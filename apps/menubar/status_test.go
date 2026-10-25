@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"image/png"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,7 +25,7 @@ const glanceSample = `{"insight":{"level":"clear","summary":"Claude Max 20x reco
 // The tray shows whatever stops work first, across every plan.
 func TestStatusShowsTheBusiestWindow(t *testing.T) {
 	st := statusOf([]byte(glanceSample))
-	if st.Title != "Codex 51% left" || st.Pct != 49 || st.Outer != 49 || st.Inner != -1 {
+	if st.Title != "Codex 51% left" || st.Pct != 49 || !st.Known {
 		t.Fatalf("status %+v", st)
 	}
 	lines := st.Tooltip
@@ -35,22 +36,23 @@ func TestStatusShowsTheBusiestWindow(t *testing.T) {
 	}
 }
 
-// The icon's rings are the busiest plan's week (outer) and session (inner).
-func TestStatusRingsAreTheBusiestPlansWindows(t *testing.T) {
+// The gauge follows the tightest window of any plan, and a stale reading
+// is flagged rather than shown as a level.
+func TestStatusIsTheTightestWindow(t *testing.T) {
 	st := statusOf([]byte(`{"plan_headroom":{"reports":[
-	  {"provider":"anthropic","windows":[{"name":"5h","used_pct":70},{"name":"week","used_pct":20},{"name":"week (Fable)","used_pct":35}]},
+	  {"provider":"anthropic","windows":[{"name":"5h","used_pct":70},{"name":"week","used_pct":20}]},
 	  {"provider":"openai","windows":[{"name":"week","used_pct":40}]}]}}`))
-	if st.Outer != 35 || st.Inner != 70 || st.Pct != 70 {
+	if st.Pct != 70 || !st.Known || st.Stale {
 		t.Errorf("status %+v", st)
 	}
-	st = statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"anthropic","windows":[{"name":"5h","used_pct":30}]}]}}`))
-	if st.Outer != 30 || st.Inner != -1 {
-		t.Errorf("a session window alone is the one ring: %+v", st)
+	st = statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"anthropic","windows":[{"name":"5h","used_pct":30,"stale":true}]}]}}`))
+	if !st.Stale || gaugeLevel(st) != gaugeUnknown {
+		t.Errorf("stale %+v", st)
 	}
 }
 
 func TestStatusWithNothingToShow(t *testing.T) {
-	if st := statusOf([]byte(`{"plan_headroom":{"error":"plans_unconfigured","hint":"bind a plan"}}`)); st.Title != "—" || !strings.Contains(st.Tooltip, "bind a plan") {
+	if st := statusOf([]byte(`{"plan_headroom":{"error":"plans_unconfigured","hint":"bind a plan"}}`)); st.Title != "—" || !strings.Contains(st.Tooltip, "bind a plan") || gaugeLevel(st) != gaugeUnknown {
 		t.Errorf("unconfigured %+v", st)
 	}
 	if st := statusOf([]byte(`not json`)); st.Title != "—" {
@@ -66,24 +68,68 @@ func TestHumanDuration(t *testing.T) {
 	}
 }
 
-func TestTrayIconIsATemplate(t *testing.T) {
-	img, err := png.Decode(bytes.NewReader(trayIcon(25, 50)))
-	if err != nil || img.Bounds().Dx() != iconSize {
-		t.Fatalf("icon %v %v", img, err)
+// Empty strictly means used up; headroom never rounds down to empty, and
+// only 100% left is full; unknown is its own state.
+func TestGaugeLevel(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		st   status
+		want int
+	}{
+		{"used up", status{Pct: 100, Known: true}, 0},
+		{"over used", status{Pct: 130, Known: true}, 0},
+		{"a sliver left", status{Pct: 99.9, Known: true}, 1},
+		{"1% left", status{Pct: 99, Known: true}, 1},
+		{"a quarter left", status{Pct: 75, Known: true}, 2},
+		{"half left", status{Pct: 50, Known: true}, 4},
+		{"just under full", status{Pct: 0.1, Known: true}, gaugeSteps - 1},
+		{"nothing used", status{Pct: 0, Known: true}, gaugeSteps},
+		{"stale", status{Pct: 10, Known: true, Stale: true}, gaugeUnknown},
+		{"never read", status{}, gaugeUnknown},
+		{"not a number", status{Pct: math.NaN(), Known: true}, gaugeUnknown},
+	} {
+		if got := gaugeLevel(c.st); got != c.want {
+			t.Errorf("%s: level %d, want %d", c.name, got, c.want)
+		}
 	}
-	alpha := func(x, y int) uint32 { _, _, _, a := img.At(x, y).RGBA(); return a >> 8 }
-	if alpha(0, 0) != 0 || alpha(18, 18) != 0 {
-		t.Error("corner or centre not transparent")
+}
+
+func TestTrayIconIsATemplateGauge(t *testing.T) {
+	decode := func(level int) func(x, y int) uint32 {
+		img, err := png.Decode(bytes.NewReader(trayIcon(level)))
+		if err != nil || img.Bounds().Dx() != iconSize {
+			t.Fatalf("icon %v %v", img, err)
+		}
+		return func(x, y int) uint32 { _, _, _, a := img.At(x, y).RGBA(); return a >> 8 }
 	}
-	// 25% used leaves 75% of the outer ring: the right side (a quarter of
-	// the way round) is filled, the top-left (seven eighths) is track.
-	if alpha(33, 18) != 0xff || alpha(7, 7) != trackAlpha {
-		t.Errorf("outer ring: right %x, top-left %x", alpha(33, 18), alpha(7, 7))
+	full, empty, unknown, half := decode(gaugeSteps), decode(0), decode(gaugeUnknown), decode(gaugeSteps/2)
+	if full(0, 0) != 0 || full(18, 2) != 0xff {
+		t.Error("corner not transparent, or outline missing")
 	}
-	// 50% used leaves the inner ring's right half: below the centre on the
-	// right is filled, on the left is track.
-	if alpha(25, 22) != 0xff || alpha(11, 22) != trackAlpha {
-		t.Errorf("inner ring: right %x, left %x", alpha(25, 22), alpha(11, 22))
+	// Tank bottom, centre and just under the top of the tank.
+	if full(18, 28) != 0xff || full(18, 18) != 0xff || full(18, 8) != 0xff {
+		t.Error("full tank is not filled")
+	}
+	if empty(18, 2) != 0xff || empty(18, 28) != 0 || empty(18, 18) != 0 {
+		t.Error("empty gauge is not an outline alone")
+	}
+	if half(18, 28) != 0xff || half(18, 12) != 0 {
+		t.Errorf("half tank: bottom %x, upper %x", half(18, 28), half(18, 12))
+	}
+	if unknown(18, 18) != 0xff || unknown(18, 28) != 0 {
+		t.Error("unknown shows a centre dot over an empty tank")
+	}
+	if string(trayIcon(0)) == string(trayIcon(gaugeUnknown)) {
+		t.Error("empty and unknown must differ")
+	}
+}
+
+// A new reading changes the tray: setTray is handed the icon of the new level.
+func TestTrayFollowsTheReading(t *testing.T) {
+	a := trayIcon(gaugeLevel(statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"anthropic","windows":[{"name":"week","used_pct":10}]}]}}`))))
+	b := trayIcon(gaugeLevel(statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"anthropic","windows":[{"name":"week","used_pct":100}]}]}}`))))
+	if string(a) == string(b) {
+		t.Error("a used-up plan draws the same icon as a nearly full one")
 	}
 }
 
