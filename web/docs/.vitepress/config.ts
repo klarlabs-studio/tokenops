@@ -16,7 +16,7 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   head: [
-    ["meta", { name: "theme-color", content: "#2742F5" }],
+    ["meta", { name: "theme-color", content: "#0E1220" }],
     // head entries are not prefixed with base, unlike themeConfig.logo.
     ["link", { rel: "icon", type: "image/svg+xml", href: `${process.env.DOCS_BASE || "/"}favicon.svg` }],
     // Link previews need an absolute image URL; assets/brand/make.py draws it.
