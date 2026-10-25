@@ -177,6 +177,14 @@ fire live in the session, at a context line or a specific Agent call,
 while `/usage` warns after the fact when it is opened. Nothing was stood
 down; revisit if `/usage` starts warning live.
 
+**Step 3 shipped (2026-10-25).** The used-up tip stands down on Claude Code
+unless another plan has room, since Claude Code's own limit message says the
+rest; each stand-down is recorded as `vendor_speaks`. The run-out warning is
+the pace banner's counterpart, and the banner is unverified in Claude Code, so
+it stands nothing down; it interrupts once a day where the last week's
+warnings were mostly unseen. `tokenops coach stats` reports tips per day and
+the unseen rate by kind, which is how the cut is judged.
+
 **Stop claiming** (landing page and README):
 
 - "Each vendor's own meter: 🚫 acts inside the session" and "🚫 limits you set".

@@ -65,11 +65,32 @@ cheaper model that fits it), and **context** (when the agent compacts).
 
 | | `quiet` | `normal` (default) | `verbose` |
 |---|---|---|---|
-| Quota tips | a run-out warning and a used-up window, once per window | the same | the same, plus each look-back's pace and every window listed |
+| Quota tips | a run-out warning and a used-up window, once per window. On Claude Code the used-up tip [stands down](#the-coach-stands-down-where-the-vendor-speaks) unless another plan has room | the same | the same, plus each look-back's pace and every window listed; nothing stands down |
 | Dollar tips (pay-per-token) | only past the budget | each tier once per session | each tier once per session |
 | The read-guard case | never | once per session | once per session |
 | Model advice | only when the model is two tiers or more above the work | once per kind of work per session | every applicable turn |
 | Compact tip (20 turns above the compaction line) | never | once until the next compaction | once until the next compaction, with what compacting would keep context near |
+
+#### The coach stands down where the vendor speaks
+
+A tip that only says what the harness's own surface says is noise, and
+noise is what makes the tips that add something go unread. As with routers
+([ADR 0009](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0009-routes-routers-billers.md)),
+the coach stands down there and records each time, with the reason:
+
+| Tip | On Claude Code | Why | Elsewhere |
+|---|---|---|---|
+| Window used up (`quota_100`) | Not given unless another bound plan has at least 25% of its window left; then the tip names it ("move the work there") | Claude Code answers a used-up window with its own limit-reached, resets-at message. Only the move to another plan is new | Codex and every other harness: given as before |
+| Run-out warning (`quota_burn`) | Given. Once a day interrupts; the rest that day wait on the status line, and only while the last week's run-out warnings were mostly unseen (at least 5 settled, half or more unseen) | Claude's weekly pace banner says the same, but was seen only in the Claude desktop app. It is **not verified in Claude Code**, so it stands nothing down | Given as before |
+| Compact tip, session and spend budgets, model advice | Unchanged | `/usage` (2.1.299 to 2.1.307) has no warning of the same class; ours fire live, at a context line or a specific call | Unchanged |
+
+TokenOps does not record which Claude Code version a session runs, so no
+rule is gated on one; the only gate is that the plan is Claude's, which in
+the Stop hook means Claude Code. Setting `verbosity` to `verbose` turns every
+stand-down off, the same way it brings back tips that were quieted for being
+ignored. `tokenops coach stats` shows how many tips of each kind were given
+per day over the last 7 days, how many went unseen, and how often the coach
+stood down and for which vendor surface.
 
 For **context**, `advise` is the compact tip (20 turns above the
 compaction line without compacting). `autonomous` sets where each agent
