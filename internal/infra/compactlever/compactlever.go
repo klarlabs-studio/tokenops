@@ -29,12 +29,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
 )
 
 // Clients the package can set.
@@ -349,35 +350,21 @@ func currentValue(s Setting) (int64, bool) {
 }
 
 func intOf(v any) (int64, bool) {
-	f, ok := v.(float64)
-	return int64(f), ok
+	switch n := v.(type) {
+	case json.Number:
+		i, err := n.Int64()
+		return i, err == nil
+	case float64:
+		return int64(n), true
+	}
+	return 0, false
 }
 
-func readJSON(path string) (map[string]any, error) {
-	b, err := os.ReadFile(path) //nolint:gosec // the operator's own config
-	if err != nil {
-		return nil, err
-	}
-	m := map[string]any{}
-	if len(b) > 0 {
-		if err := json.Unmarshal(b, &m); err != nil {
-			return nil, fmt.Errorf("%s is not plain JSON (%w); leaving it alone", path, err)
-		}
-	}
-	return m, nil
-}
+func readJSON(path string) (map[string]any, error) { return jsonfile.Read(path) }
 
-func writeJSON(path string, m map[string]any) error {
-	b, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return err
-	}
-	mode := fs.FileMode(0o600)
-	if st, err := os.Stat(path); err == nil {
-		mode = st.Mode().Perm()
-	}
-	return writeAtomic(path, append(b, '\n'), mode)
-}
+// writeJSON stores m as the operator's file, keeping its key order and
+// formatting for everything m did not change.
+func writeJSON(path string, m map[string]any) error { return jsonfile.Write(path, m) }
 
 // writeAtomic replaces path in one rename so an agent reading its
 // settings never sees half a file.
@@ -414,13 +401,9 @@ func envOr(key, fallback string) string {
 // editJSON is editFile for a JSON document, in the indentation the
 // agents' own files use.
 func (st *state) editJSON(path string, m map[string]any) error {
-	b, err := json.MarshalIndent(m, "", "  ")
+	b, err := jsonfile.Edit(path, m)
 	if err != nil {
 		return err
 	}
-	mode := fs.FileMode(0o600)
-	if fi, err := os.Stat(path); err == nil {
-		mode = fi.Mode().Perm()
-	}
-	return st.editFile(path, append(b, '\n'), mode)
+	return st.editFile(path, b, jsonfile.ModeOf(path))
 }

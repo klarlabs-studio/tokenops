@@ -17,11 +17,12 @@ package modellever
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
 )
 
 // Status is what became of the setting.
@@ -214,31 +215,11 @@ func saveState(path string, st state) error {
 	return writeAtomic(path, b, 0o600)
 }
 
-func readJSON(path string) (map[string]any, error) {
-	b, err := os.ReadFile(path) //nolint:gosec // the operator's own config
-	if err != nil {
-		return nil, err
-	}
-	m := map[string]any{}
-	if len(b) > 0 {
-		if err := json.Unmarshal(b, &m); err != nil {
-			return nil, fmt.Errorf("%s is not plain JSON (%w); leaving it alone", path, err)
-		}
-	}
-	return m, nil
-}
+func readJSON(path string) (map[string]any, error) { return jsonfile.Read(path) }
 
-func writeJSON(path string, m map[string]any) error {
-	b, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return err
-	}
-	mode := fs.FileMode(0o600)
-	if fi, err := os.Stat(path); err == nil {
-		mode = fi.Mode().Perm()
-	}
-	return writeAtomic(path, append(b, '\n'), mode)
-}
+// writeJSON stores m as the operator's file, keeping its key order and
+// formatting for everything m did not change.
+func writeJSON(path string, m map[string]any) error { return jsonfile.Write(path, m) }
 
 // writeAtomic replaces path in one rename, so Claude Code reading its
 // settings never sees half a file.

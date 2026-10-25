@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
 )
 
 // statuslineRefreshSeconds re-runs the line while Claude Code is idle, so
@@ -91,7 +92,7 @@ func installStatusline(out io.Writer, settingsPath, exe string) error {
 		if err != nil {
 			return err
 		}
-		b, err := json.MarshalIndent(current, "", "  ")
+		b, err := jsonfile.Render(nil, current)
 		if err != nil {
 			return err
 		}
