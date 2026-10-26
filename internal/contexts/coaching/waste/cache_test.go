@@ -29,6 +29,11 @@ func TestClassifyRebuild(t *testing.T) {
 		{name: "idle gap past the 1-hour lifetime", prev: warm(t0), cur: cold(t0.Add(61 * time.Minute)), ttl: CacheTTLExtended, want: CauseTTLExpired, rebuild: true},
 		{name: "a 6-minute gap inside the 1-hour lifetime", prev: warm(t0), cur: cold(t0.Add(6 * time.Minute)), ttl: CacheTTLExtended, want: CausePrefixChanged, rebuild: true},
 		{name: "exactly the lifetime has not expired", prev: warm(t0), cur: cold(t0.Add(CacheTTL)), ttl: CacheTTL, want: CausePrefixChanged, rebuild: true},
+		// A 3-minute pause and a 3-minute generation: the request went out
+		// three minutes after the turn before, inside the lifetime.
+		{name: "the gap runs to when the request went out", prev: warm(t0), cur: func() CacheTurn { c := cold(t0.Add(6 * time.Minute)); c.Latency = 3 * time.Minute; return c }(), ttl: CacheTTL, want: CausePrefixChanged, rebuild: true},
+		{name: "without a latency the recorded gap counts", prev: warm(t0), cur: cold(t0.Add(6 * time.Minute)), ttl: CacheTTL, want: CauseTTLExpired, rebuild: true},
+		{name: "a latency longer than the gap is not trusted", prev: warm(t0), cur: func() CacheTurn { c := cold(t0.Add(6 * time.Minute)); c.Latency = 7 * time.Minute; return c }(), ttl: CacheTTL, want: CauseTTLExpired, rebuild: true},
 		{name: "model switch", prev: warm(t0), cur: func() CacheTurn { c := cold(t0.Add(time.Minute)); c.Model = "claude-sonnet-4-6"; return c }(), ttl: CacheTTL, want: CauseModelSwitch, rebuild: true},
 		{name: "model switch wins over an idle gap", prev: warm(t0), cur: func() CacheTurn { c := cold(t0.Add(2 * time.Hour)); c.Model = "claude-sonnet-4-6"; return c }(), ttl: CacheTTL, want: CauseModelSwitch, rebuild: true},
 		{name: "compaction: the context fell under half", prev: warm(t0), cur: CacheTurn{At: t0.Add(time.Minute), Model: "claude-opus-4-7", Input: 30_000, CacheRead: 20_000, CacheWrite: 10_000}, ttl: CacheTTL, want: CauseCompaction, rebuild: true},

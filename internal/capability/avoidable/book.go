@@ -153,7 +153,7 @@ type rebuildNote struct {
 }
 
 func cacheTurnOf(t analytics.SessionTurn) waste.CacheTurn {
-	return waste.CacheTurn{At: t.At, Model: t.Model, Input: t.InputTokens, CacheRead: t.CacheReadTokens,
+	return waste.CacheTurn{At: t.At, Latency: t.Latency, Model: t.Model, Input: t.InputTokens, CacheRead: t.CacheReadTokens,
 		CacheWrite: t.CacheWriteTokens, CacheWrite1h: t.CacheWrite1hTokens}
 }
 

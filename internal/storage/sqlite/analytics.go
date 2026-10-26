@@ -443,7 +443,8 @@ func (s *Store) SessionUsage(ctx context.Context, f analytics.Filter) ([]analyti
 			COALESCE(` + cacheWrite1hExpr + `, 0),
 			COALESCE(cost_usd, 0), COALESCE(workflow_id, ''), COALESCE(execution_id, ''),
 			COALESCE(source, ''), COALESCE(json_extract(attributes, '$.endpoint'), ''),
-			` + costSourcePlanCovered + `
+			` + costSourcePlanCovered + `,
+			COALESCE(CAST(json_extract(payload, '$.latency_ns') AS INTEGER), 0)
 		FROM events WHERE ` + strings.Join(conds, " AND ") + ` ORDER BY timestamp_ns`
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -453,17 +454,18 @@ func (s *Store) SessionUsage(ctx context.Context, f analytics.Filter) ([]analyti
 	var out []analytics.SessionUsage
 	for rows.Next() {
 		var (
-			u    analytics.SessionUsage
-			ns   int64
-			cost sql.NullFloat64
+			u         analytics.SessionUsage
+			ns, latNs int64
+			cost      sql.NullFloat64
 		)
 		if err := rows.Scan(&u.SessionID, &ns, &u.Provider, &u.Model, &u.InputTokens, &u.OutputTokens, &u.TotalTokens,
 			&u.CacheReadTokens, &u.CacheWriteTokens, &u.CacheWrite1hTokens, &cost, &u.WorkflowID, &u.ExecutionID,
-			&u.Source, &u.Endpoint, &u.PlanCovered); err != nil {
+			&u.Source, &u.Endpoint, &u.PlanCovered, &latNs); err != nil {
 			return nil, fmt.Errorf("analytics: session turns scan: %w", err)
 		}
 		u.At = time.Unix(0, ns).UTC()
 		u.CostUSD = cost.Float64
+		u.Latency = time.Duration(latNs)
 		out = append(out, u)
 	}
 	return out, rows.Err()

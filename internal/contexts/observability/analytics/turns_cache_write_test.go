@@ -154,3 +154,24 @@ func TestSessionTurnsCarryTheirTokenBreakdown(t *testing.T) {
 		t.Errorf("breakdown = %+v", got)
 	}
 }
+
+// A turn carries how long it took, so the cache's idle gap can run to
+// when its request went out rather than when it was recorded.
+func TestSessionTurnsCarryLatency(t *testing.T) {
+	env := &eventschema.Envelope{
+		ID: "timed", SchemaVersion: eventschema.SchemaVersion, Type: eventschema.EventTypePrompt,
+		Timestamp: time.Now().UTC().Add(-time.Hour),
+		Payload: &eventschema.PromptEvent{
+			Provider: eventschema.ProviderAnthropic, RequestModel: "claude-sonnet-5", SessionID: "s-1",
+			InputTokens: 10, TotalTokens: 10, Latency: 3 * time.Minute,
+		},
+	}
+	turns, err := analytics.New(storeWith(t, env), nil).SessionTurns(context.Background(),
+		analytics.Filter{Since: time.Now().Add(-24 * time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(turns) != 1 || turns[0].Latency != 3*time.Minute {
+		t.Fatalf("turns = %+v", turns)
+	}
+}

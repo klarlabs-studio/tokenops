@@ -107,4 +107,6 @@ type SessionUsage struct {
 	Source, Endpoint string
 	// PlanCovered is plan-included or trial usage, billed nothing.
 	PlanCovered bool
+	// Latency is how long the turn took, zero when not recorded.
+	Latency time.Duration
 }

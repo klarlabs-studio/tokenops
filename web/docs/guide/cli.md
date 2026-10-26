@@ -685,8 +685,9 @@ Each class reads a source TokenOps already keeps:
   IDs only:
   - *model switches*: the turn ran on another model than the one before; a
     cache belongs to one model.
-  - *idle gaps past the cache lifetime*: the turn came longer after the one
-    before than the cache lives: an hour when the session wrote its cache
+  - *idle gaps past the cache lifetime*: the turn's request went out (its
+    recorded time less how long it took, so a long generation is not
+    counted as idle) longer after the turn before than the cache lives: an hour when the session wrote its cache
     with the extended lifetime, five minutes otherwise. The row names the
     lifetime most of them outlived ("idle gaps over 1h").
   - *prompt prefix changes*: any other rebuild after the turn before read
