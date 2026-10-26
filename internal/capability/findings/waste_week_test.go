@@ -161,3 +161,58 @@ func TestComputeShowsTheWasteWeek(t *testing.T) {
 	}
 	t.Errorf("findings = %+v", r.Findings)
 }
+
+// withRebuilds gives the week cache rebuilds split by cause.
+func withRebuilds(r avoidable.Report, causes ...avoidable.CauseCost) avoidable.Report {
+	for i, c := range r.Classes {
+		if c.Class == wastetax.ClassCacheRebuild {
+			var usd float64
+			var tokens int64
+			for _, x := range causes {
+				usd += x.APIEquivalentUSD
+				tokens += x.Tokens
+			}
+			r.Classes[i].Causes = causes
+			r.Classes[i].APIEquivalentUSD, r.Classes[i].Tokens = usd, tokens
+		}
+	}
+	return r
+}
+
+func cause(c wastetax.RebuildCause, usd float64, ttl string) avoidable.CauseCost {
+	return avoidable.CauseCost{Cause: c, Name: wastetax.RebuildCauseName(c), TTL: ttl, Turns: 1,
+		Amount: avoidable.Amount{Tokens: int64(usd * 1000), APIEquivalentUSD: usd}}
+}
+
+// The finding names what most cache rebuilds came after, in words the
+// operator can act on.
+func TestWasteWeekNamesTheTopRebuildCause(t *testing.T) {
+	cases := []struct {
+		name   string
+		causes []avoidable.CauseCost
+		want   string
+	}{
+		{"idle gaps on the five-minute cache", []avoidable.CauseCost{cause(wastetax.CauseTTLExpired, 3, "5m"), cause(wastetax.CausePrefixChanged, 1, "")},
+			"Most cache rebuilds came after idle gaps over 5 minutes."},
+		{"idle gaps on the hour cache", []avoidable.CauseCost{cause(wastetax.CauseTTLExpired, 3, "1h")},
+			"Most cache rebuilds came after idle gaps over an hour."},
+		{"no majority", []avoidable.CauseCost{cause(wastetax.CauseModelSwitch, 2, ""), cause(wastetax.CauseTTLExpired, 1.5, "5m"), cause(wastetax.CausePrefixChanged, 1.5, "")},
+			"Cache rebuilds came most often after model switches."},
+		{"prefix changes", []avoidable.CauseCost{cause(wastetax.CausePrefixChanged, 3, "")},
+			"Most cache rebuilds came after changes early in the prompt (a timestamp, the tool set)."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := weekFinding(t, withRebuilds(weekReport(false), c.causes...))
+			if !strings.Contains(f.Evidence, c.want) {
+				t.Errorf("evidence %q lacks %q", f.Evidence, c.want)
+			}
+		})
+	}
+	// Unexplained rebuilds name no cause; no rebuilds, no sentence.
+	for _, r := range []avoidable.Report{withRebuilds(weekReport(false), cause(wastetax.CauseUnknown, 3, "")), weekReport(false)} {
+		if f := weekFinding(t, r); strings.Contains(f.Evidence, "cache rebuilds") || strings.Contains(f.Evidence, "Cache rebuilds") {
+			t.Errorf("a cause named without one: %q", f.Evidence)
+		}
+	}
+}

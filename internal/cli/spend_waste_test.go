@@ -102,3 +102,28 @@ func TestSpendWasteJSONOnAnEmptyStore(t *testing.T) {
 		t.Error("the guardrails' graduation is read from the coach's configuration")
 	}
 }
+
+// The cache rebuilds are split by cause under their class.
+func TestWriteWasteReportSplitsRebuildsByCause(t *testing.T) {
+	t0 := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
+	share := func(pct float64) []avoidable.WindowShare {
+		return []avoidable.WindowShare{{Provider: "anthropic", Window: "weekly", Pct: pct}}
+	}
+	r := avoidable.Report{Since: t0, Until: t0.Add(7 * 24 * time.Hour), Attribution: avoidable.Attribution,
+		Classes: []avoidable.ClassCost{{Class: waste.ClassCacheRebuild, Name: waste.ClassName(waste.ClassCacheRebuild), Turns: 3,
+			Amount: avoidable.Amount{Tokens: 3_000, APIEquivalentUSD: 3, WindowShare: share(3)},
+			Causes: []avoidable.CauseCost{
+				{Cause: waste.CauseTTLExpired, Name: waste.RebuildCauseName(waste.CauseTTLExpired), TTL: "1h", Turns: 2,
+					Amount: avoidable.Amount{Tokens: 2_000, APIEquivalentUSD: 2, WindowShare: share(2)}},
+				{Cause: waste.CauseModelSwitch, Name: waste.RebuildCauseName(waste.CauseModelSwitch), Turns: 1,
+					Amount: avoidable.Amount{Tokens: 1_000, APIEquivalentUSD: 1, WindowShare: share(1)}},
+			}}}}
+	var b bytes.Buffer
+	writeWasteReport(&b, r)
+	out := b.String()
+	for _, want := range []string{"    idle gaps over 1h  ", "2.0%", "model switches", "1.0%"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
+	wastetax "go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 )
 
 // shownClasses bounds the waste classes the weekly finding names.
@@ -60,6 +61,9 @@ func wasteWeek(s *avoidable.Snapshot, now time.Time) []Finding {
 		})
 	}
 	evidence := strings.Join(parts, " · ")
+	if why := rebuildCause(r.Classes); why != "" {
+		evidence = strings.TrimPrefix(evidence+". "+why, ". ")
+	}
 	if r.Realized.USD >= minBilledUSD {
 		evidence = strings.TrimPrefix(evidence+". Guardrails already saved ~"+money(r.Realized.USD)+" at API prices", ". ")
 	}
@@ -76,6 +80,42 @@ func wasteWeek(s *avoidable.Snapshot, now time.Time) []Finding {
 		}
 	}
 	return []Finding{{Key: key(KindWaste, "week"), Kind: KindWaste, Level: LevelInfo, Title: title, Evidence: evidence, Action: action}}
+}
+
+// rebuildCause says what most cache rebuilds came after, or "" when none
+// were found or their top cause is unexplained.
+func rebuildCause(classes []avoidable.ClassCost) string {
+	for _, c := range classes {
+		if c.Class != wastetax.ClassCacheRebuild {
+			continue
+		}
+		top, ok := c.TopCause()
+		phrase := causePhrase(top)
+		if !ok || phrase == "" {
+			return ""
+		}
+		if top.Tokens*2 > c.Tokens {
+			return "Most cache rebuilds came after " + phrase + "."
+		}
+		return "Cache rebuilds came most often after " + phrase + "."
+	}
+	return ""
+}
+
+// causePhrase is a cause as what a rebuild came after.
+func causePhrase(c avoidable.CauseCost) string {
+	switch c.Cause {
+	case wastetax.CauseTTLExpired:
+		if c.TTL == "1h" {
+			return "idle gaps over an hour"
+		}
+		return "idle gaps over 5 minutes"
+	case wastetax.CauseModelSwitch:
+		return "model switches"
+	case wastetax.CausePrefixChanged:
+		return "changes early in the prompt (a timestamp, the tool set)"
+	}
+	return ""
 }
 
 // largestShare is the window the amount took most of.

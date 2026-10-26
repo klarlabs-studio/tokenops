@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/promptcache"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/presentation"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -119,6 +121,9 @@ type Glance struct {
 	// Routing is the advice to pass a cheaper model on subagent calls,
 	// one line per plan running short; nil when none is.
 	Routing []Routing
+	// PromptCache is the countdown to the current Claude Code session's
+	// prompt cache going cold; nil when there is none (promptcache.Current).
+	PromptCache *waste.CacheCountdown
 }
 
 // ComputeGlance composes the session budgets and plan headroom.
@@ -140,6 +145,7 @@ func ComputeGlance(ctx context.Context, d Deps, now time.Time) (Glance, error) {
 	g.PlanUse = planUse(ctx, d.Reader, now)
 	g.PlanAdvice = glanceAdvice(ctx, d, now)
 	g.EarlyResets = earlyResets(ctx, d, now)
+	g.PromptCache = promptcache.Current(ctx, d.Reader, now)
 	return g, nil
 }
 

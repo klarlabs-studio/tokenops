@@ -10,6 +10,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/config"
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 )
 
 // Power is one of the coach's powers as the operator sees it.
@@ -71,6 +72,10 @@ type Report struct {
 	// Presets are the presets with what each does, least autonomous
 	// first. Only Status fills it.
 	Presets []PresetSummary `json:"presets,omitempty"`
+	// PromptCache is the countdown to the current Claude Code session's
+	// prompt cache going cold. The daemon's API fills it from the event
+	// store; absent with no session current.
+	PromptCache *waste.CacheCountdown `json:"prompt_cache,omitempty"`
 }
 
 // FollowThroughSummary is the follow-through evidence for one kind.
