@@ -16,6 +16,8 @@ import (
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/statusline"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
@@ -27,7 +29,10 @@ import (
 // shows is read.
 type claudeStatus struct {
 	SessionID string `json:"session_id"`
-	Model     struct {
+	// TranscriptPath is the session's transcript, read only for when its
+	// last request went out.
+	TranscriptPath string `json:"transcript_path"`
+	Model          struct {
 		ID          string `json:"id"`
 		DisplayName string `json:"display_name"`
 	} `json:"model"`
@@ -91,10 +96,14 @@ func newStatuslineCmd() *cobra.Command {
 		Long: `statusline prints the quota windows, the context against the point the
 session compacts at, the cache hit ratio, the session's cost in your
 currency and the coach's open tip, in Klarlabs colours. Claude Code runs
-it on every turn with its session JSON on stdin.
+it on every turn with its session JSON on stdin. When under two minutes
+are left before the prompt cache expires it shows "cache cold in 1m", and
+"cache cold" once it has: the next prompt then writes the whole context
+to the cache again.
 
-It reads only what Claude Code hands it and files TokenOps already keeps,
-never the event store or the network, and it fails open: on any error it
+It reads only what Claude Code hands it (for the cache, the timestamps
+and token counts at the end of the session's transcript, never its text)
+and files TokenOps already keeps, never the event store or the network, and it fails open: on any error it
 prints what it can, or nothing. It keeps the windows Claude Code reports
 in ~/.tokenops/claude-limits.json, for the daemon to store as Anthropic's
 own reading.
@@ -157,6 +166,9 @@ func statusLines(raw []byte) []string {
 	if s.PromptCache != nil && s.PromptCache.HitRatio != nil {
 		in.CacheHit = *s.PromptCache.HitRatio
 	}
+	if at, ok := cacheExpiry(s.TranscriptPath); ok {
+		in.CacheExpiresAt = at
+	}
 	for _, w := range []struct {
 		label string
 		win   *claudeWindow
@@ -181,6 +193,39 @@ func statusLines(raw []byte) []string {
 		recordTipSeen(s.SessionID, tip.ID, in.Now)
 	}
 	return statusline.Render(in)
+}
+
+// statuslineTailBytes is how much of the end of a transcript the status
+// line reads for the cache countdown: enough for the last few turns.
+const statuslineTailBytes = 256 << 10
+
+// cacheExpiry is when the session's prompt cache goes cold: the lifetime
+// its latest write bought (waste.ColdClock) after its last request went
+// out, which is when the last turn's request was sent or, when an entry
+// such as a tool result follows the last reply, when that entry was. Only
+// timestamps and token counts are read; false when the transcript is not
+// there or shows no cache use.
+func cacheExpiry(path string) (time.Time, bool) {
+	if path == "" {
+		return time.Time{}, false
+	}
+	turns, lastEntry, err := claudecodejsonl.ReadTail(path, statuslineTailBytes)
+	if err != nil || len(turns) == 0 {
+		return time.Time{}, false
+	}
+	ct := make([]waste.CacheTurn, 0, len(turns))
+	for _, t := range turns {
+		ct = append(ct, waste.CacheTurn{At: t.Timestamp, Latency: t.Latency, Model: t.Model,
+			CacheRead: t.CacheReadInputTokens, CacheWrite: t.CacheCreationInputTokens, CacheWrite1h: t.CacheCreation1hInputTokens})
+	}
+	last, ttl, ok := waste.ColdClock(ct)
+	if !ok {
+		return time.Time{}, false
+	}
+	if lastEntry.After(turns[len(turns)-1].Timestamp) && lastEntry.After(last) {
+		last = lastEntry
+	}
+	return last.Add(ttl), true
 }
 
 // statusTip is the coach's open tip for this session as the line shows

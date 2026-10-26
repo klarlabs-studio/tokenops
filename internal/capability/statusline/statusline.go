@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/fx"
 )
@@ -41,6 +42,9 @@ type Input struct {
 	// CacheHit is the prompt cache's hit ratio, 0–1; negative when
 	// unknown.
 	CacheHit float64
+	// CacheExpiresAt is when the session's prompt cache goes cold: its
+	// last request plus the cache's lifetime. Zero when unknown.
+	CacheExpiresAt time.Time
 	// CostUSD is the session's cost at list price, as the agent reports
 	// it. On a subscription it is value, not money spent.
 	CostUSD float64
@@ -142,7 +146,11 @@ func Render(in Input) []string {
 		}
 		parts = append(parts, s)
 	}
-	if in.CacheHit >= 0 {
+	if warn := cacheWarning(in.CacheExpiresAt, in.Now); warn != "" {
+		// About to go cold, or gone: what the next prompt costs matters
+		// more than how well the cache did.
+		parts = append(parts, p.paint(warnFg, warn))
+	} else if in.CacheHit >= 0 {
 		parts = append(parts, p.paint(muted, "cache ")+p.paint(porcelain, fmt.Sprintf("%.0f%%", in.CacheHit*100)))
 	}
 	if in.CostUSD > 0 {
@@ -165,6 +173,23 @@ func Render(in Input) []string {
 		}
 	}
 	return []string{strings.Join(parts, sep)}
+}
+
+// cacheWarning is "cache cold in Nm" while under
+// waste.CacheExpiringWithin is left, "cache cold" once it has expired, and
+// "" otherwise.
+func cacheWarning(expires, now time.Time) string {
+	if expires.IsZero() {
+		return ""
+	}
+	left := expires.Sub(now)
+	switch {
+	case left <= 0:
+		return "cache cold"
+	case left < waste.CacheExpiringWithin:
+		return fmt.Sprintf("cache cold in %dm", int((left+time.Minute-1)/time.Minute))
+	}
+	return ""
 }
 
 // contextLevel is the context fill measured against where the session
