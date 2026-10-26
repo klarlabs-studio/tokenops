@@ -14,10 +14,9 @@ import (
 	"github.com/spf13/cobra"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/promptcache"
 	"go.klarlabs.de/tokenops/internal/capability/statusline"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
@@ -166,7 +165,7 @@ func statusLines(raw []byte) []string {
 	if s.PromptCache != nil && s.PromptCache.HitRatio != nil {
 		in.CacheHit = *s.PromptCache.HitRatio
 	}
-	if at, ok := cacheExpiry(s.TranscriptPath); ok {
+	if at, ok := promptcache.TranscriptExpiry(s.TranscriptPath); ok {
 		in.CacheExpiresAt = at
 	}
 	for _, w := range []struct {
@@ -193,39 +192,6 @@ func statusLines(raw []byte) []string {
 		recordTipSeen(s.SessionID, tip.ID, in.Now)
 	}
 	return statusline.Render(in)
-}
-
-// statuslineTailBytes is how much of the end of a transcript the status
-// line reads for the cache countdown: enough for the last few turns.
-const statuslineTailBytes = 256 << 10
-
-// cacheExpiry is when the session's prompt cache goes cold: the lifetime
-// its latest write bought (waste.ColdClock) after its last request went
-// out, which is when the last turn's request was sent or, when an entry
-// such as a tool result follows the last reply, when that entry was. Only
-// timestamps and token counts are read; false when the transcript is not
-// there or shows no cache use.
-func cacheExpiry(path string) (time.Time, bool) {
-	if path == "" {
-		return time.Time{}, false
-	}
-	turns, lastEntry, err := claudecodejsonl.ReadTail(path, statuslineTailBytes)
-	if err != nil || len(turns) == 0 {
-		return time.Time{}, false
-	}
-	ct := make([]waste.CacheTurn, 0, len(turns))
-	for _, t := range turns {
-		ct = append(ct, waste.CacheTurn{At: t.Timestamp, Latency: t.Latency, Model: t.Model,
-			CacheRead: t.CacheReadInputTokens, CacheWrite: t.CacheCreationInputTokens, CacheWrite1h: t.CacheCreation1hInputTokens})
-	}
-	last, ttl, ok := waste.ColdClock(ct)
-	if !ok {
-		return time.Time{}, false
-	}
-	if lastEntry.After(turns[len(turns)-1].Timestamp) && lastEntry.After(last) {
-		last = lastEntry
-	}
-	return last.Add(ttl), true
 }
 
 // statusTip is the coach's open tip for this session as the line shows
