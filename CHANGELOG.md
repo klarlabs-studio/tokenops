@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **coach:** `tokenops coach lint-context` finds what in every session's context changes between sessions and so breaks the prompt cache. A provider caches a prompt up to the first byte that differs from an earlier one, so a SessionStart hook that prints the date, or a "Last updated" line near the top of CLAUDE.md, made every session rebuild the cache from that point, and nothing said so. The lint reads Claude Code's CLAUDE.md files and their `@imports` (one level), the SessionStart and UserPromptSubmit hooks in its settings (their command text: hooks are never run), the hook output recent transcripts recorded, and the AGENTS.md files Codex and opencode load. Each finding names its file and line or hook, the matched token only, why it breaks the cache and the fix ("drop it from SessionStart; let the agent run `date` when it needs it"). A hook that puts something new in every session is high; a per-turn hook's output or a line a tool rewrites is medium; a date written in a file is low. Version numbers such as `go 1.26` or a semver are not flagged. A high item from your own files and hooks is also a coach finding in `tokenops glance`, the menu bar and `GET /api/findings`; the report is `tokenops_rules` (`view: lint_context`) over MCP and `GET /api/coach/lint-context` on the daemon. TokenOps' own server instructions and tool descriptions carry nothing volatile, and a test keeps it so.
+
 ## 0.112.1 - 2026-10-26
 
 ### Fixed
