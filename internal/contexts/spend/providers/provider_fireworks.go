@@ -23,6 +23,6 @@ func providerFireworks() Descriptor {
 		Opencode:  []OpencodeID{{ID: "fireworks-ai", Endpoint: "fireworks"}, {ID: "fireworks", Endpoint: "fireworks"}},
 		EnvVars:   []string{"FIREWORKS_API_KEY"},
 		ModelsDev: []string{"fireworks-ai"},
-		Docs:      Docs{Setup: "nothing: FireConnect's key or FIREWORKS_API_KEY is used"},
+		Docs:      Docs{Setup: "nothing: Nexus CLI's key or FIREWORKS_API_KEY is used"},
 	}
 }

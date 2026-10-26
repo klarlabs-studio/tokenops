@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **fireworks:** the Fireworks reader works with Nexus CLI, the new name of FireConnect. Nexus CLI 0.10.0 moved its files from `~/.fireconnect` to `~/.nexus` and no longer gives Claude Code an `apiKeyHelper`: it puts the Fireworks key in an `X-Fireworks-Api-Key` line of `ANTHROPIC_CUSTOM_HEADERS`. TokenOps looked only for the old helper and the old directory, so on a machine set up with Nexus CLI it found no key from Claude Code and no user, and a company account showed the whole account's spend, or nothing, instead of your own spend against your per-user cap. The key is now read from that header (and `nexus key export` is recognised as the helper), your user and account from `~/.nexus` before `~/.fireconnect`, and Nexus CLI's status line and settings backup are recognised like FireConnect's. Fireworks has no call that names a key's user, so where no file names yours, `tokenops vendor-usage enable fireworks --user-id <id>` sets it (`vendor_usage.fireworks.user_id`).
+
 ## 0.112.0 - 2026-10-26
 
 ### Changed

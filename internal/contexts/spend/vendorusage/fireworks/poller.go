@@ -29,8 +29,11 @@ type PollerOptions struct {
 	// Client reads the account; the daemon passes the HTTP client from
 	// internal/infra/vendorusage/fireworks. Required.
 	Client Reader
-	// Home is where FireConnect's files are; empty uses $HOME.
+	// Home is where Nexus CLI's files are; empty uses $HOME.
 	Home string
+	// UserID, when set, is the member whose own cap is read, in place of
+	// the user Nexus CLI's files name.
+	UserID string
 	// Interval defaults to 15 minutes. Fireworks aggregates billing
 	// daily and refreshes user limits about once a minute.
 	Interval time.Duration
@@ -88,6 +91,9 @@ func (p *Poller) Run(ctx context.Context) error {
 func (p *Poller) Scan(ctx context.Context) {
 	home := p.opts.Home
 	account, user := Identity(home)
+	if p.opts.UserID != "" {
+		user = p.opts.UserID
+	}
 	now := p.opts.Now().UTC()
 	r, err := p.client.Read(ctx, account, user, now)
 	if errors.Is(err, ErrNoKey) {
