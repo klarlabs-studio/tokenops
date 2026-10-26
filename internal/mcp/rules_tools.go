@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 	"go.klarlabs.de/tokenops/internal/capability/ruleintel"
 )
 
@@ -28,6 +29,10 @@ type rulesCompressInput struct {
 	RepoID              string  `json:"repo_id,omitempty"`
 	SimilarityThreshold float64 `json:"similarity_threshold,omitempty"`
 	QualityFloor        float64 `json:"quality_floor,omitempty"`
+}
+
+type rulesLintContextInput struct {
+	Root string `json:"root,omitempty"`
 }
 
 type rulesInjectInput struct {
@@ -61,7 +66,7 @@ type rulesConflictsResult struct {
 type rulesCompressResult = ruleintel.Compression
 
 // RegisterRulesTools attaches the Rule Intelligence MCP tool surface
-// (analyze, conflicts, compress, inject) to s. Read-only.
+// (analyze, conflicts, compress, inject, lint_context) to s. Read-only.
 //
 // Each tool answers from capability/ruleintel, as the CLI and the daemon's
 // /api/rules/* routes do, so behavior stays consistent across surfaces. Raw rule body content is never returned — only metrics,
@@ -88,6 +93,12 @@ func RegisterRulesTools(s *Server) error {
 		Handler(func(_ context.Context, in rulesCompressInput) (*rulesCompressResult, error) {
 			return rulesCompress(in)
 		})
+	s.Tool("tokenops_rules_lint_context").
+		Description("Find what in every session's context changes between sessions or turns and so breaks the prompt cache: dates, timestamps, UUIDs and counters in CLAUDE.md (and its @imports, one level) and AGENTS.md, SessionStart and UserPromptSubmit hooks that run date or git status, and volatile tokens in the hook output Claude Code's transcripts recorded. Each finding has its file and line or hook, the matched token only, why it breaks the cache and the fix. Hooks are never run.").
+		OutputSchema(prefixlint.Report{}).
+		Handler(func(_ context.Context, in rulesLintContextInput) (*prefixlint.Report, error) {
+			return rulesLintContext(in)
+		})
 	s.Tool("tokenops_rules_inject").
 		Description("Preview the dynamic rule subset the router selects for a request context (workflow, agent, files, tools, keywords). Returns selections with rationale and budget metrics.").
 		OutputSchema(ruleintel.Selection{}).
@@ -95,6 +106,24 @@ func RegisterRulesTools(s *Server) error {
 			return rulesInject(in)
 		})
 	return nil
+}
+
+// rulesLintContext lints the context every session loads in the project
+// at in.Root (default: the working directory), with the user's files and
+// the newest transcripts' hook output.
+func rulesLintContext(in rulesLintContextInput) (*prefixlint.Report, error) {
+	root := in.Root
+	if root == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, err
+		}
+		root = wd
+	} else if _, err := os.Stat(root); err != nil {
+		return nil, inputError(fmt.Errorf("root %q: %w", root, err))
+	}
+	r := prefixlint.Lint(prefixlint.ProjectSources(root, ""))
+	return &r, nil
 }
 
 func rulesAnalyze(in rulesAnalyzeInput) (*rulesAnalyzeResult, error) {

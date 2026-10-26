@@ -17,6 +17,7 @@ import (
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
+	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 	"go.klarlabs.de/tokenops/internal/capability/ruleintel"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
@@ -370,7 +371,7 @@ type recordsIn struct {
 }
 
 type rulesIn struct {
-	View                string   `json:"view,omitempty" jsonschema:"enum=analyze,enum=conflicts,enum=compress,enum=inject,description=analyze (default): the agent rules files, sized and scored. conflicts: rules that contradict or repeat each other. compress: a shorter rule set that keeps quality. inject: the rules that matter for one piece of work, within a token budget."`
+	View                string   `json:"view,omitempty" jsonschema:"enum=analyze,enum=conflicts,enum=compress,enum=inject,enum=lint_context,description=analyze (default): the agent rules files, sized and scored. conflicts: rules that contradict or repeat each other. compress: a shorter rule set that keeps quality. inject: the rules that matter for one piece of work, within a token budget. lint_context: what in every session's context changes between sessions (a date, a SessionStart hook running date or git status) and so breaks the prompt cache, each with its fix; matched tokens only."`
 	Root                string   `json:"root,omitempty" jsonschema:"description=Repository root (default: the working directory)"`
 	RepoID              string   `json:"repo_id,omitempty" jsonschema:"description=Stable repository identifier"`
 	Provider            string   `json:"provider,omitempty" jsonschema:"enum=openai,enum=anthropic,enum=gemini,description=analyze: tokenize for this provider"`
@@ -525,6 +526,8 @@ type rulesOut struct {
 	Conflicts *rulesConflictsResult `json:"conflicts,omitempty"`
 	Compress  *rulesCompressResult  `json:"compress,omitempty"`
 	Inject    *ruleintel.Selection  `json:"inject,omitempty"`
+	// LintContext is the volatile-prefix lint.
+	LintContext *prefixlint.Report `json:"lint_context,omitempty"`
 }
 
 type fmtOut struct {
@@ -649,13 +652,14 @@ func publicTools() []publicTool {
 		},
 		{
 			name: "tokenops_rules", title: "Agent rules", kind: reads,
-			description: "The repository's agent rules files (CLAUDE.md, AGENTS.md and the like): their size and quality, conflicts and repeats, a compressed set that keeps quality, or the rules relevant to one piece of work within a token budget. It reads; it writes no file.",
+			description: "The repository's agent rules files (CLAUDE.md, AGENTS.md and the like): their size and quality, conflicts and repeats, a compressed set that keeps quality, the rules relevant to one piece of work within a token budget, or what in every session's context changes between sessions and breaks the prompt cache. It reads; it writes no file and runs no hook.",
 			selector:    "view", def: "analyze", input: rulesIn{}, output: rulesOut{},
 			routes: map[string]route{
-				"analyze":   {inner: "tokenops_rules_analyze", params: params("root", "repo_id", "provider")},
-				"conflicts": {inner: "tokenops_rules_conflicts", params: params("root", "repo_id")},
-				"compress":  {inner: "tokenops_rules_compress", params: params("root", "repo_id", "similarity_threshold", "quality_floor")},
-				"inject":    {inner: "tokenops_rules_inject", params: params("root", "repo_id", "workflow_id", "agent_id", "files", "tools", "keywords", "token_budget", "min_score", "include_global")},
+				"analyze":      {inner: "tokenops_rules_analyze", params: params("root", "repo_id", "provider")},
+				"conflicts":    {inner: "tokenops_rules_conflicts", params: params("root", "repo_id")},
+				"compress":     {inner: "tokenops_rules_compress", params: params("root", "repo_id", "similarity_threshold", "quality_floor")},
+				"inject":       {inner: "tokenops_rules_inject", params: params("root", "repo_id", "workflow_id", "agent_id", "files", "tools", "keywords", "token_budget", "min_score", "include_global")},
+				"lint_context": {inner: "tokenops_rules_lint_context", params: params("root")},
 			},
 		},
 		{

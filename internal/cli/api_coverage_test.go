@@ -51,6 +51,7 @@ var apiRoute = map[string]string{
 	"tokenops_story":               "/api/story",
 	"tokenops_task_runtime":        "/api/story/runtime",
 	"tokenops_coach_prompts":       "/api/coach/prompts",
+	"tokenops_rules_lint_context":  "/api/coach/lint-context",
 	"tokenops_top_consumers":       "/api/spend/top",
 	"tokenops_burn_rate":           "/api/spend/burn-rate",
 	"tokenops_scorecard":           "/api/scorecard",

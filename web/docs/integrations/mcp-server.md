@@ -25,7 +25,7 @@ chosen view is refused with a message saying which ones do.
 | `tokenops_status` | Whether TokenOps is working and how it is set up | `status`, `mode`, `config`, `data_sources`, `vendor_usage`, `version` |
 | `tokenops_explain` | What a figure means, or why a decision was made | `term` or `decision_id` |
 | `tokenops_records` | What TokenOps recorded | `optimizations`, `audit`, `events`, `workflow`, `scorecard`, `verify` |
-| `tokenops_rules` | The repository's agent rules files | `analyze`, `conflicts`, `compress`, `inject` |
+| `tokenops_rules` | The repository's agent rules files | `analyze`, `conflicts`, `compress`, `inject`, `lint_context` |
 | `tokenops_fmt` | Command-output compression | `learn`, `analyze` |
 | `tokenops_pricing` | Model prices from the rate card | — |
 | `tokenops_prepare_work` | Headroom, a model recommendation and the task's expected share of the plan window before a task | — |

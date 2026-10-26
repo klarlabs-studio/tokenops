@@ -71,6 +71,7 @@ operator's instruction text and local file paths.
 | `GET /api/story` | Recent work, task by task, titles withheld; takes the same `source`, `model` and `role` |
 | `GET /api/story/runtime` | Where tasks' time went as far as the transcripts record it: status, model request, tool, approval wait, idle and unattributed time with origin and coverage, and nearest-rank median and p90 per harness, model and role. Unknown is `null`, never `0`. Same filters, plus `limit` |
 | `GET /api/coach/prompts` | Prompt scoring, quotes withheld |
+| `GET /api/coach/lint-context` | What in every session's context changes between sessions and breaks the prompt cache (see [`tokenops coach lint-context`](/guide/cli#tokenops-coach-lint-context)): the user's CLAUDE.md, AGENTS.md and hooks, the project named by `root`, and the hook output recent transcripts recorded. Each finding carries the matched token only |
 | `GET /api/spend/summary` | Spend and tokens over a window |
 | `GET /api/spend/series` | Spend and tokens over time |
 | `GET /api/spend/forecast` | Daily spend projected forward |

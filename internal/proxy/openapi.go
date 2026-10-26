@@ -17,6 +17,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/decisions"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/state"
@@ -87,6 +88,7 @@ var APICatalog = []RouteDoc{
 	{Method: "GET", Path: "/api/dx", Summary: "Agent DX, graded, with the single change worth making", Params: []Param{daysParam, allParam, sourceParam, modelParam, roleParam}, Response: sessions.DX{}},
 	{Method: "GET", Path: "/api/story", Summary: "Recent work task by task; the operator's instructions are withheld", Params: []Param{daysParam, allParam, q("limit", "integer", "most recent tasks; 10 when omitted"), sourceParam, modelParam, roleParam}, Response: sessions.Story{}},
 	{Method: "GET", Path: "/api/story/runtime", Summary: "Where tasks' time went as far as transcripts record it, with status, coverage and per-cohort percentiles; derived figures only", Params: []Param{daysParam, allParam, q("limit", "integer", "most recent tasks; 10 when omitted, -1 for all"), sourceParam, modelParam, roleParam}, Response: sessions.Runtime{}},
+	{Method: "GET", Path: "/api/coach/lint-context", Summary: "What in every session's context changes between sessions and breaks the prompt cache; matched tokens only", Params: []Param{q("root", "string", "project directory; without it, the user's files only")}, Response: prefixlint.Report{}},
 	{Method: "GET", Path: "/api/coach/prompts", Summary: "Prompt scoring; quoted instructions are withheld", Params: []Param{sinceParam, untilParam, q("session_id", "string", "one Claude Code session"), q("limit", "integer", "most recent instructions")}, Response: sessions.Findings{}},
 
 	// Spending (slice 3).
