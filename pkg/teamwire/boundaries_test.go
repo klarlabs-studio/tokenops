@@ -144,3 +144,14 @@ func TestBoundaryJSONNames(t *testing.T) {
 		}
 	}
 }
+
+// An organisation loop breaker's crossing is a count of calls: it may
+// travel, as figures only.
+func TestALoopCrossingIsAFigure(t *testing.T) {
+	a := validRequest()
+	a.Action = "continue"
+	a.Crossings = []Crossing{{Field: "loop_calls", Op: ">=", Value: 6, Threshold: 4}}
+	if err := a.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
