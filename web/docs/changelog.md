@@ -4,7 +4,16 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.112.0**.
+Current release: **v0.112.1**.
+
+## v0.112.1 — Fireworks through Nexus CLI
+
+Fireworks renamed FireConnect to Nexus CLI, which keeps its files in
+`~/.nexus` and hands Claude Code the Fireworks key in a request header
+rather than a key helper. TokenOps now finds the key and your user there,
+so a company account shows your own spend against your own cap again. When
+no file names your user, `tokenops vendor-usage enable fireworks --user-id`
+sets it.
 
 ## v0.112.0 — A coach that sorts itself, and windows that say what happened
 
