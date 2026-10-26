@@ -63,15 +63,12 @@ type FindingActResult struct {
 }
 
 // findingsDeps is the override, or the findings computed from the plan
-// routes' deps; false when neither is wired.
-func (s *Server) findingsDeps() (FindingsDeps, bool) {
+// routes' deps. The routes are mounted only when one of them is wired.
+func (s *Server) findingsDeps() FindingsDeps {
 	if s.findings != nil {
-		return s.findings(), true
+		return s.findings()
 	}
-	if s.plans == nil {
-		return FindingsDeps{}, false
-	}
-	return FindingsDeps{Report: s.computeFindings, Dismissals: findings.DefaultDismissals()}, true
+	return FindingsDeps{Report: s.computeFindings, Dismissals: findings.DefaultDismissals()}
 }
 
 // computeFindings ranks what the coach and the session analysis observed
@@ -109,7 +106,7 @@ func (s *Server) registerFindingRoutes(mux RouteMux) {
 		return
 	}
 	mux.HandleFunc("GET /api/findings", func(w http.ResponseWriter, r *http.Request) {
-		d, _ := s.findingsDeps()
+		d := s.findingsDeps()
 		body, err := shown(r.Context(), d, time.Now().UTC())
 		writeAPIResult(w, body, err)
 	})
@@ -156,7 +153,7 @@ func (s *Server) dismissFinding(r *http.Request, now time.Time) (map[string]any,
 	if in.Key != "" && !findings.ValidKey(in.Key) {
 		return nil, nil, actions.InputError{Err: fmt.Errorf("%q is not a finding's key", in.Key)}
 	}
-	d, _ := s.findingsDeps()
+	d := s.findingsDeps()
 	out := FindingDismissResult{Key: in.Key, For: in.For}
 	if in.For == "none" {
 		n, err := d.Dismissals.Restore(in.Key, now)
@@ -206,7 +203,7 @@ func (s *Server) actOnFinding(r *http.Request, now time.Time) (map[string]any, a
 	if !findings.ValidKey(in.Key) {
 		return nil, nil, actions.InputError{Err: fmt.Errorf("%q is not a finding's key", in.Key)}
 	}
-	d, _ := s.findingsDeps()
+	d := s.findingsDeps()
 	current, err := d.Report(r.Context(), now)
 	if err != nil {
 		return nil, nil, err
