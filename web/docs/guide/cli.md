@@ -1727,6 +1727,56 @@ tokenops coach replies --since 7d
 tokenops coach replies --json
 ```
 
+### `tokenops coach lint-context`
+
+Finds what in every session's context changes between sessions or turns,
+and so breaks the prompt cache. A provider caches a prompt up to the first
+byte that differs from an earlier one: a timestamp near the start of the
+context makes every session rebuild the cache from that point, however
+stable the rest is. Keep the always-loaded context stable and put what
+changes after it, or leave it out and let the agent fetch it.
+
+It reads only what the harness loads into every session:
+
+- Claude Code: `~/.claude/CLAUDE.md`, the project's `CLAUDE.md`,
+  `.claude/CLAUDE.md` and `CLAUDE.local.md` (and its parents' up to the
+  repository root), and the files they `@import`, one level deep, never
+  twice; and the `SessionStart` and `UserPromptSubmit` hooks in the
+  managed, user and project settings.
+- Codex and opencode: the project's `AGENTS.md`, `~/.codex/AGENTS.md`
+  and opencode's `AGENTS.md`.
+- What hooks printed: the newest Claude Code transcripts (20 by default)
+  record each hook's output. A `SessionStart` hook whose output carries a
+  timestamp, a UUID or a commit hash, or differs from one session to the
+  next, is reported even when its command is a script.
+
+Hooks are never run: the command text is read (`date`, `uuidgen`,
+`git status`, `git log`, `$RANDOM`, `datetime.now` and the like, unless
+the output goes to a file). Each finding names its file and line or hook,
+the matched token and nothing around it, why it breaks the cache and the
+fix. Nothing is sent anywhere.
+
+| Severity | Means | Example |
+|---|---|---|
+| high | Opens every session's context and differs each time | a `SessionStart` hook that runs `date` |
+| medium | Changes often | a `UserPromptSubmit` hook that prints the time (each turn's copy is new input; earlier turns stay cached); a "Last updated: …" line a tool rewrites |
+| low | Changes only when someone edits the file | a date written in `CLAUDE.md` |
+
+Version numbers (`go 1.26`, `v1.2.3`), ports, colours and issue numbers
+are not flagged. A high finding also shows in the coach's findings
+(`tokenops glance`, the menu bar, `GET /api/findings`), from your own
+files and hooks only.
+
+```bash
+tokenops coach lint-context                       # this project, your files and hooks
+tokenops coach lint-context --root ~/src/app      # another project
+tokenops coach lint-context --transcripts -       # skip recorded hook output
+tokenops coach lint-context --json                # the report, for scripts
+```
+
+The same report is `tokenops_rules` with `view: lint_context` over MCP and
+`GET /api/coach/lint-context` on the daemon.
+
 ## Agent DX
 
 ### `tokenops dx`
