@@ -488,6 +488,10 @@ func coachChange(args map[string]any) (*change, error) {
 		parts = append(parts, "the share of sessions whose cost and drift tips are held back to "+quoted(h))
 		cmds = append(cmds, cli("coach holdout", words(argRaw(args, "holdout"))))
 	}
+	if h := argString(args, "headroom_note"); h != "" {
+		parts = append(parts, "the plan headroom note "+quoted(h))
+		cmds = append(cmds, cli("coach headroom-note", words(h)))
+	}
 	if len(parts) == 0 {
 		return nil, nil // reports the settings
 	}
