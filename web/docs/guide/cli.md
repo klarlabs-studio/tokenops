@@ -43,6 +43,20 @@ read the same way.
 behind lasts to the reset; ahead says when the window runs out at the
 rate so far. The daemon API, the menu bar and MCP report the same pace.
 
+A window nothing has used yet has no reset to count down to. Codex keeps
+reporting a full week from each reading until the first request starts
+it, so the glance says **starts at your next request** in place of a
+countdown, and such a window has no pace. The API marks it with
+`not_started: true` and leaves out its reset.
+
+**Early resets** are shown when a window resets well before the time its
+vendor gave: more than an hour early, after it had been at least a fifth
+used, and back to near empty. Nothing the operator did explains it, so the
+glance carries an info finding for a day, such as *Codex's weekly window
+reset 5d 12h early*, with the readings either side of it. A plan switch
+between those readings is not counted. The findings and `early_resets` in
+`/api/glance` report it.
+
 **Plan use** is two figures per plan over the last 7 days. *Plan used* is
 the average peak of the plan's longest window (usually the weekly one)
 across the windows that reset in that week. It answers "is this seat

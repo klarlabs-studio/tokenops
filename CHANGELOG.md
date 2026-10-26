@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- **plans, glance:** a window that resets early is reported. A vendor can reset a window before the time it had given (a reset on its own side), and the glance went from mostly used to nearly full with no explanation, so it looked like a bug. TokenOps now finds the early reset from the readings it already keeps: a window used by at least 20% whose next reading shows at most 5% and a new reset, with the old reset still more than an hour away when that reading was taken. A normal reset, a usage figure that falls without a reset, a window whose length changed, and a plan switch between the readings (from the plan history, or a change of the plan the vendor reports) are not early resets. Each one is an info finding for a day, *Codex's weekly window reset 5d 12h early*, with the before and after readings and the time the reset fell between. The glance carries `early_resets` on the API and shows the finding in the CLI and the menu bar.
+
+### Changed
+
+- **plans, menu bar, CLI:** a Codex window that has not started yet reads "starts at your next request" instead of a countdown. Codex reports it at 0% with a reset a full week away from each reading, so the countdown ran forever ("resets in 6d 23h", then 6d 22h). A window is marked not started only when two consecutive readings show 0% with a reset a full window's length from each, and the reset moves between them; the API carries `not_started: true` and no `resets_at` or `resets_in`, and the window has no pace.
+
 ## 0.111.0 - 2026-10-26
 
 ### Added
