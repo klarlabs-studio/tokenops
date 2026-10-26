@@ -61,7 +61,7 @@ changes nothing, and the agent is told not to retry.
 |---|---|---|
 | `tokenops_routing` | `decide`, `set_rule` | `advise`, `proposals` |
 | `tokenops_configure` | every setting that writes (`plan` and `preferred_model` with a provider, `mode` with a mode, `budget`, `usage_meter`) | listing plans or ceilings, reading the mode |
-| `tokenops_coach` | a preset, an autonomy, a verbosity, the holdout, a tip answer | the report (no arguments) |
+| `tokenops_coach` | a preset, an autonomy, a verbosity, the holdout, the headroom note, a tip answer | the report (no arguments) |
 | `tokenops_experiment` | `start`, `stop` | `status` |
 
 A client that cannot ask is refused, and the refusal names the command to
@@ -115,6 +115,21 @@ measured`). When only the low end of the range fits in what is left,
 routing advice picked, if it picked one); when not even the low end fits,
 it proposes deferring until the window resets. It never changes the
 model.
+
+Runs of the same task can differ by an order of magnitude in what they
+consume, so the middle half alone hides the tail you have to leave room
+for. `window_share.spread` adds the median and the 90th percentile of the
+same runs with their count, and the summary carries them:
+
+```text
+typically 15–25% of your 5h window (p50 20%, p90 28%, n=5); 38% left, resets in 1h10
+```
+
+With fewer than five runs, `spread.status` is `too_few_samples`, the note
+says so, and `spread.fallback` names what the answer rests on instead:
+`interquartile_estimate`, or `none` while there is no estimate either.
+The spread is read only from measured outcomes, never from an agent's own
+guess of what a task will take.
 
 `tokenops_review_work` with the same `workflow_id` reads the window again,
 records the share the task took against the estimate (`within`, `over`
