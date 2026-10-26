@@ -663,6 +663,7 @@ Avoidable usage since 8 Oct 01:52
   CLASS                              TOKENS     API $  WINDOW  TURNS  GUARDRAIL
   redundant re-reads                    18k     $0.02    0.1%      2  read guard
   cache-miss rebuilds                   70k     $0.44    0.3%      1  none yet
+    idle gaps over 1h                   70k     $0.44    0.3%      1
   over-tiered model                    259k     $0.28    1.1%      4  model routing
   retry loops and runaway growth       122k     $0.15    0.5%      2  none yet
   oversized context                       0     $0.00       —      0  compact tip
@@ -678,9 +679,28 @@ Each class reads a source TokenOps already keeps:
 - **Redundant re-reads**: files the read guard saw read again, in full and
   unchanged, and let through because it only observes.
 - **Cache-miss rebuilds**: a turn that wrote to the prompt cache more than
-  half of what the turn before had cached, on the same model and without a
-  compaction (the cache expired or was invalidated). Priced as writing that
-  part instead of reading it.
+  half of what the turn before had cached (the cache expired or was
+  invalidated). Priced as writing that part instead of reading it. Each
+  rebuild is split by why it happened, from token counts, times and model
+  IDs only:
+  - *model switches*: the turn ran on another model than the one before; a
+    cache belongs to one model.
+  - *idle gaps past the cache lifetime*: the turn came longer after the one
+    before than the cache lives: an hour when the session wrote its cache
+    with the extended lifetime, five minutes otherwise. The row names the
+    lifetime most of them outlived ("idle gaps over 1h").
+  - *prompt prefix changes*: any other rebuild after the turn before read
+    from the cache. Something early in the prompt changed: a timestamp, the
+    tool or MCP set, edited instructions. A tool-set change is not told
+    apart from the rest, because Claude Code's transcript records tools
+    added after the prefix, not changes to the tool list it starts with.
+  - *unexplained*: the turn before had no cache hits, or no times were
+    recorded.
+
+  A turn whose context fell to under half of the turn before's is a
+  compaction; its new cache is by design and not counted. Codex sessions
+  record cached reads but no cache writes, so their misses are not counted
+  here.
 - **Over-tiered model**: turns that stayed on a model after the coach
   advised a cheaper one for that kind of work, priced as the difference to
   the advised model.
@@ -714,8 +734,11 @@ avoidable part is money spent and leads in dollars ("~$4.10 avoidable"), or
 follows the plan's share ("…, plus $4.10 billed per use"). Usage stored with
 a cost counts as billed; usage without one only on a provider no plan's
 windows cover. With neither reading, the dollars say they are API prices.
-What the guardrails already saved follows the classes ("Guardrails already
-saved ~$1.50 at API prices") and is left out while it is nothing. The
+When cache rebuilds are among them, the finding names what most came after
+("Most cache rebuilds came after idle gaps over 5 minutes."), or what they
+came most often after when no cause has a majority; an unexplained top
+cause is not named. What the guardrails already saved follows the classes
+("Guardrails already saved ~$1.50 at API prices") and is left out while it is nothing. The
 report's `billed_usd`, on the total and on each class, is the billed part.
 `--json`,
 `GET /api/spend/waste` and `tokenops_spend` with `view: waste` return the
@@ -1472,13 +1495,20 @@ Opus 5.5 high · ▰▰▰▰▱▱ 5h 62% ↻12:49 · wk 41% ↻Mon · ctx 71% 
   spend limit), coloured green, amber and red as they fill;
 - the context against **where the session compacts** (your coach's
   setting), so it warns before compaction rather than at 100%;
-- the prompt cache hit ratio;
+- the prompt cache hit ratio, or, when under two minutes are left before
+  the cache expires, **cache cold in 1m**, and **cache cold** once it has:
+  the next prompt then writes the whole context to the cache again. The
+  cache lives five minutes after the last request, or an hour when the
+  session writes it with the extended lifetime; the line reads both from
+  the timestamps and token counts at the end of the session's transcript,
+  never its text;
 - the session's cost in your currency — marked "value" when a plan
   covers it, since then it is what the work was worth, not what you paid;
 - the coach's open tip, unless the coach is quiet or off.
 
-It reads only what Claude Code hands it and files TokenOps already keeps,
-never the event store or the network, and takes about 12 ms. Subagent
+It reads only what Claude Code hands it (the transcript path among it) and
+files TokenOps already keeps, never the event store or the network, and
+takes about 12 ms. Subagent
 rows show each subagent's model, effort and context. `NO_COLOR` turns
 the colours off.
 

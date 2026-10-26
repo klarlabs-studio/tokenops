@@ -121,7 +121,7 @@ func TestWriteWasteReportSplitsRebuildsByCause(t *testing.T) {
 	var b bytes.Buffer
 	writeWasteReport(&b, r)
 	out := b.String()
-	for _, want := range []string{"idle gaps past the cache lifetime (1h)", "2.0%", "model switches", "1.0%"} {
+	for _, want := range []string{"    idle gaps over 1h  ", "2.0%", "model switches", "1.0%"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}

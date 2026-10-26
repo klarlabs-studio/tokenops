@@ -105,7 +105,7 @@ func writeWasteReport(out io.Writer, r avoidable.Report) {
 		for _, k := range c.Causes {
 			name := k.Name
 			if k.TTL != "" {
-				name += " (" + k.TTL + ")"
+				name = "idle gaps over " + k.TTL
 			}
 			fmt.Fprintf(out, "    %-30s %8s %9s %7s %6d\n", name, humanCount(k.Tokens), usd(k.APIEquivalentUSD),
 				windowPct(k.WindowShare), k.Turns)
