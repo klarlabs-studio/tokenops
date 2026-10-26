@@ -19,10 +19,11 @@ func transcript(t *testing.T, sent time.Time, hour bool, trailing ...time.Time) 
 		h1 = 100
 	}
 	ts := func(at time.Time) string { return at.UTC().Format(time.RFC3339Nano) }
-	lines := []string{
-		`{"type":"user","timestamp":"` + ts(sent) + `","sessionId":"abc","message":{"content":"go"}}`,
-		`{"type":"assistant","timestamp":"` + ts(sent.Add(30*time.Second)) + `","sessionId":"abc","message":{"id":"m1","model":"claude-opus-4-7","usage":{"input_tokens":1,"cache_read_input_tokens":900,"cache_creation_input_tokens":100,"cache_creation":{"ephemeral_1h_input_tokens":` + strconv.Itoa(h1) + `}}}}`,
-	}
+	lines := make([]string, 0, 2+len(trailing))
+	lines = append(lines,
+		`{"type":"user","timestamp":"`+ts(sent)+`","sessionId":"abc","message":{"content":"go"}}`,
+		`{"type":"assistant","timestamp":"`+ts(sent.Add(30*time.Second))+`","sessionId":"abc","message":{"id":"m1","model":"claude-opus-4-7","usage":{"input_tokens":1,"cache_read_input_tokens":900,"cache_creation_input_tokens":100,"cache_creation":{"ephemeral_1h_input_tokens":`+strconv.Itoa(h1)+`}}}}`,
+	)
 	for _, at := range trailing {
 		lines = append(lines, `{"type":"user","timestamp":"`+ts(at)+`","sessionId":"abc","message":{"content":[{"type":"tool_result"}]}}`)
 	}
