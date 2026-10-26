@@ -1189,6 +1189,32 @@
                       },
                       "type": "array"
                     },
+                    "prompt_cache": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "client": {
+                          "type": "string"
+                        },
+                        "expires_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "last_request_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "remaining_seconds": {
+                          "type": "integer"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "ttl_seconds": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "routers": {
                       "items": {
                         "additionalProperties": false,
@@ -1831,6 +1857,32 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "prompt_cache": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "client": {
+                          "type": "string"
+                        },
+                        "expires_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "last_request_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "remaining_seconds": {
+                          "type": "integer"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "ttl_seconds": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
                     },
                     "routers": {
                       "items": {
@@ -3638,6 +3690,32 @@
                         "until": {
                           "format": "date-time",
                           "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "prompt_cache": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "client": {
+                          "type": "string"
+                        },
+                        "expires_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "last_request_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "remaining_seconds": {
+                          "type": "integer"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "ttl_seconds": {
+                          "type": "integer"
                         }
                       },
                       "type": "object"
@@ -7818,6 +7896,60 @@
                               }
                             },
                             "type": "object"
+                          },
+                          "causes": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "Amount": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "api_equivalent_usd": {
+                                      "type": "number"
+                                    },
+                                    "billed_usd": {
+                                      "type": "number"
+                                    },
+                                    "tokens": {
+                                      "type": "integer"
+                                    },
+                                    "window_share": {
+                                      "items": {
+                                        "additionalProperties": false,
+                                        "properties": {
+                                          "pct": {
+                                            "type": "number"
+                                          },
+                                          "provider": {
+                                            "type": "string"
+                                          },
+                                          "window": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "type": "object"
+                                      },
+                                      "type": "array"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "cause": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "ttl": {
+                                  "type": "string"
+                                },
+                                "turns": {
+                                  "type": "integer"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
                           },
                           "class": {
                             "type": "string"
