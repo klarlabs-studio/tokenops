@@ -144,7 +144,8 @@ func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget f
 	}
 	if boundary {
 		// The pause point (ADR 0014): every tool call, so the matcher is
-		// "*". It reads ids only and answers from two small files.
+		// "*". It reads ids and the tool's name, hashes the tool's input
+		// for the loop breaker, and answers from a few small files.
 		out = append(out, hookSpec{
 			name:    "boundary-guard (action boundaries)",
 			event:   "PreToolUse",

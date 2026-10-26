@@ -232,6 +232,8 @@ func crossingsText(cs []teamwire.Crossing) string {
 			parts = append(parts, "sharing with "+c.Destination)
 		case "session_cost_usd":
 			parts = append(parts, fmt.Sprintf("session $%.2f %s $%.2f", c.Value, c.Op, c.Threshold))
+		case "loop_calls":
+			parts = append(parts, fmt.Sprintf("%.0f calls round a loop %s %g", c.Value, c.Op, c.Threshold))
 		case "plan_left_pct":
 			parts = append(parts, fmt.Sprintf("plan left %.1f%% %s %g%% (%s)", c.Value, c.Op, c.Threshold, cmp.Or(c.Window, "tightest")))
 		default:

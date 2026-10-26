@@ -106,6 +106,9 @@ type Inputs struct {
 	// Pause is the headroom pause: whether one is set and what it did,
 	// or in shadow would have done, this week.
 	Pause *boundaries.PauseSummary
+	// Loop is the loop breaker: whether one is set and what it did, or in
+	// shadow would have done, this week.
+	Loop *boundaries.PauseSummary
 	// Presence is the presence check on approvals (ADR 0015), in shadow.
 	Presence *boundaries.PresenceStatus
 }
@@ -127,6 +130,7 @@ func Compute(in Inputs) Report {
 	out = append(out, budget(in.CoachHook)...)
 	out = append(out, coaching(in.Coach, in.CoachHook)...)
 	out = append(out, headroomPause(in.Pause, in.Glance)...)
+	out = append(out, loopBreaker(in.Loop)...)
 	out = append(out, presenceFindings(in.Presence)...)
 	uniqueKeys(out)
 	sort.SliceStable(out, func(i, j int) bool { return urgency[out[i].Level] < urgency[out[j].Level] })

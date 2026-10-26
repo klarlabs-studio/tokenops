@@ -144,6 +144,8 @@ tokenops boundaries status --json`,
 	"boundaries promote": `tokenops boundaries promote session-spend`,
 	"boundaries headroom-pause": `tokenops boundaries headroom-pause
 tokenops boundaries promote headroom-pause`,
+	"boundaries loop-breaker": `tokenops boundaries loop-breaker
+tokenops boundaries promote loop-breaker`,
 	"boundaries demote": `tokenops boundaries demote session-spend`,
 	"boundaries presence enroll": `tokenops boundaries presence enroll             # one Touch ID or password dialog
 tokenops boundaries presence enroll --replace   # new Mac or lost key: approvals held 15 minutes`,

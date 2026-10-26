@@ -55,6 +55,9 @@ const (
 	// EnforcementIdle is a decision point inside TokenOps that is not in
 	// use, so the rule has nothing to decide there.
 	EnforcementIdle = "idle"
+	// EnforcementNotEvaluated is a harness that does not give the figure
+	// the rule reads, so the rule never matches there.
+	EnforcementNotEvaluated = "not evaluated"
 )
 
 // HarnessStatus is how one harness treats a rule.
@@ -206,6 +209,9 @@ func harnesses(r domain.Rule, installed map[string]bool) []HarnessStatus {
 	for _, h := range []string{HarnessClaudeCode, HarnessOpencode} {
 		hs := HarnessStatus{Harness: h}
 		switch {
+		case readsLoop(r) && h == HarnessOpencode:
+			hs.Enforcement = EnforcementNotEvaluated
+			hs.Note = loopOnlyClaudeCode
 		case r.Action == domain.ActionSubagentModel && h == HarnessOpencode:
 			hs.Enforcement = EnforcementAdviceOnly
 			hs.Note = "opencode's subagents are not routed through a hook TokenOps can answer"
@@ -224,12 +230,29 @@ func harnesses(r domain.Rule, installed map[string]bool) []HarnessStatus {
 		out = append(out, hs)
 	}
 	for _, h := range []string{HarnessCodex, HarnessCursor} {
+		if readsLoop(r) {
+			out = append(out, HarnessStatus{Harness: h, Enforcement: EnforcementNotEvaluated, Note: loopOnlyClaudeCode})
+			continue
+		}
 		out = append(out, HarnessStatus{
 			Harness: h, Enforcement: EnforcementAdviceOnly,
 			Note: "its hooks cannot refuse a call; the rule reaches the agent as advice through tokenops_glance",
 		})
 	}
 	return out
+}
+
+// loopOnlyClaudeCode says why a loop rule is not evaluated in a harness.
+const loopOnlyClaudeCode = "loop_calls needs each tool call's input, which only Claude Code's hook sends"
+
+// readsLoop reports whether a rule reads the loop figure.
+func readsLoop(r domain.Rule) bool {
+	for _, c := range r.When {
+		if c.Field == domain.FieldLoopCalls {
+			return true
+		}
+	}
+	return false
 }
 
 // point is a decision point inside TokenOps: enforced or in shadow when

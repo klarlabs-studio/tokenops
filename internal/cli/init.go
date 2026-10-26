@@ -122,7 +122,9 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	cfg.Money.Currency = currency
 	// The headroom pause, in shadow: inferred and set without asking, as
 	// every boundary starts by recording what it would have done.
-	cfg.Boundaries = append(cfg.Boundaries, config.HeadroomPauseRule())
+	// The loop breaker likewise: it records each session whose agent went
+	// round a loop with no file changed, and binds nothing.
+	cfg.Boundaries = append(cfg.Boundaries, config.HeadroomPauseRule(), config.LoopBreakerRule())
 
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -191,6 +193,7 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\nstorage: %s\n", configPath, storagePath)
 	fmt.Fprintf(cmd.OutOrStdout(), "currency: %s (%s; change with --currency)\n", currency, currencyFrom)
 	fmt.Fprintf(cmd.OutOrStdout(), "headroom pause: in shadow at 10%% left in the tightest plan window — records each session it would have paused, binds nothing; `tokenops boundaries promote %s` makes it pause\n", config.HeadroomPauseName)
+	fmt.Fprintf(cmd.OutOrStdout(), "loop breaker: in shadow at 4 calls round a loop with no file changed — records each session it would have paused, binds nothing; `tokenops boundaries promote %s` makes it pause\n", config.LoopBreakerName)
 	if rules.Enabled {
 		fmt.Fprintf(cmd.OutOrStdout(), "rules root: %s (repo_id=%s)\n", rules.Root, rules.RepoID)
 	} else {
