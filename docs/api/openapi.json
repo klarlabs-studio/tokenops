@@ -852,6 +852,9 @@
                       },
                       "type": "array"
                     },
+                    "headroom_note": {
+                      "type": "boolean"
+                    },
                     "holdout_percent": {
                       "type": "integer"
                     },
@@ -1255,6 +1258,9 @@
                   "autonomy": {
                     "type": "string"
                   },
+                  "headroom_note": {
+                    "type": "boolean"
+                  },
                   "holdout": {
                     "type": "integer"
                   },
@@ -1494,6 +1500,9 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "headroom_note": {
+                      "type": "boolean"
                     },
                     "holdout_percent": {
                       "type": "integer"
