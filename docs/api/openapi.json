@@ -3085,6 +3085,49 @@
                       },
                       "type": "array"
                     },
+                    "early_resets": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "duration_ns": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "observed_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "prev_observed_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "prev_resets_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "prev_used_pct": {
+                            "type": "number"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "resets_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "used_pct": {
+                            "type": "number"
+                          },
+                          "vendor_label": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "insight": {
                       "additionalProperties": false,
                       "properties": {
@@ -3370,6 +3413,9 @@
                                     "name": {
                                       "type": "string"
                                     },
+                                    "not_started": {
+                                      "type": "boolean"
+                                    },
                                     "observed_at": {
                                       "format": "date-time",
                                       "type": "string"
@@ -3619,6 +3665,9 @@
                                     },
                                     "name": {
                                       "type": "string"
+                                    },
+                                    "not_started": {
+                                      "type": "boolean"
                                     },
                                     "observed_at": {
                                       "format": "date-time",
@@ -4397,6 +4446,9 @@
                                 "name": {
                                   "type": "string"
                                 },
+                                "not_started": {
+                                  "type": "boolean"
+                                },
                                 "observed_at": {
                                   "format": "date-time",
                                   "type": "string"
@@ -4557,6 +4609,9 @@
                                 },
                                 "name": {
                                   "type": "string"
+                                },
+                                "not_started": {
+                                  "type": "boolean"
                                 },
                                 "observed_at": {
                                   "format": "date-time",
