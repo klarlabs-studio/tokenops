@@ -130,3 +130,20 @@ func TestTopRebuildCause(t *testing.T) {
 		t.Error("a top cause with no rebuilds")
 	}
 }
+
+// A pause under the lifetime before a long generation is no idle gap: the
+// request went out three minutes after the turn before, though the turn
+// was recorded six minutes after it.
+func TestRebuildGapRunsToTheRequest(t *testing.T) {
+	cur := cacheTurn("gen", 6*time.Minute, opus, 0, 10_000, 0)
+	cur.Latency = 3 * time.Minute
+	in := causesFixture()
+	in.Turns = []analytics.SessionTurn{cacheTurn("gen", 0, opus, 9_500, 500, 0), cur}
+	rb := class(Build(in), waste.ClassCacheRebuild)
+	if _, ok := causeOf(rb, waste.CauseTTLExpired); ok {
+		t.Errorf("a long generation read as an idle gap: %+v", rb.Causes)
+	}
+	if got, ok := causeOf(rb, waste.CausePrefixChanged); !ok || got.Turns != 1 {
+		t.Errorf("prefix change = %+v", rb.Causes)
+	}
+}

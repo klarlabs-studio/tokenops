@@ -32,8 +32,8 @@ const (
 	// CauseModelSwitch is a turn on another model than the turn before: a
 	// cache belongs to one model.
 	CauseModelSwitch RebuildCause = "model_switch"
-	// CauseTTLExpired is a turn sent longer after the one before than the
-	// cache's lifetime.
+	// CauseTTLExpired is a turn whose request went out longer after the
+	// one before than the cache's lifetime (IdleGap).
 	CauseTTLExpired RebuildCause = "ttl_expired"
 	// CausePrefixChanged is any other rebuild after the turn before read
 	// from the cache: something early in the prompt changed (a timestamp,
@@ -112,7 +112,7 @@ func ClassifyRebuild(prev, cur CacheTurn, ttl time.Duration) (Rebuild, bool) {
 	switch {
 	case prev.Model != "" && cur.Model != "" && prev.Model != cur.Model:
 		r.Cause = CauseModelSwitch
-	case timed && ttl > 0 && cur.At.Sub(prev.At) > ttl:
+	case timed && ttl > 0 && IdleGap(prev, cur) > ttl:
 		r.Cause = CauseTTLExpired
 	case timed && prev.CacheRead > 0:
 		r.Cause = CausePrefixChanged
@@ -120,6 +120,19 @@ func ClassifyRebuild(prev, cur CacheTurn, ttl time.Duration) (Rebuild, bool) {
 		r.Cause = CauseUnknown
 	}
 	return r, true
+}
+
+// IdleGap is how long the cache sat unused before cur: from when prev was
+// recorded to when cur's request went out, which is cur's recorded time
+// less its latency. A latency that is unknown (zero) or not shorter than
+// the recorded gap is not trusted, and the recorded gap stands. Without
+// it, a short pause before a long generation would read as an idle gap.
+func IdleGap(prev, cur CacheTurn) time.Duration {
+	gap := cur.At.Sub(prev.At)
+	if cur.Latency > 0 && cur.Latency < gap {
+		return gap - cur.Latency
+	}
+	return gap
 }
 
 // TTLOf is the lifetime a turn's cache write bought; false when it wrote
