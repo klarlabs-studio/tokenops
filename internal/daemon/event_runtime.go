@@ -14,6 +14,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/promptcache"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
@@ -256,7 +257,7 @@ func stateDeps(cfg config.Config, store *sqlite.Store, health func() []state.Sou
 				ledger, levers := coachEnv(cfg)
 				r := coachcap.Status(cfg, ledger, levers, now)
 				if store != nil {
-					r.PromptCache = headroom.PromptCache(context.Background(), store, now)
+					r.PromptCache = promptcache.Current(context.Background(), store, now)
 				}
 				return r
 			},

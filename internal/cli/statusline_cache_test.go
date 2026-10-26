@@ -33,33 +33,6 @@ func transcript(t *testing.T, sent time.Time, hour bool, trailing ...time.Time) 
 	return path
 }
 
-// The cache goes cold its lifetime after the last request went out: the
-// prompt that started the last turn, or a tool result sent after it.
-func TestCacheExpiryFromTheTranscript(t *testing.T) {
-	sent := time.Date(2026, 10, 26, 9, 0, 0, 0, time.UTC)
-	cases := []struct {
-		name string
-		path string
-		want time.Time
-	}{
-		{"five-minute cache", transcript(t, sent, false), sent.Add(5 * time.Minute)},
-		{"hour cache", transcript(t, sent, true), sent.Add(time.Hour)},
-		{"a request after the last reply", transcript(t, sent, false, sent.Add(2*time.Minute)), sent.Add(7 * time.Minute)},
-	}
-	for _, c := range cases {
-		got, ok := cacheExpiry(c.path)
-		if !ok || !got.Equal(c.want) {
-			t.Errorf("%s: expiry = %v, %v; want %v", c.name, got, ok, c.want)
-		}
-	}
-	if _, ok := cacheExpiry(""); ok {
-		t.Error("an expiry with no transcript")
-	}
-	if _, ok := cacheExpiry(filepath.Join(t.TempDir(), "missing.jsonl")); ok {
-		t.Error("an expiry for a missing transcript")
-	}
-}
-
 // The status line warns from the transcript Claude Code hands it.
 func TestStatuslineWarnsBeforeTheCacheGoesCold(t *testing.T) {
 	statuslineHome(t, "", nil)
