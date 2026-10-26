@@ -55,8 +55,9 @@ var markers = []struct {
 
 // ScanText finds the volatile tokens in text, line by line, in order.
 func ScanText(text string) []Match {
-	var out []Match
-	for i, line := range strings.Split(text, "\n") {
+	lines := strings.Split(text, "\n")
+	out := make([]Match, 0, len(lines)/8)
+	for i, line := range lines {
 		out = append(out, scanLine(line, i+1)...)
 	}
 	return out

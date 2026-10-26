@@ -269,6 +269,7 @@ func TestLintFlagsSessionStartHookThatPrintsTheDate(t *testing.T) {
 			"date > /tmp/last-session",
 			"mnemos hook brief --update-format x",
 			"git log -1 --format=%H 2>/dev/null",
+			"bash -c 'uuidgen'",
 		},
 		EventUserPromptSubmit: {"date -u"},
 		"PreToolUse":          {"date"},
@@ -282,19 +283,19 @@ func TestLintFlagsSessionStartHookThatPrintsTheDate(t *testing.T) {
 		}
 	}
 	ss := hooks[EventSessionStart]
-	if len(ss) != 4 {
-		t.Fatalf("SessionStart findings = %+v, want date, $(date), git status, git log", ss)
+	if len(ss) != 5 {
+		t.Fatalf("SessionStart findings = %+v, want date, $(date), git status, git log, uuidgen under bash -c", ss)
 	}
 	for _, f := range ss {
 		if f.Severity != SeverityHigh || f.Path != settings || f.Line == 0 || f.Fix == "" {
 			t.Errorf("SessionStart finding = %+v, want high with path, line and fix", f)
 		}
 	}
-	tokens := []string{}
+	tokens := make([]string, 0, len(ss))
 	for _, f := range ss {
 		tokens = append(tokens, f.Token)
 	}
-	for _, want := range []string{"date", "git status", "git log"} {
+	for _, want := range []string{"date", "git status", "git log", "uuidgen"} {
 		if !slices.Contains(tokens, want) {
 			t.Errorf("tokens = %v, want %q", tokens, want)
 		}
@@ -312,8 +313,8 @@ func TestLintFlagsSessionStartHookThatPrintsTheDate(t *testing.T) {
 	if len(hooks["PreToolUse"]) != 0 {
 		t.Errorf("PreToolUse is not in the context: %+v", hooks["PreToolUse"])
 	}
-	if r.High != 4 {
-		t.Errorf("high = %d, want 4", r.High)
+	if r.High != 5 {
+		t.Errorf("high = %d, want 5", r.High)
 	}
 }
 
@@ -332,7 +333,7 @@ func TestLintReadsProjectSettingsHooks(t *testing.T) {
 // records.
 func transcript(t *testing.T, root, session string, records ...map[string]any) {
 	t.Helper()
-	var lines []string
+	lines := make([]string, 0, 1+len(records))
 	lines = append(lines, `{"type":"user","sessionId":"`+session+`","message":{"content":"hi"}}`)
 	for _, a := range records {
 		b, err := json.Marshal(map[string]any{"type": "attachment", "sessionId": session, "attachment": a})

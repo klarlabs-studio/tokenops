@@ -130,6 +130,12 @@ func volatileCommands(command string) []volatile {
 			continue
 		}
 		switch filepath.Base(words[0]) {
+		case "sh", "bash", "zsh":
+			// sh -c '…' runs its quoted script: read that instead.
+			if len(words) > 2 && words[1] == "-c" {
+				script := strings.Join(words[2:], " ")
+				out = append(out, volatileCommands(strings.Trim(script, `"'`))...)
+			}
 		case "date", "gdate":
 			out = append(out, volatile{KindClock, "date"})
 		case "uptime":
@@ -147,7 +153,16 @@ func volatileCommands(command string) []volatile {
 			out = append(out, c)
 		}
 	}
-	return out
+	// One finding per thing a command prints, however often it prints it.
+	seen := map[volatile]bool{}
+	uniq := out[:0]
+	for _, v := range out {
+		if !seen[v] {
+			seen[v] = true
+			uniq = append(uniq, v)
+		}
+	}
+	return uniq
 }
 
 // commandWords are a segment's words with leading variable assignments
