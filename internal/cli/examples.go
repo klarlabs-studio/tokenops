@@ -133,6 +133,8 @@ tokenops coach preset advise`,
 	"coach migrate":       `tokenops coach migrate`,
 	"coach prompts":       `tokenops coach prompts --since 7d`,
 	"coach replies":       `tokenops coach replies --since 24h --json`,
+	"coach lint-context": `tokenops coach lint-context              # this project, your files and hooks
+tokenops coach lint-context --transcripts - --json`,
 	"mode": `tokenops mode                    # print the mode
 tokenops mode active`,
 	"routing proposals":    `tokenops routing proposals --json`,

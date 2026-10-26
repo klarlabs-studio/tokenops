@@ -3,10 +3,12 @@ package proxy
 import (
 	"errors"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/findings"
+	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 )
 
@@ -26,6 +28,8 @@ type SessionRoots struct {
 //	GET /api/story?days=&all=&limit=    recent work, task by task
 //	GET /api/story/runtime?days=&all=&limit=  where tasks' time went
 //	GET /api/coach/prompts?since=&until=&session_id=&limit=
+//	GET /api/coach/lint-context?root=   what in every session's context
+//	                                    changes and breaks the prompt cache
 //
 // dx, story and story/runtime also take ?source=, ?model= and ?role=,
 // the cohort filters the CLI and the MCP tool take.
@@ -97,6 +101,16 @@ func (s *Server) registerSessionRoutes(mux RouteMux) {
 			return
 		}
 		writeAPIJSON(w, http.StatusOK, f)
+	})
+	mux.HandleFunc("GET /api/coach/lint-context", func(w http.ResponseWriter, r *http.Request) {
+		root := r.URL.Query().Get("root")
+		if root != "" {
+			if info, err := os.Stat(root); err != nil || !info.IsDir() {
+				writeAPIError(w, http.StatusBadRequest, errors.New("root: not a directory"))
+				return
+			}
+		}
+		writeAPIJSON(w, http.StatusOK, prefixlint.Lint(prefixlint.ProjectSources(root, s.sessions().Prompts)))
 	})
 }
 
