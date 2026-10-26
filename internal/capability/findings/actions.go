@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -119,6 +120,12 @@ func key(kind string, subject ...string) string {
 
 // maxKey bounds a key's length.
 const maxKey = 128
+
+var keyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9:._-]{0,127}$`)
+
+// ValidKey reports whether k has a key's shape: lower-case letters,
+// digits and ".", "_", "-", ":", at most 128 of them.
+func ValidKey(k string) bool { return keyPattern.MatchString(k) }
 
 func slug(s string) string {
 	var b strings.Builder
