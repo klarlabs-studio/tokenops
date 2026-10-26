@@ -1704,6 +1704,30 @@ context was compacted, and whether a commit landed in the session's
 repository within a day. The difference in spend is the tip's realized
 saving. Until each side has at least 5 sessions it is "not established".
 
+### `tokenops coach headroom-note [on|off]`
+
+An agent budgets only what it can see. With the route-guard hook installed,
+the agent is told how much of the plan is left, in one line with its
+prompt:
+
+```text
+Plan headroom: 5h window 38% left (resets 14:20), week 61% left.
+```
+
+Only the binding window is named, the one with the least left, plus another
+within 25 points of it. The line is said at a session's first prompt and
+again only when a window crosses 50, 25 or 10% left, or the binding window
+changes; otherwise nothing is added.
+
+It travels in the prompt hook's `additionalContext`, which Claude Code
+inserts where the hook fired, after the part of the conversation already
+cached, and keeps in the transcript as written. It is never put in
+`CLAUDE.md`, `AGENTS.md` or a session-start block, where a figure that
+changes would invalidate the cached prefix. On by default; `off` turns it
+off (`coach.headroom_note: false`), and so does the inform power being off.
+A preset keeps your choice, and the `tokenops_coach` MCP tool takes the
+same setting (`headroom_note`).
+
 ### `tokenops coach delivery`
 
 The older setting the coach replaced; it still works.
@@ -1996,7 +2020,7 @@ TokenOps wires four hooks into a client, each independent:
 |---|---|---|
 | `--coach` | end of turn | the coaching nudge, against a per-session budget |
 | `--read-guard` | before a file read | refuses a redundant re-read of an unchanged file |
-| `--route-guard` | when you submit a prompt | states the case for a cheaper model when the one in use is over-spec |
+| `--route-guard` | when you submit a prompt | states the case for a cheaper model when the one in use is over-spec, and the [plan headroom note](#tokenops-coach-headroom-note-on-off) |
 | `--boundary` | before every tool call | checks your [action boundaries](/guide/boundaries); Claude Code and opencode only |
 
 `--client` selects which client to act on, and **install, status and
