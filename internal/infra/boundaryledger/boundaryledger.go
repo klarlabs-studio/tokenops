@@ -19,6 +19,7 @@
 //	pending/<id>.json    a decision waiting on an answer
 //	answers/<id>.json    the operator's answer
 //	sessions/<id>.json   per-session counters for status
+//	calls/<id>.jsonl     per-session latest tool calls (name and input hash) for the loop breaker
 //	figures.json         the daemon's plan and budget readings
 //	org.json             the organisation's signed rules, as fetched
 package boundaryledger

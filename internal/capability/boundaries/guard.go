@@ -106,8 +106,9 @@ func LocalUser() string {
 	return "local"
 }
 
-// Call is one action the pause point is asked about. It carries ids and
-// a model name, never a prompt or a tool's input.
+// Call is one action the pause point is asked about. It carries ids, a
+// model name, and a tool's name with a hash of its input: never a prompt
+// or the input itself.
 type Call struct {
 	Harness        string
 	SessionID      string
@@ -126,6 +127,11 @@ type Call struct {
 	Provider string
 	// Destination is where shared figures go, for share.
 	Destination string
+	// ToolName is the tool about to run, and ArgsHash a hash of its input
+	// (domain.HashToolInput), for the loop figure. Empty when the harness
+	// does not say.
+	ToolName string
+	ArgsHash string
 }
 
 // Attribution derives the agent and workflow ids every other surface
@@ -305,6 +311,16 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 			}
 		}
 	}
+	if needs(rules, domain.FieldLoopCalls) {
+		if loop, ok := readLoop(call, env); ok {
+			f.Loop = loop
+			ev = append(ev, eventschema.EvidenceRef{
+				Kind: "tool_loop", Source: "pause_point_calls", ObservedAt: now, Confidence: 1, Scope: call.SessionID,
+				Caveat: "tool names and input hashes only; an edit or write it had not seen counts as progress, " +
+					"a file changed through a shell does not",
+			})
+		}
+	}
 	if needs(rules, domain.FieldBudgetUsed) {
 		if fig, ok := figs.get(); ok && len(fig.BudgetUsedPct) > 0 {
 			f.BudgetUsedPct = fig.BudgetUsedPct
@@ -315,6 +331,24 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 		}
 	}
 	return f, ev
+}
+
+// readLoop adds the call to the session's latest calls and reads the loop
+// at their end. A call without a tool name or an input hash is not kept,
+// and its loop is unknown: the harness did not say what ran.
+func readLoop(call Call, env Env) (domain.LoopFigure, bool) {
+	if call.ToolName == "" || call.ArgsHash == "" {
+		return domain.LoopFigure{}, false
+	}
+	recent, err := env.Dir.RecentCalls(call.SessionID)
+	if err != nil {
+		return domain.LoopFigure{}, false
+	}
+	this := domain.ToolCall{Tool: call.ToolName, Hash: call.ArgsHash}
+	if err := env.Dir.AppendCall(call.SessionID, this); err != nil {
+		return domain.LoopFigure{}, false
+	}
+	return domain.LoopFigure{Known: true, Reading: domain.ReadLoop(append(recent, this))}, true
 }
 
 // lazyFigures reads the daemon's figures at most once per evaluation, and
@@ -538,7 +572,7 @@ func (g *guard) unattendedReason(m domain.Match, id string) string {
 		way = fmt.Sprintf(" They can allow this one step with `tokenops approve %s`, or the rest of the session with "+
 			"`tokenops approve %s --session`; either asks for Touch ID, a paired Apple Watch or the password.", id, id)
 	}
-	return head + way + g.refusedNote()
+	return head + way + g.refusedNote() + loopHint(m)
 }
 
 // answered applies an answer the operator already gave.
@@ -684,7 +718,17 @@ func routedReason(m domain.Match, id string) string {
 
 func askReason(m domain.Match, id string) string {
 	return fmt.Sprintf("tokenops boundary %q: %s. Continue? Yes lets the agent go on for the rest of this session (%s).",
-		m.Rule.Name, m.Crossed(), id)
+		m.Rule.Name, m.Crossed(), id) + loopHint(m)
+}
+
+// loopHint tells an agent a loop stopped what to do instead of retrying.
+func loopHint(m domain.Match) string {
+	for _, c := range m.Rule.When {
+		if c.Field == domain.FieldLoopCalls {
+			return " This looks like a loop: change approach, or ask the user, rather than repeat the same calls."
+		}
+	}
+	return ""
 }
 
 func unattendedReason(m domain.Match, id string) string {
@@ -695,7 +739,7 @@ func unattendedReason(m domain.Match, id string) string {
 	}
 	return fmt.Sprintf("tokenops boundary %q: %s, and this %s. Do not retry: stop and tell the operator. "+
 		"They can allow this one step with `tokenops approve %s`, or the rest of the session with `tokenops approve %s --session`.",
-		m.Rule.Name, m.Crossed(), approverPhrase(m.Rule.Require), id, id)
+		m.Rule.Name, m.Crossed(), approverPhrase(m.Rule.Require), id, id) + loopHint(m)
 }
 
 func denyReason(m domain.Match) string {
@@ -704,7 +748,7 @@ func denyReason(m domain.Match) string {
 			m.Rule.Name, m.Crossed(), heldUntil(m.Rule.Action))
 	}
 	return fmt.Sprintf("tokenops boundary %q: %s, and the rule refuses any further %s. Do not retry: stop and tell the operator; "+
-		"only changing the rule in TokenOps' config.yaml lifts it.", m.Rule.Name, m.Crossed(), actionNoun(m.Rule.Action))
+		"only changing the rule in TokenOps' config.yaml lifts it.", m.Rule.Name, m.Crossed(), actionNoun(m.Rule.Action)) + loopHint(m)
 }
 
 func declinedReason(m domain.Match, approver string) string {

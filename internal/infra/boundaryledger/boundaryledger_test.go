@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -306,5 +307,34 @@ func TestAMatchLogIsFoldedPastItsCap(t *testing.T) {
 	s := mustSessions(t, d)["s1"]
 	if s.Matches["spend"] != n || !s.LastAt.Equal(at.Add((n-1)*time.Second)) {
 		t.Fatalf("after folding: %+v", s)
+	}
+}
+
+// TestRecentCallsKeepTheNewestWindow pins the loop figure's input: the
+// session's latest calls, oldest first, at most a window of them, each a
+// tool name and a hash.
+func TestRecentCallsKeepTheNewestWindow(t *testing.T) {
+	d := Dir(t.TempDir())
+	if got, err := d.RecentCalls("s1"); err != nil || len(got) != 0 {
+		t.Fatalf("no calls yet = %v, %v", got, err)
+	}
+	total := boundaries.LoopWindow*3 + 5
+	for i := range total {
+		if err := d.AppendCall("s1", boundaries.ToolCall{Tool: "Bash", Hash: fmt.Sprintf("%016x", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := d.RecentCalls("s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != boundaries.LoopWindow {
+		t.Fatalf("%d calls read, want %d", len(got), boundaries.LoopWindow)
+	}
+	if want := fmt.Sprintf("%016x", total-1); got[len(got)-1].Hash != want {
+		t.Fatalf("newest = %+v, want hash %s", got[len(got)-1], want)
+	}
+	if other, _ := d.RecentCalls("s2"); len(other) != 0 {
+		t.Fatalf("another session read %d calls", len(other))
 	}
 }
