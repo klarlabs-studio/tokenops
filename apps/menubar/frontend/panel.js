@@ -339,8 +339,10 @@
       item.appendChild(mark);
       var body = el("div", "finding-body");
       body.appendChild(el("div", "finding-title", f.title));
-      if (f.evidence) body.appendChild(el("div", "note", f.evidence));
-      if (f.action) body.appendChild(withCode(el("div", "finding-action"), f.action));
+      if (f.evidence) body.appendChild(withCode(el("div", "note"), f.evidence));
+      // A finding with buttons does what its command would; the command
+      // stays for the CLI and MCP, where nothing can be clicked.
+      if (f.action && !(f.actions && f.actions.length)) body.appendChild(withCode(el("div", "finding-action"), f.action));
       if (f.key) findingControls(body, f);
       item.appendChild(body);
       box.appendChild(item);
