@@ -182,3 +182,24 @@ func TestParseMode(t *testing.T) {
 		t.Error("default should be observe")
 	}
 }
+
+// ReadStatsSince counts only what the guard did from since on, so a
+// surface can say what it did today rather than ever.
+func TestReadStatsSince(t *testing.T) {
+	dir := t.TempDir()
+	f := tmpFile(t, "content-here")
+	day1, day2 := time.Date(2026, 10, 25, 9, 0, 0, 0, time.UTC), time.Date(2026, 10, 26, 9, 0, 0, 0, time.UTC)
+	Evaluate(dir, "s1", "", f, false, ModeActive, day1) // allow
+	Evaluate(dir, "s1", "", f, false, ModeActive, day1) // blocked, day 1
+	Evaluate(dir, "s1", "", f, false, ModeActive, day2) // blocked, day 2
+	Evaluate(dir, "s1", "", f, false, ModeActive, day2) // blocked, day 2
+
+	all, err := ReadStatsSince(dir, time.Time{})
+	if err != nil || all.Blocked != 3 {
+		t.Fatalf("all = %+v, %v", all, err)
+	}
+	today, err := ReadStatsSince(dir, day2.Truncate(24*time.Hour))
+	if err != nil || today.Blocked != 2 || today.ReclaimedTok <= 0 || today.ReclaimedTok >= all.ReclaimedTok {
+		t.Errorf("today = %+v, %v", today, err)
+	}
+}

@@ -641,6 +641,37 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "activity": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "default_model_moves": {
+                            "type": "integer"
+                          },
+                          "period": {
+                            "type": "string"
+                          },
+                          "refused_rereads": {
+                            "type": "integer"
+                          },
+                          "refused_tokens": {
+                            "type": "integer"
+                          },
+                          "since": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "subagent_moves": {
+                            "type": "integer"
+                          },
+                          "summary": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "answered": {
                       "additionalProperties": false,
                       "properties": {
@@ -1142,6 +1173,21 @@
                     },
                     "preset": {
                       "type": "string"
+                    },
+                    "presets": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "routers": {
                       "items": {
@@ -1238,6 +1284,37 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "activity": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "default_model_moves": {
+                            "type": "integer"
+                          },
+                          "period": {
+                            "type": "string"
+                          },
+                          "refused_rereads": {
+                            "type": "integer"
+                          },
+                          "refused_tokens": {
+                            "type": "integer"
+                          },
+                          "since": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "subagent_moves": {
+                            "type": "integer"
+                          },
+                          "summary": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "answered": {
                       "additionalProperties": false,
                       "properties": {
@@ -1739,6 +1816,21 @@
                     },
                     "preset": {
                       "type": "string"
+                    },
+                    "presets": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "routers": {
                       "items": {

@@ -65,6 +65,12 @@ type Report struct {
 	// quality against comparable unmoved work, and any retraction. Only
 	// Status fills it.
 	Moves *MoveVerdicts `json:"moves,omitempty"`
+	// Activity is what the coach did on its own today and over the last
+	// week, in that order. Only Status fills it.
+	Activity []Activity `json:"activity,omitempty"`
+	// Presets are the presets with what each does, least autonomous
+	// first. Only Status fills it.
+	Presets []PresetSummary `json:"presets,omitempty"`
 }
 
 // FollowThroughSummary is the follow-through evidence for one kind.

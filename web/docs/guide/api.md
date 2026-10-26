@@ -61,7 +61,7 @@ operator's instruction text and local file paths.
 | `GET /api/plans/advice` | Plan right-sizing over `days` (30 by default, up to 90): each plan's windows replayed against its other tiers, metered overflow and the API at list price. Advice only |
 | `GET /api/status` | Readiness, blockers, warnings, next actions |
 | `GET /api/mode` | Operating mode and what each subsystem may do |
-| `GET /api/coach` | The coach's dials and each power's autonomy |
+| `GET /api/coach` | The coach's dials and each power's autonomy; `activity` is what it did on its own `today` (since local midnight) and over the last `7d`: subagents moved to a cheaper model, new sessions started on one, re-reads the read guard refused, with a one-line `summary` that is empty when it did nothing; `presets` names each preset with what it does |
 | `GET /api/config` | The active configuration, secrets redacted |
 | `GET /api/data-sources` | Events per source and each reader's health |
 | `GET /api/vendor-usage` | Which usage sources are on and producing |

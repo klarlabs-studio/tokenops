@@ -253,6 +253,8 @@ func Status(cfg config.Config, l Ledger, levers ContextLevers, now time.Time) Re
 	r := Build(cfg)
 	r.Preset = CurrentPreset(cfg)
 	r.FollowThrough = History(l, now)
+	r.Activity = Activities(l, now)
+	r.Presets = PresetSummaries()
 	if levers != nil {
 		r.Compaction = levers.Check()
 	}
