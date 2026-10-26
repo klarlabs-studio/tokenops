@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
+	"go.klarlabs.de/tokenops/internal/infra/routeguard"
 )
 
 // writeLimits leaves a fresh status line reading: 5h 62% used, week 39%.
@@ -121,5 +124,54 @@ func TestHeadroomNoteTravelsOnlyPerTurn(t *testing.T) {
 	tp := writeCoachTranscript(t, dir, 1, "claude-opus-5")
 	if out := runAgentHook(t, dir, "hn-agent", "toolu_1", lookupCall, tp); strings.Contains(out, "Plan headroom") {
 		t.Errorf("the subagent hook carried the note: %s", out)
+	}
+}
+
+// The note passes `tokenops coach lint-context`: the route-guard command
+// as installed prints nothing volatile by its text, and the notes
+// transcripts record (resets as clock times, different shares) carry no
+// timestamp, date, id or counter the lint flags.
+func TestHeadroomNotePassesThePrefixLint(t *testing.T) {
+	home := t.TempDir()
+	claudeDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(claudeDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	const command = "/usr/local/bin/tokenops route-guard --provider anthropic"
+	settings, _ := json.Marshal(map[string]any{"hooks": map[string]any{
+		"UserPromptSubmit": []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": command}}}},
+	}})
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), settings, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	notes := []string{
+		routeguard.HeadroomNote([]routeguard.NoteWindow{{Name: "5h", LeftPct: 38, ResetsAt: now.Add(140 * time.Minute)}, {Name: "week", LeftPct: 61, ResetsAt: now.Add(81 * time.Hour)}}, now, time.UTC),
+		routeguard.HeadroomNote([]routeguard.NoteWindow{{Name: "5h", LeftPct: 9, ResetsAt: now.Add(40 * time.Minute)}}, now, time.UTC),
+	}
+	root := filepath.Join(home, ".claude", "projects")
+	for i, note := range notes {
+		if ms := prefixlint.ScanText(note); len(ms) != 0 {
+			t.Errorf("lint flags %q: %+v", note, ms)
+		}
+		out, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]any{"hookEventName": "UserPromptSubmit", "additionalContext": note}})
+		rec, _ := json.Marshal(map[string]any{"type": "attachment", "sessionId": "s", "attachment": map[string]any{
+			"type": "hook_success", "hookName": "UserPromptSubmit", "hookEvent": "UserPromptSubmit",
+			"command": command, "stdout": string(out), "content": string(out), "exitCode": 0,
+		}})
+		p := filepath.Join(root, "proj", "s"+itoa(int64(i))+".jsonl")
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, append(rec, '\n'), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := prefixlint.Lint(prefixlint.Sources{Home: home, ClaudeDir: claudeDir, TranscriptRoot: root})
+	if r.Transcripts != len(notes) {
+		t.Errorf("transcripts read = %d, want %d", r.Transcripts, len(notes))
+	}
+	for _, f := range r.Findings {
+		t.Errorf("lint finding on the headroom note: %+v", f)
 	}
 }
