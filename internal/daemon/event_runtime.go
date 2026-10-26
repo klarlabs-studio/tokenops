@@ -254,7 +254,11 @@ func stateDeps(cfg config.Config, store *sqlite.Store, health func() []state.Sou
 			Dropped: dropped,
 			Coach: func(now time.Time) coachcap.Report {
 				ledger, levers := coachEnv(cfg)
-				return coachcap.Status(cfg, ledger, levers, now)
+				r := coachcap.Status(cfg, ledger, levers, now)
+				if store != nil {
+					r.PromptCache = headroom.PromptCache(context.Background(), store, now)
+				}
+				return r
 			},
 		}
 		if store != nil {
