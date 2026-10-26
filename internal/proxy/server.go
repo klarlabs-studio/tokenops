@@ -68,7 +68,10 @@ type Server struct {
 	sessions func() SessionRoots
 	// actions supplies what the write routes need. nil leaves them
 	// unmounted.
-	actions    func() ActionDeps
+	actions func() ActionDeps
+	// findings overrides where the findings and their dismissals come
+	// from; nil computes them from the plan routes' deps.
+	findings   func() FindingsDeps
 	resilience *ResilienceConfig
 	dashAuth   DashAuth
 	// allowedHosts are the Host names admitted beyond loopback and the
@@ -454,12 +457,14 @@ func (s *Server) buildAPIMux() *recordingMux {
 	s.registerEventCountsRoute(protected)
 	s.registerSourcesRoute(protected)
 	s.registerPlanRoutes(protected)
+	s.registerFindingRoutes(protected)
 	s.registerStateRoutes(protected)
 	s.registerSessionRoutes(protected)
 	protected.HandleFunc("GET /api/pricing", pricingHandler)
 	protected.HandleFunc("GET /api/routing/proposals", proposalsHandler)
 	protected.HandleFunc("GET /api/boundaries", s.boundariesHandler)
 	s.registerActionRoutes(protected)
+	s.registerFindingActionRoutes(protected)
 	s.registerStatementRoutes(protected)
 	return protected
 }

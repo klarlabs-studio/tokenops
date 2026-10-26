@@ -55,7 +55,7 @@ operator's instruction text and local file paths.
 | Route | Answers |
 |---|---|
 | `GET /api/glance` | Session budgets, plan headroom and one ranked insight; `boundaries` lists the [boundaries](/guide/boundaries) that hold now, as advice; `plan_use` gives each provider's plan utilization and coverage over the last 7 days |
-| `GET /api/findings` | What the coach and the session analysis observed, ranked, with what to do |
+| `GET /api/findings` | What the coach and the session analysis observed, ranked, with what to do. Each finding has a stable `key` (its kind and subject, such as `quota:openai:week`) and, where an operation exists for it, `actions` to run with `POST /api/findings/act`. `hidden` counts the findings you dismissed that are still hidden |
 | `GET /api/plans/headroom` | Each plan: usage, the vendor's windows, spend against the limit, risk |
 | `GET /api/plans/session-budget` | Each plan window: share used, pace, what to do |
 | `GET /api/plans/advice` | Plan right-sizing over `days` (30 by default, up to 90): each plan's windows replayed against its other tiers, metered overflow and the API at list price. Advice only |
@@ -116,6 +116,8 @@ instead of an empty screen.
 | `POST /api/routing/statements` | The same for a routing upgrade (`{"key"}`) |
 | `POST /api/outcomes` | Records your judgement of an execution |
 | `POST /api/coach` | Applies a coach preset, or changes its dials |
+| `POST /api/findings/dismiss` | Hides a finding (`{"key", "for": "day"}` or `"week"`) until the time passes or it becomes more urgent than when you hid it: a notice you hid shows again as a warning. `{"for": "none"}` shows every hidden finding again, or one with its `key`. Answers with the findings after the change |
+| `POST /api/findings/act` | Runs one of the `actions` a finding offers now (`{"key", "action"}`), through the same code as the CLI: `boundary.promote` (`tokenops boundaries promote`) and `tip.ack`, `tip.expected` or `tip.snooze` (`tokenops coach tip`). An action's `confirm` says what it changes, for the surface to show first. `409` when the finding is gone or no longer offers the action; `400` for an action that is not on the list. A promote takes effect on the next tool call, with no restart. Demoting stays on the CLI, so nothing on the API loosens a boundary |
 
 The write routes are guarded more tightly than the reads:
 

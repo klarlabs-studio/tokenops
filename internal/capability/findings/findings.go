@@ -55,12 +55,23 @@ const (
 type Finding struct {
 	// ID names a finding that can be answered like a tip (`tokenops
 	// coach tip ack|expected|snooze --id`); absent otherwise.
-	ID       string `json:"id,omitempty"`
+	ID string `json:"id,omitempty"`
+	// Key names the finding across readings: its kind and its subject
+	// ("quota:openai:week", "boundary:headroom-pause"), never a figure
+	// that changes. A dismissal and an action name the finding by it.
+	Key      string `json:"key"`
 	Kind     string `json:"kind"`
 	Level    string `json:"level"`
 	Title    string `json:"title"`
 	Evidence string `json:"evidence,omitempty"`
-	Action   string `json:"action,omitempty"`
+	// Action is what to do, in words and CLI commands, for the CLI and
+	// the MCP tools.
+	Action string `json:"action,omitempty"`
+	// Actions are the operations a surface can run on the finding
+	// itself (POST /api/findings/act), each from a closed allowlist.
+	Actions []FindingAction `json:"actions,omitempty"`
+	// rule is the boundary a promote acts on.
+	rule string
 }
 
 // Report is the ranked list.
@@ -70,6 +81,9 @@ type Report struct {
 	// the daemon's background, so it can lag the rest by hours. Absent
 	// when it has not run yet.
 	SessionsReadAt *time.Time `json:"sessions_read_at,omitempty"`
+	// Hidden counts the findings the operator dismissed that are still
+	// hidden (POST /api/findings/dismiss); they are left out of Findings.
+	Hidden int `json:"hidden,omitempty"`
 }
 
 // Inputs are the readings findings are drawn from; any may be missing.
@@ -107,8 +121,8 @@ func Compute(in Inputs) Report {
 	out = append(out, coaching(in.Coach, in.CoachHook)...)
 	out = append(out, headroomPause(in.Pause, in.Glance)...)
 	out = append(out, presenceFindings(in.Presence)...)
-	rank := map[string]int{LevelWarn: 0, LevelNotice: 1, LevelInfo: 2}
-	sort.SliceStable(out, func(i, j int) bool { return rank[out[i].Level] < rank[out[j].Level] })
+	uniqueKeys(out)
+	sort.SliceStable(out, func(i, j int) bool { return urgency[out[i].Level] < urgency[out[j].Level] })
 	r := Report{Findings: out}
 	if r.Findings == nil {
 		r.Findings = []Finding{}
@@ -146,6 +160,7 @@ func staleReading(r plans.HeadroomReport) (Finding, bool) {
 		}
 	}
 	f := Finding{
+		Key:      key(KindQuota, r.Provider, "stale"),
 		Kind:     KindQuota,
 		Level:    LevelWarn,
 		Title:    fmt.Sprintf("%s's plan reading is %s old", vendor(r), age(time.Since(newest))),
@@ -209,6 +224,7 @@ func quota(reports []plans.HeadroomReport) []Finding {
 				continue
 			case p.Status == plans.PaceUsedUp:
 				f = Finding{
+					Key:      key(KindQuota, r.Provider, w.Name),
 					Kind:     KindQuota,
 					Level:    LevelWarn,
 					Title:    fmt.Sprintf("%s's %s is used up until it resets in %s", vendor(r), windowWords(w.Name), human(resetsIn(w))),
@@ -216,6 +232,7 @@ func quota(reports []plans.HeadroomReport) []Finding {
 				}
 			case p.Status == plans.PaceAhead && !p.LastsToReset:
 				f = Finding{
+					Key:   key(KindQuota, r.Provider, w.Name),
 					Kind:  KindQuota,
 					Level: LevelWarn,
 					Title: fmt.Sprintf("%s's %s runs out in %s at this pace", vendor(r), windowWords(w.Name), human(p.RunsOutIn)),
@@ -267,7 +284,8 @@ func sessionFindings(warnings []string, rec *sessions.Recommendation) []Finding 
 		out = append(out, unreadable(w))
 	}
 	if rec != nil {
-		out = append(out, Finding{Kind: KindSessions, Level: LevelNotice, Title: rec.Title, Evidence: rec.Evidence, Action: sentence(rec.Action)})
+		out = append(out, Finding{Key: key(KindSessions, "recommendation"), Kind: KindSessions, Level: LevelNotice,
+			Title: rec.Title, Evidence: rec.Evidence, Action: sentence(rec.Action)})
 	}
 	return out
 }
@@ -275,8 +293,9 @@ func sessionFindings(warnings []string, rec *sessions.Recommendation) []Finding 
 // unreadable words a reader's warning; the reader's own message is the
 // evidence, since it names what failed.
 func unreadable(warning string) Finding {
-	f := Finding{Kind: KindData, Level: LevelWarn, Title: "Some sessions cannot be read", Evidence: warning}
+	f := Finding{Key: key(KindData, "sessions", shortHash(warning)), Kind: KindData, Level: LevelWarn, Title: "Some sessions cannot be read", Evidence: warning}
 	if strings.Contains(warning, "opencode") {
+		f.Key = key(KindData, "opencode")
 		f.Title = "opencode sessions cannot be read"
 		if strings.Contains(warning, "schema") {
 			f.Evidence = "opencode's database is in a newer format than this version reads, so its sessions are missing from every figure"
@@ -294,6 +313,7 @@ func waste(s *readguard.Stats, c *coach.Report) []Finding {
 	var out []Finding
 	if s.WouldBlock > 0 && (c == nil || c.Effective(config.PowerWaste) != config.AutonomyAutonomous) {
 		out = append(out, Finding{
+			Key:      key(KindWaste, "rereads"),
 			Kind:     KindWaste,
 			Level:    LevelNotice,
 			Title:    fmt.Sprintf("Agents re-read %d unchanged files in full", s.WouldBlock),
@@ -303,6 +323,7 @@ func waste(s *readguard.Stats, c *coach.Report) []Finding {
 	}
 	if s.Blocked > 0 {
 		out = append(out, Finding{
+			Key:      key(KindWaste, "refused"),
 			Kind:     KindWaste,
 			Level:    LevelInfo,
 			Title:    fmt.Sprintf("The read guard refused %d re-reads", s.Blocked),
@@ -322,6 +343,7 @@ func budget(s *coachhook.Stats) []Finding {
 		return nil
 	}
 	return []Finding{{
+		Key:      key(KindBudget, "over"),
 		Kind:     KindBudget,
 		Level:    LevelNotice,
 		Title:    fmt.Sprintf("%d of %d sessions ran past their budget", over, s.DistinctSessions),
@@ -338,7 +360,7 @@ func coaching(c *coach.Report, s *coachhook.Stats) []Finding {
 	}
 	var out []Finding
 	if c.Off() {
-		f := Finding{Kind: KindCoach, Level: LevelInfo, Title: "The coach is observing and says nothing",
+		f := Finding{Key: key(KindCoach, "observing"), Kind: KindCoach, Level: LevelInfo, Title: "The coach is observing and says nothing",
 			Action: "`tokenops coach preset advise` lets it speak, once per kind of thing."}
 		if s != nil {
 			if tips := s.Alerts + total(s.QuotaNudges) + s.PromotionNudges + s.CompactTips; tips > 0 {
@@ -349,10 +371,11 @@ func coaching(c *coach.Report, s *coachhook.Stats) []Finding {
 	}
 	if s != nil {
 		if n := s.Suppressed[coachhook.SuppressedDailyBudget]; n > 0 {
-			out = append(out, Finding{Kind: KindCoach, Level: LevelInfo,
+			out = append(out, Finding{Key: key(KindCoach, "tips-waited"), Kind: KindCoach, Level: LevelInfo,
 				Title:    fmt.Sprintf("%d tips waited on the status line instead of interrupting", n),
 				Evidence: "the day's interruption budget (coaching.quiet.max_per_day) was spent",
-				Action:   "`tokenops coach tip ack`, `expected` or `snooze` settles the newest one."})
+				Action:   "`tokenops coach tip ack`, `expected` or `snooze` settles the newest one.",
+				Actions:  tipActions(expectedNewestTip)})
 		}
 	}
 	out = append(out, graduations(c.Graduation)...)
@@ -364,6 +387,7 @@ func coaching(c *coach.Report, s *coachhook.Stats) []Finding {
 			continue
 		}
 		out = append(out, Finding{
+			Key:      key(KindCoach, "quiet", sum.Kind),
 			Kind:     KindCoach,
 			Level:    LevelInfo,
 			Title:    fmt.Sprintf("The coach went quiet on %s", kindWords(sum.Kind)),
@@ -387,7 +411,7 @@ func graduations(steps []savings.Step) []Finding {
 		if strings.HasPrefix(action, "tokenops ") {
 			action = "`" + action + "` takes the step; nothing changes until you do."
 		}
-		out = append(out, Finding{Kind: KindCoach, Level: LevelInfo, Title: strings.ToUpper(title[:1]) + title[1:],
+		out = append(out, Finding{Key: key(KindCoach, "graduation", s.Power), Kind: KindCoach, Level: LevelInfo, Title: strings.ToUpper(title[:1]) + title[1:],
 			Evidence: savings.Bar(s), Action: action})
 	}
 	return out
@@ -400,7 +424,7 @@ func snoozedMostly(s coach.FollowThroughSummary) (Finding, bool) {
 	if s.Channel != "tip" || s.Snoozed < 3 || s.SnoozeRate() < 0.5 {
 		return Finding{}, false
 	}
-	f := Finding{Kind: KindCoach, Level: LevelNotice,
+	f := Finding{Key: key(KindCoach, "snoozed", s.Kind), Kind: KindCoach, Level: LevelNotice,
 		Title:    fmt.Sprintf("You snooze most %s", kindWords(s.Kind)),
 		Evidence: fmt.Sprintf("%d of them snoozed, %d%%", s.Snoozed, int(s.SnoozeRate()*100+0.5)),
 		Action:   "If they come too early, answer `tokenops coach tip expected` instead: enough of those move the session budget up."}
@@ -492,6 +516,7 @@ func planAdvice(advice []plans.Advice) []Finding {
 		}
 		r := a.Recommendation
 		out = append(out, Finding{
+			Key:   key(KindPlan, a.Provider),
 			Kind:  KindPlan,
 			Level: LevelInfo,
 			Title: fmt.Sprintf("%s would have cost $%.0f/mo less", r.Display, r.SavingsUSD),

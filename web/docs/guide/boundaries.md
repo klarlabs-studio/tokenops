@@ -68,6 +68,10 @@ looks right:
 tokenops boundaries promote headroom-pause
 ```
 
+or press *Promote pause* on that finding in the menu bar, which says what
+the rule will do and how to undo it before anything changes
+(`POST /api/findings/act`). Demoting stays on the CLI.
+
 From then on it asks at Claude Code's prompt when someone is there, and
 otherwise refuses with the id `tokenops approve` takes; Codex and Cursor
 are told through the glance. Init also installs the pause point (the

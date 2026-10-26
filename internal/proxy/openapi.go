@@ -134,6 +134,8 @@ var APICatalog = []RouteDoc{
 	{Method: "POST", Path: "/api/routing/statements", Summary: "The statement a presence-signed approval of a routing upgrade signs, and the dialog's text; 409 presence_unavailable when no key can sign here", Request: RoutingStatementRequest{}, Response: actions.RoutingStatement{}},
 	{Method: "POST", Path: "/api/outcomes", Summary: "Record the operator's judgement of an execution", Request: OutcomeRequest{}, Response: actions.Outcome{}},
 	{Method: "POST", Path: "/api/coach", Summary: "Apply a coach preset, or change its dials", Request: coachcap.ChangeRequest{}, Response: coachcap.Report{}},
+	{Method: "POST", Path: "/api/findings/dismiss", Summary: "Hide a finding for a day or a week, until it becomes more urgent; for none shows it, or with no key every hidden finding, again", Request: FindingDismissRequest{}, Response: FindingDismissResult{}},
+	{Method: "POST", Path: "/api/findings/act", Summary: "Run an action a finding offers now (promote its boundary, answer its tip); 409 when the finding has changed", Request: FindingActRequest{}, Response: FindingActResult{}},
 }
 
 // OpenAPI renders the catalog as an OpenAPI 3.1 document. Schemas are

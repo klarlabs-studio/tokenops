@@ -78,7 +78,8 @@ func TestHeadroomPauseSummary(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := PauseSummary{Configured: true, Rule: config.HeadroomPauseName, Stage: "shadow", Sessions: 2, PausePoint: true}
+		want := PauseSummary{Configured: true, Rule: config.HeadroomPauseName, Stage: "shadow", Sessions: 2, PausePoint: true,
+			When: "the tightest plan window has 10% or less left", Require: "ask"}
 		if got != want {
 			t.Fatalf("summary = %+v, want %+v", got, want)
 		}
@@ -93,6 +94,32 @@ func TestHeadroomPauseSummary(t *testing.T) {
 			t.Fatalf("summary = %+v, want configured without a pause point", got)
 		}
 	})
+}
+
+// The summary words the rule's own condition, so a surface that offers to
+// promote it says what will happen without assuming the default 10%.
+func TestHeadroomPauseSummaryWordsTheRulesCondition(t *testing.T) {
+	for _, tc := range []struct {
+		when, window, require, want, wantRequire string
+	}{
+		{when: "<= 10", require: "ask", want: "the tightest plan window has 10% or less left", wantRequire: "ask"},
+		{when: "< 5", require: "deny", want: "the tightest plan window has less than 5% left", wantRequire: "deny"},
+		{when: "<= 20", window: "week", require: "ask", want: "the weekly window has 20% or less left", wantRequire: "ask"},
+		{when: "<= 15", window: "5h", require: "ask", want: "the 5-hour window has 15% or less left", wantRequire: "ask"},
+	} {
+		when := map[string]string{string(domain.FieldPlanLeft): tc.when}
+		if tc.window != "" {
+			when["window"] = tc.window
+		}
+		spec := domain.RuleSpec{Name: "floor", Action: string(domain.ActionContinue), When: when, Require: tc.require, Stage: "shadow"}
+		got, err := HeadroomPause(config.Config{Boundaries: []domain.RuleSpec{spec}}, testEnv(t, false), map[string]bool{})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.when, err)
+		}
+		if got.When != tc.want || got.Require != tc.wantRequire {
+			t.Errorf("%s: when = %q require = %q, want %q %q", tc.when, got.When, got.Require, tc.want, tc.wantRequire)
+		}
+	}
 }
 
 // Adding the pause is explicit, writes it in shadow once, and leaves a
