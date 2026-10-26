@@ -4,7 +4,16 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.111.0**.
+Current release: **v0.112.0**.
+
+## v0.112.0 — A coach that sorts itself, and windows that say what happened
+
+In the menu bar, a warning about a plan window sits under that window's
+bar, the coach opens with what it did today, and quieter findings fold
+away. Waste on a subscription reads as a share of your plan, not API
+prices. A window the vendor reset early is reported as such, and a weekly
+window that has not started says it starts at your next request instead
+of counting down forever.
 
 ## v0.111.0 — Act on the coach from the menu bar
 
