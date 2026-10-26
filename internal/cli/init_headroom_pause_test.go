@@ -20,12 +20,12 @@ func TestInitWritesTheHeadroomPauseInShadow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []boundaries.RuleSpec{config.HeadroomPauseRule()}; !reflect.DeepEqual(cfg.Boundaries, want) {
+	if want := []boundaries.RuleSpec{config.HeadroomPauseRule(), config.LoopBreakerRule()}; !reflect.DeepEqual(cfg.Boundaries, want) {
 		t.Fatalf("boundaries = %+v, want %+v", cfg.Boundaries, want)
 	}
 	rules := cfg.BoundaryRules()
-	if len(rules) != 1 || rules[0].Enforced() {
-		t.Fatalf("rules = %+v, want one in shadow", rules)
+	if len(rules) != 2 || rules[0].Enforced() || rules[1].Enforced() {
+		t.Fatalf("rules = %+v, want two in shadow", rules)
 	}
 	c := rules[0].When[0]
 	if c.Field != boundaries.FieldPlanLeft || c.Op != boundaries.OpLE || c.Number != 10 || c.Window != boundaries.WindowAny {
@@ -33,6 +33,9 @@ func TestInitWritesTheHeadroomPauseInShadow(t *testing.T) {
 	}
 	if !strings.Contains(out, "headroom pause: in shadow at 10% left") || !strings.Contains(out, "tokenops boundaries promote headroom-pause") {
 		t.Errorf("init does not say what it set:\n%s", out)
+	}
+	if !strings.Contains(out, "loop breaker: in shadow") || !strings.Contains(out, "tokenops boundaries promote loop-breaker") {
+		t.Errorf("init does not say it set the loop breaker:\n%s", out)
 	}
 	settings, err := os.ReadFile(filepath.Join(filepath.Dir(configPath), ".claude", "settings.json"))
 	if err != nil {

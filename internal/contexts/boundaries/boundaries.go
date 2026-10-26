@@ -73,13 +73,13 @@ const (
 
 // fieldOrder fixes the order conditions are checked and reported in, so
 // an error or a reason reads the same on every run.
-var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldBudgetUsed, FieldModelTier, FieldDestination, FieldWorkflow, FieldAgent}
+var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldBudgetUsed, FieldModelTier, FieldDestination, FieldLoopCalls, FieldWorkflow, FieldAgent}
 
 // fieldsFor are the figures each action can be judged by: the ones known
 // where the action is decided. A condition the decision point cannot read
 // is refused at load rather than never matching in silence.
 var fieldsFor = map[Action][]Field{
-	ActionContinue:      {FieldSessionCost, FieldPlanLeft, FieldWorkflow, FieldAgent},
+	ActionContinue:      {FieldSessionCost, FieldPlanLeft, FieldLoopCalls, FieldWorkflow, FieldAgent},
 	ActionSubagentModel: {FieldSessionCost, FieldPlanLeft, FieldModelTier, FieldWorkflow, FieldAgent},
 	ActionSpend:         {FieldSessionCost, FieldBudgetUsed, FieldWorkflow, FieldAgent},
 	ActionModelRoute:    {FieldPlanLeft, FieldModelTier, FieldWorkflow, FieldAgent},
@@ -458,6 +458,12 @@ func parseCondition(f Field, raw string) (Condition, error) {
 			return Condition{}, fmt.Errorf("%v must be between 0 and 100", n)
 		}
 		c.Number = n
+	case FieldLoopCalls:
+		n, err := parseLoopCalls(op, value)
+		if err != nil {
+			return Condition{}, err
+		}
+		c.Number = n
 	case FieldModelTier:
 		tier := TierOf(value)
 		if tier == "" {
@@ -538,6 +544,9 @@ type Facts struct {
 	Destination string
 	WorkflowID  string
 	AgentID     string
+	// Loop is the loop at the end of the session's tool calls; unknown
+	// when the harness did not say which tool ran with what input.
+	Loop LoopFigure
 }
 
 // Crossing is one figure that crossed a condition, as numbers and
@@ -636,6 +645,11 @@ func (c Condition) holds(f Facts) (string, bool) {
 			return "", false
 		}
 		return "figures leaving for " + destinationName(f.Destination), true
+	case FieldLoopCalls:
+		if !f.Loop.Known || f.Loop.Reading.Calls == 0 || !compare(float64(f.Loop.Reading.Calls), c.Op, c.Number) {
+			return "", false
+		}
+		return loopWords(f.Loop.Reading), true
 	case FieldWorkflow:
 		ok, _ := path.Match(c.Text, f.WorkflowID)
 		return "", ok && f.WorkflowID != ""
@@ -662,6 +676,8 @@ func (c Condition) crossing(f Facts) (Crossing, bool) {
 		x.Value, x.Threshold = float64(tierRank[f.ModelTier]), float64(tierRank[c.Text])
 	case FieldDestination:
 		x.Destination = f.Destination
+	case FieldLoopCalls:
+		x.Value = float64(f.Loop.Reading.Calls)
 	default:
 		return Crossing{}, false
 	}

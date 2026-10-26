@@ -89,6 +89,32 @@ func signedAnswer(tb testing.TB) func() {
 	}
 }
 
+// loopGuard is the loop breaker's path: every call read with a full
+// window of calls behind it, appended to the session's call log, and the
+// loop matched, so its match is counted too.
+func loopGuard(tb testing.TB) func() {
+	env := testEnv(tb, false)
+	env.Now = time.Now
+	r, err := domain.Parse([]domain.RuleSpec{
+		{Name: "loop-breaker", Action: "continue", Require: "ask", When: map[string]string{"loop_calls": ">= 4"}},
+	})
+	if err != nil {
+		tb.Fatal(err)
+	}
+	c := call("s1")
+	c.ToolName, c.ArgsHash = "Bash", "0123456789abcdef"
+	for range domain.LoopWindow {
+		if _, err := Guard(r, c, env); err != nil {
+			tb.Fatal(err)
+		}
+	}
+	return func() {
+		if _, err := Guard(r, c, env); err != nil {
+			tb.Fatal(err)
+		}
+	}
+}
+
 func benchGuard(b *testing.B, setup guardEval) {
 	eval := setup(b)
 	b.ReportAllocs()
@@ -103,6 +129,8 @@ func BenchmarkGuardNothingCrossed(b *testing.B) { benchGuard(b, spendGuard(5)) }
 func BenchmarkGuardRuleCrossed(b *testing.B) { benchGuard(b, spendGuard(25)) }
 
 func BenchmarkGuardSignedAnswer(b *testing.B) { benchGuard(b, signedAnswer) }
+
+func BenchmarkGuardLoop(b *testing.B) { benchGuard(b, loopGuard) }
 
 // TestGuardIsWithinItsBudget is the gate: a regression past 5 ms per
 // evaluation fails the suite, not just a benchmark nobody reads. A
@@ -119,6 +147,7 @@ func TestGuardIsWithinItsBudget(t *testing.T) {
 	for name, setup := range map[string]guardEval{
 		"rule crossed":  spendGuard(25),
 		"signed answer": signedAnswer,
+		"loop window":   loopGuard,
 	} {
 		t.Run(name, func(t *testing.T) { withinBudget(t, setup) })
 	}
