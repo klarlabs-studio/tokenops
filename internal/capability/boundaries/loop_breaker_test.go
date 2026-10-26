@@ -234,3 +234,26 @@ func TestAddLoopBreaker(t *testing.T) {
 		t.Fatalf("config = %+v, %v", cfg.Boundaries, err)
 	}
 }
+
+// The pause point prunes call logs as it goes: a session idle for a day
+// loses its log the next time any session's call is read.
+func TestThePausePointPrunesIdleCallLogs(t *testing.T) {
+	env := testEnv(t, false)
+	r := rules(t, config.LoopBreakerRule())
+	run(t, r, env, "old", "Bash:t")
+	stale := filepath.Join(env.Dir.Root(), "calls", "old.jsonl")
+	day := testNow.Add(-25 * time.Hour)
+	if err := os.Chtimes(stale, day, day); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(env.Dir.Root(), "calls", ".pruned")); err != nil {
+		t.Fatal(err)
+	}
+	run(t, r, env, "new", "Bash:t")
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatalf("the idle session's log was kept: %v", err)
+	}
+	if calls, _ := env.Dir.RecentCalls("new"); len(calls) != 1 {
+		t.Fatal("the live session's log was removed")
+	}
+}

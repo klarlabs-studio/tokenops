@@ -131,7 +131,8 @@ What it keeps, and what it cannot see:
 - **No input is kept.** The pause point reads each call's tool name and
   input, hashes the input (ignoring Bash's `description`, which an agent
   rewords on every retry) and keeps the tool name and the hash, under
-  `~/.tokenops/boundaries/calls/`, the newest 64 calls per session.
+  `~/.tokenops/boundaries/calls/`, the newest 64 calls per session; a
+  session's log is removed once it has been idle for a day.
   Decisions name the tools that repeated, never their input.
 - **Claude Code only.** opencode's hook does not send the tool's input,
   so `loop_calls` is never read there, and Codex and Cursor have no hook;

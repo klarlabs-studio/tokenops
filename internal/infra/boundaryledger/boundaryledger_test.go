@@ -338,3 +338,52 @@ func TestRecentCallsKeepTheNewestWindow(t *testing.T) {
 		t.Fatalf("another session read %d calls", len(other))
 	}
 }
+
+// TestStaleCallLogsArePruned: a session idle for a day has no live loop,
+// so its call log goes; a fresh one stays; and the scan runs at most once
+// an hour, by the stamp beside the logs.
+func TestStaleCallLogsArePruned(t *testing.T) {
+	d := Dir(t.TempDir())
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	for _, s := range []string{"stale", "fresh"} {
+		if err := d.AppendCall(s, boundaries.ToolCall{Tool: "Bash", Hash: "0123456789abcdef"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	age := func(session string, by time.Duration) {
+		t.Helper()
+		if err := os.Chtimes(d.callLogPath(session), now.Add(-by), now.Add(-by)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	age("stale", 25*time.Hour)
+	age("fresh", time.Hour)
+	if err := d.PruneCalls(now); err != nil {
+		t.Fatal(err)
+	}
+	if calls, _ := d.RecentCalls("stale"); len(calls) != 0 {
+		t.Fatal("a log idle for 25h was kept")
+	}
+	if calls, _ := d.RecentCalls("fresh"); len(calls) != 1 {
+		t.Fatal("a log used an hour ago was removed")
+	}
+
+	// Within the hour nothing is scanned, so a log gone stale since stays.
+	age("fresh", 30*time.Hour)
+	if err := d.PruneCalls(now.Add(30 * time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if calls, _ := d.RecentCalls("fresh"); len(calls) != 1 {
+		t.Fatal("pruned again within the hour")
+	}
+	if err := d.PruneCalls(now.Add(61 * time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if calls, _ := d.RecentCalls("fresh"); len(calls) != 0 {
+		t.Fatal("not pruned after the hour")
+	}
+	// No logs at all is no error.
+	if err := Dir(t.TempDir()).PruneCalls(now); err != nil {
+		t.Fatal(err)
+	}
+}

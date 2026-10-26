@@ -7,6 +7,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/boundaries"
 )
@@ -103,4 +105,49 @@ func (d Dir) RecentCalls(session string) ([]boundaries.ToolCall, error) {
 		out = out[len(out)-boundaries.LoopWindow:]
 	}
 	return out, sc.Err()
+}
+
+// Call logs are kept while their session may still be looping: a log not
+// written for callLogIdle belongs to a session with no live loop to see.
+// The directory is scanned at most every callPruneEvery, as the stamp
+// beside the logs records, so the pause point pays one stat per call.
+const (
+	callLogIdle    = 24 * time.Hour
+	callPruneEvery = time.Hour
+	callPruneStamp = ".pruned"
+)
+
+// PruneCalls removes call logs idle for a day, unless it last ran within
+// the hour. A log it cannot remove is left for the next run.
+func (d Dir) PruneCalls(now time.Time) error {
+	dir := filepath.Join(d.root(), callsDir)
+	stamp := filepath.Join(dir, callPruneStamp)
+	if st, err := os.Stat(stamp); err == nil && now.Sub(st.ModTime()) < callPruneEvery {
+		return nil
+	} else if errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+	}
+	if err := os.WriteFile(stamp, nil, 0o600); err != nil {
+		return err
+	}
+	if err := os.Chtimes(stamp, now, now); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || now.Sub(info.ModTime()) < callLogIdle {
+			continue
+		}
+		_ = os.Remove(filepath.Join(dir, e.Name()))
+	}
+	return nil
 }

@@ -348,6 +348,9 @@ func readLoop(call Call, env Env) (domain.LoopFigure, bool) {
 	if err := env.Dir.AppendCall(call.SessionID, this); err != nil {
 		return domain.LoopFigure{}, false
 	}
+	// Idle sessions' logs go at most once an hour: one stat per call
+	// otherwise. A failure leaves them for the next hour.
+	_ = env.Dir.PruneCalls(env.now())
 	return domain.LoopFigure{Known: true, Reading: domain.ReadLoop(append(recent, this))}, true
 }
 
