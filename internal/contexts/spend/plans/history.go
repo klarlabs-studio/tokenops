@@ -166,3 +166,14 @@ func (h History) SpendLimitAt(provider string, t time.Time) (float64, bool) {
 	b := h.bindingAt(provider, t, "")
 	return b.SpendLimitUSD, b.SpendLimitUSD > 0
 }
+
+// ChangedBetween reports whether provider's plan changed in (from, to]: a
+// binding taking effect after from and no later than to.
+func (h History) ChangedBetween(provider string, from, to time.Time) bool {
+	for _, b := range h.forProvider(provider) {
+		if b.From.After(from) && !b.From.After(to) {
+			return true
+		}
+	}
+	return false
+}
