@@ -284,7 +284,8 @@
 
     (r.windows || []).forEach(function (w) {
       var stale = w.stale && w.observed_at ? Math.max(60, (Date.now() - Date.parse(w.observed_at)) / 1000) : 0;
-      main.appendChild(windowSection(title(w), w.used_pct, w.resets_in ? "Resets in " + human(seconds(w.resets_in)) : "", w.pace, stale));
+      var resets = w.not_started ? "Starts at your next request" : w.resets_in ? "Resets in " + human(seconds(w.resets_in)) : "";
+      main.appendChild(windowSection(title(w), w.used_pct, resets, w.pace, stale));
     });
     // An account-wide figure is every member's spend together, not the
     // operator's own: it is titled and labelled as the account's.
