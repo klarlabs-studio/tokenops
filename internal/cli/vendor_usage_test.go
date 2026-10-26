@@ -171,6 +171,17 @@ func TestVendorUsageEnableSources(t *testing.T) {
 			wantErr: "user-id",
 		},
 		{
+			// A member's own cap needs their Fireworks user when Nexus CLI
+			// left no file naming it.
+			name: "fireworks takes the member's user",
+			args: []string{"fireworks", "--user-id", "u-42"},
+			assert: func(t *testing.T, cfg config.Config) {
+				if !cfg.VendorUsage.Fireworks.On() || cfg.VendorUsage.Fireworks.UserID != "u-42" {
+					t.Errorf("fireworks %+v", cfg.VendorUsage.Fireworks)
+				}
+			},
+		},
+		{
 			name: "github-copilot needs no secret",
 			args: []string{"github-copilot"},
 			assert: func(t *testing.T, cfg config.Config) {

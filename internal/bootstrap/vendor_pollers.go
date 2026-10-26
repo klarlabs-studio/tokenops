@@ -200,6 +200,7 @@ func StartVendorUsagePollers(
 	if cfg.VendorUsage.Fireworks.On() {
 		p := fireworksusage.NewPoller(bus, fireworksusage.PollerOptions{
 			Health: sourceHealth.For("fireworks-usage"), Interval: cfg.VendorUsage.Fireworks.Interval, Logger: logger,
+			UserID: cfg.VendorUsage.Fireworks.UserID,
 			Client: &fireworksapi.Client{Key: fireworksapi.KeySource{Helper: claudesettings.APIKeyHelper, Fallback: fireworksFallbackKey}.Key},
 		})
 		sup.Go("fireworks-usage", refreshable(sig, p.Run))

@@ -16,6 +16,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -117,14 +118,16 @@ func (t *Tracker) datedSwitch(harness, baseURL string) (time.Time, string, bool)
 	if e, ok := biller.EndpointFor(baseURL); !ok || e.Provider != "fireworks" {
 		return time.Time{}, "", false
 	}
-	// FireConnect snapshots Claude Code's settings the first time it
-	// routes them through Fireworks, and keeps the snapshot until
-	// `fireconnect claude off`.
-	st, err := os.Stat(filepath.Join(t.home, ".fireconnect", "claude", "provider-backup.json"))
-	if err != nil {
-		return time.Time{}, "", false
+	// Nexus CLI (FireConnect before 0.10.0) snapshots Claude Code's
+	// settings the first time it routes them through Fireworks, and keeps
+	// the snapshot until `nexus claude off`.
+	for _, d := range []string{".nexus", ".fireconnect"} {
+		st, err := os.Stat(filepath.Join(t.home, d, "claude", "provider-backup.json"))
+		if err == nil {
+			return st.ModTime().UTC(), strings.TrimPrefix(d, ".") + " backup", true
+		}
 	}
-	return st.ModTime().UTC(), "fireconnect backup", true
+	return time.Time{}, "", false
 }
 
 func (t *Tracker) append(rs []biller.Route) error {

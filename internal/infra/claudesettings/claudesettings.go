@@ -2,10 +2,10 @@
 // endpoint Claude Code sends requests to (ADR 0009).
 //
 // Claude Code's transcripts record the model that answered, not where the
-// request went, so a gateway in front of it (Fireworks through FireConnect,
+// request went, so a gateway in front of it (Fireworks through Nexus CLI,
 // OpenRouter, a company proxy) is only visible in its settings. Only the
 // setting that names the endpoint is read; the apiKeyHelper command (its
-// text, not its output), so a Fireworks reader can recognise FireConnect's;
+// text, not its output), so a Fireworks reader can recognise Nexus CLI's;
 // and the key sent to a configured gateway, for that gateway's account
 // reader (ADR 0009 §7). Every other setting is left alone.
 package claudesettings
@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // BaseURL is the ANTHROPIC_BASE_URL Claude Code is configured with, or ""
@@ -86,9 +87,11 @@ func APIKeyHelper() string {
 }
 
 // Credential is the key Claude Code sends to its configured base URL
-// (env.ANTHROPIC_AUTH_TOKEN, else env.ANTHROPIC_API_KEY), from the
-// settings file that sets the base URL. Both are "" when no gateway is
-// configured: Claude Code's own login is never read.
+// (env.ANTHROPIC_AUTH_TOKEN, else env.ANTHROPIC_API_KEY, else the
+// X-Fireworks-Api-Key line Nexus CLI writes into
+// env.ANTHROPIC_CUSTOM_HEADERS), from the settings file that sets the base
+// URL. Both are "" when no gateway is configured: Claude Code's own login
+// is never read.
 func Credential() (baseURL, key string) {
 	for _, path := range settingsFiles() {
 		b, err := os.ReadFile(path) //nolint:gosec // fixed Claude Code settings paths
@@ -105,9 +108,28 @@ func Credential() (baseURL, key string) {
 		if key == "" {
 			key = s.Env["ANTHROPIC_API_KEY"]
 		}
+		if key == "" {
+			key = headerValue(s.Env["ANTHROPIC_CUSTOM_HEADERS"], fireworksKeyHeader)
+		}
 		return s.Env["ANTHROPIC_BASE_URL"], key
 	}
 	return "", ""
+}
+
+// fireworksKeyHeader carries the Fireworks key when Nexus CLI connects
+// Claude Code, leaving the Claude login for Anthropic turns.
+const fireworksKeyHeader = "X-Fireworks-Api-Key"
+
+// headerValue reads one header from ANTHROPIC_CUSTOM_HEADERS, which holds
+// "Name: value" lines; the name is matched without regard to case.
+func headerValue(headers, name string) string {
+	for _, line := range strings.Split(headers, "\n") {
+		k, v, ok := strings.Cut(line, ":")
+		if ok && strings.EqualFold(strings.TrimSpace(k), name) {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }
 
 // modelSettings are the settings that name the model Claude Code asks for.
