@@ -24,13 +24,15 @@ import (
 const boundaryTimeout = 2 * time.Second
 
 // boundaryHookInput is what the pause point reads from a PreToolUse
-// payload: ids only. tool_input is never read, so no prompt, path or
-// command reaches the boundary engine.
+// payload: ids, the tool's name and its input. The input is only hashed,
+// here, for the loop breaker (bcap.HashToolInput), and dropped: no
+// prompt, path or command reaches the boundary engine or its files.
 type boundaryHookInput struct {
-	SessionID      string `json:"session_id"`
-	TranscriptPath string `json:"transcript_path"`
-	ToolUseID      string `json:"tool_use_id"`
-	ToolName       string `json:"tool_name"`
+	SessionID      string          `json:"session_id"`
+	TranscriptPath string          `json:"transcript_path"`
+	ToolUseID      string          `json:"tool_use_id"`
+	ToolName       string          `json:"tool_name"`
+	ToolInput      json.RawMessage `json:"tool_input"`
 	// Directory is the project the opencode plugin forwards, for the
 	// same attribution Claude Code's transcript path gives.
 	Directory string `json:"directory"`
@@ -50,8 +52,9 @@ nothing. An enforced ask rule asks when someone is at the keyboard and
 otherwise refuses with the rule and the tokenops approve command; an
 enforced deny rule refuses.
 
-It reads ids only, never the tool's input, and fails open: any error or
-timeout lets the call through and is recorded.
+It reads ids and the tool's name; the tool's input is hashed for the loop
+breaker and never kept. It fails open: any error or timeout lets the call
+through and is recorded.
 
 Install it with 'tokenops hooks install --boundary'.`,
 		Args: cobra.NoArgs,
@@ -78,7 +81,10 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 	}
 	call := bcap.Call{
 		Harness: harness, SessionID: in.SessionID, TranscriptPath: in.TranscriptPath,
-		ToolUseID: in.ToolUseID,
+		ToolUseID: in.ToolUseID, ToolName: in.ToolName,
+	}
+	if in.ToolInput != nil {
+		call.ArgsHash = bcap.HashToolInput(in.ToolInput)
 	}
 	project := bcap.TranscriptProject(in.TranscriptPath)
 	if in.Directory != "" {
@@ -160,12 +166,13 @@ Every rule starts in shadow: it records what it would have done and binds
 nothing. 'status' shows how often each rule matched and, per client, whether
 it is enforced or advice only; 'promote' makes a rule bind.
 
-'tokenops init' writes the headroom pause on a new config, in shadow; on an
-older one, 'headroom-pause' adds it.`,
+'tokenops init' writes the headroom pause and the loop breaker on a new
+config, in shadow; on an older one, 'headroom-pause' and 'loop-breaker'
+add them.`,
 		Args: cobra.NoArgs,
 	}
 	cmd.AddCommand(newBoundariesStatusCmd(), newBoundariesStageCmd("promote"), newBoundariesStageCmd("demote"), newBoundariesHeadroomPauseCmd(),
-		newBoundariesPresenceCmd())
+		newBoundariesLoopBreakerCmd(), newBoundariesPresenceCmd())
 	return cmd
 }
 
@@ -306,6 +313,58 @@ has a continue rule on plan_left_pct is left as it is.`,
 			}
 			for _, h := range hooks {
 				fmt.Fprintf(out, "  %s\n", h)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
+	return cmd
+}
+
+// newBoundariesLoopBreakerCmd adds the loop breaker to a config made
+// before init wrote it.
+func newBoundariesLoopBreakerCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "loop-breaker",
+		Short: "Add the loop breaker: ask before the next tool call once the agent repeats itself with no file changed, in shadow",
+		Long: `loop-breaker adds the boundary a new 'tokenops init' writes:
+
+  - name: loop-breaker
+    action: continue
+    when: { loop_calls: ">= 4" }
+    require: ask
+    stage: shadow
+
+loop_calls counts the agent's latest tool calls that went round a loop with
+no file changed: the same call (the same tool with the same input) again
+and again, or the same cycle of two or three calls at least three times.
+An edit or write it has not seen is progress and starts the count again.
+The pause point keeps each call's tool name and a hash of its input, never
+the input. Only Claude Code's hook sends the input, so the rule is
+evaluated there only.
+
+It starts in shadow: it records each session it would have paused and binds
+nothing until 'tokenops boundaries promote loop-breaker'. A config that
+already has a continue rule on loop_calls is left as it is.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			path, err := resolveMutableConfigPath(configFlag(cmd))
+			if err != nil {
+				return err
+			}
+			res, err := bcap.AddLoopBreaker(path)
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				return writeControlJSON(cmd, res)
+			}
+			out := cmd.OutOrStdout()
+			if res.Added {
+				fmt.Fprintf(out, "%s is set, in shadow (wrote %s)\n%s\n", res.Rule, res.Config, res.Note)
+			} else {
+				fmt.Fprintf(out, "%s [%s]: %s\n", res.Rule, res.Stage, res.Note)
 			}
 			return nil
 		},

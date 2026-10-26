@@ -63,6 +63,7 @@ var subCLIOnly = map[string]string{
 	"boundaries promote":        "making a rule bind is the operator's act; an agent must not be able to change the limits set on it",
 	"boundaries demote":         "loosening a rule is the operator's act; an agent must not be able to change the limits set on it",
 	"boundaries headroom-pause": "setting a limit on the agent and installing its hook is the operator's act, as promote is",
+	"boundaries loop-breaker":   "setting a limit on the agent is the operator's act, as promote is",
 	"boundaries presence":       "enrolling this Mac's approval key raises the Touch ID dialog and requiring it tightens what approves; both are the operator's acts, as promote is (ADR 0015)",
 	"statusline install":        "edits the operator's Claude Code settings; init runs it",
 	"spend export":              "writes a billing file for FinOps tools, not an answer an agent reasons over; GET /api/spend/export serves it",

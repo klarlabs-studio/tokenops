@@ -138,3 +138,38 @@ func pauseSummary(cfg *config.Config) *boundaries.PauseSummary {
 	}
 	return &p
 }
+
+// loopBreaker says what the loop breaker did this week, or in shadow would
+// have done, with the promote the headroom pause offers. A loop breaker
+// that cannot see a tool call says nothing: the headroom pause's finding
+// already names the missing hook, and an unset one is not suggested, since
+// the loop it would catch is not yet measured on this machine.
+func loopBreaker(p *boundaries.PauseSummary) []Finding {
+	if p == nil || !p.Configured || !p.PausePoint || p.Sessions == 0 {
+		return nil
+	}
+	if p.Stage == "enforce" {
+		return []Finding{{Key: key(KindBoundary, p.Rule, "paused"), Kind: KindBoundary, Level: LevelInfo,
+			Title:    fmt.Sprintf("The loop breaker paused %s this week", sessionsWord(p.Sessions)),
+			Evidence: fmt.Sprintf("`%s` asks before the next tool call once the agent repeats itself with no file changed", p.Rule)}}
+	}
+	return []Finding{{Key: key(KindBoundary, p.Rule), Kind: KindBoundary, Level: LevelInfo,
+		Title: fmt.Sprintf("The loop breaker would have paused %s this week", sessionsWord(p.Sessions)),
+		Evidence: fmt.Sprintf("`%s` is in shadow: it records and binds nothing; each decision names the tools that "+
+			"repeated, never their input", p.Rule),
+		Action:  fmt.Sprintf("`tokenops boundaries promote %s` makes it pause; nothing changes until you do.", p.Rule),
+		Actions: []FindingAction{promoteAction(*p)}, rule: p.Rule}}
+}
+
+// loopSummary reads the loop breaker for cfg; nil when there is no config
+// or the boundary ledger cannot be read.
+func loopSummary(cfg *config.Config) *boundaries.PauseSummary {
+	if cfg == nil {
+		return nil
+	}
+	p, err := boundaries.LoopBreaker(*cfg, boundaries.Env{}, boundaries.Installed("", ""))
+	if err != nil {
+		return nil
+	}
+	return &p
+}
