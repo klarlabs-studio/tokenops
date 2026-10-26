@@ -370,7 +370,9 @@ func saveState(dir, session string, st state) {
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(statePath(dir, session), b, 0o600)
+	if os.WriteFile(statePath(dir, session), b, 0o600) == nil {
+		_ = PruneSessions(dir, time.Now())
+	}
 }
 
 // withCurrent adds the model a session is running on to the models on

@@ -183,7 +183,9 @@ func DecideHeadroomNote(dir, session string, ws []NoteWindow, now time.Time, loc
 	}
 	if err := os.MkdirAll(dir, 0o755); err == nil {
 		if b, err := json.Marshal(cur); err == nil {
-			_ = os.WriteFile(notePath(dir, session), b, 0o600)
+			if os.WriteFile(notePath(dir, session), b, 0o600) == nil {
+				_ = PruneSessions(dir, now)
+			}
 		}
 	}
 	return note, true
