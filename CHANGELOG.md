@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- **findings, glance, menu bar:** the week's waste leads with the share of your plan it took, not with API-price dollars. On a flat-rate plan the finding read "Last 7 days: ~$364 avoidable (9.2% of a weekly window), $0.00 realized": dollars nobody paid, beside a zero that read as something broken. It now reads "Last 7 days: ~9.2% of a weekly window avoidable", with each class as its share of the same window ("cache-miss rebuilds 6.4% · over-tiered model 2.2% · …"). Dollars lead only where a provider billed per use (an API key, pay as you go), or follow the plan's share ("…, plus $4.10 billed per use"); with neither reading, they say they are API prices. What the guardrails saved is said in words ("Guardrails already saved ~$41.20 at API prices") and left out while it is nothing. The waste report gains `billed_usd` on the total and on each class: usage stored with a cost, or without one on a provider no plan's windows cover. `tokenops glance`, the MCP tools, `GET /api/findings` and the menu bar share the finding
+- **menu bar:** the coach's findings are sorted by where they belong. A warning about a plan window was listed with everything else at the bottom of the panel; it now sits under that window's bar in the plan's tab, and the tab carries a ▲. Findings that need attention or are worth a look stay open and are what the heading counts; information folds behind "N more", closed by default and remembered. Quota findings name their `provider` and `window` on `GET /api/findings` for this
+
+### Added
+
+- **coach, menu bar:** what the coach did. `GET /api/coach` (and `tokenops coach --json`) carries `activity` for today and the last 7 days: subagents moved to a cheaper model, new sessions started on one, and re-reads the read guard refused, from the coach's own ledgers, with a one-line summary that is empty when it did nothing. The panel's Coach section opens with it ("Today: moved 3 subagents to a cheaper model · refused 41 re-reads", or the last week's when nothing happened today). The report also lists each preset with what it does, and the panel says that under the preset menu, which offered four names with no explanation
+
 ## 0.111.0 - 2026-10-26
 
 ### Added

@@ -85,6 +85,19 @@ make menubar-test   # tests, no window needed
   route shows its latest readings and says it cannot poll on demand.
 - Each coach finding has a mark for its level, with its words on hover:
   ▲ needs attention, ● worth a look, ○ for your information.
+- A warning about a plan's window (a quota finding, which names its
+  `provider` and `window`) sits in that plan's tab, directly under the
+  bar it concerns, and the tab carries a ▲ so it is seen from another
+  plan; one about the plan as a whole (its reading has stopped) leads the
+  tab. The *Coach* section keeps what needs attention or is worth a look
+  open, and its heading counts those ("2 to look at"); information folds
+  behind an "N more" button (`aria-expanded`), closed by default and
+  remembered on this Mac.
+- The *Coach* section starts with what the coach did on its own, from
+  `GET /api/coach`'s `activity`: today's ("Today: moved 3 subagents to a
+  cheaper model · refused 41 re-reads"), or the last week's, said as such,
+  when it did nothing today. Under the preset menu, one line says what the
+  chosen preset does, from the daemon's preset definitions.
 - A finding with an operation behind it has buttons for it, the first in
   lime: *Promote pause* on the headroom pause in shadow, and *Got it*,
   *Expected* and *Snooze 4h* on unusual spend and on tips that waited. They
