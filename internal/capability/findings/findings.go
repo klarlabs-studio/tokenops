@@ -22,6 +22,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/config"
@@ -108,6 +109,9 @@ type Inputs struct {
 	Pause *boundaries.PauseSummary
 	// Presence is the presence check on approvals (ADR 0015), in shadow.
 	Presence *boundaries.PresenceStatus
+	// Context is the volatile-prefix lint of the user's always-loaded
+	// context files and hooks.
+	Context *prefixlint.Report
 }
 
 // Compute ranks every finding in, most urgent first.
@@ -128,6 +132,7 @@ func Compute(in Inputs) Report {
 	out = append(out, coaching(in.Coach, in.CoachHook)...)
 	out = append(out, headroomPause(in.Pause, in.Glance)...)
 	out = append(out, presenceFindings(in.Presence)...)
+	out = append(out, volatileContext(in.Context)...)
 	uniqueKeys(out)
 	sort.SliceStable(out, func(i, j int) bool { return urgency[out[i].Level] < urgency[out[j].Level] })
 	r := Report{Findings: out}
