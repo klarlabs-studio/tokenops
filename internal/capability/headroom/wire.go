@@ -2,6 +2,7 @@ package headroom
 
 import (
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/presentation"
@@ -71,6 +72,11 @@ type GlancePayload struct {
 	// cheaper model on subagent calls for work that fits, and why. Absent
 	// under no pressure.
 	Routing []Routing `json:"routing,omitempty"`
+	// PromptCache is the time until the current Claude Code session's
+	// prompt cache goes cold: warm, expiring with under two minutes left,
+	// or cold, after which the next prompt writes the whole context to the
+	// cache again. Absent with no session current.
+	PromptCache *waste.CacheCountdown `json:"prompt_cache,omitempty"`
 }
 
 // Payload is r on the wire.
@@ -106,6 +112,7 @@ func (g Glance) Payload() *GlancePayload {
 		PlanAdvice:    g.PlanAdvice,
 		EarlyResets:   g.EarlyResets,
 		Routing:       g.Routing,
+		PromptCache:   g.PromptCache,
 	}
 }
 
