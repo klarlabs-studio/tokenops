@@ -54,11 +54,12 @@ make menubar-test   # tests, no window needed
 - It reads only the local daemon's API (ADR 0010), with the token the
   daemon writes to `~/.tokenops/daemon.url`. The token stays in the Go
   process; the panel never sees it.
-- The panel's grant names six permissions: `glance.read`
+- The panel's grant names seven permissions: `glance.read`
   (`glance.follow`), `glance.refresh` (`sources.refresh`), `coach.change`
   (`coach.preset`, which the daemon writes to its audit log),
   `boundaries.deny` (`boundary.deny`), `boundaries.approve`
-  (`boundary.approve`) and `panel.close`.
+  (`boundary.approve`), `findings.answer` (`finding.act` and
+  `finding.dismiss`) and `panel.close`.
 - Decisions a boundary is waiting on (ADR 0014) are listed under *Waiting on
   you*. Deny answers through the daemon in one click and never signs.
   Approve needs a person, because the agent a boundary stopped can reach the
@@ -84,6 +85,20 @@ make menubar-test   # tests, no window needed
   route shows its latest readings and says it cannot poll on demand.
 - Each coach finding has a mark for its level, with its words on hover:
   ▲ needs attention, ● worth a look, ○ for your information.
+- A finding with an operation behind it has buttons for it, the first in
+  lime: *Promote pause* on the headroom pause in shadow, and *Got it*,
+  *Expected* and *Snooze 4h* on unusual spend and on tips that waited. They
+  run through the daemon (`POST /api/findings/act`), which checks the
+  finding still offers the action, runs the same code as the CLI and
+  audits it. An action that changes what binds or what is flagged
+  (promote, expected) first opens a row inside the finding saying what
+  will change and how to undo it, with *Confirm* and *Cancel*; nothing
+  runs until Confirm. Demoting stays on the CLI. *Hide…* hides a finding
+  for a day or a week (`POST /api/findings/dismiss`); it shows again
+  sooner if it becomes more urgent. "2 hidden · Show" brings hidden ones
+  back. A finding that changed since the panel read it is left alone and
+  the note says so. `tokenops glance --findings` still lists every finding
+  and says how many the menu bar hides.
 - Each plan shows its vendor's own logo (`frontend/logos`, see its
   NOTICE.md for the source and the trademarks).
 - The icon appears at once and fills in when the first read returns; the
