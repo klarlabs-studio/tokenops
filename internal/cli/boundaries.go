@@ -16,7 +16,6 @@ import (
 
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/config"
-	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 )
 
@@ -26,7 +25,7 @@ const boundaryTimeout = 2 * time.Second
 
 // boundaryHookInput is what the pause point reads from a PreToolUse
 // payload: ids, the tool's name and its input. The input is only hashed,
-// here, for the loop breaker (domain.HashToolInput), and dropped: no
+// here, for the loop breaker (bcap.HashToolInput), and dropped: no
 // prompt, path or command reaches the boundary engine or its files.
 type boundaryHookInput struct {
 	SessionID      string          `json:"session_id"`
@@ -85,7 +84,7 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 		ToolUseID: in.ToolUseID, ToolName: in.ToolName,
 	}
 	if in.ToolInput != nil {
-		call.ArgsHash = domain.HashToolInput(in.ToolInput)
+		call.ArgsHash = bcap.HashToolInput(in.ToolInput)
 	}
 	project := bcap.TranscriptProject(in.TranscriptPath)
 	if in.Directory != "" {

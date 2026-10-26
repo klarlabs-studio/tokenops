@@ -1,6 +1,7 @@
 package boundaries
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
@@ -96,3 +97,8 @@ func AddLoopBreaker(path string) (PauseAdded, error) {
 		Note: "in shadow at 4 calls round a loop with no file changed: it records each session it would have paused and binds nothing; " +
 			"`tokenops boundaries promote " + config.LoopBreakerName + "` makes it pause"}, nil
 }
+
+// HashToolInput is the hash a hook puts on Call.ArgsHash: the tool's input
+// with its keys sorted and cosmetic keys dropped. Adapters hash the input
+// and drop it; the input itself never reaches the pause point.
+func HashToolInput(raw json.RawMessage) string { return domain.HashToolInput(raw) }
