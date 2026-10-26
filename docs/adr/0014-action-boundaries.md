@@ -301,3 +301,24 @@ option:
 - **Agents cannot loosen a hard window.** The daemon API and the MCP tool
   may make a window hard, but change or remove a budget holding one only
   from a terminal, for the same reason they cannot promote or approve.
+
+## Loop breaker (amended 2026-10-26)
+
+- **A loop is a figure, so the loop breaker is a rule.** `loop_calls`
+  joins the `continue` conditions: how many of the session's latest tool
+  calls went round a loop with no file changed (the same call again, or a
+  cycle of two or three calls at least three times). The default
+  `loop-breaker` rule (`>= 4`, `ask`) is written by init in shadow and
+  promoted like any other rule; nothing promotes it on its own.
+- **The pause point reads a tool's input, to hash it.** The rest of this
+  ADR reads no input; `loop_calls` cannot be judged without telling one
+  call from another. The hook hashes the input (dropping cosmetic keys such
+  as Bash's `description`) and keeps only the tool's name and the hash, in
+  a per-session log of the newest 64 calls. Decisions name the tools that
+  repeated, never their input. opencode's hook sends no input, so the
+  figure is unknown there and the rule never matches.
+- **Progress is what the hook sees.** An edit or write not made since the
+  last progress starts the count again; a change made through a shell is
+  not seen. Comparing a session's cost with similar successful tasks
+  (EET) is not done: the pause point does not know the task's kind, and
+  that history is in the event store it never opens.

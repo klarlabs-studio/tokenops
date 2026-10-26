@@ -85,6 +85,70 @@ pause point. A `continue` rule of your own on `plan_left_pct`, whatever
 its name, counts as a headroom pause and is left alone. Change the
 threshold by editing `plan_left_pct` in `config.yaml`.
 
+## The loop breaker
+
+An agent that is stuck repeats itself: the same test run, the same file
+read, the same pair of calls, with nothing changing in between. `tokenops
+init` writes a second boundary for that, also in shadow:
+
+```yaml
+boundaries:
+  - name: loop-breaker
+    action: continue                     # the agent's next tool call
+    when: { loop_calls: ">= 4" }         # 4 calls round a loop, no file changed
+    require: ask
+    stage: shadow
+```
+
+`loop_calls` counts the session's latest tool calls that went round a loop
+with no file changed in between:
+
+- **the same call again**: the same tool with the same input, four times
+  in a row by default;
+- **a short cycle**: the same two or three calls, in the same order, at
+  least three times (test, read, test, read, test, read). Twice is
+  ordinary work and is not counted.
+
+An `Edit`, `Write` or other file-changing call it has not seen before is
+progress and starts the count again; the same edit made again is not
+progress, since it fails or changes nothing. Repetition alone is a poor
+sign of a loop; repetition with no progress is a much better one (IBM,
+*Unsupervised Cycle Detection in Agentic Applications*, arXiv 2511.10650).
+
+In shadow it asks nothing: the findings say "The loop breaker would have
+paused 2 sessions this week", with a *Promote* action, and `tokenops
+boundaries status` how often it matched. Promoted, the next call in a loop
+asks at Claude Code's prompt, or, unattended, is refused, with what
+repeated and a nudge for the agent: change approach, or ask the user.
+
+```bash
+tokenops boundaries loop-breaker            # add it to an older config, in shadow
+tokenops boundaries promote loop-breaker
+```
+
+What it keeps, and what it cannot see:
+
+- **No input is kept.** The pause point reads each call's tool name and
+  input, hashes the input (ignoring Bash's `description`, which an agent
+  rewords on every retry) and keeps the tool name and the hash, under
+  `~/.tokenops/boundaries/calls/`, the newest 64 calls per session.
+  Decisions name the tools that repeated, never their input.
+- **Claude Code only.** opencode's hook does not send the tool's input,
+  so `loop_calls` is never read there, and Codex and Cursor have no hook;
+  `boundaries status` shows the rule as *not evaluated* on them.
+- **Shell edits are not seen.** A file changed through a shell command
+  (`sed -i`, a code generator) is not progress to it, and polling the same
+  command while waiting (CI checks, a deploy) looks like a loop. That is
+  what shadow is for: watch what it would have paused before promoting.
+- **One answer per session.** As with every `ask` rule, a yes at the prompt
+  holds for the rest of the session, so a later loop in the same session is
+  not asked about again.
+
+Not yet: stopping a run that has cost more than similar *successful* runs
+usually do with no progress (EET, arXiv 2601.05777). The pause point does
+not know a session's kind of task, and the history it would compare with
+lives in the event store, which it never opens.
+
 ## Rules
 
 | Key | Takes |
@@ -104,7 +168,8 @@ threshold by editing `plan_left_pct` in `config.yaml`.
 | `share` | figures leaving the machine: a team upload, an OTel export | the uploader and the exporter |
 
 Conditions read only figures TokenOps already holds; no prompt text is read
-to evaluate a rule. Each needs a comparator: `<`, `<=`, `>`, `>=` or `==`.
+to evaluate a rule. The one input read is a tool call's, for `loop_calls`,
+and only its hash is kept. Each needs a comparator: `<`, `<=`, `>`, `>=` or `==`.
 An action takes only the conditions it can be judged by where it is
 decided:
 
@@ -115,6 +180,7 @@ decided:
 | `budget_used_pct` with `budget: <name>` | the share of a configured budget used in its window; with no name, the fullest | `spend` | the daemon's figures |
 | `model_tier` | haiku < sonnet < opus | `subagent_model`, `model_route` | the subagent's model (or the session's when it inherits); the model the router would move to |
 | `destination` | `== team` or `== otel` | `share` | where the figures are going |
+| `loop_calls` | `>=` or `>` a whole number from 2 to 64: the latest calls that went round a loop with no file changed ([the loop breaker](#the-loop-breaker)) | `continue` | the tool calls Claude Code's hook reports, as names and input hashes |
 | `workflow_id`, `agent_id` | `==` with `*` wildcards, e.g. `"== claude-code:*my-repo*"` | all but `share` | the session's attribution, or the request's |
 
 A figure TokenOps cannot read never satisfies a condition: a boundary that

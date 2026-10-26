@@ -255,7 +255,10 @@ installs the Claude Code hooks. A new config also gets the
 [headroom pause](/guide/boundaries#the-headroom-pause), in shadow: it
 records each session it would have paused once the tightest plan window
 is down to 10% left and binds nothing until you promote it; init installs the pause
-point (the boundary hook) to evaluate it. Re-running init on an existing
+point (the boundary hook) to evaluate it. It also gets the
+[loop breaker](/guide/boundaries#the-loop-breaker), in shadow: it records
+each session whose agent went round a loop of tool calls with no file
+changed. Re-running init on an existing
 config does not add it. `--detect` adds a report of the clients it
 found; it does not make the command read-only. Use `tokenops detect` to
 only look, or `--print-only` / `--no-wire` for a dry run.
@@ -835,7 +838,7 @@ one. Each window is **soft** or **hard**:
   interruption budget. `tokenops budget list` and the glance show each
   window's share used.
 - **Hard** (`--mode hard`) is enforced by a spend
-  [boundary](#tokenops-boundaries-status-promote-demote-headroom-pause) named `budget-<name>-<window>`, which
+  [boundary](#tokenops-boundaries-status-promote-demote-headroom-pause-loop-breaker) named `budget-<name>-<window>`, which
   asks (`--require ask`, the default) or refuses (`--require deny`) before
   further steps once the window is spent. Like every boundary it starts
   in shadow, recording what it would have done, until you promote it.
@@ -2217,7 +2220,7 @@ enrolled, `decide … approve` shows the Touch ID dialog and signs the
 approval; with `boundary_approval: presence` an upgrade approval counts only
 when signed, and an agent cannot approve one at all.
 
-### `tokenops boundaries {status|promote|demote|headroom-pause}`
+### `tokenops boundaries {status|promote|demote|headroom-pause|loop-breaker}`
 
 [Action boundaries](/guide/boundaries) are limits you set in
 `config.yaml` before work starts: past $20 in a session, ask me; no
@@ -2230,6 +2233,7 @@ tokenops boundaries status --json   # the daemon API's GET /api/boundaries
 tokenops boundaries promote session-spend
 tokenops boundaries demote session-spend
 tokenops boundaries headroom-pause  # add the headroom pause to an older config, in shadow
+tokenops boundaries loop-breaker    # add the loop breaker to an older config, in shadow
 ```
 
 Every rule starts in **shadow**: it records what it would have done and
@@ -2252,6 +2256,14 @@ written before init did this is not changed: the findings suggest
 installs the pause point in Claude Code and opencode. A config that already
 has a `continue` rule on `plan_left_pct` is left as it is. Like `promote`,
 it has no MCP equivalent.
+
+**The loop breaker** is the other boundary init writes: once the agent's
+latest tool calls go round a loop with no file changed (the same call four
+times, or the same two or three calls three times), the next call asks
+first (`when: { loop_calls: ">= 4" }`, `require: ask`). It starts in
+shadow; `tokenops boundaries loop-breaker` adds it to an older config, and
+`tokenops boundaries promote loop-breaker` makes it pause. It keeps tool
+names and input hashes only, and is evaluated in Claude Code only.
 
 ### `tokenops boundaries presence {enroll|enforce|status|rotate}`
 
