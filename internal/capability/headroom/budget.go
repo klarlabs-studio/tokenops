@@ -113,6 +113,9 @@ type Glance struct {
 	// PlanAdvice is each bound plan replayed against its other tiers over
 	// the last plans.AdviceDays; nil when it could not be computed.
 	PlanAdvice []plans.Advice
+	// EarlyResets are windows that reset well before their reported reset
+	// within the last day (plans.EarlyResetsIn).
+	EarlyResets []plans.EarlyReset
 	// Routing is the advice to pass a cheaper model on subagent calls,
 	// one line per plan running short; nil when none is.
 	Routing []Routing
@@ -136,6 +139,7 @@ func ComputeGlance(ctx context.Context, d Deps, now time.Time) (Glance, error) {
 	}
 	g.PlanUse = planUse(ctx, d.Reader, now)
 	g.PlanAdvice = glanceAdvice(ctx, d, now)
+	g.EarlyResets = earlyResets(ctx, d, now)
 	return g, nil
 }
 

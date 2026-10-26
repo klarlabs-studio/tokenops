@@ -116,6 +116,7 @@ func Compute(in Inputs) Report {
 	if in.Glance != nil {
 		out = append(out, quota(in.Glance.Headroom.Reports)...)
 		out = append(out, planAdvice(in.Glance.PlanAdvice)...)
+		out = append(out, earlyResetFindings(in.Glance.EarlyResets)...)
 	}
 	if in.Sessions != nil {
 		out = append(out, sessionFindings(in.Sessions.DX.Warnings, in.Sessions.DX.Recommendation)...)
@@ -144,11 +145,41 @@ func Compute(in Inputs) Report {
 var vendorNames = map[string]string{"anthropic": "Claude", "openai": "Codex", "gemini": "Gemini", "github": "Copilot", "cursor": "Cursor"}
 
 func vendor(r plans.HeadroomReport) string {
-	if v, ok := vendorNames[r.Provider]; ok {
+	return providerVendor(r.Provider, r.Display)
+}
+
+// providerVendor is the name users know a provider by, or the display name
+// when the provider is not one of them.
+func providerVendor(provider, display string) string {
+	if v, ok := vendorNames[provider]; ok {
 		return v
 	}
-	return r.Display
+	return display
 }
+
+// earlyResetFindings says a window reset before the time its vendor gave,
+// for the day after it did. Nothing the operator did explains the drop in
+// use, so the finding names the window's before and after, and how early.
+func earlyResetFindings(rs []plans.EarlyReset) []Finding {
+	out := make([]Finding, 0, len(rs))
+	for _, r := range rs {
+		out = append(out, Finding{
+			Key:   key(KindPlan, r.Provider, "early-reset", r.Name),
+			Kind:  KindPlan,
+			Level: LevelInfo,
+			Title: fmt.Sprintf("%s's %s reset %s early", providerVendor(r.Provider, r.Provider), windowWords(r.Name), human(r.Earliness())),
+			Evidence: fmt.Sprintf("At %s it was %.0f%% used, due to reset at %s. At %s it showed %.0f%% used and a new reset at %s. "+
+				"The reset came between those two readings, so it was at least this early.",
+				clock(r.PrevObservedAt), r.PrevUsedPct, clock(r.PrevResetsAt),
+				clock(r.ObservedAt), r.UsedPct, clock(r.ResetsAt)),
+			Action: "Nothing to do: the window is open again. TokenOps keeps this in the glance for a day.",
+		})
+	}
+	return out
+}
+
+// clock is a time as the operator's clock reads it: "Oct 25 10:00".
+func clock(t time.Time) string { return t.Local().Format("Jan 2 15:04") }
 
 // staleReading is a plan whose every window comes from a source that has
 // stopped: the plan's share is unknown, and says how to get it back.
