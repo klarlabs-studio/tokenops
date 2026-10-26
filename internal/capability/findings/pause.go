@@ -23,14 +23,14 @@ func headroomPause(p *boundaries.PauseSummary, g *headroom.Glance) []Finding {
 		if !watchesAPlan(g) {
 			return nil
 		}
-		return []Finding{{Kind: KindBoundary, Level: LevelInfo,
+		return []Finding{{Key: key(KindBoundary, config.HeadroomPauseName, "unset"), Kind: KindBoundary, Level: LevelInfo,
 			Title:    "No headroom pause is set",
 			Evidence: "nothing stops an agent as a plan window runs out",
 			Action: "`tokenops boundaries headroom-pause` adds one at 10% left in the tightest window, in shadow: " +
 				"it records what it would have paused and binds nothing."}}
 	}
 	if !p.PausePoint {
-		return []Finding{{Kind: KindBoundary, Level: LevelNotice,
+		return []Finding{{Key: key(KindBoundary, p.Rule, "no-hook"), Kind: KindBoundary, Level: LevelNotice,
 			Title:    "The headroom pause sees no tool calls",
 			Evidence: fmt.Sprintf("`%s` is set, but no agent has the boundary hook, so it records nothing", p.Rule),
 			Action:   "`tokenops hooks install --boundary` adds it to Claude Code (`--client opencode` for opencode)."}}
@@ -39,14 +39,15 @@ func headroomPause(p *boundaries.PauseSummary, g *headroom.Glance) []Finding {
 		return nil
 	}
 	if p.Stage == "enforce" {
-		return []Finding{{Kind: KindBoundary, Level: LevelInfo,
+		return []Finding{{Key: key(KindBoundary, p.Rule, "paused"), Kind: KindBoundary, Level: LevelInfo,
 			Title:    fmt.Sprintf("The headroom pause paused %s this week", sessionsWord(p.Sessions)),
 			Evidence: fmt.Sprintf("`%s` asks before the next tool call once a plan window is nearly used up", p.Rule)}}
 	}
-	return []Finding{{Kind: KindBoundary, Level: LevelInfo,
+	return []Finding{{Key: key(KindBoundary, p.Rule), Kind: KindBoundary, Level: LevelInfo,
 		Title:    fmt.Sprintf("The headroom pause would have paused %s this week", sessionsWord(p.Sessions)),
 		Evidence: fmt.Sprintf("`%s` is in shadow: it records and binds nothing", p.Rule),
-		Action:   fmt.Sprintf("`tokenops boundaries promote %s` makes it pause; nothing changes until you do.", p.Rule)}}
+		Action:   fmt.Sprintf("`tokenops boundaries promote %s` makes it pause; nothing changes until you do.", p.Rule),
+		Actions:  []FindingAction{promoteAction(*p)}, rule: p.Rule}}
 }
 
 func sessionsWord(n int) string {
@@ -81,7 +82,7 @@ func presenceFindings(p *boundaries.PresenceStatus) []Finding {
 	}
 	var out []Finding
 	if p.State == boundaries.PresenceStateUnavailable {
-		out = append(out, Finding{Kind: KindBoundary, Level: LevelWarn,
+		out = append(out, Finding{Key: key(KindBoundary, "presence", "no-key"), Kind: KindBoundary, Level: LevelWarn,
 			Title:    "Presence approval is on, and no key is enrolled",
 			Evidence: p.Note,
 			Action:   "Enrol this Mac's key: " + boundaries.EnrolCommand})
@@ -91,13 +92,13 @@ func presenceFindings(p *boundaries.PresenceStatus) []Finding {
 		if p.Refused == 1 {
 			word = "approval was"
 		}
-		out = append(out, Finding{Kind: KindBoundary, Level: LevelNotice,
+		out = append(out, Finding{Key: key(KindBoundary, "presence", "refused"), Kind: KindBoundary, Level: LevelNotice,
 			Title: fmt.Sprintf("%d %s not honoured: not signed by this Mac's presence key", p.Refused, word),
 			Evidence: "each decision says why (`tokenops explain <id>`); an approval written by something other than you " +
 				"shows up here"})
 	}
 	if p.State == boundaries.PresenceStateHeld {
-		out = append(out, Finding{Kind: KindBoundary, Level: LevelWarn,
+		out = append(out, Finding{Key: key(KindBoundary, "presence", "replaced"), Kind: KindBoundary, Level: LevelWarn,
 			Title:    "The approval key was replaced",
 			Evidence: p.Note,
 			Action:   "If you did not replace it, something running as your user did: check ~/.tokenops/presence."})
@@ -107,7 +108,7 @@ func presenceFindings(p *boundaries.PresenceStatus) []Finding {
 		if p.WouldBeIgnored == 1 {
 			word = "approval"
 		}
-		out = append(out, Finding{Kind: KindBoundary, Level: LevelNotice,
+		out = append(out, Finding{Key: key(KindBoundary, "presence", "shadow"), Kind: KindBoundary, Level: LevelNotice,
 			Title: fmt.Sprintf("%d %s would not have been honoured with presence enforced", p.WouldBeIgnored, word),
 			Evidence: "presence-checked approval is in shadow: they went through, and each decision says why " +
 				"it would not have (`tokenops explain <id>`)"})
