@@ -34,6 +34,9 @@ type SessionTurn struct {
 	Source, Endpoint string
 	// PlanCovered is usage a plan covered, billed nothing at the margin.
 	PlanCovered bool
+	// Latency is how long the turn took, zero when not recorded: its
+	// request went out at At minus Latency.
+	Latency time.Duration
 }
 
 // BilledUSD is what the turn was billed: nothing when a plan covered it,
@@ -64,7 +67,7 @@ func (a *Aggregator) SessionTurns(ctx context.Context, f Filter) ([]SessionTurn,
 	for _, u := range usage {
 		t := SessionTurn{SessionID: u.SessionID, At: u.At, Provider: u.Provider, Model: u.Model,
 			WorkflowID: u.WorkflowID, ExecutionID: u.ExecutionID,
-			Source: u.Source, Endpoint: u.Endpoint, PlanCovered: u.PlanCovered,
+			Source: u.Source, Endpoint: u.Endpoint, PlanCovered: u.PlanCovered, Latency: u.Latency,
 			InputTokens: u.InputTokens, OutputTokens: u.OutputTokens, CacheReadTokens: u.CacheReadTokens,
 			CacheWriteTokens: u.CacheWriteTokens, CacheWrite1hTokens: u.CacheWrite1hTokens}
 		t.Tokens = u.TotalTokens
