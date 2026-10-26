@@ -15,6 +15,7 @@ var subToMCP = map[string][]string{
 	"budget set":            {"tokenops_configure"},
 	"budget unset":          {"tokenops_configure"},
 	"coach prompts":         {"tokenops_sessions"},
+	"coach lint-context":    {"tokenops_rules"},
 	"coach autonomy":        {"tokenops_coach"},
 	"coach verbosity":       {"tokenops_coach"},
 	"coach set":             {"tokenops_coach"},

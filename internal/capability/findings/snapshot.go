@@ -12,6 +12,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
@@ -113,8 +114,9 @@ func AnalyzeSessions(ctx context.Context, dir string, now time.Time, cache *sess
 	return s, dropped, err
 }
 
-// Gather reads the coach's ledgers, the last session analysis and the
-// headroom pause around a glance, the coach's report and the config, any
+// Gather reads the coach's ledgers, the last session analysis, the
+// volatile-prefix lint of the user's context files and the headroom pause
+// around a glance, the coach's report and the config, any
 // of which may be nil. A ledger that cannot be read leaves its findings
 // out.
 func Gather(g *headroom.Glance, c *coach.Report, cfg *config.Config, cacheDir string) Inputs {
@@ -136,6 +138,10 @@ func Gather(g *headroom.Glance, c *coach.Report, cfg *config.Config, cacheDir st
 	if s, err := avoidable.ReadSnapshot(cacheDir); err == nil {
 		in.Waste = s
 	}
+	// The user's own context files and hooks: a few small files, no
+	// transcripts, no project.
+	lint := prefixlint.Lint(prefixlint.UserSources())
+	in.Context = &lint
 	return in
 }
 
