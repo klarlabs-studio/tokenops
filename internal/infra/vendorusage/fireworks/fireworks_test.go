@@ -127,6 +127,11 @@ func TestIsFireConnectHelper(t *testing.T) {
 		"/opt/homebrew/bin/fireconnect key   export":            true,
 		"fireconnect key list":                                  false,
 		"myfireconnect key export":                              false,
+		"nexus key export":                                      true,
+		"/Users/x/.nexus/bin/nexus key export":                  true,
+		`node "/u/.nexus/cli/nexus.mjs" key export`:             true,
+		"nexus status":                                          false,
+		"mynexus key export":                                    false,
 	} {
 		if got := IsFireConnectHelper(cmd); got != want {
 			t.Errorf("%q = %v, want %v", cmd, got, want)

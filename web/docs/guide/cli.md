@@ -1066,19 +1066,25 @@ spend and limit from Fireworks' documented API every 15 minutes. Nothing
 needs setting up, and `plan headroom` shows Fireworks as `pay-as-you-go`
 until you bind another plan.
 
-- **The key** is `FIREWORKS_API_KEY`, or FireConnect's own key: TokenOps
-  runs Claude Code's `apiKeyHelper` only when it is FireConnect's
-  `fireconnect key export`. Without FireConnect, a Fireworks key that
-  opencode or Codex uses is taken instead. The key is fetched for each reading and is
-  never stored or logged.
+- **The key** is `FIREWORKS_API_KEY`, or the key Nexus CLI (FireConnect
+  before 0.10.0) connected Claude Code with: the `X-Fireworks-Api-Key`
+  header it writes into Claude Code's settings, or, on older versions, its
+  `apiKeyHelper` (TokenOps runs that helper only when it is `nexus key
+  export` or `fireconnect key export`). Otherwise a Fireworks key that
+  opencode or Codex uses is taken. The key is fetched for each reading
+  and is never stored or logged.
 - **The figures** on a company account are your own spend against your
   per-user cap (`/users/{you}/usageLimits`). On your own account they are
   the month's spend (`/billing/summary`) against the `monthly-spend-usd`
   quota. That figure is the whole account's, every member together, so
   where it is shown it is labelled "Account spend" with
   `account <id>, all members` (`spend_scope: account` and `spend_scope_label` in the API), not
-  as your own extra usage. Your user and account come from FireConnect's
-  `~/.fireconnect/minted-key.json`, or from the key itself.
+  as your own extra usage. Your user and account come from Nexus CLI's
+  `~/.nexus/minted-key.json` (`~/.fireconnect` on older versions); the
+  account can also come from the key. Fireworks has no call that names a
+  key's user, so when no file names yours, set it once:
+  `tokenops vendor-usage enable fireworks --user-id <your-user-id>`.
+  Until then the figures are the account's.
 - **Calls** go to `api.fireworks.ai` only. Turn them off with
   `tokenops vendor-usage enable fireworks --disable`.
 

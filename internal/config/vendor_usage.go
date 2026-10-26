@@ -100,12 +100,14 @@ func (c AccountsUsageConfig) On() bool { return c.Enabled == nil || *c.Enabled }
 
 // FireworksUsageConfig wires the Fireworks account reader (ADR 0009 §7):
 // spend this month against the account's or the member's cap, read from
-// Fireworks' API with the key FireConnect or FIREWORKS_API_KEY already
+// Fireworks' API with the key Nexus CLI or FIREWORKS_API_KEY already
 // provides. It is on unless Enabled is false, and idle on a machine with
-// no Fireworks key. Interval defaults to 15 minutes.
+// no Fireworks key. Interval defaults to 15 minutes. UserID names the
+// member whose own cap is read, when Nexus CLI's files do not.
 type FireworksUsageConfig struct {
 	Enabled  *bool         `yaml:"enabled,omitempty"`
 	Interval time.Duration `yaml:"interval,omitempty"`
+	UserID   string        `yaml:"user_id,omitempty"`
 }
 
 // On reports whether the reader runs: unless switched off.

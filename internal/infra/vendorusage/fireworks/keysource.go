@@ -12,21 +12,23 @@ import (
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/fireworks"
 )
 
-// fireconnectHelper matches FireConnect's apiKeyHelper, `fireconnect key
-// export`, with the pattern FireConnect itself uses to recognise it.
+// The apiKeyHelper of Nexus CLI, `nexus key export`, or of FireConnect
+// as it was called before 0.10.0, matched with the pattern the CLI itself
+// uses to recognise it.
 var (
-	fireconnectBin    = regexp.MustCompile(`(?:^|[/\\])fireconnect(?:\.mjs)?['"]?(?:\s|$)`)
+	fireconnectBin    = regexp.MustCompile(`(?:^|[/\\])(?:nexus|fireconnect)(?:\.mjs)?['"]?(?:\s|$)`)
 	fireconnectExport = regexp.MustCompile(`(?:^|\s)key\s+export(?:\s|$)`)
 )
 
-// IsFireConnectHelper reports whether an apiKeyHelper is FireConnect's.
+// IsFireConnectHelper reports whether an apiKeyHelper is Nexus CLI's
+// (formerly FireConnect's).
 func IsFireConnectHelper(cmd string) bool {
 	return fireconnectBin.MatchString(cmd) && fireconnectExport.MatchString(cmd)
 }
 
 // KeySource finds the Fireworks key the operator already uses, in
-// FireConnect's own order: FIREWORKS_API_KEY, then FireConnect's key
-// export (its keychain entry). Only FireConnect's helper is ever run; any
+// Nexus CLI's own order: FIREWORKS_API_KEY, then its key export (its
+// keychain entry). Only Nexus CLI's helper is ever run; any
 // other apiKeyHelper is left alone.
 type KeySource struct {
 	// Getenv reads the environment; nil uses os.Getenv.
@@ -70,11 +72,11 @@ func (k KeySource) Key(ctx context.Context) (string, error) {
 	if err != nil {
 		// The helper's own message can echo configuration; say only that
 		// it failed.
-		return "", errors.New("fireworks: FireConnect's key export failed")
+		return "", errors.New("fireworks: Nexus CLI's key export failed")
 	}
 	key := strings.TrimSpace(out)
 	if key == "" || strings.ContainsAny(key, " \n") {
-		return "", errors.New("fireworks: FireConnect's key export returned no key")
+		return "", errors.New("fireworks: Nexus CLI's key export returned no key")
 	}
 	return key, nil
 }
@@ -82,6 +84,6 @@ func (k KeySource) Key(ctx context.Context) (string, error) {
 func runHelper(ctx context.Context, cmd string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "/bin/sh", "-c", cmd).Output() //nolint:gosec // only FireConnect's own helper, matched above
+	out, err := exec.CommandContext(ctx, "/bin/sh", "-c", cmd).Output() //nolint:gosec // only Nexus CLI's own helper, matched above
 	return string(out), err
 }

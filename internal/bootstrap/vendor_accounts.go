@@ -81,7 +81,7 @@ func unreadableGateway(baseURL string) bool {
 }
 
 // fireworksFallbackKey is a Fireworks key a harness other than
-// FireConnect uses (opencode's auth.json, Codex's config).
+// Nexus CLI uses (opencode's auth.json, Codex's config).
 func fireworksFallbackKey() string {
 	for _, c := range accountCredentials() {
 		if c.Endpoint == "fireworks" {

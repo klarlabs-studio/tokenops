@@ -215,6 +215,8 @@ func recordStatuslineChoice(on bool) error {
 // readers.
 func statuslineName(command string) string {
 	switch {
+	case strings.Contains(command, ".nexus"):
+		return "Your Nexus status line"
 	case strings.Contains(command, ".fireconnect"):
 		return "Your FireConnect status line"
 	case strings.Contains(command, "ccstatusline"):

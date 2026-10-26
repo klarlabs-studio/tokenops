@@ -1,5 +1,6 @@
 // Package fireworks reads a Fireworks account's own figures: spend this
-// month and the limit it is spent against (ADR 0009 §7). FireConnect points
+// month and the limit it is spent against (ADR 0009 §7). Nexus CLI (formerly
+// FireConnect) points
 // Claude Code, Codex and opencode at Fireworks, and the open models it
 // routes to bill there, so Fireworks is a biller with limits of its own.
 //
@@ -68,32 +69,48 @@ type Reading struct {
 	LimitReached bool
 }
 
-// Identity is the account and user FireConnect signed in as, read from
-// the ids-only files it keeps: minted-key.json names the user
-// ("accounts/<a>/users/<u>"), config.json the SSO account. Either may be
-// empty. config.json can also hold keys, so only ssoAccountId is decoded.
+// identityDirs are where Fireworks' CLI keeps its files, newest name
+// first: Nexus CLI (0.10.0 on) uses ~/.nexus and leaves ~/.fireconnect as
+// a link for upgraded installs; a fresh install has only ~/.nexus.
+var identityDirs = []string{".nexus", ".fireconnect"}
+
+// Identity is the account and user Nexus CLI (formerly FireConnect)
+// signed in as, read from the ids-only files it keeps: minted-key.json
+// names the user ("accounts/<a>/users/<u>"), config.json the SSO account.
+// Either may be empty. config.json can also hold keys, so only
+// ssoAccountId is decoded.
 func Identity(home string) (account, user string) {
-	dir := filepath.Join(home, ".fireconnect")
-	if b, err := os.ReadFile(filepath.Join(dir, "minted-key.json")); err == nil { //nolint:gosec // fixed FireConnect path
+	for _, d := range identityDirs {
+		a, u := identityIn(filepath.Join(home, d))
+		if account == "" {
+			account = a
+		}
+		if u != "" {
+			return a, u
+		}
+	}
+	return account, ""
+}
+
+func identityIn(dir string) (account, user string) {
+	if b, err := os.ReadFile(filepath.Join(dir, "minted-key.json")); err == nil { //nolint:gosec // fixed Nexus CLI path
 		var m struct {
 			UserName string `json:"userName"`
 		}
 		if json.Unmarshal(b, &m) == nil {
 			parts := strings.Split(m.UserName, "/")
 			if len(parts) == 4 && parts[0] == "accounts" && parts[2] == "users" {
-				account, user = parts[1], parts[3]
+				return parts[1], parts[3]
 			}
 		}
 	}
-	if account == "" {
-		if b, err := os.ReadFile(filepath.Join(dir, "config.json")); err == nil { //nolint:gosec // fixed FireConnect path
-			var c struct {
-				SSOAccountID string `json:"ssoAccountId"`
-			}
-			if json.Unmarshal(b, &c) == nil {
-				account = c.SSOAccountID
-			}
+	if b, err := os.ReadFile(filepath.Join(dir, "config.json")); err == nil { //nolint:gosec // fixed Nexus CLI path
+		var c struct {
+			SSOAccountID string `json:"ssoAccountId"`
+		}
+		if json.Unmarshal(b, &c) == nil {
+			account = c.SSOAccountID
 		}
 	}
-	return account, user
+	return account, ""
 }

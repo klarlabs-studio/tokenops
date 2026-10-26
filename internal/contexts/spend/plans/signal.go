@@ -104,7 +104,7 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 		return SignalQuality{
 			Level:  SignalLevelHigh,
 			Source: SignalSourceFireworks,
-			Caveat: "Reads Fireworks' documented API with the key FireConnect or FIREWORKS_API_KEY provides: your own spend and cap on a company account, otherwise the account's month spend and monthly-spend-usd quota. Billing is aggregated daily.",
+			Caveat: "Reads Fireworks' documented API with the key Nexus CLI or FIREWORKS_API_KEY provides: your own spend and cap on a company account, otherwise the account's month spend and monthly-spend-usd quota. Billing is aggregated daily.",
 		}
 	case in.VendorAccountInWindow > 0:
 		return SignalQuality{

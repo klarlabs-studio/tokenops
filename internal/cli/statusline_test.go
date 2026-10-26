@@ -210,6 +210,7 @@ func TestStatuslineUninstallSticksAcrossInit(t *testing.T) {
 func TestStatuslineNameIsReadable(t *testing.T) {
 	for cmd, want := range map[string]string{
 		"/Users/x/.nvm/versions/node/v25.6.0/bin/node /Users/x/.fireconnect/cli/packages/setup-cli/bin/claude-statusline.mjs": "Your FireConnect status line",
+		"/Users/x/.nvm/versions/node/v25.6.0/bin/node /Users/x/.nexus/cli/packages/setup-cli/bin/claude-statusline.mjs":       "Your Nexus status line",
 		"~/.claude/statusline.sh": "Your status line (statusline.sh)",
 		`printf '%s' "$(pwd)"`:    "Your previous status line",
 	} {

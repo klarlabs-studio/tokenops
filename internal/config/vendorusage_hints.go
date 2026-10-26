@@ -60,7 +60,7 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 		if !c.VendorUsage.Fireworks.On() {
 			return "switched off: `tokenops vendor-usage enable fireworks` turns it back on"
 		}
-		return "on; reads only when FireConnect or FIREWORKS_API_KEY provides a Fireworks key on this machine"
+		return "on; reads only when Nexus CLI or FIREWORKS_API_KEY provides a Fireworks key on this machine"
 	case "cursor-hook":
 		return "always on; reads the ledger Cursor's stop hook writes — `tokenops hooks install --client cursor --coach` installs the hook"
 	case "claude-code-statusline":

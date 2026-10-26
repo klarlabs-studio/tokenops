@@ -197,7 +197,7 @@ Where secrets end up:
 	cmd.Flags().StringVar(&f.sessionKey, "session-key", "", "claude.ai sessionKey cookie (claude-subscription); \"-\" reads stdin; env TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY")
 	cmd.Flags().StringVar(&f.orgID, "org-id", "", "Anthropic org_id (claude-subscription); auto-resolved on first scan when empty")
 	cmd.Flags().StringVar(&f.cookie, "cookie", "", "WorkosCursorSessionToken cookie (cursor); \"-\" reads stdin; env TOKENOPS_CURSOR_COOKIE")
-	cmd.Flags().StringVar(&f.userID, "user-id", "", "Cursor user_id (cursor)")
+	cmd.Flags().StringVar(&f.userID, "user-id", "", "Cursor user_id (cursor); your Fireworks user, for your own spend limit (fireworks)")
 	cmd.Flags().StringVar(&f.adminKey, "admin-key", "", "Anthropic admin key (anthropic-admin); \"-\" reads stdin; env TOKENOPS_ANTHROPIC_ADMIN_KEY")
 	cmd.Flags().StringVar(&f.bucketWidth, "bucket-width", "", "anthropic-admin bucket width (1m|1h|1d); empty keeps current")
 	cmd.Flags().StringVar(&f.oauthToken, "oauth-token", "", "GitHub Copilot OAuth token (github-copilot); \"-\" reads stdin; env TOKENOPS_COPILOT_OAUTH_TOKEN. Empty = auto-discover")
@@ -260,6 +260,9 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		}
 	case "fireworks":
 		cfg.VendorUsage.Fireworks.Enabled = &enabled
+		if f.userID != "" {
+			cfg.VendorUsage.Fireworks.UserID = f.userID
+		}
 		if f.interval > 0 {
 			cfg.VendorUsage.Fireworks.Interval = f.interval
 		}
