@@ -306,7 +306,8 @@
     if (loose.length) main.appendChild(findingList("plan-findings", loose));
     (r.windows || []).forEach(function (w) {
       var stale = w.stale && w.observed_at ? Math.max(60, (Date.now() - Date.parse(w.observed_at)) / 1000) : 0;
-      var s = windowSection(title(w), w.used_pct, w.resets_in ? "Resets in " + human(seconds(w.resets_in)) : "", w.pace, stale);
+      var resets = w.not_started ? "Starts at your next request" : w.resets_in ? "Resets in " + human(seconds(w.resets_in)) : "";
+      var s = windowSection(title(w), w.used_pct, resets, w.pace, stale);
       var about = mine.filter(function (f) { return f.window === w.name; });
       if (about.length) s.appendChild(findingList("window-findings", about));
       main.appendChild(s);
