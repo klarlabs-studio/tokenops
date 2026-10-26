@@ -45,8 +45,11 @@ type window struct {
 	VendorLabel string  `json:"vendor_label"`
 	UsedPct     float64 `json:"used_pct"`
 	ResetsIn    string  `json:"resets_in"`
-	Pace        *pace   `json:"pace"`
-	Stale       bool    `json:"stale"`
+	// NotStarted is a window no request has started yet: it has no reset
+	// to count down to, and starts at the next request.
+	NotStarted bool  `json:"not_started"`
+	Pace       *pace `json:"pace"`
+	Stale      bool  `json:"stale"`
 }
 
 // pace is the daemon's verdict on a window (plans.WindowPace).
@@ -110,7 +113,10 @@ func statusOf(raw json.RawMessage) status {
 		rs := status{}
 		for _, w := range r.Windows {
 			line := fmt.Sprintf("%s · %s %.0f%% left", name, w.Name, left(w.UsedPct))
-			if w.ResetsIn != "" {
+			switch {
+			case w.NotStarted:
+				line += " · starts at your next request"
+			case w.ResetsIn != "":
 				line += " · resets in " + humanDuration(w.ResetsIn)
 			}
 			lines = append(lines, line)

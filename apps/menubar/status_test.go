@@ -36,6 +36,16 @@ func TestStatusShowsTheBusiestWindow(t *testing.T) {
 	}
 }
 
+// An unstarted window has no reset to count down to; the tooltip says it
+// starts at the next request.
+func TestStatusSaysAnUnstartedWindowStartsAtTheNextRequest(t *testing.T) {
+	st := statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"openai","display":"ChatGPT Pro",
+	 "windows":[{"name":"week","used_pct":0,"not_started":true}]}]}}`))
+	if !strings.Contains(st.Tooltip, "Codex · week 100% left · starts at your next request") || strings.Contains(st.Tooltip, "resets in") {
+		t.Errorf("tooltip:\n%s", st.Tooltip)
+	}
+}
+
 // The gauge follows the tightest window of any plan, and a stale reading
 // is flagged rather than shown as a level.
 func TestStatusIsTheTightestWindow(t *testing.T) {

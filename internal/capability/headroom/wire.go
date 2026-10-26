@@ -54,6 +54,10 @@ type GlancePayload struct {
 	// the last 30 days: lockouts, cost and peak window share per option,
 	// and a recommendation. Advice only; nothing is switched.
 	PlanAdvice []plans.Advice `json:"plan_advice,omitempty"`
+	// EarlyResets are plan windows that reset early within the last day:
+	// the vendor reset them before the time it had given, and nothing the
+	// operator did explains it.
+	EarlyResets []plans.EarlyReset `json:"early_resets,omitempty"`
 	// Boundaries are the operator's boundaries that hold now, as advice
 	// for an agent whose harness cannot be refused (ADR 0014). The caller
 	// sets them; Payload leaves them empty.
@@ -100,6 +104,7 @@ func (g Glance) Payload() *GlancePayload {
 		Accounts:      g.Accounts,
 		PlanUse:       g.PlanUse,
 		PlanAdvice:    g.PlanAdvice,
+		EarlyResets:   g.EarlyResets,
 		Routing:       g.Routing,
 	}
 }
