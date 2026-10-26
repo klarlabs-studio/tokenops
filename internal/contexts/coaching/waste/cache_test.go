@@ -89,10 +89,11 @@ func TestTTLOf(t *testing.T) {
 }
 
 func TestColdClock(t *testing.T) {
-	turns := []CacheTurn{
-		{At: t0, CacheWrite: 1_000, CacheWrite1h: 1_000},
-		{At: t0.Add(2 * time.Minute), Latency: 30 * time.Second, CacheRead: 1_000},
-	}
+	turns := make([]CacheTurn, 0, 3)
+	turns = append(turns,
+		CacheTurn{At: t0, CacheWrite: 1_000, CacheWrite1h: 1_000},
+		CacheTurn{At: t0.Add(2 * time.Minute), Latency: 30 * time.Second, CacheRead: 1_000},
+	)
 	last, ttl, ok := ColdClock(turns)
 	// The last request went out when the turn began, not when it ended.
 	if !ok || !last.Equal(t0.Add(90*time.Second)) || ttl != CacheTTLExtended {
