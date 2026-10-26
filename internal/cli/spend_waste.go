@@ -28,7 +28,9 @@ func newSpendWasteCmd(rf *rootFlags) *cobra.Command {
   - redundant re-reads: files read again, unchanged, that the read guard
     watched go ahead
   - cache-miss rebuilds: prompt cache written again for a prefix that was
-    cached a turn earlier
+    cached a turn earlier, split by cause: a model switch, an idle gap past
+    the cache lifetime, a prompt prefix change after cache hits, or
+    unexplained
   - over-tiered model: turns left on a model after the coach advised a
     cheaper one for that kind of work
   - retry loops and runaway growth, and oversized context: what the waste
@@ -100,6 +102,14 @@ func writeWasteReport(out io.Writer, r avoidable.Report) {
 		}
 		fmt.Fprintf(out, "  %-32s %8s %9s %7s %6d  %s\n", c.Name, humanCount(c.Tokens), usd(c.APIEquivalentUSD),
 			windowPct(c.WindowShare), c.Turns, guard)
+		for _, k := range c.Causes {
+			name := k.Name
+			if k.TTL != "" {
+				name += " (" + k.TTL + ")"
+			}
+			fmt.Fprintf(out, "    %-30s %8s %9s %7s %6d\n", name, humanCount(k.Tokens), usd(k.APIEquivalentUSD),
+				windowPct(k.WindowShare), k.Turns)
+		}
 	}
 
 	rz := r.Realized

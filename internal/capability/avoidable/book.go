@@ -26,13 +26,15 @@ type book struct {
 	// sessions are each session's turn indexes, oldest first.
 	sessions map[string][]int
 	claims   []waste.Claim
+	// rebuilds are the cache rebuilds claimed, by place in period.
+	rebuilds map[int]rebuildNote
 
 	noRateCard                       bool
 	unpricedRebuilds, unpricedRoutes int
 }
 
 func newBook(in Inputs) *book {
-	b := &book{in: in, pos: map[int]int{}, sessions: map[string][]int{}, noRateCard: in.Price == nil}
+	b := &book{in: in, pos: map[int]int{}, sessions: map[string][]int{}, rebuilds: map[int]rebuildNote{}, noRateCard: in.Price == nil}
 	order := make([]int, len(in.Turns))
 	for i := range order {
 		order[i] = i
@@ -109,40 +111,50 @@ func tokensOf(t analytics.SessionTurn, share float64) int64 {
 }
 
 // claimCacheRebuilds finds turns that wrote again most of the prefix the
-// turn before had cached, and claims the difference between writing that
-// part and reading it.
+// turn before had cached, notes why (waste.ClassifyRebuild), and claims the
+// difference between writing that part and reading it. A compaction's
+// rebuild is new by design and is not claimed.
 func (b *book) claimCacheRebuilds() {
 	for _, turns := range b.sessions {
+		ttl := waste.CacheTTL
 		for k := 1; k < len(turns); k++ {
 			prev, cur := b.in.Turns[turns[k-1]], b.in.Turns[turns[k]]
-			if _, in := b.pos[turns[k]]; !in || cur.Model != prev.Model {
+			if d, wrote := waste.TTLOf(cacheTurnOf(prev)); wrote {
+				ttl = d
+			}
+			p, in := b.pos[turns[k]]
+			if !in {
 				continue
 			}
-			cached := prev.CacheReadTokens + prev.CacheWriteTokens
-			// A turn that fell to under half the context is a compaction
-			// or a fresh start: its cache is new by design.
-			if cached <= 0 || cur.CacheWriteTokens <= 0 || cur.InputTokens*2 < prev.InputTokens {
-				continue
-			}
-			rebuilt := min(cur.CacheWriteTokens, cached-cur.CacheReadTokens)
-			if rebuilt*2 <= cached {
-				continue
-			}
-			if b.noRateCard {
+			rb, ok := waste.ClassifyRebuild(cacheTurnOf(prev), cacheTurnOf(cur), ttl)
+			if !ok || !rb.Cause.Avoidable() || b.noRateCard {
 				continue
 			}
 			changed := usageOf(cur)
-			changed.CacheRead += rebuilt
-			changed.CacheWrite -= rebuilt
+			changed.CacheRead += rb.Tokens
+			changed.CacheWrite -= rb.Tokens
 			changed.CacheWrite1h = min(changed.CacheWrite1h, changed.CacheWrite)
 			share, ok := b.avoidableShare(cur, changed)
 			if !ok {
 				b.unpricedRebuilds++
 				continue
 			}
+			b.rebuilds[p] = rebuildNote{cause: rb.Cause, ttl: ttl}
 			b.claim(waste.ClassCacheRebuild, tokensOf(cur, share), turns[k])
 		}
 	}
+}
+
+// rebuildNote is why a period turn rebuilt its cache, and the lifetime the
+// cache it lost had.
+type rebuildNote struct {
+	cause waste.RebuildCause
+	ttl   time.Duration
+}
+
+func cacheTurnOf(t analytics.SessionTurn) waste.CacheTurn {
+	return waste.CacheTurn{At: t.At, Model: t.Model, Input: t.InputTokens, CacheRead: t.CacheReadTokens,
+		CacheWrite: t.CacheWriteTokens, CacheWrite1h: t.CacheWrite1hTokens}
 }
 
 // sameModel reports whether a turn's model is the one advice named:
