@@ -100,6 +100,31 @@ func TestUsedUpWindow(t *testing.T) {
 	}
 }
 
+// A quota finding names the plan and the window it concerns, as the
+// glance names them, so a surface can show it beside that window's bar
+// rather than match on its key; a stale reading names only the plan.
+func TestQuotaFindingsNameTheirWindow(t *testing.T) {
+	g := glance()
+	g.Headroom.Reports[0].Windows[0].Name = "week (Fable)"
+	g.Headroom.Reports[1].Windows = []plans.VendorWindow{{Name: "5h", UsedPct: 9, ObservedAt: time.Now().Add(-3 * time.Hour), Stale: true}}
+	r := Compute(Inputs{Glance: g})
+	got := map[string]Finding{}
+	for _, f := range r.Findings {
+		got[f.Key] = f
+	}
+	if f := got["quota:openai:week-fable"]; f.Provider != "openai" || f.Window != "week (Fable)" {
+		t.Errorf("window finding = %+v", f)
+	}
+	if f := got["quota:anthropic:stale"]; f.Provider != "anthropic" || f.Window != "" {
+		t.Errorf("stale finding = %+v", f)
+	}
+	for _, f := range r.Findings {
+		if f.Kind != KindQuota && (f.Provider != "" || f.Window != "") {
+			t.Errorf("%s names a window: %+v", f.Key, f)
+		}
+	}
+}
+
 // A plan whose every window is stale says so, once, with how to get the
 // reading back, and its stale windows warn about nothing else (ADR 0011).
 func TestStalePlanReading(t *testing.T) {

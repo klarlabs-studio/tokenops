@@ -12,7 +12,12 @@
   // open is the finding whose confirm row or hide choices are showing:
   // { key, action } or { key, hide: true }. busy is a finding being acted on.
   var state = { view: null, selected: null, refreshing: false, open: null, busy: null };
-  try { state.selected = localStorage.getItem("tokenops.tab"); } catch (e) { /* a private window */ }
+  // more is whether the coach's information findings are unfolded.
+  state.more = false;
+  try {
+    state.selected = localStorage.getItem("tokenops.tab");
+    state.more = localStorage.getItem("tokenops.coach.more") === "1";
+  } catch (e) { /* a private window */ }
 
   function invoke(command, args) { return window.vitra.invoke(command, args || {}, ""); }
 
@@ -138,7 +143,7 @@
     return s;
   }
 
-  function tabs(reports) {
+  function tabs(reports, v) {
     var nav = document.getElementById("tabs");
     nav.textContent = "";
     reports.forEach(function (r) {
@@ -147,7 +152,17 @@
       b.setAttribute("role", "tab");
       b.setAttribute("aria-selected", r.provider === state.selected ? "true" : "false");
       b.appendChild(mark(r.provider));
-      b.appendChild(el("span", "tab-name", name(r.provider)));
+      var label = el("span", "tab-name", name(r.provider));
+      // A warning about this plan's windows shows in its tab, so it is
+      // marked here for when another plan is selected.
+      if (planFindings(v, r.provider).length) {
+        var alert = el("span", "tab-alert", MARKS_BY_LEVEL.warn);
+        alert.setAttribute("role", "img");
+        alert.setAttribute("aria-label", LEVEL_WORDS.warn);
+        alert.title = LEVEL_WORDS.warn;
+        label.appendChild(alert);
+      }
+      b.appendChild(label);
       var mini = el("span", "mini");
       var f = el("span", "mini-fill " + level(busiest(r)));
       f.style.width = leftOf(busiest(r)) + "%";
@@ -282,9 +297,19 @@
     head.appendChild(right);
     main.appendChild(head);
 
+    // A warning about the plan as a whole leads the pane; one about a
+    // window sits under that window's bar.
+    var mine = planFindings(v, r.provider);
+    var known = {};
+    (r.windows || []).forEach(function (w) { known[w.name] = true; });
+    var loose = mine.filter(function (f) { return !f.window || !known[f.window]; });
+    if (loose.length) main.appendChild(findingList("plan-findings", loose));
     (r.windows || []).forEach(function (w) {
       var stale = w.stale && w.observed_at ? Math.max(60, (Date.now() - Date.parse(w.observed_at)) / 1000) : 0;
-      main.appendChild(windowSection(title(w), w.used_pct, w.resets_in ? "Resets in " + human(seconds(w.resets_in)) : "", w.pace, stale));
+      var s = windowSection(title(w), w.used_pct, w.resets_in ? "Resets in " + human(seconds(w.resets_in)) : "", w.pace, stale);
+      var about = mine.filter(function (f) { return f.window === w.name; });
+      if (about.length) s.appendChild(findingList("window-findings", about));
+      main.appendChild(s);
     });
     // An account-wide figure is every member's spend together, not the
     // operator's own: it is titled and labelled as the account's.
@@ -322,31 +347,96 @@
   // dot with no label, and read as a stray character.
   var MARKS_BY_LEVEL = { warn: "▲", notice: "●", info: "○" };
   var LEVEL_WORDS = { warn: "Needs attention", notice: "Worth a look", info: "For your information" };
+
+  function plansShown(v) {
+    var shown = {};
+    (((v.glance && v.glance.plan_headroom) || {}).reports || []).forEach(function (r) { shown[r.provider] = true; });
+    return shown;
+  }
+
+  // A plan's own warnings: a quota finding about one of the plans the
+  // tabs show belongs in that plan's tab, beside the window it concerns.
+  function planFindings(v, provider) {
+    var all = (v && v.findings && v.findings.findings) || [];
+    if (!plansShown(v)[provider]) return [];
+    return all.filter(function (f) { return f.kind === "quota" && f.provider === provider; });
+  }
+
+  function findingItem(f) {
+    var item = el("div", "finding " + f.level);
+    var mark = el("span", "finding-mark", MARKS_BY_LEVEL[f.level] || MARKS_BY_LEVEL.info);
+    mark.title = LEVEL_WORDS[f.level] || LEVEL_WORDS.info;
+    mark.setAttribute("role", "img");
+    mark.setAttribute("aria-label", mark.title);
+    item.appendChild(mark);
+    var body = el("div", "finding-body");
+    body.appendChild(el("div", "finding-title", f.title));
+    if (f.evidence) body.appendChild(withCode(el("div", "note"), f.evidence));
+    // A finding with buttons does what its command would; the command
+    // stays for the CLI and MCP, where nothing can be clicked.
+    if (f.action && !(f.actions && f.actions.length)) body.appendChild(withCode(el("div", "finding-action"), f.action));
+    if (f.key) findingControls(body, f);
+    item.appendChild(body);
+    return item;
+  }
+
+  function findingList(cls, list) {
+    var box = el("div", "findings " + cls);
+    list.forEach(function (f) { box.appendChild(findingItem(f)); });
+    return box;
+  }
+
+  // What the coach did on its own, from the daemon's coach report:
+  // today's when it did anything today, else the last week's, said as
+  // such. Nothing is said for a daemon that does not report it.
+  function activityLine(v) {
+    var periods = (v.coach && v.coach.activity) || [];
+    if (!periods.length) return null;
+    var today = periods.filter(function (a) { return a.period === "today"; })[0];
+    var week = periods.filter(function (a) { return a.period === "7d"; })[0];
+    if (today && today.summary) return "Today: " + today.summary + ".";
+    if (week && week.summary) return "Last 7 days: " + week.summary + ".";
+    return "Nothing done on its own in the last 7 days.";
+  }
+
+  // The coach's findings, ranked by the daemon. What needs attention or
+  // is worth a look stays open; information folds behind "N more". A
+  // plan's window warnings are in its tab instead.
   function coachFindings(main, v) {
     var report = v.findings;
     if (!report || !report.findings) return;
+    var shown = plansShown(v);
+    var listed = report.findings.filter(function (f) { return !(f.kind === "quota" && shown[f.provider]); });
+    var urgent = listed.filter(function (f) { return f.level === "warn" || f.level === "notice"; });
+    var info = listed.filter(function (f) { return !(f.level === "warn" || f.level === "notice"); });
     var box = el("section", "metric coach");
     var head = el("h3", null, "Coach");
-    var count = report.findings.length;
-    head.appendChild(el("span", "count", count ? String(count) : "nothing stands out"));
+    var count;
+    if (urgent.length) count = urgent.length + " to look at";
+    else count = info.length ? "nothing urgent" : "nothing stands out";
+    head.appendChild(el("span", "count", count));
     box.appendChild(head);
-    report.findings.forEach(function (f) {
-      var item = el("div", "finding " + f.level);
-      var mark = el("span", "finding-mark", MARKS_BY_LEVEL[f.level] || MARKS_BY_LEVEL.info);
-      mark.title = LEVEL_WORDS[f.level] || LEVEL_WORDS.info;
-      mark.setAttribute("role", "img");
-      mark.setAttribute("aria-label", mark.title);
-      item.appendChild(mark);
-      var body = el("div", "finding-body");
-      body.appendChild(el("div", "finding-title", f.title));
-      if (f.evidence) body.appendChild(withCode(el("div", "note"), f.evidence));
-      // A finding with buttons does what its command would; the command
-      // stays for the CLI and MCP, where nothing can be clicked.
-      if (f.action && !(f.actions && f.actions.length)) body.appendChild(withCode(el("div", "finding-action"), f.action));
-      if (f.key) findingControls(body, f);
-      item.appendChild(body);
-      box.appendChild(item);
-    });
+    var did = activityLine(v);
+    if (did) box.appendChild(el("p", "coach-did", did));
+    if (urgent.length) box.appendChild(findingList("coach-urgent", urgent));
+    if (info.length) {
+      var more = button("more", (state.more ? "Fewer" : info.length + " more"),
+        (state.more ? "Fold " : "Show ") + info.length + " more for your information");
+      more.id = "coach-more";
+      more.setAttribute("aria-expanded", String(state.more));
+      more.setAttribute("aria-controls", "coach-info");
+      more.addEventListener("click", function () {
+        state.more = !state.more;
+        try { localStorage.setItem("tokenops.coach.more", state.more ? "1" : "0"); } catch (e) { /* ignore */ }
+        render();
+        focus("#coach-more");
+      });
+      box.appendChild(more);
+      var folded = findingList("coach-info", info);
+      folded.id = "coach-info";
+      folded.hidden = !state.more;
+      box.appendChild(folded);
+    }
     if (report.hidden > 0) {
       var hidden = el("div", "findings-hidden", report.hidden + " hidden · ");
       var showAll = button("link", "Show", "Show the findings you hid");
@@ -562,7 +652,7 @@
     if (!reports.some(function (r) { return r.provider === state.selected; }) && reports.length) {
       state.selected = reports[0].provider;
     }
-    tabs(reports);
+    tabs(reports, v);
     var sel = reports.filter(function (r) { return r.provider === state.selected; })[0];
     if (sel) detail(sel, v); else document.getElementById("detail").textContent = "";
     coachFindings(document.getElementById("detail"), v);
@@ -581,6 +671,21 @@
         select.insertBefore(custom, select.firstChild);
       }
     }
+    presetHelp(v, select.value);
+  }
+
+  // presetHelp says in one line what the chosen preset does, from the
+  // daemon's preset definitions (GET /api/coach presets).
+  function presetHelp(v, chosen) {
+    var help = document.getElementById("preset-help");
+    var presets = (v.coach && v.coach.presets) || [];
+    var p = presets.filter(function (x) { return x.name === chosen; })[0];
+    var text = "";
+    if (p) text = p.summary.charAt(0).toUpperCase() + p.summary.slice(1) + ".";
+    else if (v.coach && !v.coach.preset && presets.length) text = "Tuned by hand: `tokenops coach` shows each power.";
+    help.textContent = "";
+    withCode(help, text);
+    help.hidden = !text;
   }
 
   function show(v) { state.view = v; render(); }
@@ -596,6 +701,7 @@
     show({ error: "Your usage couldn't be fetched just now. TokenOps will try again in a minute." });
   });
   document.getElementById("preset").addEventListener("change", function (e) {
+    presetHelp(state.view || {}, e.target.value);
     invoke("coach.preset", { preset: e.target.value }).then(show, function (err) {
       failed("coach.preset", err);
       state.view = state.view || {};

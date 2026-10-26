@@ -30,26 +30,47 @@ func weekReport(ready bool) avoidable.Report {
 	}
 }
 
-// The week's waste is one ambient finding: avoidable in both currencies
-// beside realized, the classes that carried it, and the next guardrail.
-func TestWasteWeekFinding(t *testing.T) {
+// A finding for one week: the plan reading where one is set, the
+// classes, and the next guardrail.
+func weekFinding(t *testing.T, r avoidable.Report) Finding {
+	t.Helper()
 	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	f := wasteWeek(&avoidable.Snapshot{ComputedAt: now.Add(-time.Hour), Report: r}, now)
+	if len(f) != 1 {
+		t.Fatalf("findings = %+v", f)
+	}
+	if f[0].Kind != KindWaste || f[0].Level != LevelInfo || f[0].Key != "waste:week" {
+		t.Errorf("finding = %+v", f[0])
+	}
+	return f[0]
+}
+
+// withClassShares gives each class its share of the weekly window, at
+// 2,000 tokens per percent as the total's 6.25% has it.
+func withClassShares(r avoidable.Report) avoidable.Report {
+	for i, c := range r.Classes {
+		if c.Tokens > 0 {
+			r.Classes[i].WindowShare = []avoidable.WindowShare{{Provider: "anthropic", Window: "weekly", Pct: float64(c.Tokens) / 2_000}}
+		}
+	}
+	return r
+}
+
+// On a flat-rate plan the week's waste is a share of a window: the
+// dollars are what the usage would cost at API prices, which nobody paid,
+// so they lead nothing. Each class is its share of the same window.
+func TestWasteWeekOnAPlanLeadsWithTheWindowShare(t *testing.T) {
 	for _, ready := range []bool{true, false} {
-		f := wasteWeek(&avoidable.Snapshot{ComputedAt: now.Add(-time.Hour), Report: weekReport(ready)}, now)
-		if len(f) != 1 {
-			t.Fatalf("findings = %+v", f)
+		got := weekFinding(t, withClassShares(weekReport(ready)))
+		if got.Title != "Last 7 days: ~6.2% of a weekly window avoidable" {
+			t.Errorf("title = %q", got.Title)
 		}
-		got := f[0]
-		if got.Kind != KindWaste || got.Level != LevelInfo {
-			t.Errorf("finding = %+v", got)
-		}
-		for _, want := range []string{"Last 7 days: ~$12.50 avoidable", "6.2% of a weekly window", "$1.50 realized"} {
-			if !strings.Contains(got.Title, want) {
-				t.Errorf("title %q lacks %q", got.Title, want)
-			}
-		}
-		if !strings.Contains(got.Evidence, "abandoned sessions $8.00 · retry loops and runaway growth $2.50 · redundant re-reads $2.00") {
+		if !strings.HasPrefix(got.Evidence, "abandoned sessions 4.0% · retry loops and runaway growth 1.2% · redundant re-reads 1.0%") {
 			t.Errorf("evidence = %q", got.Evidence)
+		}
+		// What the guardrails saved is said in words, at API prices.
+		if !strings.Contains(got.Evidence, "Guardrails already saved ~$1.50 at API prices") || strings.Contains(got.Title, "realized") {
+			t.Errorf("realized: title %q, evidence %q", got.Title, got.Evidence)
 		}
 		if ready && !strings.Contains(got.Action, "`tokenops coach set waste advise`") {
 			t.Errorf("ready action = %q", got.Action)
@@ -57,6 +78,60 @@ func TestWasteWeekFinding(t *testing.T) {
 		if !ready && (!strings.Contains(got.Action, "still gathering evidence") || !strings.Contains(got.Action, "tokenops spend waste")) {
 			t.Errorf("not-ready action = %q", got.Action)
 		}
+	}
+}
+
+// Nothing saved yet says nothing about it: "$0.00 realized" read as a
+// figure that had gone wrong.
+func TestWasteWeekLeavesOutNothingSaved(t *testing.T) {
+	r := withClassShares(weekReport(true))
+	r.Realized = avoidable.Realized{}
+	got := weekFinding(t, r)
+	if strings.Contains(got.Title+got.Evidence, "realized") || strings.Contains(got.Title+got.Evidence, "saved") {
+		t.Errorf("finding = %+v", got)
+	}
+}
+
+// Where a provider bills per use (an API key, pay as you go), the
+// avoidable part is money spent and leads in dollars, class by class.
+func TestWasteWeekBilledPerUseLeadsWithDollars(t *testing.T) {
+	r := weekReport(true)
+	r.Avoidable.WindowShare = nil
+	r.Avoidable.BilledUSD = 12.5
+	for i := range r.Classes {
+		r.Classes[i].BilledUSD = r.Classes[i].APIEquivalentUSD
+	}
+	got := weekFinding(t, r)
+	if got.Title != "Last 7 days: ~$12.50 avoidable" {
+		t.Errorf("title = %q", got.Title)
+	}
+	if !strings.HasPrefix(got.Evidence, "abandoned sessions $8.00 · retry loops and runaway growth $2.50 · redundant re-reads $2.00") {
+		t.Errorf("evidence = %q", got.Evidence)
+	}
+}
+
+// A plan and a billed provider together: the plan's share leads and the
+// billed dollars follow it.
+func TestWasteWeekPlanAndBilled(t *testing.T) {
+	r := withClassShares(weekReport(true))
+	r.Avoidable.BilledUSD = 4
+	got := weekFinding(t, r)
+	if got.Title != "Last 7 days: ~6.2% of a weekly window avoidable, plus $4.00 billed per use" {
+		t.Errorf("title = %q", got.Title)
+	}
+}
+
+// Neither a calibrated plan nor a bill: the dollars are all there is,
+// and they say they are API prices.
+func TestWasteWeekWithoutAPlanReading(t *testing.T) {
+	r := weekReport(true)
+	r.Avoidable.WindowShare = nil
+	got := weekFinding(t, r)
+	if got.Title != "Last 7 days: ~$12.50 avoidable at API prices" {
+		t.Errorf("title = %q", got.Title)
+	}
+	if !strings.HasPrefix(got.Evidence, "abandoned sessions $8.00 · ") {
+		t.Errorf("evidence = %q", got.Evidence)
 	}
 }
 

@@ -55,13 +55,13 @@ operator's instruction text and local file paths.
 | Route | Answers |
 |---|---|
 | `GET /api/glance` | Session budgets, plan headroom and one ranked insight; `boundaries` lists the [boundaries](/guide/boundaries) that hold now, as advice; `plan_use` gives each provider's plan utilization and coverage over the last 7 days |
-| `GET /api/findings` | What the coach and the session analysis observed, ranked, with what to do. Each finding has a stable `key` (its kind and subject, such as `quota:openai:week`) and, where an operation exists for it, `actions` to run with `POST /api/findings/act`. `hidden` counts the findings you dismissed that are still hidden |
+| `GET /api/findings` | What the coach and the session analysis observed, ranked, with what to do. Each finding has a stable `key` (its kind and subject, such as `quota:openai:week`); a quota finding also names its `provider` and `window` as the plan headroom names them, so it can be shown beside that window. Where an operation exists for it, it has `actions` to run with `POST /api/findings/act`. `hidden` counts the findings you dismissed that are still hidden |
 | `GET /api/plans/headroom` | Each plan: usage, the vendor's windows, spend against the limit, risk |
 | `GET /api/plans/session-budget` | Each plan window: share used, pace, what to do |
 | `GET /api/plans/advice` | Plan right-sizing over `days` (30 by default, up to 90): each plan's windows replayed against its other tiers, metered overflow and the API at list price. Advice only |
 | `GET /api/status` | Readiness, blockers, warnings, next actions |
 | `GET /api/mode` | Operating mode and what each subsystem may do |
-| `GET /api/coach` | The coach's dials and each power's autonomy |
+| `GET /api/coach` | The coach's dials and each power's autonomy; `activity` is what it did on its own `today` (since local midnight) and over the last `7d`: subagents moved to a cheaper model, new sessions started on one, re-reads the read guard refused, with a one-line `summary` that is empty when it did nothing; `presets` names each preset with what it does |
 | `GET /api/config` | The active configuration, secrets redacted |
 | `GET /api/data-sources` | Events per source and each reader's health |
 | `GET /api/vendor-usage` | Which usage sources are on and producing |
