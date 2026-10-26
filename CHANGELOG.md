@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **work:** `tokenops_prepare_work` shows how widely tasks of the same kind vary. It gave one range, the middle half of past runs ("typically 15–25% of your 5h window"), and runs of the same task can differ by an order of magnitude, so the range hid the tail a plan has to leave room for. `window_share.spread` now carries the median and the 90th percentile of the same measured runs with their count, and the summary reads "typically 15–25% of your 5h window (p50 20%, p90 28%, n=5)". With fewer than five runs the spread says so (`status: too_few_samples`) and names what the answer falls back to (`fallback: interquartile_estimate`, or `none`). It is read only from measured outcomes, never from an agent's own guess. Existing fields are unchanged.
+- **coach, hooks:** the agent sees how much of the plan is left. An agent budgets only what it can see, and nothing put the plan's headroom in front of it. With the route-guard hook installed, the prompt hook now adds one line, "Plan headroom: 5h window 38% left (resets 14:20), week 61% left.", naming only the binding window and another within 25 points of it. It is said at a session's first prompt and again only when a window crosses 50, 25 or 10% left. It travels in `UserPromptSubmit`'s `additionalContext`, after the cached part of the conversation, never in `CLAUDE.md`, `AGENTS.md` or a session-start block, so it never invalidates the prompt cache. On by default; `tokenops coach headroom-note off` (or `coach.headroom_note: false`, or `headroom_note` on the `tokenops_coach` MCP tool) turns it off, as does the inform power being off.
+
 ## 0.112.1 - 2026-10-26
 
 ### Fixed
