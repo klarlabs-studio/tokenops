@@ -139,6 +139,29 @@ type ClassCost struct {
 	// Guardrail is the capability that addresses the class; empty when
 	// none does yet.
 	Guardrail string `json:"guardrail,omitempty"`
+	// Causes split the cache rebuilds by why each happened, largest
+	// first; absent on every other class.
+	Causes []CauseCost `json:"causes,omitempty"`
+}
+
+// CauseCost is the part of the cache rebuilds one cause accounts for.
+type CauseCost struct {
+	Cause waste.RebuildCause `json:"cause"`
+	Name  string             `json:"name"`
+	Amount
+	Turns int `json:"turns"`
+	// TTL is, for idle gaps, the cache lifetime most of them outlived:
+	// "5m" or "1h".
+	TTL string `json:"ttl,omitempty"`
+}
+
+// TopCause is the cause that accounts for most of the class's dollars;
+// false when nothing is split by cause.
+func (c ClassCost) TopCause() (CauseCost, bool) {
+	if len(c.Causes) == 0 || c.Causes[0].Tokens <= 0 {
+		return CauseCost{}, false
+	}
+	return c.Causes[0], true
 }
 
 // Realized is what the coach's interventions saved over the period.
@@ -207,7 +230,9 @@ var methods = map[waste.Class]string{
 	waste.ClassReread: "the read guard's ledger: each unchanged file read again in full while its earlier read was in context, " +
 		"which the guard watched go ahead, sized from the file, on the turn that carried it",
 	waste.ClassCacheRebuild: "a turn that wrote to the prompt cache more than half of the prefix the turn before had cached, " +
-		"on the same model and without a compaction, priced as writing rather than reading that part at the rate card",
+		"without a compaction, priced as writing rather than reading that part at the rate card; " +
+		"split by cause: a model switch, an idle gap past the cache lifetime (an hour when the session wrote with the hour-long lifetime, " +
+		"else five minutes), a prompt prefix change after cache hits, or unexplained",
 	waste.ClassOverTiered: "turns left on a model after the coach advised a cheaper one for that kind of work, " +
 		"priced as the difference to the advised model at the rate card",
 	waste.ClassRetryLoop: "the waste detector on each workflow: an identical prompt sent again, an agent's steps past the loop limit, " +
@@ -262,6 +287,7 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 		cc := &ClassCost{Class: c, Name: waste.ClassName(c), Method: methods[c], Guardrail: guardrailOf[c]}
 		byClass[c], tokensOf[c], sessionsOf[c] = cc, map[string]int64{}, map[string]bool{}
 	}
+	causes := newCauseBook()
 	usageTokens := map[string]int64{}
 	avoidTokens := map[string]int64{}
 	r.Calibrations = calibrations(in)
@@ -289,6 +315,9 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 			sessionsOf[c][t.SessionID] = true
 			tokensOf[c][t.Provider] += n
 			avoidTokens[t.Provider] += n
+			if note, ok := b.rebuilds[p]; ok && c == waste.ClassCacheRebuild {
+				causes.add(note, t, n, v)
+			}
 		}
 	}
 	if len(r.Calibrations) > 0 {
@@ -298,6 +327,9 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 		cc := byClass[c]
 		cc.Sessions = len(sessionsOf[c])
 		cc.WindowShare = shares(r.Calibrations, tokensOf[c])
+		if c == waste.ClassCacheRebuild {
+			cc.Causes = causes.costs(r.Calibrations)
+		}
 		r.Avoidable.Tokens += cc.Tokens
 		r.Avoidable.APIEquivalentUSD += cc.APIEquivalentUSD
 		r.Avoidable.BilledUSD += cc.BilledUSD
@@ -310,6 +342,68 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 	r.Notes = b.notes()
 	r.Headline = headline(r)
 	return r, turns
+}
+
+// causeBook sums the cache rebuilds' attributed tokens by cause.
+type causeBook struct {
+	cost     map[waste.RebuildCause]*CauseCost
+	tokensOf map[waste.RebuildCause]map[string]int64
+	ttlOf    map[waste.RebuildCause]map[time.Duration]int64
+}
+
+func newCauseBook() *causeBook {
+	return &causeBook{cost: map[waste.RebuildCause]*CauseCost{}, tokensOf: map[waste.RebuildCause]map[string]int64{},
+		ttlOf: map[waste.RebuildCause]map[time.Duration]int64{}}
+}
+
+func (cb *causeBook) add(note rebuildNote, t analytics.SessionTurn, tokens int64, usd float64) {
+	c, ok := cb.cost[note.cause]
+	if !ok {
+		c = &CauseCost{Cause: note.cause, Name: waste.RebuildCauseName(note.cause)}
+		cb.cost[note.cause] = c
+		cb.tokensOf[note.cause] = map[string]int64{}
+		cb.ttlOf[note.cause] = map[time.Duration]int64{}
+	}
+	c.Tokens += tokens
+	c.APIEquivalentUSD += usd
+	c.Turns++
+	cb.tokensOf[note.cause][t.Provider] += tokens
+	cb.ttlOf[note.cause][note.ttl] += tokens
+}
+
+// costs are the causes, largest first, each with its window share.
+func (cb *causeBook) costs(cs []plans.WindowCalibration) []CauseCost {
+	var out []CauseCost
+	for _, cause := range waste.RebuildCauses() {
+		c, ok := cb.cost[cause]
+		if !ok {
+			continue
+		}
+		c.WindowShare = shares(cs, cb.tokensOf[cause])
+		if cause == waste.CauseTTLExpired {
+			c.TTL = ttlLabel(cb.ttlOf[cause])
+		}
+		out = append(out, *c)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].APIEquivalentUSD > out[j].APIEquivalentUSD })
+	return out
+}
+
+// ttlLabel is the lifetime that carried the most tokens.
+func ttlLabel(by map[time.Duration]int64) string {
+	var best time.Duration
+	for d, n := range by {
+		if n > by[best] || n == by[best] && d > best {
+			best = d
+		}
+	}
+	switch best {
+	case waste.CacheTTLExtended:
+		return "1h"
+	case waste.CacheTTL:
+		return "5m"
+	}
+	return ""
 }
 
 // valueOf is n of a turn's tokens at its API-equivalent rate.
