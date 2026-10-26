@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.112.0 - 2026-10-26
+
 ### Changed
 
 - **findings, glance, menu bar:** the week's waste leads with the share of your plan it took, not with API-price dollars. On a flat-rate plan the finding read "Last 7 days: ~$364 avoidable (9.2% of a weekly window), $0.00 realized": dollars nobody paid, beside a zero that read as something broken. It now reads "Last 7 days: ~9.2% of a weekly window avoidable", with each class as its share of the same window ("cache-miss rebuilds 6.4% · over-tiered model 2.2% · …"). Dollars lead only where a provider billed per use (an API key, pay as you go), or follow the plan's share ("…, plus $4.10 billed per use"); with neither reading, they say they are API prices. What the guardrails saved is said in words ("Guardrails already saved ~$41.20 at API prices") and left out while it is nothing. The waste report gains `billed_usd` on the total and on each class: usage stored with a cost, or without one on a provider no plan's windows cover. `tokenops glance`, the MCP tools, `GET /api/findings` and the menu bar share the finding
