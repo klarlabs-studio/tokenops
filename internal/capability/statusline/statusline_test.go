@@ -109,3 +109,46 @@ func TestSubagentRow(t *testing.T) {
 		t.Errorf("unresolved model row %q", got)
 	}
 }
+
+// The line warns only when the cache is about to go cold, and says so
+// once it has; the rest of the time it shows the hit ratio.
+func TestRenderCacheCountdown(t *testing.T) {
+	cases := []struct {
+		name    string
+		left    time.Duration
+		unknown bool
+		want    string
+		absent  []string
+	}{
+		{name: "unknown expiry", unknown: true, want: "cache 95%", absent: []string{"cold"}},
+		{name: "plenty left", left: 4 * time.Minute, want: "cache 95%", absent: []string{"cold"}},
+		{name: "exactly two minutes", left: 2 * time.Minute, want: "cache 95%", absent: []string{"cold"}},
+		{name: "under two minutes", left: 119 * time.Second, want: "cache cold in 2m", absent: []string{"cache 95%"}},
+		{name: "under a minute", left: 20 * time.Second, want: "cache cold in 1m", absent: []string{"cache 95%"}},
+		{name: "at expiry", left: 0, want: "cache cold", absent: []string{"cold in", "cache 95%"}},
+		{name: "long gone", left: -3 * time.Hour, want: "cache cold", absent: []string{"cold in"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			in := full()
+			if !c.unknown {
+				in.CacheExpiresAt = now.Add(c.left)
+			}
+			line := Render(in)[0]
+			if !strings.Contains(line, c.want) {
+				t.Errorf("line %q lacks %q", line, c.want)
+			}
+			for _, a := range c.absent {
+				if strings.Contains(line, a) {
+					t.Errorf("line %q has %q", line, a)
+				}
+			}
+		})
+	}
+	// Coloured as a warning.
+	in := full()
+	in.Color, in.CacheExpiresAt = true, now.Add(time.Minute)
+	if line := Render(in)[0]; !strings.Contains(line, warnFg+"cache cold in 1m") {
+		t.Errorf("the warning is not coloured: %q", line)
+	}
+}

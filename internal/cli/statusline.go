@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/promptcache"
 	"go.klarlabs.de/tokenops/internal/capability/statusline"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
@@ -27,7 +28,10 @@ import (
 // shows is read.
 type claudeStatus struct {
 	SessionID string `json:"session_id"`
-	Model     struct {
+	// TranscriptPath is the session's transcript, read only for when its
+	// last request went out.
+	TranscriptPath string `json:"transcript_path"`
+	Model          struct {
 		ID          string `json:"id"`
 		DisplayName string `json:"display_name"`
 	} `json:"model"`
@@ -91,10 +95,14 @@ func newStatuslineCmd() *cobra.Command {
 		Long: `statusline prints the quota windows, the context against the point the
 session compacts at, the cache hit ratio, the session's cost in your
 currency and the coach's open tip, in Klarlabs colours. Claude Code runs
-it on every turn with its session JSON on stdin.
+it on every turn with its session JSON on stdin. When under two minutes
+are left before the prompt cache expires it shows "cache cold in 1m", and
+"cache cold" once it has: the next prompt then writes the whole context
+to the cache again.
 
-It reads only what Claude Code hands it and files TokenOps already keeps,
-never the event store or the network, and it fails open: on any error it
+It reads only what Claude Code hands it (for the cache, the timestamps
+and token counts at the end of the session's transcript, never its text)
+and files TokenOps already keeps, never the event store or the network, and it fails open: on any error it
 prints what it can, or nothing. It keeps the windows Claude Code reports
 in ~/.tokenops/claude-limits.json, for the daemon to store as Anthropic's
 own reading.
@@ -156,6 +164,9 @@ func statusLines(raw []byte) []string {
 	}
 	if s.PromptCache != nil && s.PromptCache.HitRatio != nil {
 		in.CacheHit = *s.PromptCache.HitRatio
+	}
+	if at, ok := promptcache.TranscriptExpiry(s.TranscriptPath); ok {
+		in.CacheExpiresAt = at
 	}
 	for _, w := range []struct {
 		label string
