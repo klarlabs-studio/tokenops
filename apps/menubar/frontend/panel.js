@@ -1,6 +1,7 @@
 // The tray panel. It talks to Go only through window.vitra.invoke; its
-// grant lets it call glance.follow, coach.preset and panel.close, nothing
-// else. It never sees the daemon's API token.
+// grant lets it read the glance, change the coach preset, answer
+// boundaries, act on and hide findings, and close itself, nothing else.
+// It never sees the daemon's API token.
 (function () {
   "use strict";
 
@@ -8,7 +9,9 @@
   // (logos/NOTICE.md), from TokenOps' provider registry (providers.js,
   // generated). A vendor without a logo shows two letters.
   var PROVIDERS = window.TOKENOPS_PROVIDERS || {};
-  var state = { view: null, selected: null, refreshing: false };
+  // open is the finding whose confirm row or hide choices are showing:
+  // { key, action } or { key, hide: true }. busy is a finding being acted on.
+  var state = { view: null, selected: null, refreshing: false, open: null, busy: null };
   try { state.selected = localStorage.getItem("tokenops.tab"); } catch (e) { /* a private window */ }
 
   function invoke(command, args) { return window.vitra.invoke(command, args || {}, ""); }
@@ -338,14 +341,124 @@
       body.appendChild(el("div", "finding-title", f.title));
       if (f.evidence) body.appendChild(el("div", "note", f.evidence));
       if (f.action) body.appendChild(withCode(el("div", "finding-action"), f.action));
+      if (f.key) findingControls(body, f);
       item.appendChild(body);
       box.appendChild(item);
     });
+    if (report.hidden > 0) {
+      var hidden = el("div", "findings-hidden", report.hidden + " hidden · ");
+      var showAll = button("link", "Show", "Show the findings you hid");
+      showAll.addEventListener("click", function () { act("finding.dismiss", { key: "", for: "none" }, null); });
+      hidden.appendChild(showAll);
+      box.appendChild(hidden);
+    }
     if (report.sessions_read_at) {
       var mins = Math.round((Date.now() - new Date(report.sessions_read_at)) / 60000);
       box.appendChild(el("div", "note", "Sessions read " + (mins < 60 ? mins + "m" : Math.round(mins / 60) + "h") + " ago."));
     }
     main.appendChild(box);
+  }
+
+  function button(cls, text, label) {
+    var b = el("button", "fbtn " + cls, text);
+    b.type = "button";
+    if (label) b.setAttribute("aria-label", label);
+    return b;
+  }
+
+  function isOpen(f, what) {
+    var o = state.open;
+    return !!o && o.key === f.key && (what === "hide" ? !!o.hide : o.action === what);
+  }
+
+  // A finding's actions, the first as the primary button, and its hide
+  // choices. An action with a confirm sentence opens a row inside the
+  // finding that says what will change; nothing runs until Confirm.
+  function findingControls(body, f) {
+    var busy = state.busy === f.key;
+    var row = el("div", "finding-controls");
+    (f.actions || []).forEach(function (a, i) {
+      var b = button(i === 0 ? "primary" : "quiet", a.label, a.label + ": " + f.title);
+      b.disabled = busy;
+      if (a.confirm) b.setAttribute("aria-expanded", String(isOpen(f, a.id)));
+      b.addEventListener("click", function () {
+        if (a.confirm) {
+          state.open = isOpen(f, a.id) ? null : { key: f.key, action: a.id };
+          render();
+          focus(".finding-confirm .primary");
+          return;
+        }
+        act("finding.act", { key: f.key, action: a.id }, f.key);
+      });
+      row.appendChild(b);
+    });
+    var hide = button("quiet hide", "Hide…", "Hide: " + f.title);
+    hide.disabled = busy;
+    hide.setAttribute("aria-expanded", String(isOpen(f, "hide")));
+    hide.addEventListener("click", function () {
+      state.open = isOpen(f, "hide") ? null : { key: f.key, hide: true };
+      render();
+      focus(".finding-hide .quiet");
+    });
+    row.appendChild(hide);
+    body.appendChild(row);
+
+    var chosen = (f.actions || []).filter(function (a) { return a.confirm && isOpen(f, a.id); })[0];
+    if (chosen) {
+      var confirm = el("div", "finding-confirm");
+      confirm.setAttribute("role", "group");
+      confirm.setAttribute("aria-label", "Confirm " + chosen.label);
+      confirm.appendChild(withCode(el("div", "confirm-text"), chosen.confirm));
+      var yes = button("primary", "Confirm", "Confirm " + chosen.label);
+      yes.disabled = busy;
+      yes.addEventListener("click", function () { act("finding.act", { key: f.key, action: chosen.id }, f.key); });
+      var no = button("quiet", "Cancel");
+      no.addEventListener("click", function () { state.open = null; render(); });
+      var buttons = el("div", "finding-controls");
+      buttons.appendChild(yes);
+      buttons.appendChild(no);
+      confirm.appendChild(buttons);
+      body.appendChild(confirm);
+    }
+    if (isOpen(f, "hide")) {
+      var choices = el("div", "finding-controls finding-hide");
+      choices.setAttribute("role", "group");
+      choices.setAttribute("aria-label", "Hide " + f.title);
+      [["day", "Hide for a day"], ["week", "Hide for a week"]].forEach(function (c) {
+        var b = button("quiet", c[1]);
+        b.disabled = busy;
+        b.addEventListener("click", function () { act("finding.dismiss", { key: f.key, for: c[0] }, f.key); });
+        choices.appendChild(b);
+      });
+      var cancel = button("quiet", "Cancel");
+      cancel.addEventListener("click", function () { state.open = null; render(); });
+      choices.appendChild(cancel);
+      body.appendChild(choices);
+    }
+  }
+
+  function focus(selector) {
+    var e = document.querySelector(selector);
+    if (e) e.focus();
+  }
+
+  // act runs a finding command; Go leaves what happened in the note.
+  function act(command, args, key) {
+    state.busy = key;
+    render();
+    invoke(command, args).then(function (v) {
+      state.busy = null;
+      state.open = null;
+      show(v);
+    }, function (err) {
+      failed(command, err);
+      state.busy = null;
+      state.view = state.view || {};
+      state.view.error = command === "finding.act"
+        ? "That didn't go through, and nothing was changed. Try again in a moment."
+        : "The findings weren't hidden or shown. Try again in a moment.";
+      render();
+    });
   }
 
   // Decisions a boundary is waiting on (ADR 0014). Deny goes through the

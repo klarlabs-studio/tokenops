@@ -234,3 +234,20 @@ select {
 .wait-actions button { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--hair); background: var(--surface); color: inherit; cursor: pointer; }
 .wait-actions button:hover { border-color: var(--faint); }
 .wait-actions .wait-approve { font-weight: 550; }
+
+/* Acting on a finding: the first action is a lime fill with ink text, the
+   rest quiet; text on white is the dark lime. */
+.finding-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.fbtn { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--hair); background: var(--surface); color: var(--fg); cursor: pointer; }
+.fbtn:hover { border-color: var(--faint); }
+.fbtn:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+.fbtn:disabled { opacity: 0.5; cursor: default; }
+.fbtn.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; font-weight: 600; }
+.fbtn.primary:hover { box-shadow: 0 2px 8px rgba(198, 244, 50, 0.35); }
+.fbtn.quiet { background: transparent; color: var(--accent-line); }
+.fbtn.hide { color: var(--faint); }
+.fbtn.link { padding: 0; border: 0; background: none; color: var(--accent-line); text-decoration: underline; font-size: inherit; }
+.finding-confirm { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--hair); }
+.confirm-text { font-size: 12px; }
+.confirm-text code { font: 11px ui-monospace, Menlo, monospace; }
+.findings-hidden { margin-top: 6px; font-size: 11.5px; color: var(--faint); }
