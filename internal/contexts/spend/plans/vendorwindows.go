@@ -25,6 +25,11 @@ type VendorWindow struct {
 	Duration    time.Duration `json:"duration_ns,omitempty"`
 	ResetsAt    time.Time     `json:"resets_at,omitempty"`
 	ResetsIn    string        `json:"resets_in,omitempty"`
+	// NotStarted is a window no request has started yet: nothing used, and
+	// its reset moving with each reading to a full window's length ahead.
+	// The vendor has no reset to give for it, so ResetsAt and ResetsIn are
+	// empty and it starts at the next request (see notStarted).
+	NotStarted bool `json:"not_started,omitempty"`
 	// Pace compares the share used with the share of the window gone by;
 	// absent when the window's length or reset is unknown.
 	Pace *WindowPace `json:"pace,omitempty"`
@@ -84,52 +89,80 @@ func VendorWindows(ctx context.Context, reader EventReader, provider eventschema
 	return out
 }
 
-func vendorWindows(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) []VendorWindow {
-	// Each vendor's windows come from its own reader; matching on keys
-	// alone read Codex's primary window as Claude's.
-	var (
-		parse   func(map[string]string, time.Time) []VendorWindow
-		sources []string
-	)
+// windowParser is the reader for a provider's plan windows and the sources
+// it reads them from; a nil parser means the provider has none of this
+// shape. Each vendor's windows come from its own reader: matching on keys
+// alone read Codex's primary window as Claude's.
+func windowParser(provider eventschema.Provider) (func(map[string]string, time.Time) []VendorWindow, []string) {
 	switch provider {
 	case eventschema.ProviderAnthropic:
 		// The claude.ai meter and Claude Code's status line report the
 		// same windows in the same shape.
-		parse, sources = claudeWindows, ClaudeWindowSources
+		return claudeWindows, ClaudeWindowSources
 	case eventschema.ProviderOpenAI:
-		parse, sources = codexWindows, []string{"codex-jsonl", "codex-app-server"}
-	default:
+		return codexWindows, []string{"codex-jsonl", "codex-app-server"}
+	}
+	return nil, nil
+}
+
+func vendorWindows(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) []VendorWindow {
+	parse, sources := windowParser(provider)
+	if parse == nil {
 		return accountWindows(ctx, reader, provider, now)
 	}
 	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-14*24*time.Hour))
 	if err != nil {
 		return nil
 	}
-	newest := map[string]*eventschema.Envelope{}
-	for _, e := range events {
-		if e == nil || !slices.Contains(sources, e.Source) || e.Attributes == nil || len(parse(e.Attributes, now)) == 0 {
-			continue
-		}
-		if best := newest[e.Source]; best == nil || e.Timestamp.After(best.Timestamp) {
-			newest[e.Source] = e
-		}
-	}
+	newest, prior := newestTwo(events, sources, func(e *eventschema.Envelope) bool {
+		return len(parse(e.Attributes, now)) > 0
+	})
 	if len(newest) == 0 {
 		return nil
 	}
-	out := newestPerWindow(newest, parse, now)
+	out := newestPerWindow(newest, prior, parse, now)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].UsedPct > out[j].UsedPct })
 	return out
+}
+
+// newestTwo finds each source's newest reading that passes usable, and the
+// reading before it, which marks a window as not started.
+func newestTwo(events []*eventschema.Envelope, sources []string, usable func(*eventschema.Envelope) bool) (newest, prior map[string]*eventschema.Envelope) {
+	bySource := map[string][]*eventschema.Envelope{}
+	for _, e := range events {
+		if e == nil || !slices.Contains(sources, e.Source) || e.Attributes == nil || !usable(e) {
+			continue
+		}
+		bySource[e.Source] = append(bySource[e.Source], e)
+	}
+	newest, prior = map[string]*eventschema.Envelope{}, map[string]*eventschema.Envelope{}
+	for src, es := range bySource {
+		sort.SliceStable(es, func(i, j int) bool { return es[i].Timestamp.After(es[j].Timestamp) })
+		newest[src] = es[0]
+		if len(es) > 1 {
+			prior[src] = es[1]
+		}
+	}
+	return newest, prior
 }
 
 // newestPerWindow parses each source's newest reading on its own, so every
 // window keeps the source and time it came from, and keeps the newest
 // reading of each window across sources.
-func newestPerWindow(newest map[string]*eventschema.Envelope, parse func(map[string]string, time.Time) []VendorWindow, now time.Time) []VendorWindow {
+func newestPerWindow(newest, prior map[string]*eventschema.Envelope, parse func(map[string]string, time.Time) []VendorWindow, now time.Time) []VendorWindow {
 	byName := map[string]VendorWindow{}
 	var order []string
-	for _, e := range newest {
-		for _, w := range stamp(parse(e.Attributes, now), e, now) {
+	for src, e := range newest {
+		ws := stamp(parse(e.Attributes, now), e, now)
+		if p := prior[src]; p != nil {
+			// The prior reading is parsed at its own time: its resets are
+			// absolute, and some may already be past at now.
+			before := stamp(parse(p.Attributes, p.Timestamp), p, now)
+			for i := range ws {
+				markNotStarted(&ws[i], before)
+			}
+		}
+		for _, w := range ws {
 			key := w.Name + "|" + w.VendorLabel
 			prev, seen := byName[key]
 			if !seen {
