@@ -12,15 +12,16 @@ import (
 )
 
 type coachInput struct {
-	Preset    string `json:"preset,omitempty" jsonschema:"description=Set the whole coach in one choice and wire everything it needs (hooks on every installed agent, where agents compact): observe | advise | guided | autopilot. Other fields are ignored when set."`
-	Autonomy  string `json:"autonomy,omitempty" jsonschema:"description=Set every power's default autonomy: off | advise | ask | autonomous."`
-	Verbosity string `json:"verbosity,omitempty" jsonschema:"description=Set how much the coach says: quiet | normal | verbose."`
-	Power     string `json:"power,omitempty" jsonschema:"description=Power to override: inform | waste | models. Requires rung."`
-	Rung      string `json:"rung,omitempty" jsonschema:"description=Autonomy for the named power: off | advise | ask | autonomous."`
-	Tip       string `json:"tip,omitempty" jsonschema:"description=Answer a tip, only on the operator's word: acknowledged (seen; nothing more of that kind this session) | expected (normal for them; also tunes the session budget) | snoozed (tips of that kind wait snooze_minutes, default 240). Answers the newest unanswered tip unless tip_id is set."`
-	TipID     string `json:"tip_id,omitempty" jsonschema:"description=The tip to answer; empty answers the newest unanswered one."`
-	SnoozeMin int    `json:"snooze_minutes,omitempty" jsonschema:"description=How long a snooze lasts, in minutes (default 240)."`
-	Holdout   string `json:"holdout,omitempty" jsonschema:"description=Share of sessions whose cost and drift tips are held back to measure their saving: off | on (10%) | a percent 0-10. Only on the operator's word."`
+	Preset       string `json:"preset,omitempty" jsonschema:"description=Set the whole coach in one choice and wire everything it needs (hooks on every installed agent, where agents compact): observe | advise | guided | autopilot. Other fields are ignored when set."`
+	Autonomy     string `json:"autonomy,omitempty" jsonschema:"description=Set every power's default autonomy: off | advise | ask | autonomous."`
+	Verbosity    string `json:"verbosity,omitempty" jsonschema:"description=Set how much the coach says: quiet | normal | verbose."`
+	Power        string `json:"power,omitempty" jsonschema:"description=Power to override: inform | waste | models. Requires rung."`
+	Rung         string `json:"rung,omitempty" jsonschema:"description=Autonomy for the named power: off | advise | ask | autonomous."`
+	Tip          string `json:"tip,omitempty" jsonschema:"description=Answer a tip, only on the operator's word: acknowledged (seen; nothing more of that kind this session) | expected (normal for them; also tunes the session budget) | snoozed (tips of that kind wait snooze_minutes, default 240). Answers the newest unanswered tip unless tip_id is set."`
+	TipID        string `json:"tip_id,omitempty" jsonschema:"description=The tip to answer; empty answers the newest unanswered one."`
+	SnoozeMin    int    `json:"snooze_minutes,omitempty" jsonschema:"description=How long a snooze lasts, in minutes (default 240)."`
+	Holdout      string `json:"holdout,omitempty" jsonschema:"description=Share of sessions whose cost and drift tips are held back to measure their saving: off | on (10%) | a percent 0-10. Only on the operator's word."`
+	HeadroomNote string `json:"headroom_note,omitempty" jsonschema:"description=The one-line plan headroom note the agent is shown with its prompt (at a session's first prompt and when a window crosses 50, 25 or 10% left): on | off. Only on the operator's word."`
 }
 
 // RegisterCoachTool registers tokenops_coach: the coach's two dials and
@@ -31,7 +32,7 @@ func RegisterCoachTool(s *Server, d ModeDeps) error {
 		return errors.New("mcp: nil server")
 	}
 	s.Tool("tokenops_coach").
-		Description("Show or set the coach (ADR 0006). preset sets everything in one opinionated choice (observe: records only; advise: tells, changes nothing; guided: refuses redundant re-reads, asks before moving subagents; autopilot: acts on its own and stays quiet, including where agents compact) and installs the hooks it needs on every installed agent; prefer it when asked to configure tokenops. With no arguments, returns verbosity and, for each power (inform: quota and context tips; waste: redundant re-reads; models: moving work to a cheaper model), the configured autonomy, the effective autonomy on this machine, the reason they differ, and the setting it came from. autonomy sets every power's default (off | advise | ask | autonomous); power + rung overrides one (context: when agents compact; autonomous sets it in Claude Code, Codex, and opencode settings and restores them when lowered); verbosity sets how much it says (quiet | normal | verbose). A rung the coach cannot deliver yet is reported one rung lower with the reason. follow_through reports, per kind, how often advice was followed or ignored and whether autonomous moves stood or were undone; a tip nothing shows the operator saw (delivered only as the Stop hook message, never shown in the status line) and not acted on counts as unseen, neither followed nor ignored; advice ignored repeatedly is marked quiet and no longer offered unless verbosity is verbose. tip answers the coach's newest tip on the operator's word (acknowledged, expected, snoozed): an answered episode is not told again, a snooze holds that kind of tip for a while, and expected answers move the session budget up. holdout_percent is the share of sessions whose cost and drift tips are held back to measure their realized saving (tips about work about to stop never are); holdout sets it (off | on | 0-10). graduation lists, per capability (read guard, compact tip, session budget, model routing), its stage on the shadow -> advise -> act ladder, the published bar for the next stage (criteria with want, have and met) and, when ready, the command that takes the step; nothing is promoted automatically, so suggest the command to the operator rather than running it.").
+		Description("Show or set the coach (ADR 0006). preset sets everything in one opinionated choice (observe: records only; advise: tells, changes nothing; guided: refuses redundant re-reads, asks before moving subagents; autopilot: acts on its own and stays quiet, including where agents compact) and installs the hooks it needs on every installed agent; prefer it when asked to configure tokenops. With no arguments, returns verbosity and, for each power (inform: quota and context tips; waste: redundant re-reads; models: moving work to a cheaper model), the configured autonomy, the effective autonomy on this machine, the reason they differ, and the setting it came from. autonomy sets every power's default (off | advise | ask | autonomous); power + rung overrides one (context: when agents compact; autonomous sets it in Claude Code, Codex, and opencode settings and restores them when lowered); verbosity sets how much it says (quiet | normal | verbose). A rung the coach cannot deliver yet is reported one rung lower with the reason. follow_through reports, per kind, how often advice was followed or ignored and whether autonomous moves stood or were undone; a tip nothing shows the operator saw (delivered only as the Stop hook message, never shown in the status line) and not acted on counts as unseen, neither followed nor ignored; advice ignored repeatedly is marked quiet and no longer offered unless verbosity is verbose. tip answers the coach's newest tip on the operator's word (acknowledged, expected, snoozed): an answered episode is not told again, a snooze holds that kind of tip for a while, and expected answers move the session budget up. holdout_percent is the share of sessions whose cost and drift tips are held back to measure their realized saving (tips about work about to stop never are); holdout sets it (off | on | 0-10). headroom_note says whether the agent is shown a one-line plan headroom note with its prompt; headroom_note on | off sets it. graduation lists, per capability (read guard, compact tip, session budget, model routing), its stage on the shadow -> advise -> act ladder, the published bar for the next stage (criteria with want, have and met) and, when ready, the command that takes the step; nothing is promoted automatically, so suggest the command to the operator rather than running it.").
 		OutputSchema(coachcap.Report{}).
 		Handler(func(_ context.Context, in coachInput) (*coachcap.Report, error) {
 			path, err := d.path()
@@ -63,6 +64,13 @@ func RegisterCoachTool(s *Server, d ModeDeps) error {
 					return nil, inputError(err)
 				}
 				req.Holdout = &n
+			}
+			if in.HeadroomNote != "" {
+				on, err := coachcap.ParseHeadroomNote(in.HeadroomNote)
+				if err != nil {
+					return nil, inputError(err)
+				}
+				req.HeadroomNote = &on
 			}
 			if req.Empty() {
 				cfg, err := config.ReadMutable(path)

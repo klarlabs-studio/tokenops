@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/infra/followthrough"
 	"go.klarlabs.de/tokenops/internal/infra/routeguard"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -90,8 +91,9 @@ Use 'tokenops route-guard hook' to print the settings.json block.`,
 	return cmd
 }
 
-// runRouteGuardHook reads the UserPromptSubmit JSON and, when the model
-// is over-spec for the work, injects the case for a cheaper one.
+// runRouteGuardHook reads the UserPromptSubmit JSON and injects, as the
+// turn's additionalContext, the plan headroom note when it is due and the
+// case for a cheaper model when the model is over-spec for the work.
 //
 // Every failure path is silent: a guard that cannot decide must let the
 // turn proceed untouched rather than interrupt it with its own troubles.
@@ -114,23 +116,6 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 	if dir = routeGuardDir(dir); dir == "" {
 		return nil
 	}
-	// Prefer what the client stated. Codex and Cursor put the active
-	// model on every hook payload; the opencode shim forwards it from
-	// chat.message. Only Claude Code makes this a search problem.
-	model := firstNonEmptyStr(in.ModelID, in.Model)
-	claudeCode := model == ""
-	if model == "" {
-		model = latestTranscriptModel(in.TranscriptPath)
-	}
-	if model == "" {
-		return nil
-	}
-	// An external router chooses the model for this harness; two routers
-	// for one turn cannot be explained (ADR 0009 §5).
-	if routers.Decides(routers.Sources{}, model, claudeCode) {
-		return nil
-	}
-	prov := eventschema.Provider(firstNonEmptyStr(in.ProviderID, provider, string(eventschema.ProviderAnthropic)))
 	// Load("") returns defaults without reading anything, so the path
 	// has to be resolved first — otherwise the guard silently runs with
 	// no model set and abstains on every turn while appearing wired.
@@ -142,8 +127,64 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 	if err != nil {
 		return nil
 	}
-	if coachcap.Build(cfg).Effective(config.PowerModels) == config.AutonomyOff {
+	prov := eventschema.Provider(firstNonEmptyStr(in.ProviderID, provider, string(eventschema.ProviderAnthropic)))
+	now := time.Now()
+	var parts []string
+	if note := headroomNote(cfg, dir, in.SessionID, prov, now); note != "" {
+		parts = append(parts, note)
+	}
+	if advice := routeAdvice(cfg, in, mode, dir, prov, now); advice != "" {
+		parts = append(parts, advice)
+	}
+	if len(parts) == 0 {
 		return nil
+	}
+	out := promptHookOutput{}
+	out.HookSpecificOutput.HookEventName = "UserPromptSubmit"
+	out.HookSpecificOutput.AdditionalContext = strings.Join(parts, "\n")
+	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
+}
+
+// headroomNote is the plan headroom note when this turn is due one, or "".
+//
+// It rides UserPromptSubmit's additionalContext, which Claude Code inserts
+// where the hook fired and keeps in the transcript as written: after the
+// cached prefix, and never rewritten, so the cache stays valid. It is not
+// put in CLAUDE.md, AGENTS.md or a SessionStart block, where text that
+// changes with the window would break the cached prefix of every session.
+func headroomNote(cfg config.Config, dir, session string, prov eventschema.Provider, now time.Time) string {
+	if !coachcap.Build(cfg).HeadroomNote {
+		return ""
+	}
+	ws := routeguard.ReadHeadroom("", boundaryledger.DefaultDir(), string(prov), now)
+	note, ok := routeguard.DecideHeadroomNote(dir, session, ws, now, time.Local)
+	if !ok {
+		return ""
+	}
+	return note
+}
+
+// routeAdvice is the case for a cheaper model, or "" when there is none
+// to make.
+func routeAdvice(cfg config.Config, in userPromptSubmitInput, mode routeguard.Mode, dir string, prov eventschema.Provider, now time.Time) string {
+	// Prefer what the client stated. Codex and Cursor put the active
+	// model on every hook payload; the opencode shim forwards it from
+	// chat.message. Only Claude Code makes this a search problem.
+	model := firstNonEmptyStr(in.ModelID, in.Model)
+	claudeCode := model == ""
+	if model == "" {
+		model = latestTranscriptModel(in.TranscriptPath)
+	}
+	if model == "" {
+		return ""
+	}
+	// An external router chooses the model for this harness; two routers
+	// for one turn cannot be explained (ADR 0009 §5).
+	if routers.Decides(routers.Sources{}, model, claudeCode) {
+		return ""
+	}
+	if coachcap.Build(cfg).Effective(config.PowerModels) == config.AutonomyOff {
+		return ""
 	}
 	sr := cfg.Optimizer.SmartRouting
 	candidates := cfg.RoutingCandidates(prov)
@@ -152,7 +193,6 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 		mode = routeguard.ParseMode(sr.Intervention)
 	}
 	ledger := coachLedger()
-	now := time.Now()
 	dec := routeguard.Evaluate(routeguard.Input{
 		Dir: dir, SessionID: in.SessionID, Prompt: in.Prompt,
 		CurrentModel: model, Provider: prov,
@@ -167,16 +207,13 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 	// prompt arrives here, often before any further Agent call.
 	coachcap.RecordResolutions(ledger, now, proposalResolutions(routeguard.SettleProposals(dir, in.SessionID, in.TranscriptPath)))
 	if !dec.Advise {
-		return nil
+		return ""
 	}
 	coachcap.RecordAdvice(ledger, now, dec.OfferID, in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To)
 	savings.RecordRoute(savings.DefaultLedger(), now, dec.OfferID, in.SessionID, string(dec.Kind), dec.From, dec.To)
-	out := promptHookOutput{}
-	out.HookSpecificOutput.HookEventName = "UserPromptSubmit"
-	out.HookSpecificOutput.AdditionalContext = fmt.Sprintf(
+	return fmt.Sprintf(
 		"tokenops: %s. Consider %s for this task (switch with /model, or delegate it to a subagent on that model). Staying on %s is fine if you prefer.",
 		dec.Reason, dec.To, dec.From)
-	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 }
 
 // coachLedger is the follow-through ledger, or nil when there is no home
