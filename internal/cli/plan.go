@@ -484,7 +484,9 @@ func planWindowLines(r headroom.Report) []string {
 	case len(r.Windows) > 0:
 		for _, w := range r.Windows {
 			line := "  window:  " + shareLeftOf(w.UsedPct, "%.0f", w.Name)
-			if w.ResetsIn != "" {
+			if w.NotStarted {
+				line += " — starts at your next request"
+			} else if w.ResetsIn != "" {
 				line += " — resets in " + friendlyDuration(w.ResetsIn)
 			}
 			out = append(out, line)
