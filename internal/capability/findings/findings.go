@@ -59,9 +59,15 @@ type Finding struct {
 	// Key names the finding across readings: its kind and its subject
 	// ("quota:openai:week", "boundary:headroom-pause"), never a figure
 	// that changes. A dismissal and an action name the finding by it.
-	Key      string `json:"key"`
-	Kind     string `json:"kind"`
-	Level    string `json:"level"`
+	Key   string `json:"key"`
+	Kind  string `json:"kind"`
+	Level string `json:"level"`
+	// Provider and Window name the plan and the window a quota finding
+	// concerns, as the glance names them ("openai", "week"), so a
+	// surface can show it beside that window. A finding about a whole
+	// plan names no window; other kinds name neither.
+	Provider string `json:"provider,omitempty"`
+	Window   string `json:"window,omitempty"`
 	Title    string `json:"title"`
 	Evidence string `json:"evidence,omitempty"`
 	// Action is what to do, in words and CLI commands, for the CLI and
@@ -162,6 +168,7 @@ func staleReading(r plans.HeadroomReport) (Finding, bool) {
 	f := Finding{
 		Key:      key(KindQuota, r.Provider, "stale"),
 		Kind:     KindQuota,
+		Provider: r.Provider,
 		Level:    LevelWarn,
 		Title:    fmt.Sprintf("%s's plan reading is %s old", vendor(r), age(time.Since(newest))),
 		Evidence: "Its windows are from the last reading before the source stopped, so how much is left is unknown",
@@ -242,6 +249,7 @@ func quota(reports []plans.HeadroomReport) []Finding {
 			default:
 				continue
 			}
+			f.Provider, f.Window = r.Provider, w.Name
 			if alt, pct, ok := roomiest(reports, r.Provider); ok {
 				f.Action = fmt.Sprintf("Put the work that can move on %s (%.0f%% left) until it resets.", alt, math.Max(0, 100-pct))
 			} else {

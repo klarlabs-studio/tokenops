@@ -2751,7 +2751,13 @@
                           "level": {
                             "type": "string"
                           },
+                          "provider": {
+                            "type": "string"
+                          },
                           "title": {
+                            "type": "string"
+                          },
+                          "window": {
                             "type": "string"
                           }
                         },
@@ -2892,7 +2898,13 @@
                               "level": {
                                 "type": "string"
                               },
+                              "provider": {
+                                "type": "string"
+                              },
                               "title": {
+                                "type": "string"
+                              },
+                              "window": {
                                 "type": "string"
                               }
                             },
@@ -2999,7 +3011,13 @@
                               "level": {
                                 "type": "string"
                               },
+                              "provider": {
+                                "type": "string"
+                              },
                               "title": {
+                                "type": "string"
+                              },
+                              "window": {
                                 "type": "string"
                               }
                             },
