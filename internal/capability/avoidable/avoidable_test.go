@@ -274,3 +274,50 @@ func TestBuildTurnsSumToTheClasses(t *testing.T) {
 		}
 	}
 }
+
+// Avoidable usage on a flat-rate plan cost nothing more than the plan:
+// only what a provider billed per use is money spent. Usage stored with
+// a cost was billed; usage without one was billed only where no plan's
+// windows cover the provider and the reader did not mark it plan-covered.
+func TestBilledIsOnlyWhatWasBilledPerUse(t *testing.T) {
+	if r := Build(fixture()); r.Avoidable.BilledUSD != 0 || r.Avoidable.APIEquivalentUSD <= 0 {
+		t.Fatalf("plan usage without a stored cost counted as billed: %+v", r.Avoidable)
+	}
+
+	// "lost" ran on a pay-as-you-go provider that billed $2 per 1,000
+	// tokens; all 3,000 of its tokens were avoidable.
+	in := fixture()
+	for i := range in.Turns {
+		if in.Turns[i].SessionID == "lost" {
+			in.Turns[i].Provider, in.Turns[i].CostUSD = "fireworks", 2
+		}
+	}
+	r := Build(in)
+	if math.Abs(r.Avoidable.BilledUSD-6) > 1e-9 {
+		t.Errorf("billed = %v, want 6", r.Avoidable.BilledUSD)
+	}
+	var classes float64
+	for _, c := range r.Classes {
+		classes += c.BilledUSD
+	}
+	if math.Abs(classes-r.Avoidable.BilledUSD) > 1e-9 {
+		t.Errorf("classes bill %v, total %v", classes, r.Avoidable.BilledUSD)
+	}
+	if got := class(r, waste.ClassOverTiered); got.BilledUSD != 0 {
+		t.Errorf("plan session billed: %+v", got)
+	}
+
+	// Without any plan's windows, usage with no stored cost is metered at
+	// list price, unless the reader marked it plan-covered.
+	in = fixture()
+	in.Windows = nil
+	if r := Build(in); math.Abs(r.Avoidable.BilledUSD-r.Avoidable.APIEquivalentUSD) > 1e-9 {
+		t.Errorf("metered usage: billed %v, list %v", r.Avoidable.BilledUSD, r.Avoidable.APIEquivalentUSD)
+	}
+	for i := range in.Turns {
+		in.Turns[i].PlanCovered = true
+	}
+	if r := Build(in); r.Avoidable.BilledUSD != 0 {
+		t.Errorf("plan-covered usage billed %v", r.Avoidable.BilledUSD)
+	}
+}

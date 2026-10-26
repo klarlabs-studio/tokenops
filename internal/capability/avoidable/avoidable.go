@@ -117,6 +117,11 @@ type WindowShare struct {
 type Amount struct {
 	Tokens           int64   `json:"tokens"`
 	APIEquivalentUSD float64 `json:"api_equivalent_usd"`
+	// BilledUSD is the part a provider billed per use: usage stored with
+	// a cost, or without one on a provider no plan's windows cover and
+	// not marked plan-covered. On a flat-rate plan the rest cost nothing
+	// beyond the plan, so its measure is WindowShare, not dollars.
+	BilledUSD float64 `json:"billed_usd"`
 	// WindowShare is the amount as a share of each calibrated plan
 	// window; absent without a flat-rate plan's readings.
 	WindowShare []WindowShare `json:"window_share,omitempty"`
@@ -259,6 +264,11 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 	}
 	usageTokens := map[string]int64{}
 	avoidTokens := map[string]int64{}
+	r.Calibrations = calibrations(in)
+	onPlan := map[string]bool{}
+	for _, c := range r.Calibrations {
+		onPlan[c.Provider] = true
+	}
 	for p, i := range b.period {
 		t := in.Turns[i]
 		r.Usage.Tokens += t.Tokens
@@ -274,13 +284,13 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 			turns = append(turns, TurnWaste{Turn: t, Class: c, Tokens: n, APIEquivalentUSD: v})
 			cc.Tokens += n
 			cc.APIEquivalentUSD += v
+			cc.BilledUSD += billedOf(t, n, onPlan[t.Provider])
 			cc.Turns++
 			sessionsOf[c][t.SessionID] = true
 			tokensOf[c][t.Provider] += n
 			avoidTokens[t.Provider] += n
 		}
 	}
-	r.Calibrations = calibrations(in)
 	if len(r.Calibrations) > 0 {
 		r.ShareMethod = ShareMethod
 	}
@@ -290,6 +300,7 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 		cc.WindowShare = shares(r.Calibrations, tokensOf[c])
 		r.Avoidable.Tokens += cc.Tokens
 		r.Avoidable.APIEquivalentUSD += cc.APIEquivalentUSD
+		r.Avoidable.BilledUSD += cc.BilledUSD
 		r.Classes = append(r.Classes, *cc)
 	}
 	r.Usage.WindowShare = shares(r.Calibrations, usageTokens)
@@ -307,6 +318,17 @@ func valueOf(t analytics.SessionTurn, n int64) float64 {
 		return 0
 	}
 	return t.APIEquivalentUSD * float64(n) / float64(t.Tokens)
+}
+
+// billedOf is what n of a turn's tokens were billed per use. A turn
+// stored with a cost was billed it. One without a cost was billed its
+// list price only when no plan covers it: a reader that leaves plan
+// usage unmarked must not turn a subscription into spend.
+func billedOf(t analytics.SessionTurn, n int64, onPlan bool) float64 {
+	if t.Tokens <= 0 || t.PlanCovered || (t.CostUSD <= 0 && onPlan) {
+		return 0
+	}
+	return t.BilledUSD() * float64(n) / float64(t.Tokens)
 }
 
 // calibrations size each provider's plan window from the turns recorded

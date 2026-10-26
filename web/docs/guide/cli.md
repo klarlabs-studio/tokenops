@@ -690,8 +690,20 @@ then by the avoidable dollars it addresses, and the next one is named with
 the command that takes the step. Nothing is switched on for you.
 
 The daemon runs the week's report once a day, and the glance, the menu bar
-and `GET /api/findings` show it as one line: "Last 7 days: ~$1.38 avoidable
-(3.8% of a weekly window), $0.00 realized". `--json`,
+and `GET /api/findings` show it as one finding, in the currency you pay in.
+On a flat-rate plan the avoidable usage cost nothing beyond the plan, so it
+leads with the share of a window it took and lists each class as its share
+of the same window: "Last 7 days: ~9.2% of a weekly window avoidable", with
+"cache-miss rebuilds 6.4% · over-tiered model 2.2% · abandoned sessions 0.6%"
+below it. Where a provider bills per use (an API key, pay as you go), the
+avoidable part is money spent and leads in dollars ("~$4.10 avoidable"), or
+follows the plan's share ("…, plus $4.10 billed per use"). Usage stored with
+a cost counts as billed; usage without one only on a provider no plan's
+windows cover. With neither reading, the dollars say they are API prices.
+What the guardrails already saved follows the classes ("Guardrails already
+saved ~$1.50 at API prices") and is left out while it is nothing. The
+report's `billed_usd`, on the total and on each class, is the billed part.
+`--json`,
 `GET /api/spend/waste` and `tokenops_spend` with `view: waste` return the
 same report; it holds derived figures only.
 

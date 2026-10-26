@@ -170,7 +170,11 @@ type Stats struct {
 }
 
 // ReadStats reads the ledger and aggregates it.
-func ReadStats(dir string) (Stats, error) {
+func ReadStats(dir string) (Stats, error) { return ReadStatsSince(dir, time.Time{}) }
+
+// ReadStatsSince aggregates the ledger's events from since on; a zero
+// since reads every event.
+func ReadStatsSince(dir string, since time.Time) (Stats, error) {
 	dir = resolveDir(dir)
 	f, err := os.Open(filepath.Join(dir, "events.jsonl"))
 	if err != nil {
@@ -188,6 +192,9 @@ func ReadStats(dir string) (Stats, error) {
 		var e ledgerEvent
 		if err := dec.Decode(&e); err != nil {
 			break
+		}
+		if e.TS.Before(since) {
+			continue
 		}
 		s.Events++
 		sessions[e.Session] = struct{}{}

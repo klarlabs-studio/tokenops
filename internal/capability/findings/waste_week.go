@@ -13,10 +13,20 @@ import (
 // shownClasses bounds the waste classes the weekly finding names.
 const shownClasses = 3
 
+// minBilledUSD is the least billed amount worth naming beside a plan's
+// share: under a cent it reads as noise.
+const minBilledUSD = 0.01
+
 // wasteWeek is the week's waste report as one ambient finding: what was
-// avoidable in dollars and window share beside what was realized, the
-// classes that carried it, and the guardrail to switch on next. It shows
-// while the daemon's daily run is fresh and found anything.
+// avoidable, in the currency the operator pays in, the classes that
+// carried it, what the guardrails already saved, and the guardrail to
+// switch on next. It shows while the daemon's daily run is fresh and
+// found anything.
+//
+// On a flat-rate plan the avoidable usage cost nothing beyond the plan;
+// what it took is a share of a window, so that leads and the classes are
+// shares of the same window. Dollars lead only where a provider billed
+// per use, and are the API price, said so, when neither is known.
 func wasteWeek(s *avoidable.Snapshot, now time.Time) []Finding {
 	if s == nil || now.Sub(s.ComputedAt) > avoidable.MaxSnapshotAge {
 		return nil
@@ -26,26 +36,32 @@ func wasteWeek(s *avoidable.Snapshot, now time.Time) []Finding {
 		return nil
 	}
 	days := int(math.Round(r.Until.Sub(r.Since).Hours() / 24))
-	title := fmt.Sprintf("Last %d days: ~%s avoidable", days, money(r.Avoidable.APIEquivalentUSD))
-	var best avoidable.WindowShare
-	for _, w := range r.Avoidable.WindowShare {
-		if w.Pct > best.Pct {
-			best = w
-		}
-	}
-	if best.Pct > 0 {
-		title += fmt.Sprintf(" (%.1f%% of a %s window)", best.Pct, best.Window)
-	}
-	title += fmt.Sprintf(", %s realized", money(r.Realized.USD))
-
-	classes := append([]avoidable.ClassCost(nil), r.Classes...)
-	sort.SliceStable(classes, func(i, j int) bool { return classes[i].APIEquivalentUSD > classes[j].APIEquivalentUSD })
+	share := largestShare(r.Avoidable.WindowShare)
+	billed := r.Avoidable.BilledUSD >= minBilledUSD
+	var title string
 	var parts []string
-	for _, c := range classes {
-		if c.APIEquivalentUSD <= 0 || len(parts) == shownClasses {
-			break
+	switch {
+	case share.Pct > 0:
+		title = fmt.Sprintf("Last %d days: ~%.1f%% of a %s window avoidable", days, share.Pct, share.Window)
+		if billed {
+			title += fmt.Sprintf(", plus %s billed per use", money(r.Avoidable.BilledUSD))
 		}
-		parts = append(parts, fmt.Sprintf("%s %s", c.Name, money(c.APIEquivalentUSD)))
+		parts = classParts(r.Classes, func(c avoidable.ClassCost) (float64, string) {
+			pct := shareOf(c.WindowShare, share)
+			return pct, fmt.Sprintf("%.1f%%", pct)
+		})
+	case billed:
+		title = fmt.Sprintf("Last %d days: ~%s avoidable", days, money(r.Avoidable.BilledUSD))
+		parts = classParts(r.Classes, func(c avoidable.ClassCost) (float64, string) { return c.BilledUSD, money(c.BilledUSD) })
+	default:
+		title = fmt.Sprintf("Last %d days: ~%s avoidable at API prices", days, money(r.Avoidable.APIEquivalentUSD))
+		parts = classParts(r.Classes, func(c avoidable.ClassCost) (float64, string) {
+			return c.APIEquivalentUSD, money(c.APIEquivalentUSD)
+		})
+	}
+	evidence := strings.Join(parts, " · ")
+	if r.Realized.USD >= minBilledUSD {
+		evidence = strings.TrimPrefix(evidence+". Guardrails already saved ~"+money(r.Realized.USD)+" at API prices", ". ")
 	}
 
 	action := "`tokenops spend waste` shows each class and how it is found."
@@ -59,5 +75,46 @@ func wasteWeek(s *avoidable.Snapshot, now time.Time) []Finding {
 			action = fmt.Sprintf("Next guardrail: the %s, still gathering evidence. `tokenops spend waste` shows each class and what the %s still needs.", n.Name, n.Name)
 		}
 	}
-	return []Finding{{Key: key(KindWaste, "week"), Kind: KindWaste, Level: LevelInfo, Title: title, Evidence: strings.Join(parts, " · "), Action: action}}
+	return []Finding{{Key: key(KindWaste, "week"), Kind: KindWaste, Level: LevelInfo, Title: title, Evidence: evidence, Action: action}}
+}
+
+// largestShare is the window the amount took most of.
+func largestShare(ss []avoidable.WindowShare) avoidable.WindowShare {
+	var best avoidable.WindowShare
+	for _, w := range ss {
+		if w.Pct > best.Pct {
+			best = w
+		}
+	}
+	return best
+}
+
+// shareOf is the share of the same provider's window in ss.
+func shareOf(ss []avoidable.WindowShare, of avoidable.WindowShare) float64 {
+	for _, w := range ss {
+		if w.Provider == of.Provider && w.Window == of.Window {
+			return w.Pct
+		}
+	}
+	return 0
+}
+
+// classParts names the classes that carried the most, by measure, each
+// with its figure.
+func classParts(classes []avoidable.ClassCost, measure func(avoidable.ClassCost) (float64, string)) []string {
+	sorted := append([]avoidable.ClassCost(nil), classes...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		a, _ := measure(sorted[i])
+		b, _ := measure(sorted[j])
+		return a > b
+	})
+	var parts []string
+	for _, c := range sorted {
+		v, words := measure(c)
+		if v <= 0 || len(parts) == shownClasses {
+			break
+		}
+		parts = append(parts, c.Name+" "+words)
+	}
+	return parts
 }
