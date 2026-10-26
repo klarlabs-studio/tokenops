@@ -20,11 +20,13 @@ func anomalyFindings(as []anomalies.Anomaly) []Finding {
 	for _, a := range as {
 		out = append(out, Finding{
 			ID:       a.ID,
+			Key:      key(KindSpend, a.ID),
 			Kind:     KindSpend,
 			Level:    LevelNotice,
 			Title:    anomalyTitle(a.Anomaly),
 			Evidence: anomalyEvidence(a),
 			Action:   anomalyAction(a),
+			Actions:  tipActions(expectedSpend),
 		})
 	}
 	return out

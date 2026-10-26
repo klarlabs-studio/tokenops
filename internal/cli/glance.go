@@ -121,8 +121,26 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView
 		opt.CostsLate = costCtx.Err() != nil
 		cancelCost()
 	}
-	_, err = io.WriteString(out, cards.Render(g, opt))
+	if _, err = io.WriteString(out, cards.Render(g, opt)); err != nil || !view.findings {
+		return err
+	}
+	ds, _ := findings.DefaultDismissals().Load(now)
+	_, err = io.WriteString(out, hiddenNote(found, ds, now))
 	return err
+}
+
+// hiddenNote says how many of the findings listed are hidden in the menu
+// bar. The CLI lists every finding: a dismissal tidies the panel, it does
+// not make a finding untrue.
+func hiddenNote(r findings.Report, ds []findings.Dismissal, now time.Time) string {
+	switch n := findings.Filter(r, ds, now).Hidden; n {
+	case 0:
+		return ""
+	case 1:
+		return "\n1 of these is hidden in the menu bar until it changes or its time is up.\n"
+	default:
+		return fmt.Sprintf("\n%d of these are hidden in the menu bar until they change or their time is up.\n", n)
+	}
 }
 
 // costBudget bounds the cost lookups.

@@ -1,6 +1,7 @@
 package boundaries
 
 import (
+	"fmt"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
@@ -24,6 +25,11 @@ type PauseSummary struct {
 	// PausePoint is whether a harness that can pause has the boundary
 	// hook. Without one the rule records nothing.
 	PausePoint bool `json:"pause_point"`
+	// When words the rule's own condition: "the tightest plan window has
+	// 10% or less left". Require is what it requires then: ask, approver
+	// or deny.
+	When    string `json:"when,omitempty"`
+	Require string `json:"require,omitempty"`
 }
 
 // HeadroomPause summarises the config's headroom pause: the default rule
@@ -37,6 +43,7 @@ func HeadroomPause(cfg config.Config, env Env, installed map[string]bool) (Pause
 	out := PauseSummary{
 		Configured: true, Rule: r.Name, Stage: string(r.Stage),
 		PausePoint: installed[HarnessClaudeCode] || installed[HarnessOpencode],
+		When:       planLeftWords(r), Require: string(r.Require.Kind),
 	}
 	sessions, err := env.Dir.Sessions()
 	if err != nil {
@@ -68,6 +75,38 @@ func headroomPauseRule(rules []domain.Rule) (domain.Rule, bool) {
 		return domain.Rule{}, false
 	}
 	return *found, true
+}
+
+// planLeftWords words a rule's plan_left_pct condition: "the tightest
+// plan window has 10% or less left".
+func planLeftWords(r domain.Rule) string {
+	for _, c := range r.When {
+		if c.Field != domain.FieldPlanLeft {
+			continue
+		}
+		window := "the tightest plan window"
+		switch c.Window {
+		case domain.Window5h:
+			window = "the 5-hour window"
+		case domain.WindowWeek:
+			window = "the weekly window"
+		}
+		var left string
+		switch c.Op {
+		case domain.OpLT:
+			left = fmt.Sprintf("less than %g%%", c.Number)
+		case domain.OpGE:
+			left = fmt.Sprintf("%g%% or more", c.Number)
+		case domain.OpGT:
+			left = fmt.Sprintf("more than %g%%", c.Number)
+		case domain.OpEQ:
+			left = fmt.Sprintf("exactly %g%%", c.Number)
+		default:
+			left = fmt.Sprintf("%g%% or less", c.Number)
+		}
+		return window + " has " + left + " left"
+	}
+	return ""
 }
 
 func pausesOnHeadroom(r domain.Rule) bool {

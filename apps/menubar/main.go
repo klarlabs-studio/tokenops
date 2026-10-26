@@ -6,7 +6,8 @@
 //	CGO_ENABLED=1 go run -tags vitra_native .
 //
 // The panel is an ordinary window to Vitra's security model: it may read
-// the glance, change the coach preset, and close itself. The API token
+// the glance, change the coach preset, answer boundaries, act on and hide
+// the coach's findings, and close itself. The API token
 // stays in this process; the panel never sees it.
 package main
 
@@ -187,12 +188,12 @@ func newMenubar(host app.DesktopHost, d *daemon, sink audit.Sink) (*menubar, err
 // register grants the panel what it needs and registers its commands.
 func (m *menubar) register() error {
 	grant, err := domain.NewCapabilityGrant(
-		"panel", "read the glance, ask the daemon to poll now, change the coach preset, answer boundaries, close the panel",
+		"panel", "read the glance, ask the daemon to poll now, change the coach preset, answer boundaries, act on and hide findings, close the panel",
 		[]domain.WindowID{panelWindow},
 		[]domain.Origin{domain.OriginPackagedLocal},
 		[]domain.PermissionSpec{
 			{Name: "glance.read"}, {Name: "glance.refresh"}, {Name: "coach.change"},
-			{Name: "boundaries.deny"}, {Name: "boundaries.approve"}, {Name: "panel.close"},
+			{Name: "boundaries.deny"}, {Name: "boundaries.approve"}, {Name: "findings.answer"}, {Name: "panel.close"},
 		},
 	)
 	if err != nil {
@@ -251,6 +252,28 @@ func (m *menubar) register() error {
 			Permission:  "boundaries.approve",
 			Handler: func(ctx context.Context, _ domain.Invocation, in answerInput) (view, error) {
 				if err := m.approve(ctx, in.ID, in.Session); err != nil {
+					return view{}, err
+				}
+				return m.refresh(ctx), nil
+			},
+		}),
+		vitra.Register(m.rt, vitra.Command[findingActInput, view]{
+			Name:        "finding.act",
+			Description: "Run an action a finding offers (promote its boundary, answer its tip) through the daemon, which audits it",
+			Permission:  "findings.answer",
+			Handler: func(ctx context.Context, _ domain.Invocation, in findingActInput) (view, error) {
+				if err := m.actOnFinding(ctx, in); err != nil {
+					return view{}, err
+				}
+				return m.refresh(ctx), nil
+			},
+		}),
+		vitra.Register(m.rt, vitra.Command[findingDismissInput, view]{
+			Name:        "finding.dismiss",
+			Description: "Hide a finding for a day or a week, or show hidden findings again, through the daemon",
+			Permission:  "findings.answer",
+			Handler: func(ctx context.Context, _ domain.Invocation, in findingDismissInput) (view, error) {
+				if err := m.dismissFinding(ctx, in); err != nil {
 					return view{}, err
 				}
 				return m.refresh(ctx), nil

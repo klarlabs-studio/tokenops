@@ -2718,10 +2718,31 @@
                           "action": {
                             "type": "string"
                           },
+                          "actions": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "confirm": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
                           "evidence": {
                             "type": "string"
                           },
                           "id": {
+                            "type": "string"
+                          },
+                          "key": {
                             "type": "string"
                           },
                           "kind": {
@@ -2737,6 +2758,9 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "hidden": {
+                      "type": "integer"
                     },
                     "sessions_read_at": {
                       "format": "date-time",
@@ -2757,6 +2781,270 @@
           }
         },
         "summary": "What the coach and the session analysis observed, ranked, with what to do"
+      }
+    },
+    "/api/findings/act": {
+      "post": {
+        "operationId": "postFindingsAct",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "acted": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "action": {
+                          "type": "string"
+                        },
+                        "answer": {
+                          "type": "string"
+                        },
+                        "config": {
+                          "type": "string"
+                        },
+                        "config_changed": {
+                          "type": "boolean"
+                        },
+                        "key": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "snoozed_until": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "stage": {
+                          "type": "string"
+                        },
+                        "tip": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "findings": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "findings": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "action": {
+                                "type": "string"
+                              },
+                              "actions": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "confirm": {
+                                      "type": "string"
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "evidence": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "key": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "level": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "hidden": {
+                          "type": "integer"
+                        },
+                        "sessions_read_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Run an action a finding offers now (promote its boundary, answer its tip); 409 when the finding has changed"
+      }
+    },
+    "/api/findings/dismiss": {
+      "post": {
+        "operationId": "postFindingsDismiss",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "for": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "findings": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "findings": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "action": {
+                                "type": "string"
+                              },
+                              "actions": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "confirm": {
+                                      "type": "string"
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "evidence": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "key": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "level": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "hidden": {
+                          "type": "integer"
+                        },
+                        "sessions_read_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "for": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "restored": {
+                      "type": "integer"
+                    },
+                    "until": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Hide a finding for a day or a week, until it becomes more urgent; for none shows it, or with no key every hidden finding, again"
       }
     },
     "/api/glance": {
