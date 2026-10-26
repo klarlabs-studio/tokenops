@@ -4,7 +4,14 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.110.2**.
+Current release: **v0.111.0**.
+
+## v0.111.0 — Act on the coach from the menu bar
+
+The coach's findings in the menu bar panel have buttons now: promote the
+headroom pause, or answer a tip, without opening a terminal. A change that
+binds first says what it will do and how to undo it. Any finding can be
+hidden for a day or a week, and it comes back early if it gets more urgent.
 
 ## v0.110.2 — A plain white and ink panel
 
