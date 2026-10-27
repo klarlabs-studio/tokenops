@@ -154,6 +154,8 @@ func replayInput(provider, name string, h plans.History, envs []*eventschema.Env
 		},
 		Current: current, Candidates: family,
 	}
+	in.EarlyResets = plans.EarlyResetsIn(envs, eventschema.Provider(provider), since, now,
+		func(from, to time.Time) bool { return h.ChangedBetween(provider, from, to) })
 	if price != nil {
 		in.ListValueUSD, in.UnpricedRequests = plans.ListValue(envs, provider, since, now, price)
 		in.ListValueKnown = true

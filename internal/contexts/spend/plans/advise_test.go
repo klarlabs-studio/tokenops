@@ -397,3 +397,55 @@ func TestReplayAtTheTopTierNeverUpgradesToItself(t *testing.T) {
 		t.Error("staying on the top tier is not a finding")
 	}
 }
+
+// lockoutCycle is one weekly window of OpenAI that runs out at 100% and is
+// reset early by the vendor: its readings, and the early reset.
+func lockoutCycle(start time.Time) ([]QuotaReading, EarlyReset) {
+	reset := start.Add(3 * 24 * time.Hour)
+	early := start.Add(5 * time.Hour)
+	rs := []QuotaReading{
+		{At: start.Add(time.Hour), Windows: []QuotaWindow{{Label: "weekly", UsedPct: 60, ResetsAt: reset, Duration: week}}},
+		{At: start.Add(2 * time.Hour), Windows: []QuotaWindow{{Label: "weekly", UsedPct: 100, ResetsAt: reset, Duration: week}}},
+		{At: early, Windows: []QuotaWindow{{Label: "weekly", UsedPct: 2, ResetsAt: early.Add(week), Duration: week}}},
+	}
+	return rs, EarlyReset{Provider: "openai", Name: "weekly", Duration: week,
+		PrevUsedPct: 100, PrevResetsAt: reset, PrevObservedAt: start.Add(2 * time.Hour),
+		UsedPct: 2, ObservedAt: early, ResetsAt: early.Add(week)}
+}
+
+// A lockout the vendor ends early is blocked only until the reset, not
+// until the window's scheduled reset.
+func TestReplayEndsLockoutsAtAnEarlyReset(t *testing.T) {
+	base := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+	rs, early := lockoutCycle(base)
+	_, _, twenty := maxTiers()
+	a := Replay(ReplayInput{Provider: "openai", Since: base, Until: base.Add(6 * 24 * time.Hour), Readings: rs,
+		FactorAt: func(time.Time) (float64, bool) { return 20, true }, Current: twenty, Candidates: []Tier{twenty},
+		EarlyResets: []EarlyReset{early}})
+	cur := optionFor(t, a, OptionPlan, "claude-max-20x")
+	if cur.Lockouts != 1 || cur.BlockedMinutes != 180 {
+		t.Errorf("current = %+v, want one lockout blocked 180 minutes (exhausted at 2h, reset at 5h)", cur)
+	}
+}
+
+// On the top tier with early resets, the summary says the vendor reset the
+// window early and how much blocked time that cut out.
+func TestReplaySaysWhenTheVendorResetTheTopTierEarly(t *testing.T) {
+	base := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+	rs1, e1 := lockoutCycle(base)
+	rs2, e2 := lockoutCycle(base.Add(8 * 24 * time.Hour))
+	pro, five, twenty := maxTiers()
+	a := Replay(ReplayInput{Provider: "openai", Since: base, Until: base.Add(14 * 24 * time.Hour),
+		Readings: append(rs1, rs2...), EarlyResets: []EarlyReset{e1, e2},
+		FactorAt: func(time.Time) (float64, bool) { return 20, true },
+		Current:  twenty, Candidates: []Tier{pro, five, twenty}})
+	r := a.Recommendation
+	if r == nil || r.Verdict != VerdictStay || r.Plan != "claude-max-20x" {
+		t.Fatalf("recommendation = %+v, want stay on the top tier", r)
+	}
+	for _, want := range []string{"top tier", "OpenAI reset the weekly window early both times", "about 6.0h"} {
+		if !strings.Contains(r.Summary, want) {
+			t.Errorf("summary = %q, want it to contain %q", r.Summary, want)
+		}
+	}
+}
