@@ -59,11 +59,15 @@ func (n NexusStatus) SignIn(ctx context.Context) usage.SignIn {
 
 // binary is Nexus CLI's executable: its own bin directory first, then
 // PATH, then the usual Homebrew and /usr/local places (a daemon started
-// by launchd has a short PATH).
+// by launchd has a short PATH). Another tool may be called nexus, so
+// nothing is looked for unless Nexus CLI's own ~/.nexus exists.
 func (n NexusStatus) binary() string {
 	home := n.Home
 	if home == "" {
 		home, _ = os.UserHomeDir()
+	}
+	if info, err := os.Stat(filepath.Join(home, ".nexus")); err != nil || !info.IsDir() {
+		return ""
 	}
 	look := n.LookPath
 	if look == nil {

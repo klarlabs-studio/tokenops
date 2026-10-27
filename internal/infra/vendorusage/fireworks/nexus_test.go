@@ -53,7 +53,27 @@ func TestNexusStatusFindsTheBinary(t *testing.T) {
 		}
 		return "", errors.New("not found")
 	}
+	if err := os.MkdirAll(filepath.Join(home, ".nexus"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if got := (NexusStatus{Home: home, LookPath: look, Places: []string{}}).SignIn(context.Background()); got.Email != "ada@example.com" {
 		t.Errorf("on PATH: %+v", got)
+	}
+}
+
+// Another tool may be called nexus. Without Nexus CLI's own ~/.nexus no
+// program of that name is ever run.
+func TestNexusStatusRunsNothingWithoutNexusHome(t *testing.T) {
+	home := t.TempDir()
+	marker := filepath.Join(t.TempDir(), "ran")
+	onPath := filepath.Join(t.TempDir(), "nexus")
+	script(t, onPath, `touch "`+marker+`"; echo '{"email":"ada@example.com"}'`)
+	look := func(string) (string, error) { return onPath, nil }
+	got := NexusStatus{Home: home, LookPath: look, Places: []string{onPath}}.SignIn(context.Background())
+	if got != (usage.SignIn{}) {
+		t.Errorf("got %+v without ~/.nexus", got)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a program called nexus ran although Nexus CLI is not installed")
 	}
 }
