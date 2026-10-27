@@ -86,6 +86,8 @@
     if (!p) return "";
     if (p.status === "on_pace") return "On pace";
     if (p.status === "used_up") return "Used up";
+    // A pace without its figure says nothing rather than "NaN%".
+    if (typeof p.delta_pct !== "number" || !isFinite(p.delta_pct)) return "";
     var d = Math.abs(Math.round(p.delta_pct));
     return p.status === "behind" ? d + "% in reserve" : d + "% over pace";
   }
