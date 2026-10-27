@@ -110,7 +110,6 @@ nox fix -dry-run         # preview
 nox fix                  # apply
 go mod tidy
 (cd web/dashboard && npm install --package-lock-only)
-(cd web/docs      && npm install --package-lock-only)
 ```
 
 ## Plugins
@@ -140,7 +139,7 @@ classified per `security/SUPPRESSION-GOVERNANCE.md`:
 | `.roady/` event logs, state, usage, snapshot | False Positive | UUID hashes trip AWS-secret regex |
 | `.nox/`, `findings.json`, `ai.inventory.json` | Acceptable Pattern | nox own state |
 | `**/package-lock.json` | False Positive | Lockfile hashes trigger secret detector; real CVEs surface via VULN-001 |
-| `web/dashboard/dist/`, `web/docs/.vitepress/dist\|cache/` | Acceptable Pattern | Bundled build output re-trips secret detector |
+| `web/dashboard/dist/` | Acceptable Pattern | Bundled build output re-trips secret detector |
 | `integrations/vscode/out/` | Acceptable Pattern | Transpilation output |
 | `internal/redaction/redactor_test.go` | Acceptable Pattern | Intentionally embeds sample AWS keys |
 | `*_test.go` (8 test files, SEC-569 pattern) | Acceptable Pattern | Provider-like placeholder strings, no real credentials |

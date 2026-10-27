@@ -10,7 +10,7 @@ import (
 )
 
 // cliDocsPath is the CLI reference the docs site serves.
-const cliDocsPath = "../../web/docs/guide/cli.md"
+const cliDocsPath = "../../docs/reference/cli.md"
 
 // cobraBuiltins are commands cobra adds itself; they need no section.
 var cobraBuiltins = map[string]bool{"help": true, "completion": true}
@@ -47,15 +47,15 @@ func TestCLIDocsPageCoversEveryCommand(t *testing.T) {
 
 	for _, name := range slices.Sorted(maps.Keys(visible)) {
 		if !documented[name] {
-			t.Errorf("`tokenops %s` is in --help but has no section in web/docs/guide/cli.md", name)
+			t.Errorf("`tokenops %s` is in --help but has no section in docs/reference/cli.md", name)
 		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(documented)) {
 		switch {
 		case hidden[name]:
-			t.Errorf("web/docs/guide/cli.md has a section for `tokenops %s`, which --help hides", name)
+			t.Errorf("docs/reference/cli.md has a section for `tokenops %s`, which --help hides", name)
 		case !visible[name]:
-			t.Errorf("web/docs/guide/cli.md has a section for `tokenops %s`, which is not a command", name)
+			t.Errorf("docs/reference/cli.md has a section for `tokenops %s`, which is not a command", name)
 		}
 	}
 }

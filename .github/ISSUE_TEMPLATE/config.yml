@@ -4,7 +4,7 @@ contact_links:
     url: https://github.com/klarlabs-studio/tokenops/security/policy
     about: Please report security issues privately (see SECURITY.md), not as a public issue.
   - name: Documentation
-    url: https://klarlabs-studio.github.io/tokenops/
+    url: https://team.klarlabs.de/
     about: Quickstart, integration guides, and architecture docs.
   - name: Discussion / question
     url: https://github.com/klarlabs-studio/tokenops/discussions
