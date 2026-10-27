@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.114.0 - 2026-10-27
+
 ### Added
 
 - **copilot:** the Copilot reader finds the Copilot CLI's sign-in, and reads GitHub AI Credits. It looked for a token only in the IDE plugins' `apps.json`/`hosts.json`, so an operator who signed in through the Copilot CLI, which now keeps its OAuth token in the macOS Keychain (service `copilot-cli`, plaintext fallback `~/.copilot/config.json`), was read as not signed in. After the IDE files it now tries the Copilot CLI's own order: `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN` (a classic `ghp_` token, which Copilot refuses, is passed over), the Keychain item read quietly (never a prompt; when macOS would ask, health says so and how to sign in instead; nothing with `keychain.disabled`), then `~/.copilot/config.json`. The GitHub CLI's token is another application's sign-in with scopes beyond Copilot, so `gh auth token` is asked only with `vendor_usage.github_copilot.use_gh_cli: true` (`tokenops vendor-usage enable github-copilot --use-gh-cli`). Since 2026-06-01 monthly Copilot plans bill in GitHub AI Credits: the month's allowance is now a vendor window, "month (AI credits)" (premium requests keep their name on annual plans), with its reset, in `plan headroom`, glance and the API, and the credits used are stored with it. The catalog gains `copilot-pro-plus` ($39, 7,000 credits), `copilot-max` ($100, 20,000) and `copilot-enterprise` ($39 a seat, 3,900); `copilot-individual` is shown as Copilot Pro (1,500).
