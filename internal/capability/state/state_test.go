@@ -77,3 +77,55 @@ func TestDataSourcesSaysWhenHealthIsUnknown(t *testing.T) {
 		t.Errorf("known health reported as unknown: %+v", healthy)
 	}
 }
+
+// A refused reader degrades status with its own next action. Only quiet
+// sources, lost writes or a missing daemon add the daemon remedy: sending
+// an operator to restart a healthy daemon over a revoked key is the advice
+// this replaces.
+func TestComputeStatusFailingSources(t *testing.T) {
+	st := ComputeStatus(StatusInputs{Ready: true, Failing: []string{"cursor-web is refused"}})
+	if st.State != Degraded || len(st.Warnings) != 1 {
+		t.Fatalf("status = %+v", st)
+	}
+	if !contains(st.NextActions, FailingSourceNextAction) || contains(st.NextActions, config.StaleIngestionNextAction) {
+		t.Errorf("next actions %q", st.NextActions)
+	}
+	st = ComputeStatus(StatusInputs{Ready: true, Stale: []string{"quiet"}, Failing: []string{"refused"}})
+	if strings.Join(st.Warnings, "|") != "refused|quiet" {
+		t.Errorf("warnings %q, want the refused source first", st.Warnings)
+	}
+	if !contains(st.NextActions, FailingSourceNextAction) || !contains(st.NextActions, config.StaleIngestionNextAction) {
+		t.Errorf("next actions %q", st.NextActions)
+	}
+}
+
+func contains(xs []string, x string) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}
+
+// The daemon grades its status from the readers' health when it has it,
+// so a reader that polled successfully and found nothing stays quiet even
+// though the event-count check would call it stale.
+func TestStatusOfPrefersReaderHealth(t *testing.T) {
+	d := Deps{
+		Ready: func() bool { return true },
+		Health: func() []freshness.Report {
+			return []freshness.Report{{Tag: "gemini-cli", State: freshness.StateIdle, Severity: freshness.SeverityOK}}
+		},
+		Stale: func(context.Context, time.Time) []config.StaleSource {
+			return []config.StaleSource{{SourceTag: "gemini-cli", WindowHours: 48}}
+		},
+	}
+	if st := StatusOf(context.Background(), d, time.Now()); st.State != Ready || len(st.Warnings) != 0 {
+		t.Errorf("status = %+v, want ready with no warnings", st)
+	}
+	d.Health = nil
+	if st := StatusOf(context.Background(), d, time.Now()); len(st.Warnings) != 1 {
+		t.Errorf("without reader health the count check applies; got %+v", st)
+	}
+}

@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- **status:** `tokenops status` and the `tokenops_status` tool now judge every provider's reader the same way, by its health, not only by event counts. They warned only about the dozen readers turned on in the config, and only when no events arrived, so a reader whose key was refused looked the same as one with nothing new to read, and both were told to restart the daemon. Both surfaces now ask the daemon how each reader is doing:
+  - a reader that is refused says so, with the vendor's reason and how to reconnect it, not a daemon restart;
+  - a reader that stopped says it will not come back on its own;
+  - a quiet reader with data it should have read keeps the "ingestion stale" warning;
+  - a reader that polled successfully and found nothing new says nothing.
+
+  When the daemon cannot answer, the event-count check applies as before. The daemon also stops grading always-on readers that found nothing to read with on this machine (no key, no sign-in, no installed client) as stale: they are not connected, which is no fault. Before, 93 of the 101 readers on one Mac were reported stale for this reason.
 - **status:** Gemini CLI and Pi no longer warn "ingestion stale" when there is nothing to read. Only the Claude Code, Codex and opencode readers checked when their client last wrote anything, so an enabled Gemini CLI or Pi reader with no new events always warned, and the warning told the operator to restart the daemon. On a Mac that last used Gemini CLI months ago, where `~/.gemini/tmp` holds only `logs.json` and no chat recordings, `tokenops status` showed this warning on every run. Both readers now get the same check, using the reader's own file finder: Gemini CLI chat recordings under `chats/`, and Pi and OMP transcripts. A reader warns only when its client wrote data in the check window that was not ingested. A missing data directory still counts as unknown, so that case still warns.
 
 ## 0.114.0 - 2026-10-27
