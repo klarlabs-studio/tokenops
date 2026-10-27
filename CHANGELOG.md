@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.113.0 - 2026-10-27
 
 ### Added
 
@@ -10,6 +10,9 @@
 - **status line, glance, coach:** a warning before the prompt cache goes cold. A prompt sent after the cache expired writes the whole context to it again, and nothing said when that would happen. The status line now shows "cache cold in 1m" when under two minutes are left and "cache cold" once the cache has expired, in place of the hit ratio; the rest of the time it is unchanged. It reads the end of the transcript Claude Code hands it for when the last request went out and which lifetime the session's cache has, timestamps and token counts only. `GET /api/glance`, `GET /api/coach` and the glance MCP tool carry `prompt_cache` for the Claude Code session that ran last: when its last request went out, the lifetime, when it expires, the seconds left and `warm`, `expiring` or `cold`, until an hour after it went cold. The menu bar does not show it yet: it refreshes once a minute and has no place for one session's countdown
 - **work:** `tokenops_prepare_work` shows how widely tasks of the same kind vary. It gave one range, the middle half of past runs ("typically 15–25% of your 5h window"), and runs of the same task can differ by an order of magnitude, so the range hid the tail a plan has to leave room for. `window_share.spread` now carries the median and the 90th percentile of the same measured runs with their count, and the summary reads "typically 15–25% of your 5h window (p50 20%, p90 28%, n=5)". With fewer than five runs the spread says so (`status: too_few_samples`) and names what the answer falls back to (`fallback: interquartile_estimate`, or `none`). It is read only from measured outcomes, never from an agent's own guess. Existing fields are unchanged.
 - **coach, hooks:** the agent sees how much of the plan is left. An agent budgets only what it can see, and nothing put the plan's headroom in front of it. With the route-guard hook installed, the prompt hook now adds one line, "Plan headroom: 5h window 38% left (resets 14:20), week 61% left.", naming only the binding window and another within 25 points of it. It is said at a session's first prompt and again only when a window crosses 50, 25 or 10% left. It travels in `UserPromptSubmit`'s `additionalContext`, after the cached part of the conversation, never in `CLAUDE.md`, `AGENTS.md` or a session-start block, so it never invalidates the prompt cache. On by default; `tokenops coach headroom-note off` (or `coach.headroom_note: false`, or `headroom_note` on the `tokenops_coach` MCP tool) turns it off, as does the inform power being off.
+
+### Fixed
+
 - **hooks:** route-guard's per-session state no longer piles up. `~/.tokenops/route-guard` kept a `session-<id>.json` for every session ever run (and now a `headroom-<id>.json`), and nothing removed them, so the directory held hundreds of files for sessions long over. A file not written for a day is now removed, checked at most once an hour after the guard writes; anything else in the directory is left alone. A session resumed after a day may hear a model case or the headroom note once more.
 
 ## 0.112.1 - 2026-10-26
