@@ -75,6 +75,11 @@ type Source struct {
 	Name string
 	// Tag is the value the event store records in its source column.
 	Tag string
+	// AlwaysOn marks a reader that runs on every machine and reads only
+	// where it finds something to read with: a key, a sign-in, an
+	// installed client. Until it has tried, it is not connected, which is
+	// no fault.
+	AlwaysOn bool
 }
 
 // Origin is what a source's upstream holds, read at its own end: the
@@ -264,7 +269,7 @@ func assessOne(s Source, in Inputs, window time.Duration, now time.Time) Report 
 		}
 	}
 
-	r.State = stateOf(r, origin, hasOrigin, poll, hasPoll, window, now)
+	r.State = stateOf(s, r, origin, hasOrigin, poll, hasPoll, window, now)
 	r.Severity = severityOf(r)
 	return r
 }
@@ -292,7 +297,7 @@ func refusedFor(p Poll, lastEvent time.Time) time.Duration {
 
 // stateOf applies the three facts in the order that makes each one
 // meaningful.
-func stateOf(r Report, origin Origin, hasOrigin bool, poll Poll, hasPoll bool, window time.Duration, now time.Time) State {
+func stateOf(s Source, r Report, origin Origin, hasOrigin bool, poll Poll, hasPoll bool, window time.Duration, now time.Time) State {
 	// A reader that exited outranks everything else, including events
 	// inside the window: those are from before it died.
 	if r.ReaderStopped {
@@ -314,6 +319,15 @@ func stateOf(r Report, origin Origin, hasOrigin bool, poll Poll, hasPoll bool, w
 	// remedy for either of the others.
 	if hasPoll && poll.attempted() && poll.LastError != nil {
 		return StateFailing
+	}
+
+	// An always-on reader that has not tried found nothing to read with
+	// on this machine: not connected, not broken. A ledger reader with no
+	// poller (the status line, Cursor's hook) is quiet whenever its client
+	// is, which is no fault either.
+	tried := hasPoll && poll.attempted()
+	if s.AlwaysOn && !tried && (!hasOrigin || !origin.Known) {
+		return StateIdle
 	}
 
 	// A poll that succeeded inside the window proves the reader works and

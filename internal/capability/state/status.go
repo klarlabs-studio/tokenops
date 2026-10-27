@@ -34,6 +34,9 @@ type StatusInputs struct {
 	Config *config.Config
 	// Stale is one warning per enabled source that has gone quiet.
 	Stale []string
+	// Failing is one warning per source whose reader is refused or has
+	// stopped. Its remedy is a sign-in or a key, not the daemon.
+	Failing []string
 	// Dropped is how many events the store failed to persist.
 	Dropped int64
 	// DaemonMissing, when set, says no ingestion daemon answered.
@@ -79,11 +82,15 @@ func ComputeStatus(in StatusInputs) Status {
 	}
 
 	warnings := append([]string(nil), in.Stale...)
+	// The daemon remedy fits quiet sources, lost writes and a missing
+	// daemon; a refused reader has its own, and they must not share one.
+	daemonRemedy := len(in.Stale) > 0
 	// Lost writes are reported even while everything else looks healthy:
 	// that is exactly when they go unnoticed.
 	if w := events.DropWarning(in.Dropped); w != "" {
 		warnings = append(warnings, w)
 		out.NextActions = append(out.NextActions, events.DropNextAction)
+		daemonRemedy = true
 		degrade()
 	}
 	// A missing daemon is the cause and quiet sources the symptom, so it
@@ -91,10 +98,22 @@ func ComputeStatus(in StatusInputs) Status {
 	if p := in.DaemonMissing; p != nil {
 		warnings = append([]string{p.Warning}, warnings...)
 		out.NextActions = append(out.NextActions, p.NextAction)
+		daemonRemedy = true
 		degrade()
 	}
-	if len(warnings) > 0 {
+	if daemonRemedy {
 		out.NextActions = append(out.NextActions, config.StaleIngestionNextAction)
+		degrade()
+	}
+	// A refused reader is the more specific fault, so it is listed ahead
+	// of quiet sources, behind a missing daemon that explains both.
+	if len(in.Failing) > 0 {
+		at := 0
+		if in.DaemonMissing != nil {
+			at = 1
+		}
+		warnings = append(warnings[:at], append(append([]string(nil), in.Failing...), warnings[at:]...)...)
+		out.NextActions = append(out.NextActions, FailingSourceNextAction)
 		degrade()
 	}
 	// An outdated binary qualifies every other answer, so it leads.

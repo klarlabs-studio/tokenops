@@ -37,7 +37,14 @@ func StatusOf(ctx context.Context, d Deps, now time.Time) Status {
 	if d.Dropped != nil {
 		in.Dropped = d.Dropped()
 	}
-	if d.Stale != nil {
+	// The readers' own health outranks the event-count check: it also
+	// knows which pollers succeeded with nothing new and which are
+	// refused, which a count of zero cannot tell apart.
+	switch {
+	case d.Health != nil:
+		w := SourceWarnings(d.Health())
+		in.Stale, in.Failing = w.Stale, w.Failing
+	case d.Stale != nil:
 		in.Stale = StaleWarnings(d.Stale(ctx, now))
 	}
 	return ComputeStatus(in)

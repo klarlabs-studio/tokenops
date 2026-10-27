@@ -32,10 +32,18 @@ func StaleSources(ctx context.Context, cfg config.Config, counter config.SourceC
 // stamped cursor-hook — so a plausible-looking key can pin nothing at all.
 func LocalWarnings(ctx context.Context, cfg config.Config, counter config.SourceCounter, now time.Time) []string {
 	warnings := StaleWarnings(StaleSources(ctx, cfg, counter, now))
+	return append(warnings, RetentionWarnings(ctx, cfg, counter)...)
+}
+
+// RetentionWarnings is one warning per retention rule that names a source
+// nothing has written. Nil when there is nothing to report or the store
+// cannot be read.
+func RetentionWarnings(ctx context.Context, cfg config.Config, counter config.SourceCounter) []string {
 	counts, err := counter.CountBySource(ctx, time.Time{}, time.Time{})
 	if err != nil {
-		return warnings
+		return nil
 	}
+	var warnings []string
 	for _, key := range cfg.UnmatchedRetentionSources(counts) {
 		warnings = append(warnings, fmt.Sprintf(
 			"retention.keep_by_source[%q] matches no source that has produced events — "+
