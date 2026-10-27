@@ -278,3 +278,18 @@ func TestDerivedLists(t *testing.T) {
 		t.Errorf("openrouter kind %q label %q", d.Kind(), d.Label())
 	}
 }
+
+// A plan read by another source names one that exists, with the reason.
+func TestPlanReadByNamesARegisteredSource(t *testing.T) {
+	for _, p := range Plans() {
+		if p.ReadBy == "" {
+			continue
+		}
+		if _, ok := ForSource(p.ReadBy); !ok {
+			t.Errorf("%s: ReadBy %q is no registered source", p.Name, p.ReadBy)
+		}
+		if p.ReadByWhy == "" {
+			t.Errorf("%s: ReadBy without ReadByWhy", p.Name)
+		}
+	}
+}

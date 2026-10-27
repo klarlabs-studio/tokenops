@@ -505,4 +505,10 @@ type Plan struct {
 	// in Codex logs are listed ("pro" is what the $200 plan reported before
 	// the cheaper tiers existed); a tier never seen reporting one has none.
 	VendorPlanTypes []string
+	// ReadBy, when set, is the source tag that reads this plan's usage
+	// because the provider's own client no longer serves the plan, and
+	// ReadByWhy says so in a sentence. Status points an operator bound to
+	// the plan there instead of at a reader that has nothing to read.
+	ReadBy    string
+	ReadByWhy string
 }
