@@ -2,12 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- **brand, menu bar:** one set of design tokens for every TokenOps surface. The menu bar, the docs site and the team app each carried their own copy of the lime-and-ink palette, and the copies had drifted: the dark lime used for links and text was `#3F6B0B` in the menu bar and `#4D7C0F` on the docs site, which is 4.99:1 on white and so just short of the 5:1 the brand promises; the quietest text was `#70757F`, 4.24:1 on the menu bar panel's grey fills. `assets/brand/tokens.json` now holds the colours (light and dark), type scale and font stacks, spacing, radii, shadows and motion, and `go generate ./internal/tools/gen/designtokens` writes them as CSS custom properties (`assets/brand/tokens.css`, `--tok-` prefixed, following the system appearance or pinned with `data-theme`) and as the token table with measured contrast ratios in `assets/brand/README.md`. A test fails when a generated file is stale or a colour falls below the contrast it names. The menu bar panel reads its colours, fonts, radii, shadows and timings from the tokens; other surfaces copy `tokens.css` as it is. What changes on screen: the faintest text is `#686D77` (5.19:1 on white), hairlines are `#E4E6EA` (`#262C3C` on ink), quiet fills `#F7F8F9` (`#1B2030`), and the bar and select border on the selected lime tab are ink instead of white, which the brand never puts on lime. `#4D7C0F` stays the logo's ring on light grounds and is never text.
+
 ### Changed
 
 - **docs:** the documentation site moves to https://team.klarlabs.de/, served from the root of the team service. It is no longer built from this repository: `web/docs` and the GitHub Pages workflow (`pages.yml`) are removed, so the site stops deploying from here. GitHub Pages stays on until the new site is live; the maintainer turns it off afterwards, and old `klarlabs-studio.github.io/tokenops/` links need a redirect then. The CLI, configuration and API reference pages stay in the repository under `docs/reference/`, where the generated provider tables and the tests that check the CLI and API docs read them. Homepage links in the README, the issue template, the goreleaser cask, the npm and Python packages, and the systemd unit point at team.klarlabs.de.
 
 ### Fixed
 
+- **plans:** plan advice no longer says "upgrade" to the plan you already have. On the top tier (Max 20x) with a lockout and nothing larger to move to, the replay recommended the same plan with metered overflow, which costs the same when no window went over its cap, and printed `upgrade` with `$0.00` saved. `tokenops team preview` and the team upload showed it as `upgrade`, recommended `claude-max-20x`. An upgrade now only goes to a larger allowance; with none, the verdict is `stay` and the summary says the plan is the top tier and the lockouts are the price of its allowance. The team wire verdicts are unchanged.
 - **daemon:** `tokenops daemon install`, which the Homebrew upgrade runs, restarts the daemon once when it does not answer after starting. On an upgrade to 0.113.1 launchd refused the first start of the new binary (exit reason `OS_REASON_CODESIGNING`, "spawn failed") and the daemon stayed down until restarted by hand, while the next start of the same file worked. The upgrade hook cannot fail the upgrade, so its error went unseen. It now waits five seconds, restarts the unit and checks again, and reports an error only when the retry does not come up either.
 
 ## 0.113.1 - 2026-10-27

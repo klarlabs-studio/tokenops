@@ -616,10 +616,48 @@ func recommend(os []Option, cur *Option, perMonth float64) *Recommendation {
 		r.Verdict, r.Kind, r.Plan, r.Display, r.SavingsUSD, r.Material = VerdictStay, cur.Kind, cur.Plan, cur.Display, 0, false
 		best = cur
 	default:
-		r.Verdict = VerdictUpgrade
+		// The plan in force runs out and nothing cheaper fits. Upgrade
+		// only to a larger allowance; with none to move to, stay and say so.
+		up := cheapestHigherAcceptable(os, cur, perMonth)
+		if up == nil {
+			r.Verdict, r.Kind, r.Plan, r.Display, r.SavingsUSD, r.Material = VerdictStay, cur.Kind, cur.Plan, cur.Display, 0, false
+			r.Summary = fmt.Sprintf("%s ran out %d time(s) (about %s blocked) and is the top tier: no larger plan to move to, "+
+				"so it stays; the lockouts are the price of this tier's allowance.",
+				cur.Display, cur.Lockouts, hoursWords(cur.BlockedMinutes))
+			return r
+		}
+		best = up
+		r.Verdict, r.Kind, r.Plan, r.Display = VerdictUpgrade, up.Kind, up.Plan, up.Display
+		r.SavingsUSD, r.Material = round2(*cur.MonthlyUSD-*up.MonthlyUSD), false
 	}
 	r.Summary = summarize(r, best, cur)
 	return r
+}
+
+// cheapestHigherAcceptable is the cheapest priced option that runs out
+// rarely enough and sits on a tier with a larger allowance than cur's, or
+// nil when there is none. Overflow options carry no lockouts of their own,
+// so they qualify on the tier they overflow.
+func cheapestHigherAcceptable(os []Option, cur *Option, perMonth float64) *Option {
+	curFactor := planFactor(cur.Plan)
+	var best *Option
+	for i := range os {
+		o := &os[i]
+		if o.MonthlyUSD == nil || o.Kind == OptionAPI || planFactor(o.Plan) <= curFactor || !acceptable(*o, perMonth) {
+			continue
+		}
+		if best == nil || *o.MonthlyUSD < *best.MonthlyUSD {
+			best = o
+		}
+	}
+	return best
+}
+
+// planFactor is a plan's allowance as a multiple of its family's base; zero
+// when the plan has none.
+func planFactor(name string) float64 {
+	_, f, _ := TierOf(name)
+	return f
 }
 
 func summarize(r *Recommendation, best, cur *Option) string {
