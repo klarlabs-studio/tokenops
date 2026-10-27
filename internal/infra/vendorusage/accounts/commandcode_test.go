@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,5 +58,29 @@ func TestCommandCodeRefusalsAndShape(t *testing.T) {
 	odd := newWebServer(t, "", 0, map[string]string{"/internal/billing/credits": `{"credits":{}}`})
 	if _, err := (CommandCode{BaseURL: odd.URL}).Read(context.Background(), ccCookie); err == nil {
 		t.Error("an answer without credits was read")
+	}
+}
+
+// An API key is sent as a Bearer token to the CLI's /alpha routes, which
+// answer with the /internal shapes, and reads the same windows.
+func TestCommandCodeAPIKeyReadsAlphaRoutes(t *testing.T) {
+	routes := map[string]string{}
+	for path, body := range routesOf(t, "commandcode") {
+		routes[strings.Replace(path, "/internal", "/alpha", 1)] = body
+	}
+	srv := serveRoutes(t, "Authorization", "Bearer ok-key", routes)
+	got, err := CommandCode{BaseURL: srv.URL}.Read(context.Background(), "ok-key")
+	if err != nil || len(got.Windows) != 3 || !got.HasBalance || got.BalanceUSD != 2 {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	if w := got.Windows[2]; w.Name != "month" || !approx(w.UsedPct, 15) {
+		t.Errorf("month %+v", w)
+	}
+}
+
+func TestCommandCodeRefusedKeyAndCookieIsAuthError(t *testing.T) {
+	srv := serveRoutes(t, "Authorization", "Bearer ok-key", map[string]string{})
+	if _, err := (CommandCode{BaseURL: srv.URL}).Read(context.Background(), "wrong-key"); !errors.Is(err, usage.ErrAuth) {
+		t.Errorf("refused = %v", err)
 	}
 }

@@ -23,6 +23,12 @@ func readerCommandCode() usage.Reader { return CommandCode{} }
 // from the credits call, the grant sized from the plan when the credits
 // call omits it and the period end from the subscription call
 // (best-effort); purchased credits are the dollar balance.
+//
+// It also reads with an API key (COMMAND_CODE_API_KEY, or one set in
+// config), sent as a Bearer token to the CLI's /alpha routes, which answer
+// with the same shapes as the /internal routes the session reads. A bare
+// value is tried as a key first and, when refused, as the session cookie's
+// value, as it always was; a Cookie header is always a session.
 type CommandCode struct {
 	BaseURL string
 	HTTP    *http.Client
@@ -40,23 +46,39 @@ var commandCodePlans = map[string]float64{
 	"individual-pro-v1": 80, "individual-max": 150, "individual-ultra": 300,
 }
 
+// commandCodeSessionCookie is the cookie a bare session token is sent as.
+const commandCodeSessionCookie = "__Secure-commandcode_prod_.session_token="
+
 func (c CommandCode) Read(ctx context.Context, key string) (usage.Reading, error) {
-	cookie := strings.TrimSpace(key)
-	if !isSession(cookie) {
-		// A bare token is the production session cookie's value.
-		cookie = "__Secure-commandcode_prod_.session_token=" + cookie
+	key = strings.TrimSpace(key)
+	if isSession(key) {
+		return c.read(ctx, "/internal", http.Header{"Cookie": {key}})
 	}
+	r, err := c.read(ctx, "/alpha", http.Header{"Authorization": {"Bearer " + key}})
+	if errors.Is(err, usage.ErrAuth) {
+		return c.read(ctx, "/internal", http.Header{"Cookie": {commandCodeSessionCookie + key}})
+	}
+	return r, err
+}
+
+// read reads the billing routes under prefix, sending auth (a Cookie or an
+// Authorization header).
+func (c CommandCode) read(ctx context.Context, prefix string, auth http.Header) (usage.Reading, error) {
 	root := base(c.BaseURL, "https://api.commandcode.ai")
 	get := func(path string, out any) error {
-		body, err := doWeb(ctx, c.HTTP, http.MethodGet, root+path, http.Header{
-			"Cookie": {cookie}, "Accept": {"application/json, text/plain, */*"}, "Accept-Language": {"en-US,en;q=0.9"},
+		header := http.Header{
+			"Accept": {"application/json, text/plain, */*"}, "Accept-Language": {"en-US,en;q=0.9"},
 			"Origin": {"https://commandcode.ai"}, "Referer": {"https://commandcode.ai/"},
-		}, nil)
+		}
+		for name, values := range auth {
+			header[name] = values
+		}
+		body, err := doWeb(ctx, c.HTTP, http.MethodGet, root+prefix+path, header, nil)
 		if err != nil {
 			return err
 		}
 		if err := json.Unmarshal(body, out); err != nil {
-			return fmt.Errorf("accounts: GET %s: %w", hostPath(root+path), err)
+			return fmt.Errorf("accounts: GET %s: %w", hostPath(root+prefix+path), err)
 		}
 		return nil
 	}
@@ -78,7 +100,7 @@ func (c CommandCode) Read(ctx context.Context, key string) (usage.Reading, error
 		} `json:"credits"`
 		WindowLimits *limits `json:"windowLimits"`
 	}
-	if err := get("/internal/billing/credits", &credits); err != nil {
+	if err := get("/billing/credits", &credits); err != nil {
 		return usage.Reading{}, err
 	}
 	if credits.Credits == nil || !credits.Credits.MonthlyCredits.ok {
@@ -113,7 +135,7 @@ func (c CommandCode) Read(ctx context.Context, key string) (usage.Reading, error
 	}
 	granted := cr.MonthlyCreditsGranted.v
 	var periodEnd time.Time
-	if get("/internal/billing/subscriptions", &sub) == nil && sub.Success != nil && *sub.Success && sub.Data != nil {
+	if get("/billing/subscriptions", &sub) == nil && sub.Success != nil && *sub.Success && sub.Data != nil {
 		periodEnd = sub.Data.CurrentPeriodEnd.t
 		if !cr.MonthlyCreditsGranted.ok || granted <= 0 {
 			granted = commandCodePlans[strings.ToLower(sub.Data.PlanID)]
