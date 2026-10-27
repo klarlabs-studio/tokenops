@@ -124,6 +124,7 @@ func (p *Poller) Scan(ctx context.Context) {
 			continue
 		}
 		health.Succeeded(now)
+		health.Noted(reading.Notice, now)
 		if reading.Empty() {
 			continue
 		}

@@ -123,12 +123,14 @@ func isJetBrainsIDE(dir string) bool {
 	return false
 }
 
-// jetbrainsQuota is the monthly credit state: used of max, refilled at
-// next.
+// jetbrainsQuota is the credit state: used of max on the monthly tariff,
+// refilled at next, and purchased top-up credits left when reported.
 type jetbrainsQuota struct {
 	used, max float64
 	next      time.Time
 	period    time.Duration
+	topUp     float64
+	hasTopUp  bool
 }
 
 func (j JetBrains) Read(_ context.Context, _ string) (usage.Reading, error) {
@@ -144,24 +146,49 @@ func (j JetBrains) Read(_ context.Context, _ string) (usage.Reading, error) {
 	if err != nil {
 		return usage.Reading{}, err
 	}
-	if logged, at, ok := j.loggedQuota(ide); ok && at.After(ide.modified) {
-		q = logged
+	var notice string
+	logged := j.loggedQuota(ide)
+	switch {
+	case logged.ok && logged.at.After(ide.modified):
+		q = logged.quota
+		if logged.problem != "" {
+			notice = "using quota from idea.log; " + logged.problem
+		}
+	case logged.problem != "":
+		notice = fmt.Sprintf("using stale quota from %s, last written %s; %s",
+			ide.quota, ide.modified.Format("2006-01-02"), logged.problem)
+	}
+	r := jetbrainsReading(q)
+	r.Notice = notice
+	return r, nil
+}
+
+// jetbrainsReading is the account reading for a quota. A quota with no
+// maximum is an account with nothing to measure, not an error.
+func jetbrainsReading(q jetbrainsQuota) usage.Reading {
+	r := usage.Reading{Scope: "account", Subscription: true}
+	if q.hasTopUp {
+		r.Credits, r.CreditsUnit, r.HasCredits = q.topUp, "credits", true
 	}
 	if q.max <= 0 {
-		return usage.Reading{Scope: "account", Subscription: true}, nil
+		return r
 	}
 	period := q.period
 	if period <= 0 {
 		period = 30 * 24 * time.Hour
 	}
-	return usage.Reading{Scope: "account", Subscription: true, Windows: []usage.Window{{
+	r.Windows = []usage.Window{{
 		Name: windowName(period), UsedPct: math.Max(0, math.Min(pct(q.used, q.max), 100)), Duration: period, ResetsAt: q.next,
-	}}}, nil
+	}}
+	return r
 }
 
 // errNoQuotaInfo is a quota file without the quota: AI Assistant has not
 // fetched one yet, or the format changed.
 var errNoQuotaInfo = errors.New("accounts: the JetBrains quota file holds no quota")
+
+// errQuotaShape is a quota whose figures this version cannot find.
+var errQuotaShape = errors.New("accounts: JetBrains quotaInfo holds no quota figures in a shape this version reads")
 
 // parseJetBrainsXML reads quotaInfo and nextRefill from the quota file.
 // Their values are JSON, every number a string.
@@ -203,6 +230,7 @@ func parseJetBrainsXML(b []byte) (jetbrainsQuota, error) {
 	var qi struct {
 		amounts
 		TariffQuota *amounts `json:"tariffQuota"`
+		TopUpQuota  *amounts `json:"topUpQuota"`
 	}
 	if err := json.Unmarshal([]byte(info), &qi); err != nil {
 		return jetbrainsQuota{}, fmt.Errorf("accounts: JetBrains quotaInfo in a shape this version cannot read")
@@ -211,10 +239,16 @@ func parseJetBrainsXML(b []byte) (jetbrainsQuota, error) {
 	// The monthly tariff is what the IDE shows as "monthly credits left";
 	// top-ups only inflate the total. Monthly and total figures are never
 	// mixed.
-	if t := qi.TariffQuota; t != nil && finite(t.Current) && finite(t.Maximum) {
+	switch t := qi.TariffQuota; {
+	case t != nil && finite(t.Current) && finite(t.Maximum):
 		q.used, q.max = num(t.Current), num(t.Maximum)
-	} else {
+	case finite(qi.Current) && finite(qi.Maximum):
 		q.used, q.max = num(qi.Current), num(qi.Maximum)
+	default:
+		return jetbrainsQuota{}, errQuotaShape
+	}
+	if t := qi.TopUpQuota; t != nil && finite(t.Available) {
+		q.topUp, q.hasTopUp = num(t.Available), true
 	}
 	var nr struct {
 		Type     string  `json:"type"`
@@ -273,49 +307,202 @@ func isoDuration(s string) time.Duration {
 // jetbrainsLogTail is how much of idea.log is read, from its end.
 const jetbrainsLogTail = 4 << 20
 
-var (
-	jetbrainsLogState  = lazyRegexp(`QuotaManager2Impl - New quota state is: Available\(current=[0-9.]+, maximum=[0-9.]+, until=[^,]*, tariffQuota=QuotaDetails\(current=([0-9.]+), maximum=([0-9.]+), available=[0-9.]+\)`)
-	jetbrainsLogRefill = lazyRegexp(`QuotaManager2Impl - New quota refill state is: Known\(next=([^,]+), tariff=QuotaRefillInfoTariff\(amount=[0-9.]+, duration=([^)]+)\)\)`)
+const (
+	jetbrainsQuotaMarker   = "QuotaManager2Impl - New quota state is: "
+	jetbrainsRefillMarker  = "QuotaManager2Impl - New quota refill state is: "
+	jetbrainsJunieMarker   = "AiaActivationTransmitter - Received message from junie: quota_update:"
+	jetbrainsDisabledState = "Error(exception=com.intellij.ml.llm.core.AIAssistantForbiddenException"
 )
 
-// loggedQuota is the newest quota state ide's own idea.log records, and
-// when it was logged. Only that installation's log is read: another IDE
-// may be signed in to another account. A newest state that does not parse
-// is not replaced with an older one.
-func (j JetBrains) loggedQuota(ide jetbrainsIDE) (jetbrainsQuota, time.Time, bool) {
+// Numbers are matched but only the amounts are captured; license, quota and
+// user identifiers are matched by shape and never kept.
+const jbaiNumber = `([0-9.]+)`
+
+var (
+	// The layout before AI Assistant 262.x.
+	jetbrainsLegacyState = lazyRegexp(`Available\(current=[0-9.]+, maximum=[0-9.]+, until=[^,]*, ` +
+		`tariffQuota=QuotaDetails\(current=` + jbaiNumber + `, maximum=` + jbaiNumber + `, available=[0-9.]+\)` +
+		`(?:, topUpQuota=QuotaDetails\(current=[0-9.]+, maximum=[0-9.]+, available=` + jbaiNumber + `\))?`)
+	// The JbaiQuota layout AI Assistant 262.x logs.
+	jetbrainsJbaiState = lazyRegexp(`Available\(quota=JbaiQuota\(license=[^,()]*, current=[0-9.]+, maximum=[0-9.]+, ` +
+		`quotaID=JbaiQuotaId\([^()]*\), until=[^,]*, ` +
+		`tariffQuota=Details\(current=` + jbaiNumber + `, maximum=` + jbaiNumber + `, available=[0-9.]+\)` +
+		`(?:, topUpQuota=Details\(current=[0-9.]+, maximum=[0-9.]+, available=` + jbaiNumber + `\))?`)
+	jetbrainsLegacyRefill = lazyRegexp(`Known\(next=([^,]+), tariff=QuotaRefillInfoTariff\(amount=[0-9.]+, duration=([^)]+)\)\)`)
+	jetbrainsJbaiRefill   = lazyRegexp(`Known\(refill=JbaiQuotaRefill\(tariff=JbaiQuotaTariff\(amount=[0-9.]+, period=([^,)]+)\), ` +
+		`next=([^,]+), last=[^)]*\)\)`)
+)
+
+// jetbrainsLogQuota is the newest quota state idea.log holds for this
+// installation. ok is set when that state was read; problem says what
+// could not be, so health can name it.
+type jetbrainsLogQuota struct {
+	quota   jetbrainsQuota
+	at      time.Time
+	ok      bool
+	problem string
+}
+
+// loggedQuota reads the newest quota record of ide's own idea.log. Only that
+// installation's log is read: another IDE may be signed in to another
+// account. A newest record in an unrecognised layout is not replaced with an
+// older one; the caller falls back to the quota file and says so.
+func (j JetBrains) loggedQuota(ide jetbrainsIDE) jetbrainsLogQuota {
 	p := filepath.Join(j.home(), "Library", "Logs", ide.vendor, ide.dir, "idea.log")
 	if j.goos() != "darwin" {
 		p = filepath.Join(j.home(), ".cache", ide.vendor, ide.dir, "log", "idea.log")
 	}
 	lines, ok := tailLines(p, jetbrainsLogTail)
 	if !ok {
-		return jetbrainsQuota{}, time.Time{}, false
+		return jetbrainsLogQuota{}
 	}
-	var q jetbrainsQuota
-	var at time.Time
-	haveState, haveRefill := false, false
-	for i := len(lines) - 1; i >= 0 && (!haveState || !haveRefill); i-- {
+	var out jetbrainsLogQuota
+	haveQuota, haveRefill := false, false
+	for i := len(lines) - 1; i >= 0 && (!haveQuota || !haveRefill); i-- {
 		line := lines[i]
 		switch {
-		case !haveState && strings.Contains(line, "New quota state is:"):
-			haveState = true
-			m := jetbrainsLogState().FindStringSubmatch(line)
-			if m == nil {
-				return jetbrainsQuota{}, time.Time{}, false
+		case !haveQuota && isLogQuotaLine(line):
+			haveQuota = true
+			q, at, parsed := parseLogQuota(line)
+			if !parsed {
+				return jetbrainsLogQuota{problem: "the newest quota record in idea.log is in an unrecognised layout"}
 			}
-			q.used, _ = strconv.ParseFloat(m[1], 64)
-			q.max, _ = strconv.ParseFloat(m[2], 64)
-			if at = logTime(line); at.IsZero() || q.max <= 0 {
-				return jetbrainsQuota{}, time.Time{}, false
-			}
-		case !haveRefill && strings.Contains(line, "New quota refill state is:"):
+			// The refill is read from its own line, newer or older than the
+			// state; keep it when the state replaces the quota.
+			q.next, q.period = out.quota.next, out.quota.period
+			out.quota, out.at, out.ok = q, at, true
+		case !haveRefill && strings.Contains(line, jetbrainsRefillMarker):
 			haveRefill = true
-			if m := jetbrainsLogRefill().FindStringSubmatch(line); m != nil {
-				q.next, q.period = parseTime(m[1]), isoDuration(m[2])
+			if next, period, parsed := parseLogRefill(line); parsed {
+				out.quota.next, out.quota.period = next, period
+			} else {
+				out.problem = "the newest refill record in idea.log is in an unrecognised layout, so the reset time is not shown"
 			}
 		}
 	}
-	return q, at, haveState
+	return out
+}
+
+// isLogQuotaLine is a line carrying the account's quota. The disabled
+// assistant error says nothing about the account, so it is skipped: Junie's
+// record before it still holds.
+func isLogQuotaLine(line string) bool {
+	if strings.Contains(line, jetbrainsJunieMarker) {
+		return true
+	}
+	return strings.Contains(line, jetbrainsQuotaMarker) && !strings.Contains(line, jetbrainsDisabledState)
+}
+
+// parseLogQuota reads one quota record and when it was logged. A record
+// with no maximum is not a quota this reader can show.
+func parseLogQuota(line string) (jetbrainsQuota, time.Time, bool) {
+	at := logTime(line)
+	if at.IsZero() {
+		return jetbrainsQuota{}, time.Time{}, false
+	}
+	var q jetbrainsQuota
+	var ok bool
+	if i := strings.Index(line, jetbrainsJunieMarker); i >= 0 {
+		q, ok = parseJunieQuota(line[i+len(jetbrainsJunieMarker):])
+	} else {
+		q, ok = parseLogState(line)
+	}
+	return q, at, ok && q.max > 0
+}
+
+// parseLogState reads an Available state in either the legacy or the
+// JbaiQuota layout.
+func parseLogState(line string) (jetbrainsQuota, bool) {
+	m := jetbrainsLegacyState().FindStringSubmatch(line)
+	if m == nil {
+		m = jetbrainsJbaiState().FindStringSubmatch(line)
+	}
+	if m == nil {
+		return jetbrainsQuota{}, false
+	}
+	used, okU := parseAmount(m[1])
+	maxi, okM := parseAmount(m[2])
+	if !okU || !okM {
+		return jetbrainsQuota{}, false
+	}
+	q := jetbrainsQuota{used: used, max: maxi}
+	if m[3] != "" {
+		topUp, okT := parseAmount(m[3])
+		if !okT {
+			return jetbrainsQuota{}, false
+		}
+		q.topUp, q.hasTopUp = topUp, true
+	}
+	return q, true
+}
+
+// parseLogRefill reads a refill record in either layout: next refill and
+// the period it refills over.
+func parseLogRefill(line string) (time.Time, time.Duration, bool) {
+	var next, period string
+	if m := jetbrainsLegacyRefill().FindStringSubmatch(line); m != nil {
+		next, period = m[1], m[2]
+	} else if m := jetbrainsJbaiRefill().FindStringSubmatch(line); m != nil {
+		period, next = m[1], m[2]
+	} else {
+		return time.Time{}, 0, false
+	}
+	t, d := parseTime(next), isoDuration(period)
+	return t, d, !t.IsZero() && d > 0
+}
+
+// junieAmount is one of Junie's amounts, {"amount": "12.5"} in the log.
+type junieAmount struct {
+	Amount json.Number `json:"amount"`
+}
+
+// junieDetails is a quota split the way Junie writes it.
+type junieDetails struct {
+	Current   *junieAmount `json:"current"`
+	Maximum   *junieAmount `json:"maximum"`
+	Available *junieAmount `json:"available"`
+}
+
+// parseJunieQuota reads the JSON of a Junie quota_update record. Only the
+// quota amounts are read: the license and expiry are never kept.
+func parseJunieQuota(payload string) (jetbrainsQuota, bool) {
+	var u struct {
+		TariffQuota *junieDetails `json:"tariffQuota"`
+		TopUpQuota  *junieDetails `json:"topUpQuota"`
+	}
+	if err := json.NewDecoder(strings.NewReader(payload)).Decode(&u); err != nil || u.TariffQuota == nil {
+		return jetbrainsQuota{}, false
+	}
+	t := u.TariffQuota
+	used, okU := junieValue(t.Current)
+	maxi, okM := junieValue(t.Maximum)
+	_, okA := junieValue(t.Available)
+	if !okU || !okM || !okA {
+		return jetbrainsQuota{}, false
+	}
+	q := jetbrainsQuota{used: used, max: maxi}
+	if u.TopUpQuota != nil {
+		if topUp, ok := junieValue(u.TopUpQuota.Available); ok {
+			q.topUp, q.hasTopUp = topUp, true
+		}
+	}
+	return q, true
+}
+
+func junieValue(a *junieAmount) (float64, bool) {
+	if a == nil {
+		return 0, false
+	}
+	return parseAmount(string(a.Amount))
+}
+
+// parseAmount reads a finite, non-negative amount.
+func parseAmount(s string) (float64, bool) {
+	v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil || math.IsInf(v, 0) || math.IsNaN(v) || v < 0 {
+		return 0, false
+	}
+	return v, true
 }
 
 // logTime is an idea.log line's local timestamp.

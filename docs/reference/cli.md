@@ -1214,6 +1214,7 @@ vendor's windows, busiest first:
 | Muse (muse.ai) | `POST muse.ai/` (the page's fetchSubscriptionAction server action) | the weekly token allowance used |
 | Notion AI | `POST /api/v3/getCreditRateLimitStatus` | the Notion AI allowance used, rolling and this billing period (Business and Enterprise workspaces) |
 | Nous Portal (Hermes Agent) | `GET /api/oauth/account` | the monthly credit grant used this period and the top-up credit left |
+| Ollama Cloud | `GET /api/balance` (ollama.com) | Monthly included allowance used, its reset, and purchased credit balance |
 | Ollama Cloud | `GET ollama.com/settings` (the page; there is no usage API) | Ollama Cloud's monthly usage (or the older session and weekly windows) |
 | opencode Go | `GET /zen/go/v1/usage` | the 5-hour, weekly and monthly windows |
 | Perplexity | `GET /rest/billing/credits` | the plan's monthly credit grant used, and the credit balance |
@@ -1292,7 +1293,7 @@ use read its own spend.
   ```
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `COMMAND_CODE_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FACTORY_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `GROK_OAUTH_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `HYPER_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `LONGCAT_MANUAL_COOKIE`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAKANA_COOKIE`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`, `ZENMUX_MANAGEMENT_API_KEY`.
+The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `COMMAND_CODE_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FACTORY_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `GROK_OAUTH_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `HYPER_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `LONGCAT_MANUAL_COOKIE`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OLLAMA_API_KEY`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAKANA_COOKIE`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`, `ZENMUX_MANAGEMENT_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -1375,7 +1376,8 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Neuralwatt | `neuralwatt-account` | prepaid USD credit left, and the subscription's kWh allowance used this period | API key | CodexBar's source, the vendor's docs and fixtures |
 | Notion AI | `notion-account` | the Notion AI allowance used, rolling and this billing period (Business and Enterprise workspaces) | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Nous Portal | `nous-account` | the monthly credit grant used this period and the top-up credit left | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
-| Ollama | `ollama-web` | Ollama Cloud's monthly usage (or the older session and weekly windows) | browser session | CodexBar's source, the vendor's docs and fixtures |
+| Ollama | `ollama-api` | Monthly included allowance used, its reset, and purchased credit balance | API key | CodexBar's source, the vendor's docs and fixtures |
+|  | `ollama-web` | Ollama Cloud's monthly usage (or the older session and weekly windows) | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Codex | `codex-app-server` | the 5-hour and weekly windows `codex app-server` reports, Codex signing its own request | the vendor's CLI | against a real account |
 |  | `codex-jsonl` | per-turn tokens and the rate_limits in Codex's rollouts | local files | against a real account |
 |  | `openai-admin` | the API organisation's spend this month (Administration API) | admin key | CodexBar's source, the vendor's docs and fixtures |
