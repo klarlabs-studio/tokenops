@@ -290,7 +290,7 @@ func renderDetection(w fmtWriter, ds []detect.Detection) {
 		case "openai":
 			fmt.Fprintln(w, "    run: tokenops plan set openai gpt-plus  # or gpt-pro-5x | gpt-pro-20x | gpt-pro-500")
 		case "cursor":
-			fmt.Fprintln(w, "    run: tokenops plan set cursor cursor-pro  # or cursor-business")
+			fmt.Fprintln(w, "    run: tokenops plan set cursor cursor-premium  # or cursor-plus | cursor-super | cursor-ultra | cursor-teams; legacy: cursor-pro | cursor-business")
 		case "gemini":
 			fmt.Fprintln(w, "    run: (no plan-based gemini catalog entry today; use the proxy)")
 		}

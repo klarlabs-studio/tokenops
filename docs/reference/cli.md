@@ -1332,7 +1332,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | CodeRabbit | `coderabbit-cli` | reviews this billing period, a count with no allowance (no percentage) | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 | Command Code | `commandcode-web` | 5-hour and weekly limits, the monthly credit grant used, and purchased credits | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Cursor | `cursor-hook` | per-turn consumption Cursor's stop hook records | local files | public docs and fixtures |
-|  | `cursor-web` | requests used against the month's allowance, from cursor.com | browser session | the vendor's client source and fixtures |
+|  | `cursor-web` | the weekly pool, or the billing cycle's included usage (legacy: requests), from cursor.com | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Deepgram | `deepgram-account` | prepaid USD balance left, across the key's projects | API key | CodexBar's source, the vendor's docs and fixtures |
 | DeepInfra | `deepinfra-account` | spend since the last invoice, the limit, prepaid credit | API key | public docs and fixtures |
 | DeepSeek | `deepseek-account` | prepaid USD balance left | API key | public docs and fixtures |

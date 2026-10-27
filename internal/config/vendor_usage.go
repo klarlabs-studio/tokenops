@@ -126,7 +126,7 @@ type GitHubCopilotUsageConfig struct {
 	Interval   time.Duration `yaml:"interval"`
 }
 
-// CursorUsageConfig wires the cursor.com/api/usage poller. Cookie +
+// CursorUsageConfig wires the cursor.com usage poller. Cookie +
 // UserID must be set (extract from the Cursor IDE devtools, or via a
 // future state.vscdb auto-discovery). Empty means the poller stays
 // idle. Interval defaults to 2 minutes.

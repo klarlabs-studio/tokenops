@@ -47,6 +47,7 @@ func TestCatalogCoversPublishedPlans(t *testing.T) {
 		"gpt-plus", "gpt-pro", "gpt-pro-5x", "gpt-pro-20x", "gpt-pro-500", "gpt-business",
 		"copilot-individual", "copilot-business",
 		"cursor-pro", "cursor-business",
+		"cursor-plus", "cursor-premium", "cursor-super", "cursor-ultra", "cursor-teams",
 	}
 	for _, w := range want {
 		if _, ok := Lookup(w); !ok {
