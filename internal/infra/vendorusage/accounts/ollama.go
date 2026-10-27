@@ -47,7 +47,8 @@ var (
 func (o Ollama) Read(ctx context.Context, cookie string) (usage.Reading, error) {
 	cookie = cookieHeader(cookie)
 	if !isSession(cookie) {
-		return usage.Reading{}, fmt.Errorf("%w (Ollama Cloud is read with ollama.com's session cookie)", usage.ErrAuth)
+		// An API key is read by OllamaAPI; this reader needs the session.
+		return usage.Reading{}, usage.ErrSkip
 	}
 	root := base(o.BaseURL, "https://ollama.com")
 	page, err := doWeb(ctx, o.HTTP, http.MethodGet, root+"/settings", http.Header{
