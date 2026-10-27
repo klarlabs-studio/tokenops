@@ -82,6 +82,38 @@ func TestCardNamesAnAccountWideSpend(t *testing.T) {
 	}
 }
 
+// An account-wide figure standing in for the operator's own says why, in
+// the card's footer, with the fix; it is never a silent fallback.
+func TestCardSaysWhyTheSpendIsAccountWide(t *testing.T) {
+	var g headroom.Glance
+	g.Headroom.Reports = []plans.HeadroomReport{{Provider: "fireworks", Display: "Pay as you go",
+		SpendUSD: 900, SpendLimitUSD: 4000, SpendPct: 22.5, SpendScope: "account",
+		SpendScopeLabel:  "account acme-test, all members",
+		SpendScopeReason: "your user wasn't found — set it with `tokenops vendor-usage enable fireworks --user-id <id>`"}}
+	out := Render(g, Options{Width: 80})
+	flat := strings.Join(strings.Fields(strings.NewReplacer("│", " ").Replace(out)), " ")
+	if !strings.Contains(flat, "account-wide: your user wasn't found — set it with `tokenops vendor-usage enable fireworks --user-id <id>`") {
+		t.Errorf("card lacks the reason:\n%s", out)
+	}
+}
+
+// A member blocked by their cap is shown as blocked, with the local date
+// it ends, as a used-up window shows it is used up.
+func TestCardShowsTheBlock(t *testing.T) {
+	until := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	var g headroom.Glance
+	g.Headroom.Reports = []plans.HeadroomReport{{Provider: "fireworks", Display: "Pay as you go",
+		SpendUSD: 105.34, SpendLimitUSD: 100, SpendPct: 105.34, SpendScope: "user",
+		LimitReached: true, BlockedUntil: &until, OverageRisk: "high"}}
+	out := Render(g, Options{Width: 80})
+	if !strings.Contains(out, "Blocked until "+until.Local().Format("2 Jan")) {
+		t.Errorf("card lacks the block:\n%s", out)
+	}
+	if strings.Contains(out, "account-wide") {
+		t.Errorf("the operator's own figure is called account-wide:\n%s", out)
+	}
+}
+
 // A card reads as CodexBar's: source and plan, then each window's share,
 // bar, reset and pace, then the money.
 func TestCardContents(t *testing.T) {

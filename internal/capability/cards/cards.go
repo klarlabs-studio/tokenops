@@ -282,6 +282,9 @@ type metric struct {
 	// stale is how old the reading is when its source has stopped; zero
 	// when it is current.
 	stale time.Duration
+	// blocked words a spend limit that blocks requests ("Blocked until 1
+	// Nov"); empty when it does not.
+	blocked string
 }
 
 // detail is a "Label: value" line.
@@ -305,9 +308,31 @@ func metrics(r plans.HeadroomReport) []metric {
 		out = append(out, metric{title: windowTitle(windowLabel(r.WindowDuration)), pct: r.WindowPct, reset: humanReset(r.WindowResetsIn)})
 	}
 	if r.SpendLimitUSD > 0 {
-		out = append(out, metric{title: spendTitle(r), pct: r.SpendPct})
+		out = append(out, metric{title: spendTitle(r), pct: r.SpendPct, blocked: blockedLine(r)})
 	}
 	return out
+}
+
+// blockedLine words a spend limit the vendor enforces by blocking
+// requests: until the local date it ends, when the vendor says.
+func blockedLine(r plans.HeadroomReport) string {
+	switch {
+	case r.BlockedUntil != nil:
+		return "Blocked until " + r.BlockedUntil.Local().Format("2 Jan")
+	case r.LimitReached:
+		return "Blocked at the limit"
+	}
+	return ""
+}
+
+// scopeNote says why an account-wide spend stands in for the operator's
+// own, as the card's footer; empty when it is their own or no reason is
+// known.
+func scopeNote(r plans.HeadroomReport) string {
+	if r.SpendScope != "account" || r.SpendScopeReason == "" {
+		return ""
+	}
+	return "account-wide: " + r.SpendScopeReason
 }
 
 // spendTitle names a spend limit's bar. An account-wide figure (every
@@ -446,6 +471,9 @@ func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, late 
 		if m.reset != "" {
 			out = append(out, side(p.paint(muted, "Resets in "+m.reset)))
 		}
+		if m.blocked != "" {
+			out = append(out, side(p.paint(dangerC, clip(m.blocked, inner))))
+		}
 		text, tone := paceLine(m.pace)
 		if m.stale > 0 {
 			text, tone = "Reading from "+humanDuration(m.stale)+" ago", warnC
@@ -464,6 +492,9 @@ func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, late 
 	}
 	for _, n := range costNotes(cost) {
 		out = append(out, side(p.paint(muted, clip(n, inner))))
+	}
+	for _, l := range wrap(scopeNote(r), inner) {
+		out = append(out, side(p.paint(warnC, clip(l, inner))))
 	}
 	return append(out, p.paint(line, "╰"+strings.Repeat("─", width-2)+"╯"))
 }

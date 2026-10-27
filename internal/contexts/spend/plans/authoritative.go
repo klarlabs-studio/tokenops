@@ -278,7 +278,14 @@ type VendorSpend struct {
 	Scope string
 	// AccountID names the account an "account" figure covers.
 	AccountID string
-	At        time.Time
+	// ScopeReason says, in one line, why an "account" figure stands in
+	// for the operator's own (their user was not found, has no cap, or
+	// could not be read). Empty when the reader gives no reason.
+	ScopeReason string
+	// BlockedUntil is when requests blocked by the limit may resume, when
+	// the vendor says; zero otherwise.
+	BlockedUntil time.Time
+	At           time.Time
 }
 
 // LatestVendorSpend returns the newest vendor-reported spend for provider
@@ -320,7 +327,13 @@ func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventsc
 	if m, err := strconv.Atoi(best.Attributes["extra_usage_period_min"]); err == nil && m > 0 {
 		period = time.Duration(m) * time.Minute
 	}
+	var blockedUntil time.Time
+	if t, err := time.Parse(time.RFC3339, best.Attributes["extra_usage_blocked_until"]); err == nil {
+		blockedUntil = t.UTC()
+	}
 	return &VendorSpend{
+		ScopeReason:  best.Attributes["scope_reason"],
+		BlockedUntil: blockedUntil,
 		UsedUSD:      used,
 		UsedUnknown:  !hasUsed || err1 != nil,
 		UsedPeriod:   period,

@@ -198,10 +198,11 @@ func StartVendorUsagePollers(
 		logger.Info("anthropic admin usage poller live", "interval", cfg.VendorUsage.Anthropic.Interval, "bucket_width", cfg.VendorUsage.Anthropic.BucketWidth)
 	}
 	if cfg.VendorUsage.Fireworks.On() {
+		client := &fireworksapi.Client{Key: fireworksapi.KeySource{Helper: claudesettings.APIKeyHelper, Fallback: fireworksFallbackKey}.Key}
 		p := fireworksusage.NewPoller(bus, fireworksusage.PollerOptions{
 			Health: sourceHealth.For("fireworks-usage"), Interval: cfg.VendorUsage.Fireworks.Interval, Logger: logger,
-			UserID: cfg.VendorUsage.Fireworks.UserID,
-			Client: &fireworksapi.Client{Key: fireworksapi.KeySource{Helper: claudesettings.APIKeyHelper, Fallback: fireworksFallbackKey}.Key},
+			UserID: cfg.VendorUsage.Fireworks.UserID, Email: cfg.VendorUsage.Fireworks.Email,
+			Client: client, Finder: client, SignIn: fireworksapi.NexusStatus{}.SignIn,
 		})
 		sup.Go("fireworks-usage", refreshable(sig, p.Run))
 	}
