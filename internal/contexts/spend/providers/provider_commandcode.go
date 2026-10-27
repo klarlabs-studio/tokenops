@@ -22,8 +22,9 @@ func providerCommandCode() Descriptor {
 						"__Host-commandcode_prod_.session_token", "__Host-better-auth.session_token",
 						"__Secure-better-auth.session_token", "better-auth.session_token",
 					}},
-				Endpoint: "`GET /internal/billing/credits`, `/internal/billing/subscriptions` (api.commandcode.ai)",
+				Endpoint: "`GET /internal/billing/credits`, `/internal/billing/subscriptions` (api.commandcode.ai); with an API key, the same under `/alpha`",
 				Shows:    "5-hour and weekly limits, the monthly credit grant used, and purchased credits"},
 		},
+		EnvVars: []string{"COMMAND_CODE_API_KEY"},
 	}
 }

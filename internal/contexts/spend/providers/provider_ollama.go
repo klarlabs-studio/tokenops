@@ -10,9 +10,11 @@ func providerOllama() Descriptor {
 		Sources: []Source{
 			// CodexBar: Sources/CodexBarCore/Providers/Ollama
 			// (OllamaUsageFetcher.swift, OllamaUsageParser.swift),
-			// docs/ollama.md. CodexBar's API-key source only checks that
-			// a key is accepted and reads no figure, so it is not a source
-			// here.
+			// docs/ollama.md.
+			{Name: "ollama_api", Tag: "ollama-api", Kind: Subscription, Credential: APIKey,
+				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
+				Endpoint: "`GET /api/balance` (ollama.com)",
+				Shows:    "Monthly included allowance used, its reset, and purchased credit balance"},
 			{Name: "ollama_web", Tag: "ollama-web", Kind: Subscription, Credential: BrowserCookie,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
 				Cookie: &Cookie{Host: "ollama.com", Names: []string{"__Secure-session", "session", "ollama_session",
@@ -20,6 +22,7 @@ func providerOllama() Descriptor {
 				Endpoint: "`GET ollama.com/settings` (the page; there is no usage API)",
 				Shows:    "Ollama Cloud's monthly usage (or the older session and weekly windows)"},
 		},
-		Docs: Docs{Label: "Ollama Cloud"},
+		EnvVars: []string{"OLLAMA_API_KEY"},
+		Docs:    Docs{Label: "Ollama Cloud"},
 	}
 }
