@@ -214,7 +214,9 @@ func latestCursorMonthly(ctx context.Context, reader EventReader, now time.Time)
 	if err != nil {
 		return nil
 	}
-	return &AuthoritativeWindow{UsedPct: pct, Source: "cursor:monthly"}
+	// Cursor's usage summary names the end of the billing cycle; the legacy
+	// requests endpoint names none, and the plan's nominal month applies.
+	return &AuthoritativeWindow{UsedPct: pct, ResetsIn: parseResetsIn(best.Attributes["billing_cycle_end"], now), Source: "cursor:monthly"}
 }
 
 // latestCopilotMonthly reads the newest Copilot poll. One poll stores a
