@@ -10,10 +10,14 @@
 package harnesskeys
 
 import (
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	_ "modernc.org/sqlite" // read-only driver for opencode.db
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
@@ -59,6 +63,9 @@ type Options struct {
 	Getenv func(string) string
 	// OpencodeData is opencode's data directory (auth.json).
 	OpencodeData string
+	// OpencodeDB is opencode 2's database (credential table). Empty is
+	// OPENCODE_DB, else opencode.db in OpencodeData.
+	OpencodeDB string
 	// OpencodeConfig is opencode's config directory (opencode.json[c]).
 	OpencodeConfig string
 	// Claude returns Claude Code's gateway base URL and key.
@@ -89,8 +96,14 @@ func Find(o Options) []Credential {
 			add(Credential{Origin: "Codex config", BaseURL: p.BaseURL, Key: key})
 		}
 	}
+	fromDB := opencodeDBCredentials(o.OpencodeDB, time.Now())
+	for id, key := range fromDB {
+		add(Credential{Origin: "opencode.db", ProviderID: id, Key: key})
+	}
 	for id, key := range opencodeAuth(o.OpencodeData) {
-		add(Credential{Origin: "opencode auth.json", ProviderID: id, Key: key})
+		if _, ok := fromDB[id]; !ok {
+			add(Credential{Origin: "opencode auth.json", ProviderID: id, Key: key})
+		}
 	}
 	for _, c := range opencodeConfig(o.OpencodeConfig, o.Getenv) {
 		add(c)
@@ -146,6 +159,12 @@ func (o Options) withDefaults() Options {
 		}
 		o.OpencodeData = filepath.Join(base, "opencode")
 	}
+	if o.OpencodeDB == "" {
+		o.OpencodeDB = o.Getenv("OPENCODE_DB")
+	}
+	if o.OpencodeDB == "" {
+		o.OpencodeDB = filepath.Join(o.OpencodeData, "opencode.db")
+	}
 	if o.OpencodeConfig == "" {
 		base := o.Getenv("XDG_CONFIG_HOME")
 		if base == "" {
@@ -160,6 +179,75 @@ func (o Options) withDefaults() Options {
 		o.Codex = codexsettings.ReadProviders
 	}
 	return o
+}
+
+// opencodeDBCredentials reads the active credential of opencode 2's
+// opencode-go and opencode integrations from its database, which is what
+// opencode 2 signs in with. The database is opened read-only, as the
+// opencode reader opens it, so a running opencode is not blocked. An
+// opencode-go key is a key; a plain opencode login counts only as an OAuth
+// login, and only while its token has not expired. A token is never
+// refreshed here. A row in another shape is skipped and its text is never
+// returned, so an error cannot carry a credential.
+func opencodeDBCredentials(path string, now time.Time) map[string]string {
+	if _, err := os.Stat(path); err != nil {
+		return nil
+	}
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = db.Close() }()
+	rows, err := db.Query(`SELECT integration_id, value FROM credential
+		WHERE active = 1 AND integration_id IN ('opencode-go', 'opencode')`)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]string{}
+	for rows.Next() {
+		var id, value string
+		if rows.Scan(&id, &value) != nil {
+			continue
+		}
+		if key, ok := opencodeDBKey(id, value, now); ok {
+			out[id] = key
+		}
+	}
+	return out
+}
+
+// opencodeDBKey is the key a credential row counts as, if it counts.
+func opencodeDBKey(id, value string, now time.Time) (string, bool) {
+	var c struct {
+		Type    string   `json:"type"`
+		Key     string   `json:"key"`
+		Access  string   `json:"access"`
+		Expires *float64 `json:"expires"`
+	}
+	if json.Unmarshal([]byte(value), &c) != nil {
+		return "", false
+	}
+	switch {
+	case id == "opencode-go" && c.Type == "key" && c.Key != "":
+		return c.Key, true
+	case id == "opencode" && c.Type == "oauth" && c.Access != "" && !opencodeExpired(c.Expires, now):
+		return c.Access, true
+	}
+	return "", false
+}
+
+// opencodeExpired reports a token past its expiry. The expiry is epoch
+// milliseconds; a value this small can only be seconds.
+func opencodeExpired(expires *float64, now time.Time) bool {
+	if expires == nil || *expires <= 0 {
+		return false
+	}
+	ms := *expires
+	if ms < 1e12 {
+		ms *= 1000
+	}
+	return time.UnixMilli(int64(ms)).Before(now)
 }
 
 // opencodeAuth reads the API keys in opencode's auth.json. OAuth logins
