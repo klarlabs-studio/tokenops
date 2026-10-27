@@ -10,7 +10,7 @@ func providerZAI() Descriptor {
 		Sources: []Source{
 			{Name: "zai_account", Tag: "zai-account", Kind: Subscription, Credential: APIKey,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromClientSource,
-				Endpoint: "`GET /api/monitor/usage/quota/limit`", Shows: "5-hour and weekly token windows"},
+				Endpoint: "`GET /api/monitor/usage/quota/limit`", Shows: "5-hour and weekly coding-plan windows (token or credit rows)"},
 		},
 		// The GLM Coding Plan is served under /api/anthropic and /api/coding;
 		// the pay-as-you-go API under /api/paas.
