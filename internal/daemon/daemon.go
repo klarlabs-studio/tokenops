@@ -36,8 +36,15 @@ func Run(ctx context.Context, cfg config.Config, logWriter io.Writer) error {
 // is cancelled, then tears down through stopDaemon. A step that fails
 // stops the boot and its error is returned; cleanups registered by the
 // steps that ran are released either way.
+//
+// The run also ends when the binary it runs is replaced by an install
+// (see binary_drift.go). That stop goes through the same shutdown as a
+// signal, and returns ErrBinaryReplaced so the process exits non-zero and
+// the supervisor starts the installed binary.
 func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	s := &startup{cfg: cfg, logger: logger}
+	ctx, restart := context.WithCancelCause(ctx)
+	defer restart(nil)
+	s := &startup{cfg: cfg, logger: logger, restart: restart}
 	defer s.runCleanups()
 	for _, step := range s.steps() {
 		if err := step(ctx); err != nil {
@@ -46,9 +53,21 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	}
 
 	<-ctx.Done()
-	logger.Info("shutdown signal received")
+	cause := context.Cause(ctx)
+	replaced := errors.Is(cause, ErrBinaryReplaced)
+	if replaced {
+		logger.Info("stopping for the installed binary")
+	} else {
+		logger.Info("shutdown signal received")
+	}
 	err := s.shutdown()
 	logger.Info("tokenops daemon stopped")
+	if replaced {
+		if err != nil {
+			logger.Warn("shutdown after binary replacement incomplete", "err", err)
+		}
+		return cause
+	}
 	return err
 }
 
