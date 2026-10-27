@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,7 +46,77 @@ var (
 	ErrAuth = errors.New("fireworks: the API key was refused")
 	// ErrNotFound reports a resource the account does not have.
 	ErrNotFound = errors.New("fireworks: not found")
+	// ErrNoUserMatch reports that no single member of the account has the
+	// email looked up (none, or several).
+	ErrNoUserMatch = errors.New("fireworks: no single user has that email")
 )
+
+// UserFinder finds the member an email belongs to. The HTTP client in
+// internal/infra/vendorusage/fireworks satisfies it.
+type UserFinder interface {
+	// KeyStamp names the key in use without revealing it, so a found user
+	// is looked up again when the key changes.
+	KeyStamp(ctx context.Context) (string, error)
+	// FindUser returns the account (resolved from the key when account is
+	// empty) and the id of the one member with email, or ErrNoUserMatch.
+	FindUser(ctx context.Context, account, email string) (resolvedAccount, user string, err error)
+}
+
+// StatusError is an answer from Fireworks other than 200. Err, when set,
+// is the sentinel it also is (ErrAuth, ErrNotFound).
+type StatusError struct {
+	Status int
+	Path   string
+	Err    error
+}
+
+func (e *StatusError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("%v (%d on %s)", e.Err, e.Status, e.Path)
+	}
+	return fmt.Sprintf("fireworks: GET %s: status %d", e.Path, e.Status)
+}
+
+// Unwrap is the sentinel, so errors.Is(err, ErrAuth) holds.
+func (e *StatusError) Unwrap() error { return e.Err }
+
+// StatusOf is the HTTP status err carries, 0 when it carries none.
+func StatusOf(err error) int {
+	var se *StatusError
+	if errors.As(err, &se) {
+		return se.Status
+	}
+	return 0
+}
+
+// Why a reading is the whole account's rather than the operator's own.
+// Each is one line; the ones the operator can fix name the fix.
+const (
+	setUserHint = " — set it with `tokenops vendor-usage enable fireworks --user-id <id>`"
+	// FallbackNoUser is no file naming the user and no sign-in email.
+	FallbackNoUser = "your user wasn't found" + setUserHint
+	// FallbackNoMatch is the sign-in email matching no single member.
+	FallbackNoMatch = "no user on the account has your email" + setUserHint
+	// FallbackNoCap is the member having no spend cap of their own.
+	FallbackNoCap = "your user has no spend cap of their own"
+)
+
+// FallbackLookupFailed is the user lookup failing.
+func FallbackLookupFailed(err error) string {
+	return "the user lookup failed" + statusSuffix(err) + setUserHint
+}
+
+// FallbackUserReadFailed is the member's own limit failing to read.
+func FallbackUserReadFailed(err error) string {
+	return "your own limit wasn't read" + statusSuffix(err)
+}
+
+func statusSuffix(err error) string {
+	if s := StatusOf(err); s != 0 {
+		return fmt.Sprintf(" (status %d)", s)
+	}
+	return ""
+}
 
 // Scope says whose figures a Reading holds.
 type Scope string
@@ -67,6 +138,12 @@ type Reading struct {
 	LimitUSD float64
 	// LimitReached is Fireworks saying requests are blocked by the cap.
 	LimitReached bool
+	// BlockedUntil is when a member blocked by their cap may send again
+	// (exceededUntil, enforcement BLOCK); zero when not blocked.
+	BlockedUntil time.Time
+	// Fallback says why an account-wide reading is not the operator's
+	// own, one line; empty for the operator's own figures.
+	Fallback string
 }
 
 // identityDirs are where Fireworks' CLI keeps its files, newest name

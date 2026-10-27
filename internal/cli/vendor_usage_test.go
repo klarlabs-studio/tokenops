@@ -182,6 +182,21 @@ func TestVendorUsageEnableSources(t *testing.T) {
 			},
 		},
 		{
+			// The email finds the member when no file names them.
+			name: "fireworks takes the sign-in email",
+			args: []string{"fireworks", "--email", "ada@example.com"},
+			assert: func(t *testing.T, cfg config.Config) {
+				if !cfg.VendorUsage.Fireworks.On() || cfg.VendorUsage.Fireworks.Email != "ada@example.com" {
+					t.Errorf("fireworks %+v", cfg.VendorUsage.Fireworks)
+				}
+			},
+		},
+		{
+			name:    "fireworks refuses a malformed email",
+			args:    []string{"fireworks", "--email", "ada"},
+			wantErr: "email",
+		},
+		{
 			name: "github-copilot needs no secret",
 			args: []string{"github-copilot"},
 			assert: func(t *testing.T, cfg config.Config) {
