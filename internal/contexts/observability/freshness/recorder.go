@@ -43,6 +43,21 @@ func (r *Recorder) Succeeded(at time.Time) {
 	r.poll.LastSuccessAt = at
 	r.poll.LastError = nil
 	r.poll.LastErrorAt = time.Time{}
+	r.poll.Notice = ""
+}
+
+// Noted records what a usable reading is degraded by, such as a quota
+// read from a fallback because the newest record was unrecognised. It is
+// not a failure: the reading was stored. It applies to the poll that
+// reported it and is cleared by the next successful one.
+func (r *Recorder) Noted(note string, at time.Time) {
+	if r == nil || note == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.poll.LastAttemptAt = at
+	r.poll.Notice = note
 }
 
 // Failed records an attempt that did not complete. The last success is

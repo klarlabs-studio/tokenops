@@ -102,6 +102,9 @@ type Poll struct {
 	LastError error
 	// LastErrorAt is when that failure happened.
 	LastErrorAt time.Time
+	// Notice says why the last reading is degraded, when it is usable
+	// but not the whole picture; empty otherwise.
+	Notice string
 }
 
 // attempted reports whether this record describes a poller that has run
@@ -173,6 +176,8 @@ type Report struct {
 	LastError string `json:"last_error,omitempty"`
 	// LastErrorAt is when that failure happened.
 	LastErrorAt time.Time `json:"last_error_at,omitzero"`
+	// Notice says why the last reading is degraded, when it is usable.
+	Notice string `json:"notice,omitempty"`
 
 	// OriginNewestAt is the newest data the upstream holds, when it could
 	// be read.
@@ -253,6 +258,7 @@ func assessOne(s Source, in Inputs, window time.Duration, now time.Time) Report 
 		r.LastPollAt = poll.LastAttemptAt
 		r.LastSuccessfulPollAt = poll.LastSuccessAt
 		r.LastErrorAt = poll.LastErrorAt
+		r.Notice = poll.Notice
 		if poll.LastError != nil && !r.ReaderStopped {
 			r.LastError = poll.LastError.Error()
 		}

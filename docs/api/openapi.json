@@ -2314,6 +2314,9 @@
                           "never_seen": {
                             "type": "boolean"
                           },
+                          "notice": {
+                            "type": "string"
+                          },
                           "origin_newest_at": {
                             "format": "date-time",
                             "type": "string"
@@ -6327,6 +6330,9 @@
                           },
                           "never_seen": {
                             "type": "boolean"
+                          },
+                          "notice": {
+                            "type": "string"
                           },
                           "origin_newest_at": {
                             "format": "date-time",
