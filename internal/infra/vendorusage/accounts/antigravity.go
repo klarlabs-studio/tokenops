@@ -208,11 +208,13 @@ func agTime(raw json.RawMessage) time.Time {
 	return time.Time{}
 }
 
-// agGroupTitle names a quota group as Antigravity's UI does.
+// agGroupTitle names a quota group as Antigravity's UI does. A Gemini group
+// with a version in its name ("Gemini 4 Argon") is a separate quota from the
+// Gemini limit, so it keeps its own name.
 func agGroupTitle(name string) string {
 	lower := strings.ToLower(name)
 	switch {
-	case strings.Contains(lower, "gemini"):
+	case strings.Contains(lower, "gemini") && !strings.ContainsAny(lower, "0123456789"):
 		return "Gemini"
 	case strings.Contains(lower, "claude") || strings.Contains(lower, "gpt"):
 		return "Claude/GPT"
