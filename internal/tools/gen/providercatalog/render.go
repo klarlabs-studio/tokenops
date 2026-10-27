@@ -34,8 +34,8 @@ type File struct {
 }
 
 const (
-	cliDocs    = "web/docs/guide/cli.md"
-	configDocs = "web/docs/guide/configuration.md"
+	cliDocs    = "docs/reference/cli.md"
+	configDocs = "docs/reference/configuration.md"
 	// MenubarJS and MenubarGo are the menu bar's provider names and logos.
 	MenubarJS = "apps/menubar/frontend/providers.js"
 	MenubarGo = "apps/menubar/providers_gen.go"

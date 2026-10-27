@@ -22,7 +22,7 @@
     "type": "git",
     "url": "git+https://github.com/klarlabs-studio/tokenops.git"
   },
-  "homepage": "https://github.com/klarlabs-studio/tokenops",
+  "homepage": "https://team.klarlabs.de/",
   "engines": {
     "node": ">=16"
   }

@@ -64,8 +64,6 @@ scan:
     # Classification: Acceptable Pattern
     # Last reviewed: 2026-09-14
     - web/dashboard/dist/
-    - web/docs/.vitepress/dist/
-    - web/docs/.vitepress/cache/
     - integrations/vscode/out/
 
     # Test fixtures intentionally embed sample AWS keys to exercise the

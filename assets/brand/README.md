@@ -11,7 +11,7 @@ draws live (filled clockwise from the top to the share left).
 | `mark-currentcolor.svg` | the ring in the surrounding text colour (VS Code activity bar) |
 | `app-icon.svg`, `app-icon-1024.png` | square icon, lime ring on ink (VS Code Marketplace; `integrations/vscode/resources/logo.png` is its 256 px render) |
 | `wordmark.png` | the wordmark as a PNG, 112 px high, where SVG is not shown (npm) |
-| `social.svg`, `social.png` | the 1200×630 link preview (`og:image`, GitHub social preview); copied to `web/docs/public/social.png` |
+| `social.svg`, `social.png` | the 1200×630 link preview (`og:image`, GitHub social preview); copied to the docs site (served from team.klarlabs.de) as its social card |
 | `app-icon-macos.svg` | macOS icon on the Big Sur grid; `apps/menubar/AppIcon.icns` is built from it |
 | `favicon.svg` | heavier ring, no dot, for 16–32 px |
 

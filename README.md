@@ -28,7 +28,7 @@ DX the same way across harnesses, and pauses an agent before a plan window
 runs out when you set a boundary on `plan_left_pct`. The core needs no
 upload at all; a team gets derived figures only, never prompts or code.
 
-Docs: <https://klarlabs-studio.github.io/tokenops/> · Releases: <https://github.com/klarlabs-studio/tokenops/releases>
+Docs: <https://team.klarlabs.de/> · Releases: <https://github.com/klarlabs-studio/tokenops/releases>
 
 ## Install
 
@@ -172,7 +172,7 @@ an identifier does not claim that execution started.
 See [docs/architecture-ddd.md](docs/architecture-ddd.md) for bounded contexts
 and layer rules; [docs/plan-cost-model.md](docs/plan-cost-model.md) for the
 subscription-plan model; and the
-[integration capability matrix](https://klarlabs-studio.github.io/tokenops/integrations/coverage)
+[integration capability matrix](https://team.klarlabs.de/integrations/coverage)
 for source coverage and client-specific limitations.
 
 ## CLI surface
@@ -293,7 +293,7 @@ internal/
   daemon/                         # boot sequence
   storage/sqlite/                 # event store
 pkg/eventschema/                  # public envelope + payload types
-web/docs/                         # VitePress docs site
+docs/reference/                  # CLI, configuration and API reference
 .roady/                           # spec-driven planning
 ```
 
@@ -301,7 +301,7 @@ web/docs/                         # VitePress docs site
 
 TokenOps instruments AI usage on three planes; which ones a client supports is
 the whole integration story. Full matrix + provider list:
-[docs/integrations/coverage](https://klarlabs-studio.github.io/tokenops/integrations/coverage).
+[docs/integrations/coverage](https://team.klarlabs.de/integrations/coverage).
 
 | Client | Passive read | MCP | Proxy |
 |---|:--:|:--:|:--:|
@@ -328,7 +328,7 @@ GitHub clients have no local token log and no base-URL override, so coaching
 there is pull-only: no transcripts means no storytelling, no proactive nudges,
 no routing. What is left is the MCP surface, which on those clients is the
 whole product. The
-[capability matrix](https://klarlabs-studio.github.io/tokenops/integrations/coverage#what-reaches-which-client)
+[capability matrix](https://team.klarlabs.de/integrations/coverage#what-reaches-which-client)
 lists what reaches which client, feature by feature, gaps included.
 
 ## Disabled-subsystem contract

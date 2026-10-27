@@ -71,13 +71,13 @@ func TestOpenAPIDocumentIsCurrent(t *testing.T) {
 
 // The docs page names every route, so a route cannot ship undocumented.
 func TestAPIDocsPageListsEveryRoute(t *testing.T) {
-	page, err := os.ReadFile(filepath.Clean("../../web/docs/guide/api.md"))
+	page, err := os.ReadFile(filepath.Clean("../../docs/reference/api.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range APICatalog {
 		if !strings.Contains(string(page), "`"+r.Method+" "+r.Path+"`") {
-			t.Errorf("web/docs/guide/api.md does not list %s", r.Pattern())
+			t.Errorf("docs/reference/api.md does not list %s", r.Pattern())
 		}
 	}
 }

@@ -126,7 +126,7 @@ homebrew_casks:
       owner: klarlabs-studio
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    homepage: "https://github.com/klarlabs-studio/tokenops"
+    homepage: "https://team.klarlabs.de/"
     description: "Guardrails for coding agents: what is left on every AI plan, and limits your agents respect"
     license: "Apache-2.0"
     commit_author:

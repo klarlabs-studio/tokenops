@@ -46,7 +46,7 @@ func TestEveryProviderIsComplete(t *testing.T) {
 		gateways[g.Source()] = g.Name()
 	}
 	cfg := config.Default()
-	cliDocs := readRepoFile(t, "web/docs/guide/cli.md")
+	cliDocs := readRepoFile(t, "docs/reference/cli.md")
 	menubar := readRepoFile(t, "apps/menubar/providers_gen.go")
 
 	for _, d := range providers.All() {
@@ -67,7 +67,7 @@ func TestEveryProviderIsComplete(t *testing.T) {
 				t.Errorf("%s/%s: no hint in `vendor-usage status`", id, s.Tag)
 			}
 			if !strings.Contains(cliDocs, "`"+s.Tag+"`") {
-				t.Errorf("%s/%s: no row in web/docs/guide/cli.md; run go generate ./...", id, s.Tag)
+				t.Errorf("%s/%s: no row in docs/reference/cli.md; run go generate ./...", id, s.Tag)
 			}
 		}
 	}

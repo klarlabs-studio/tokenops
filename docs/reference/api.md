@@ -54,7 +54,7 @@ operator's instruction text and local file paths.
 
 | Route | Answers |
 |---|---|
-| `GET /api/glance` | Session budgets, plan headroom and one ranked insight; `boundaries` lists the [boundaries](/guide/boundaries) that hold now, as advice; `plan_use` gives each provider's plan utilization and coverage over the last 7 days; `early_resets` lists windows that reset early within the last day; a window with `not_started: true` has no `resets_at` yet; `prompt_cache` is the countdown to the current Claude Code session's prompt cache going cold (`last_request_at`, `ttl_seconds`, `expires_at`, `remaining_seconds`, and `state`: `warm`, `expiring` with under two minutes left, or `cold`), absent when no session's cache went cold within the last hour |
+| `GET /api/glance` | Session budgets, plan headroom and one ranked insight; `boundaries` lists the [boundaries](https://team.klarlabs.de/guide/boundaries) that hold now, as advice; `plan_use` gives each provider's plan utilization and coverage over the last 7 days; `early_resets` lists windows that reset early within the last day; a window with `not_started: true` has no `resets_at` yet; `prompt_cache` is the countdown to the current Claude Code session's prompt cache going cold (`last_request_at`, `ttl_seconds`, `expires_at`, `remaining_seconds`, and `state`: `warm`, `expiring` with under two minutes left, or `cold`), absent when no session's cache went cold within the last hour |
 | `GET /api/findings` | What the coach and the session analysis observed, ranked, with what to do. Each finding has a stable `key` (its kind and subject, such as `quota:openai:week`); a quota finding also names its `provider` and `window` as the plan headroom names them, so it can be shown beside that window. Where an operation exists for it, it has `actions` to run with `POST /api/findings/act`. `hidden` counts the findings you dismissed that are still hidden |
 | `GET /api/plans/headroom` | Each plan: usage, the vendor's windows, spend against the limit, risk |
 | `GET /api/plans/session-budget` | Each plan window: share used, pace, what to do |
@@ -71,7 +71,7 @@ operator's instruction text and local file paths.
 | `GET /api/story` | Recent work, task by task, titles withheld; takes the same `source`, `model` and `role` |
 | `GET /api/story/runtime` | Where tasks' time went as far as the transcripts record it: status, model request, tool, approval wait, idle and unattributed time with origin and coverage, and nearest-rank median and p90 per harness, model and role. Unknown is `null`, never `0`. Same filters, plus `limit` |
 | `GET /api/coach/prompts` | Prompt scoring, quotes withheld |
-| `GET /api/coach/lint-context` | What in every session's context changes between sessions and breaks the prompt cache (see [`tokenops coach lint-context`](/guide/cli#tokenops-coach-lint-context)): the user's CLAUDE.md, AGENTS.md and hooks, the project named by `root`, and the hook output recent transcripts recorded. Each finding carries the matched token only |
+| `GET /api/coach/lint-context` | What in every session's context changes between sessions and breaks the prompt cache (see [`tokenops coach lint-context`](./cli.md#tokenops-coach-lint-context)): the user's CLAUDE.md, AGENTS.md and hooks, the project named by `root`, and the hook output recent transcripts recorded. Each finding carries the matched token only |
 | `GET /api/spend/summary` | Spend and tokens over a window |
 | `GET /api/spend/series` | Spend and tokens over time |
 | `GET /api/spend/forecast` | Daily spend projected forward |
@@ -90,7 +90,7 @@ operator's instruction text and local file paths.
 | `GET /api/optimizations` | Optimization recommendations |
 | `GET /api/routing/proposals` | Model upgrades waiting on you |
 | `GET /api/decisions/{id}` | Why a decision was made |
-| `GET /api/boundaries` | Each [action boundary](/guide/boundaries), how often it matched, where it is enforced, and what waits on you |
+| `GET /api/boundaries` | Each [action boundary](https://team.klarlabs.de/guide/boundaries), how often it matched, where it is enforced, and what waits on you |
 | `GET /api/rules/analyze` | Rule files analysed |
 | `GET /api/rules/compress` | Rule files compressed |
 | `GET /api/rules/conflicts` | Conflicts between rules |
@@ -112,7 +112,7 @@ instead of an empty screen.
 | `POST /api/plans` | Binds a provider to a plan, or clears it |
 | `POST /api/preferred-models` | Sets or clears a provider's preferred model |
 | `POST /api/routing/decisions` | Answers a routing proposal; with `boundary_approval: presence` an approval needs `presence_proof`, as below |
-| `POST /api/boundaries/decisions` | Denies what a boundary asked about (`{"id", "decision": "deny", "session"}`). It approves only with `presence_proof`, the signature `tokenops approve` makes with this Mac's [presence key](/guide/boundaries#presence-checked-approval) (the statement's fields, and `sig` in base64); without one an approval comes from `tokenops approve` at a terminal or Claude Code's prompt |
+| `POST /api/boundaries/decisions` | Denies what a boundary asked about (`{"id", "decision": "deny", "session"}`). It approves only with `presence_proof`, the signature `tokenops approve` makes with this Mac's [presence key](https://team.klarlabs.de/guide/boundaries#presence-checked-approval) (the statement's fields, and `sig` in base64); without one an approval comes from `tokenops approve` at a terminal or Claude Code's prompt |
 | `POST /api/boundaries/statements` | The statement that approves a waiting boundary decision (`{"id", "session"}`), for a surface that signs it with the presence helper: `proof` (the statement's fields, unsigned; post it back as `presence_proof` with `sig` added), `statement` (the bytes to sign, base64), `reason` (the dialog's text, naming the rule, action and session) and `blob` (the key the helper signs with). `409` with `"code": "presence_unavailable"` when no key can sign here (none enrolled, a held key, no key blob), so the surface falls back to the terminal. The menu bar's inline *Approve* uses it |
 | `POST /api/routing/statements` | The same for a routing upgrade (`{"key"}`) |
 | `POST /api/outcomes` | Records your judgement of an execution |

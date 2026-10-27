@@ -14,7 +14,7 @@ The local daemon is canonical. Keep entitlements outside core domains. Model ins
 - `internal/contexts`: DDD domains for control-plane capabilities.
 - `internal/{infra,storage,events,proxy,mcp}`: adapters and runtime infrastructure.
 - `pkg/eventschema`: public event contracts and protobuf definitions.
-- `web/docs`: VitePress documentation site. The daemon exposes a local HTTP API; there is no bundled browser dashboard.
+- `docs/reference`: CLI, configuration and API reference pages. The VitePress docs site is served from https://team.klarlabs.de (its source lives in the private team repo). The daemon exposes a local HTTP API; there is no bundled browser dashboard.
 - `integrations`: VS Code and Python adapters; `docs/adr`: architecture decisions.
 
 ## Build and Verification

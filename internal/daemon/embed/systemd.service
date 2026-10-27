@@ -1,6 +1,6 @@
 [Unit]
 Description=TokenOps ingestion daemon
-Documentation=https://github.com/klarlabs-studio/tokenops
+Documentation=https://team.klarlabs.de/
 After=network-online.target
 
 # `tokenops serve` is the MCP server and ingests nothing. This unit runs
