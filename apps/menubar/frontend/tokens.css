@@ -1,0 +1,237 @@
+/* Code generated from assets/brand/tokens.json by internal/tools/gen/tokensgen; DO NOT EDIT.
+   Regenerate: go generate ./internal/tools/gen/designtokens
+   The same file is written to assets/brand/tokens.css and apps/menubar/frontend/tokens.css.
+
+   TokenOps design tokens: electric lime on ink. Light is plain white, dark
+   is plain ink. Lime fills carry ink text, never white; on a light ground
+   lime as text, a link or a thin stroke is the dark lime. Pin a mode with
+   data-theme="light" or "dark" on the root element.
+*/
+
+:root {
+  color-scheme: light dark;
+
+  /* Brand */
+  --tok-ink: #0E1220;
+  --tok-lime: #C6F432;
+  --tok-lime-hover: #D4F75E;
+  --tok-lime-press: #B3E01C;
+  --tok-lime-dark: #3F6B0B;
+  --tok-lime-mark: #4D7C0F;
+  --tok-amber: #F59E0B;
+  --tok-red: #DC2626;
+  --tok-white: #FFFFFF;
+
+  /* Surface */
+  --tok-bg: #FFFFFF;
+  --tok-surface: #FFFFFF;
+  --tok-surface-2: #F7F8F9;
+  --tok-surface-3: #F0F1F3;
+  --tok-sidebar: #FAFAFB;
+  --tok-border: #E4E6EA;
+  --tok-border-strong: #CFD3D9;
+  --tok-track: rgba(22, 24, 29, 0.10);
+  --tok-overlay: rgba(255, 255, 255, 0.85);
+  --tok-selection: rgba(198, 244, 50, 0.45);
+
+  /* Text */
+  --tok-text: #16181D;
+  --tok-text-2: #3D4148;
+  --tok-muted: #555A64;
+  --tok-faint: #686D77;
+
+  /* Accent */
+  --tok-accent: #C6F432;
+  --tok-accent-hover: #D4F75E;
+  --tok-accent-press: #B3E01C;
+  --tok-on-accent: #0E1220;
+  --tok-accent-soft: #F2FDD2;
+  --tok-accent-border: #D6F37A;
+  --tok-accent-text: #3F6B0B;
+
+  /* Status */
+  --tok-meter-warn: #F59E0B;
+  --tok-meter-high: #DC2626;
+  --tok-success: #127034;
+  --tok-success-soft: #E8F6ED;
+  --tok-success-border: #B9E2C7;
+  --tok-warn: #92400E;
+  --tok-warn-soft: #FEF5E4;
+  --tok-warn-border: #F6D28E;
+  --tok-warn-accent: #F59E0B;
+  --tok-danger: #B91C1C;
+  --tok-danger-soft: #FDEEEE;
+  --tok-danger-border: #F5C2C2;
+  --tok-danger-solid: #DC2626;
+  --tok-on-danger: #FFFFFF;
+
+  /* Chart */
+  --tok-chart-bar: #4D7C0F;
+  --tok-chart-bar-hover: #3F6B0B;
+  --tok-chart-line: #3F6B0B;
+  --tok-chart-grid: #E8EAEE;
+  --tok-chart-text: #555A64;
+  --tok-chart-muted: #C8CCD3;
+
+  /* Brand panel */
+  --tok-brand-bg: #0E1220;
+  --tok-brand-text: #F2F3F5;
+  --tok-brand-muted: #C7CAD1;
+  --tok-brand-accent: #C6F432;
+
+  /* Type */
+  --tok-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --tok-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --tok-fs-2xs: 11px;
+  --tok-fs-xs: 12px;
+  --tok-fs-sm: 13px;
+  --tok-fs-md: 14px;
+  --tok-fs-lg: 16px;
+  --tok-fs-xl: 18px;
+  --tok-fs-2xl: 22px;
+  --tok-fs-3xl: 26px;
+  --tok-fs-4xl: 32px;
+  --tok-lh-tight: 1.25;
+  --tok-lh: 1.55;
+  --tok-weight-medium: 550;
+  --tok-weight-semibold: 600;
+  --tok-weight-bold: 650;
+  --tok-tracking-tight: -0.01em;
+
+  /* Space */
+  --tok-s-0: 2px;
+  --tok-s-1: 4px;
+  --tok-s-2: 8px;
+  --tok-s-3: 12px;
+  --tok-s-4: 16px;
+  --tok-s-5: 20px;
+  --tok-s-6: 24px;
+  --tok-s-8: 32px;
+  --tok-s-10: 40px;
+  --tok-s-12: 48px;
+  --tok-s-16: 64px;
+
+  /* Radius */
+  --tok-r-xs: 4px;
+  --tok-r-sm: 6px;
+  --tok-r-md: 8px;
+  --tok-r-lg: 12px;
+  --tok-r-xl: 16px;
+  --tok-r-full: 999px;
+
+  /* Shadow */
+  --tok-shadow-xs: 0 1px 1px rgba(22, 24, 29, 0.04);
+  --tok-shadow-sm: 0 1px 2px rgba(22, 24, 29, 0.05), 0 1px 1px rgba(22, 24, 29, 0.03);
+  --tok-shadow-md: 0 1px 2px rgba(22, 24, 29, 0.05), 0 4px 12px rgba(22, 24, 29, 0.06);
+  --tok-shadow-lg: 0 2px 6px rgba(22, 24, 29, 0.06), 0 16px 40px rgba(22, 24, 29, 0.14);
+  --tok-shadow-accent: 0 4px 14px rgba(198, 244, 50, 0.35);
+  --tok-shadow-accent-sm: 0 2px 8px rgba(198, 244, 50, 0.35);
+  --tok-ring: 0 0 0 3px rgba(63, 107, 11, 0.25);
+
+  /* Motion */
+  --tok-ease: cubic-bezier(0.2, 0, 0, 1);
+  --tok-duration-fast: 150ms;
+  --tok-duration-base: 350ms;
+  --tok-duration-spin: 800ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* Surface */
+    --tok-bg: #0E1220;
+    --tok-surface: #161A28;
+    --tok-surface-2: #1B2030;
+    --tok-surface-3: #222838;
+    --tok-sidebar: #111524;
+    --tok-border: #262C3C;
+    --tok-border-strong: #353C4F;
+    --tok-track: rgba(255, 255, 255, 0.10);
+    --tok-overlay: rgba(14, 18, 32, 0.82);
+    /* Text */
+    --tok-text: #F2F3F5;
+    --tok-text-2: #C7CAD1;
+    --tok-muted: #C7CAD1;
+    --tok-faint: #9DA2AC;
+    /* Accent */
+    --tok-accent-soft: rgba(198, 244, 50, 0.14);
+    --tok-accent-border: rgba(198, 244, 50, 0.30);
+    --tok-accent-text: #C6F432;
+    /* Status */
+    --tok-meter-warn: #FBBF24;
+    --tok-meter-high: #F87171;
+    --tok-success: #5BD08A;
+    --tok-success-soft: rgba(34, 160, 90, 0.14);
+    --tok-success-border: rgba(91, 208, 138, 0.30);
+    --tok-warn: #FBC65A;
+    --tok-warn-soft: rgba(245, 158, 11, 0.13);
+    --tok-warn-border: rgba(245, 158, 11, 0.32);
+    --tok-danger: #F87171;
+    --tok-danger-soft: rgba(220, 38, 38, 0.14);
+    --tok-danger-border: rgba(248, 113, 113, 0.32);
+    /* Chart */
+    --tok-chart-bar: #C6F432;
+    --tok-chart-bar-hover: #D4F75E;
+    --tok-chart-line: #C6F432;
+    --tok-chart-grid: #262C3C;
+    --tok-chart-text: #A9AEB8;
+    --tok-chart-muted: #3A4154;
+    /* Shadow */
+    --tok-shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.2);
+    --tok-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --tok-shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.25);
+    --tok-shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.35), 0 18px 48px rgba(0, 0, 0, 0.45);
+    --tok-ring: 0 0 0 3px rgba(198, 244, 50, 0.30);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  /* Surface */
+  --tok-bg: #0E1220;
+  --tok-surface: #161A28;
+  --tok-surface-2: #1B2030;
+  --tok-surface-3: #222838;
+  --tok-sidebar: #111524;
+  --tok-border: #262C3C;
+  --tok-border-strong: #353C4F;
+  --tok-track: rgba(255, 255, 255, 0.10);
+  --tok-overlay: rgba(14, 18, 32, 0.82);
+  /* Text */
+  --tok-text: #F2F3F5;
+  --tok-text-2: #C7CAD1;
+  --tok-muted: #C7CAD1;
+  --tok-faint: #9DA2AC;
+  /* Accent */
+  --tok-accent-soft: rgba(198, 244, 50, 0.14);
+  --tok-accent-border: rgba(198, 244, 50, 0.30);
+  --tok-accent-text: #C6F432;
+  /* Status */
+  --tok-meter-warn: #FBBF24;
+  --tok-meter-high: #F87171;
+  --tok-success: #5BD08A;
+  --tok-success-soft: rgba(34, 160, 90, 0.14);
+  --tok-success-border: rgba(91, 208, 138, 0.30);
+  --tok-warn: #FBC65A;
+  --tok-warn-soft: rgba(245, 158, 11, 0.13);
+  --tok-warn-border: rgba(245, 158, 11, 0.32);
+  --tok-danger: #F87171;
+  --tok-danger-soft: rgba(220, 38, 38, 0.14);
+  --tok-danger-border: rgba(248, 113, 113, 0.32);
+  /* Chart */
+  --tok-chart-bar: #C6F432;
+  --tok-chart-bar-hover: #D4F75E;
+  --tok-chart-line: #C6F432;
+  --tok-chart-grid: #262C3C;
+  --tok-chart-text: #A9AEB8;
+  --tok-chart-muted: #3A4154;
+  /* Shadow */
+  --tok-shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.2);
+  --tok-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --tok-shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.25);
+  --tok-shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.35), 0 18px 48px rgba(0, 0, 0, 0.45);
+  --tok-ring: 0 0 0 3px rgba(198, 244, 50, 0.30);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}

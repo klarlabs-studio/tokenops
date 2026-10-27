@@ -1,42 +1,25 @@
-/* Klarlabs brand tokens: ink, electric lime, amber, red. Dark is plain ink;
-   light is plain white. Lime is a fill that
-   carries ink text; as text, bars or thin strokes on light it is the dark
-   lime (--accent-line, --low). */
+/* The panel's names for the TokenOps design tokens (tokens.css, generated
+   from assets/brand/tokens.json; link it before this file). Dark is plain
+   ink, light plain white. Lime is a fill that carries ink text; as text,
+   bars or thin strokes on light it is the dark lime (--accent-line, --low).
+   The values follow the system appearance through tokens.css, so nothing
+   here changes for dark. */
 :root {
-  --bg: #FFFFFF;
-  --surface: #F4F5F7;
-  --fg: #16181D;
-  --muted: #555A64;
-  --faint: #70757F;
-  --hair: rgba(22, 24, 29, 0.10);
-  --track: rgba(22, 24, 29, 0.10);
-  --accent: #C6F432;
-  --accent-fg: #0E1220;
-  --accent-line: #3F6B0B;
-  --low: #3F6B0B;
-  --medium: #F59E0B;
-  --high: #DC2626;
-  --error: #B91C1C;
-  color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0E1220;
-    --surface: rgba(255, 255, 255, 0.05);
-    --fg: #F2F3F5;
-    --muted: #C7CAD1;
-    --faint: #9DA2AC;
-    --hair: rgba(255, 255, 255, 0.08);
-    --track: rgba(255, 255, 255, 0.10);
-    --accent: #C6F432;
-    --accent-fg: #0E1220;
-    --accent-line: #C6F432;
-    --low: #C6F432;
-    --medium: #FBBF24;
-    --high: #F87171;
-    --error: #F87171;
-  }
+  --bg: var(--tok-bg);
+  --surface: var(--tok-surface-2);
+  --fg: var(--tok-text);
+  --muted: var(--tok-muted);
+  --faint: var(--tok-faint);
+  --hair: var(--tok-border);
+  --track: var(--tok-track);
+  --accent: var(--tok-accent);
+  --accent-fg: var(--tok-on-accent);
+  --accent-line: var(--tok-accent-text);
+  --low: var(--tok-accent-text);
+  --medium: var(--tok-meter-warn);
+  --high: var(--tok-meter-high);
+  --error: var(--tok-danger);
+  --mono: var(--tok-font-mono);
 }
 
 * { box-sizing: border-box; }
@@ -44,13 +27,12 @@
 html, body {
   margin: 0;
   height: 100%;
-  background: #0E1220;
+  background: var(--bg);
   color: var(--fg);
-  font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  font: var(--tok-fs-sm)/1.35 var(--tok-font-sans);
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
-@media (prefers-color-scheme: light) { html, body { background: #FFFFFF; } }
 
 .panel {
   height: 100%;
@@ -83,30 +65,30 @@ html, body {
   font: inherit;
   font-size: 11.5px;
   cursor: pointer;
-  transition: background .15s, color .15s;
+  transition: background var(--tok-duration-fast), color var(--tok-duration-fast);
 }
 .tab:hover { background: var(--surface); color: var(--fg); }
-.tab.active { background: var(--accent); color: var(--accent-fg); box-shadow: 0 4px 14px rgba(198, 244, 50, 0.35); }
+.tab.active { background: var(--accent); color: var(--accent-fg); box-shadow: var(--tok-shadow-accent); }
 .tab:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
 /* The vendor's logo on a white tile, so every mark keeps its own colours
    on either theme and on the selected tab. */
 .mark {
   width: 22px; height: 22px; flex: none;
   display: grid; place-items: center;
-  border-radius: 6px;
-  background: #FFFFFF;
+  border-radius: var(--tok-r-sm);
+  background: var(--tok-white);
   box-shadow: 0 0 0 1px rgba(22, 24, 29, 0.10);
   color: #16181D;
 }
 .mark img { width: 15px; height: 15px; display: block; }
-.mark.letters { font-size: 10px; font-weight: 700; letter-spacing: -.02em; color: #FFFFFF; background: #555A64; }
+.mark.letters { font-size: 10px; font-weight: 700; letter-spacing: -.02em; color: var(--tok-white); background: #555A64; }
 .mark-large { width: 26px; height: 26px; border-radius: 7px; }
 .mark-large img { width: 18px; height: 18px; }
 .head h2 { display: flex; align-items: center; gap: 8px; }
 .mini { width: 70%; height: 3px; border-radius: 2px; background: var(--track); overflow: hidden; }
-.tab.active .mini { background: rgba(255, 255, 255, 0.25); }
+.tab.active .mini { background: rgba(14, 18, 32, 0.18); }
 .mini-fill { display: block; height: 100%; border-radius: 2px; background: var(--low); }
-.tab.active .mini-fill { background: #FFFFFF; }
+.tab.active .mini-fill { background: var(--accent-fg); }
 .mini-fill.medium { background: var(--medium); }
 .mini-fill.high { background: var(--high); }
 
@@ -126,7 +108,7 @@ html, body {
 }
 .plan {
   font-size: 11.5px; color: var(--muted);
-  padding: 1px 8px; border-radius: 999px;
+  padding: 1px 8px; border-radius: var(--tok-r-full);
   border: 1px solid var(--hair); background: var(--surface);
   max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -136,7 +118,7 @@ html, body {
 .metric + .metric { border-top: 1px solid var(--hair); }
 .metric h3 { margin: 0 0 9px; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
 .track { position: relative; height: 10px; border-radius: 5px; background: var(--track); overflow: hidden; }
-.fill { height: 100%; border-radius: 5px; background: var(--low); transition: width .35s ease; }
+.fill { height: 100%; border-radius: 5px; background: var(--low); transition: width var(--tok-duration-base) ease; }
 .fill.medium { background: var(--medium); }
 .fill.high { background: var(--high); }
 /* Where an even spread would leave the bar. */
@@ -173,16 +155,16 @@ html, body {
   width: 12px; height: 12px; flex: none;
   border: 2px solid var(--track); border-top-color: var(--low);
   border-radius: 50%;
-  animation: spin .8s linear infinite;
+  animation: spin var(--tok-duration-spin) linear infinite;
 }
 .row.busy { cursor: default; }
-.row.busy .refresh-icon { display: inline-block; animation: spin .8s linear infinite; color: var(--low); }
+.row.busy .refresh-icon { display: inline-block; animation: spin var(--tok-duration-spin) linear infinite; color: var(--low); }
 .row.busy:hover { background: transparent; color: var(--fg); }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   .spinner, .row.busy .refresh-icon { animation-duration: 2.4s; }
 }
-.error { margin: 6px 0; padding: 8px 10px; border-radius: 8px; background: var(--surface); color: var(--error); }
+.error { margin: 6px 0; padding: 8px 10px; border-radius: var(--tok-r-md); background: var(--surface); color: var(--error); }
 .error.waiting { color: var(--muted); }
 
 /* Menu rows, as the system draws them. */
@@ -191,7 +173,7 @@ html, body {
   width: 100%;
   display: flex; align-items: center; gap: 10px;
   padding: 6px 6px;
-  border: 0; border-radius: 6px;
+  border: 0; border-radius: var(--tok-r-sm);
   background: transparent; color: var(--fg);
   font: inherit; font-size: 13.5px; text-align: left;
   cursor: pointer;
@@ -200,16 +182,16 @@ html, body {
 .row:hover .row-icon, .row:hover kbd { color: var(--accent-fg); }
 .row-icon { width: 16px; text-align: center; color: var(--faint); }
 .row-label { flex: 1; }
-kbd { font: 11px ui-monospace, Menlo, monospace; color: var(--faint); }
+kbd { font: 11px var(--mono); color: var(--faint); }
 select {
   font: inherit; font-size: 12.5px;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: var(--tok-r-sm);
   border: 1px solid var(--hair);
   background: var(--surface);
   color: inherit;
 }
-.coach-row:hover select { border-color: rgba(255, 255, 255, 0.4); }
+.coach-row:hover select { border-color: rgba(14, 18, 32, 0.3); }
 
 /* The coach's findings. */
 .coach h3, .waits h3 { display: flex; align-items: baseline; gap: 8px; }
@@ -221,7 +203,7 @@ select {
 .finding.notice .finding-mark { color: var(--low); }
 .finding-title { font-weight: 550; }
 .finding-action { margin-top: 3px; font-size: 12px; color: var(--low); }
-.finding-action code { font: 11px ui-monospace, Menlo, monospace; padding: 0 3px; border-radius: 4px; background: var(--surface); border: 1px solid var(--hair); }
+.finding-action code { font: 11px var(--mono); padding: 0 3px; border-radius: var(--tok-r-xs); background: var(--surface); border: 1px solid var(--hair); }
 
 /* A window whose source stopped: dimmed, its age in the warning tone. */
 .metric.stale .track { opacity: 0.45; }
@@ -231,30 +213,30 @@ select {
 .waits .wait { padding: 6px 0; }
 .waits .wait + .wait { border-top: 1px solid var(--hair); }
 .wait-actions { display: flex; gap: 6px; margin-top: 6px; }
-.wait-actions button { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--hair); background: var(--surface); color: inherit; cursor: pointer; }
+.wait-actions button { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: var(--tok-r-sm); border: 1px solid var(--hair); background: var(--surface); color: inherit; cursor: pointer; }
 .wait-actions button:hover { border-color: var(--faint); }
 .wait-actions .wait-approve { font-weight: 550; }
 
 /* Acting on a finding: the first action is a lime fill with ink text, the
    rest quiet; text on white is the dark lime. */
 .finding-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.fbtn { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--hair); background: var(--surface); color: var(--fg); cursor: pointer; }
+.fbtn { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: var(--tok-r-sm); border: 1px solid var(--hair); background: var(--surface); color: var(--fg); cursor: pointer; }
 .fbtn:hover { border-color: var(--faint); }
 .fbtn:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
 .fbtn:disabled { opacity: 0.5; cursor: default; }
 .fbtn.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; font-weight: 600; }
-.fbtn.primary:hover { box-shadow: 0 2px 8px rgba(198, 244, 50, 0.35); }
+.fbtn.primary:hover { box-shadow: var(--tok-shadow-accent-sm); }
 .fbtn.quiet { background: transparent; color: var(--accent-line); }
 .fbtn.hide { color: var(--faint); }
 .fbtn.link { padding: 0; border: 0; background: none; color: var(--accent-line); text-decoration: underline; font-size: inherit; }
-.finding-confirm { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--hair); }
+.finding-confirm { margin-top: 6px; padding: 8px 10px; border-radius: var(--tok-r-md); background: var(--surface); border: 1px solid var(--hair); }
 .confirm-text { font-size: 12px; }
-.confirm-text code { font: 11px ui-monospace, Menlo, monospace; }
+.confirm-text code { font: 11px var(--mono); }
 .findings-hidden { margin-top: 6px; font-size: 11.5px; color: var(--faint); }
 
 /* A plan's own warnings, under the window they concern. */
 .findings.window-findings, .findings.plan-findings {
-  margin-top: 8px; padding: 2px 10px; border-radius: 8px;
+  margin-top: 8px; padding: 2px 10px; border-radius: var(--tok-r-md);
   background: var(--surface); border: 1px solid var(--hair);
 }
 .tab-alert { margin-left: 4px; font-size: 10px; color: var(--medium); }
@@ -268,4 +250,4 @@ select {
 /* What the selected preset does. */
 .preset-help { margin: 0 6px 4px 32px; font-size: 11.5px; color: var(--faint); }
 .preset-help[hidden] { display: none; }
-.preset-help code { font: 11px ui-monospace, Menlo, monospace; }
+.preset-help code { font: 11px var(--mono); }
