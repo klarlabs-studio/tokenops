@@ -163,3 +163,37 @@ func TestLoopbackClientStaysOnTheMachine(t *testing.T) {
 		t.Fatal("the loopback client reached another host")
 	}
 }
+
+// A versioned Gemini group is its own quota: Gemini 4 Argon is not the
+// Gemini weekly limit, so it must not be renamed "Gemini".
+func TestAntigravityKeepsAVersionedGeminiGroupApart(t *testing.T) {
+	summary := `{"groups":[
+    {"displayName":"Gemini Models","buckets":[{"bucketId":"gemini-weekly","displayName":"Weekly Limit","window":"weekly","remainingFraction":0.5}]},
+    {"displayName":"Gemini 4 Argon","buckets":[{"bucketId":"gemini-argon-wtu-weekly","displayName":"Gemini 4 Argon Weekly Limit","window":"weekly","remainingFraction":0.53}]}]}`
+	got, ok := parseAntigravitySummary([]byte(summary))
+	if !ok || len(got.Windows) != 2 {
+		t.Fatalf("got %+v, %v", got, ok)
+	}
+	names := map[string]float64{}
+	for _, w := range got.Windows {
+		names[w.Name] = w.UsedPct
+	}
+	if !approx(names["week (Gemini)"], 50) || !approx(names["week (Gemini 4 Argon)"], 47) {
+		t.Errorf("windows %+v", got.Windows)
+	}
+}
+
+func TestAntigravityGroupTitles(t *testing.T) {
+	for in, want := range map[string]string{
+		"Gemini Models":  "Gemini",
+		"Gemini":         "Gemini",
+		"Gemini quota":   "Gemini",
+		"Gemini 4 Argon": "Gemini 4 Argon",
+		"Gemini 3 Pro":   "Gemini 3 Pro",
+		"Claude and GPT": "Claude/GPT",
+	} {
+		if got := agGroupTitle(in); got != want {
+			t.Errorf("agGroupTitle(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
