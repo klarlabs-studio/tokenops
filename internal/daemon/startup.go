@@ -18,6 +18,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/infra/routehistory"
+	"go.klarlabs.de/tokenops/internal/infra/selfexe"
 	"go.klarlabs.de/tokenops/internal/proxy"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -31,6 +32,12 @@ import (
 type startup struct {
 	cfg    config.Config
 	logger *slog.Logger
+	// restart ends the run with a cause; the binary watch uses it to stop
+	// the daemon when its binary has been replaced.
+	restart context.CancelCauseFunc
+	// exe is the binary this process started from, recorded before anything
+	// can replace it. Nil when it could not be resolved.
+	exe *selfexe.Snapshot
 
 	components     *bootstrap.Components
 	eventCounter   *bootstrap.EventCounter
@@ -63,6 +70,7 @@ type startupStep func(ctx context.Context) error
 // steps lists the boot stages in the order they run.
 func (s *startup) steps() []startupStep {
 	return []startupStep{
+		s.recordBinary,
 		s.announce,
 		s.configureTLS,
 		s.listenEarly,
@@ -93,6 +101,18 @@ func (s *startup) runCleanups() {
 		s.cleanups[i]()
 	}
 	s.cleanups = nil
+}
+
+// recordBinary notes which binary this process runs, first, so a later
+// install cannot be mistaken for the one already running.
+func (s *startup) recordBinary(context.Context) error {
+	exe, err := selfexe.SnapshotExecutable()
+	if err != nil {
+		s.logger.Warn("cannot resolve own executable; replaced-binary detection off", "err", err)
+		return nil
+	}
+	s.exe = exe
+	return nil
 }
 
 // announce validates the configuration and logs the start banner along
@@ -461,6 +481,11 @@ func (s *startup) startPostServeSubsystems(context.Context) error {
 	}
 	startReadGuardRuntime(ingest, s.sup, s.logger)
 
+	// Follow an upgrade: a supervised daemon restarts onto the installed
+	// binary, and the menu bar app is refreshed to match.
+	s.startBinaryWatch()
+	s.startMenubarRefresh()
+
 	// Follow a plan change the clients report (Claude Code's account
 	// tier, Codex's plan_type) without anyone re-running init.
 	startPlanFollowRuntime(s.cfg, s.components.Store, s.sup, s.logger)
@@ -489,6 +514,25 @@ func (s *startup) announceReady(context.Context) error {
 	}
 	proxy.MarkReady(true)
 	return nil
+}
+
+// startBinaryWatch checks, every driftCheckEvery, whether the binary this
+// process runs has been replaced by an install. See binary_drift.go.
+func (s *startup) startBinaryWatch() {
+	if s.exe == nil {
+		return
+	}
+	ticker := time.NewTicker(driftCheckEvery)
+	watch := &driftWatch{
+		settle:     driftSettle,
+		supervised: supervisedIn(os.Getenv, selfCgroup()),
+		exists:     isExecutableFile,
+	}
+	s.sup.Go("binary-watch", func(ctx context.Context) error {
+		defer ticker.Stop()
+		watchBinaryDrift(ctx, s.exe.Check, watch, ticker.C, s.logger, s.restart)
+		return nil
+	})
 }
 
 // shutdown tears the run down through stopDaemon.

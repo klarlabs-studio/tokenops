@@ -23,6 +23,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/internal/infra/selfexe"
 	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -112,7 +113,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	// across upgrades: one agent's server reported 0.54.3 while 0.66.0 was
 	// installed, and nothing said so.
 	var binaryDrift func() mcp.BinaryDrift
-	if snap, err := mcp.SnapshotExecutable(); err == nil {
+	if snap, err := selfexe.SnapshotExecutable(); err == nil {
 		binaryDrift = snap.Check
 	} else {
 		logger.Warn("serve: cannot resolve own executable; out-of-date detection off", "err", err)
