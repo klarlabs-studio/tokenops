@@ -1,0 +1,13 @@
+{
+  "included": {
+    "allowance_usd": 40,
+    "balance_usd": "30.00",
+    "period": {
+      "from": "2026-09-15T00:00:00Z",
+      "until": "2026-10-15T00:00:00Z"
+    }
+  },
+  "purchased": {
+    "balance_usd": "12.50"
+  }
+}
