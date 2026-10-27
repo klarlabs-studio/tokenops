@@ -3578,6 +3578,10 @@
                               "balance_usd": {
                                 "type": "number"
                               },
+                              "blocked_until": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
                               "consumed_pct": {
                                 "type": "number"
                               },
@@ -3589,6 +3593,9 @@
                               },
                               "headroom_days": {
                                 "type": "number"
+                              },
+                              "limit_reached": {
+                                "type": "boolean"
                               },
                               "note": {
                                 "type": "string"
@@ -3636,6 +3643,9 @@
                                 "type": "string"
                               },
                               "spend_scope_label": {
+                                "type": "string"
+                              },
+                              "spend_scope_reason": {
                                 "type": "string"
                               },
                               "spend_source": {
@@ -4637,6 +4647,10 @@
                           "balance_usd": {
                             "type": "number"
                           },
+                          "blocked_until": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
                           "consumed_pct": {
                             "type": "number"
                           },
@@ -4648,6 +4662,9 @@
                           },
                           "headroom_days": {
                             "type": "number"
+                          },
+                          "limit_reached": {
+                            "type": "boolean"
                           },
                           "note": {
                             "type": "string"
@@ -4695,6 +4712,9 @@
                             "type": "string"
                           },
                           "spend_scope_label": {
+                            "type": "string"
+                          },
+                          "spend_scope_reason": {
                             "type": "string"
                           },
                           "spend_source": {

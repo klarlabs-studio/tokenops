@@ -1106,12 +1106,28 @@ until you bind another plan.
   quota. That figure is the whole account's, every member together, so
   where it is shown it is labelled "Account spend" with
   `account <id>, all members` (`spend_scope: account` and `spend_scope_label` in the API), not
-  as your own extra usage. Your user and account come from Nexus CLI's
-  `~/.nexus/minted-key.json` (`~/.fireconnect` on older versions); the
-  account can also come from the key. Fireworks has no call that names a
-  key's user, so when no file names yours, set it once:
-  `tokenops vendor-usage enable fireworks --user-id <your-user-id>`.
-  Until then the figures are the account's.
+  as your own extra usage. The account comes from the key (or Nexus CLI's
+  files). Your user comes, in order, from `--user-id`
+  (`vendor_usage.fireworks.user_id`), from `minted-key.json` in
+  `~/.nexus` (`~/.fireconnect` on older versions), from
+  `nexus status --json` when it names your user, or by email: the
+  account's members are looked up by `--email`
+  (`vendor_usage.fireworks.email`), else by the email
+  `nexus status --json` reports, else by one read from an email field in Nexus CLI's
+  `config.json`, `key-storage.json` or the JSON files under `cli/` (only
+  such fields; key fields are never read). A user you set that the
+  account does not have, or an account that is not your key's, is named
+  as the reason instead of showing the account's figure as if it were
+  yours. The user found is kept in the daemon's memory
+  for a day, or until the key changes, and never written to your config.
+  When your own figure cannot be read, the account's is shown and says
+  why, in `tokenops glance`'s card ("account-wide: your user wasn't
+  found — set it with
+  `tokenops vendor-usage enable fireworks --user-id <id>`"), in
+  `tokenops vendor-usage status` and as `spend_scope_reason` in the API.
+- **A block.** When your cap blocks requests, the card says "Blocked
+  until 1 Nov" (your local date) and the API carries `limit_reached` and
+  `blocked_until`.
 - **Calls** go to `api.fireworks.ai` only. Turn them off with
   `tokenops vendor-usage enable fireworks --disable`.
 
@@ -1214,9 +1230,10 @@ vendor's windows, busiest first:
 | Windsurf | `POST windsurf.com/_backend/.../GetPlanStatus` | daily and weekly quota, live |
 | WorkBuddy (Tencent) | `POST /billing/meter/get-user-resource-summary` (www.workbuddy.cn) | the share of the credit packages' cycle used, and when it ends |
 | xKiro | `GET /v1/usage` | the plan's spend windows, today's free tokens and the wallet balance |
-| z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly token windows |
+| z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly coding-plan windows (token or credit rows) |
 | Zed | `GET cloud.zed.dev/client/users/me` | edit predictions used of the plan's allowance this billing cycle |
 | ZenMux | `GET /api/v1/management/subscription/detail` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance |
+| Zhipu AI | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly coding-plan windows |
 | ZoomMate | `GET /ai-computer/api/v1/credits/status` | AI credits used against the budget cap this billing cycle, and the credits left |
 <!-- end generated: provider-subscriptions -->
 
@@ -1389,10 +1406,10 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | xAI | `xai-account` | the team's posted prepaid USD credit, and its spend over the last 30 days | API key | CodexBar's source, the vendor's docs and fixtures |
 | X API | `xapi-web` | prepaid credit left, purchased plus free (below zero when overdrawn) | browser session | CodexBar's source, the vendor's docs and fixtures |
 | xKiro | `xkiro-account` | the plan's spend windows, today's free tokens and the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
-| z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |
+| z.ai | `zai-account` | 5-hour and weekly coding-plan windows (token or credit rows) | API key | the vendor's client source and fixtures |
 | Zed | `zed-account` | edit predictions used of the plan's allowance this billing cycle | another app's sign-in, from the Keychain at setup | CodexBar's source, the vendor's docs and fixtures |
 | ZenMux | `zenmux-account` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance | API key | CodexBar's source, the vendor's docs and fixtures |
-| Zhipu AI | — | in the catalog only: z.ai's mainland-China platform: its endpoints, opencode IDs and prices are known; no reader reads its plan yet | — | — |
+| Zhipu AI | `zhipuai-account` | 5-hour and weekly coding-plan windows | API key | the vendor's client source and fixtures |
 | ZoomMate | `zoommate-account` | AI credits used against the budget cap this billing cycle, and the credits left | browser session | CodexBar's source, the vendor's docs and fixtures |
 <!-- end generated: provider-list -->
 

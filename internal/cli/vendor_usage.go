@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/backfill"
 	"go.klarlabs.de/tokenops/internal/capability/providersetup"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // newVendorUsageCmd assembles the `tokenops vendor-usage` command tree.
@@ -38,6 +40,7 @@ type vendorUsageEnableFlags struct {
 	orgID       string
 	cookie      string
 	userID      string
+	email       string
 	adminKey    string
 	bucketWidth string
 	oauthToken  string
@@ -198,6 +201,7 @@ Where secrets end up:
 	cmd.Flags().StringVar(&f.orgID, "org-id", "", "Anthropic org_id (claude-subscription); auto-resolved on first scan when empty")
 	cmd.Flags().StringVar(&f.cookie, "cookie", "", "WorkosCursorSessionToken cookie (cursor); \"-\" reads stdin; env TOKENOPS_CURSOR_COOKIE")
 	cmd.Flags().StringVar(&f.userID, "user-id", "", "Cursor user_id (cursor); your Fireworks user, for your own spend limit (fireworks)")
+	cmd.Flags().StringVar(&f.email, "email", "", "the email you sign in to Fireworks with, to find your user by when no file names it (fireworks)")
 	cmd.Flags().StringVar(&f.adminKey, "admin-key", "", "Anthropic admin key (anthropic-admin); \"-\" reads stdin; env TOKENOPS_ANTHROPIC_ADMIN_KEY")
 	cmd.Flags().StringVar(&f.bucketWidth, "bucket-width", "", "anthropic-admin bucket width (1m|1h|1d); empty keeps current")
 	cmd.Flags().StringVar(&f.oauthToken, "oauth-token", "", "GitHub Copilot OAuth token (github-copilot); \"-\" reads stdin; env TOKENOPS_COPILOT_OAUTH_TOKEN. Empty = auto-discover")
@@ -262,6 +266,12 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		cfg.VendorUsage.Fireworks.Enabled = &enabled
 		if f.userID != "" {
 			cfg.VendorUsage.Fireworks.UserID = f.userID
+		}
+		if f.email != "" {
+			if !providersetup.ValidFireworksEmail(f.email) {
+				return fmt.Errorf("--email %q is not an email address", f.email)
+			}
+			cfg.VendorUsage.Fireworks.Email = f.email
 		}
 		if f.interval > 0 {
 			cfg.VendorUsage.Fireworks.Interval = f.interval
@@ -519,6 +529,9 @@ machine-readable output.`,
 					EventsInWin: counts[src.SourceTag],
 					ConfigHint:  cfg.VendorUsageConfigHint(src.SourceTag),
 				})
+				if src.SourceTag == "fireworks-usage" {
+					report.Sources[len(report.Sources)-1].Note = fireworksStatusNote(ctx, store, now)
+				}
 			}
 			for _, g := range providersetup.Grants(cfg, providersetup.AppLoginEnv(cfg.Keychain.Disabled)) {
 				report.Grants = append(report.Grants, vendorUsageGrant{
@@ -567,6 +580,15 @@ type vendorUsageSource struct {
 	AlwaysOn    bool   `json:"always_on,omitempty"`
 	EventsInWin int64  `json:"events_in_window"`
 	ConfigHint  string `json:"config_hint,omitempty"`
+	// Note says what the source's latest reading leaves out, one line:
+	// Fireworks' figure being account-wide and why, or a block.
+	Note string `json:"note,omitempty"`
+}
+
+// fireworksStatusNote is what Fireworks' latest reading this month leaves
+// out: a block, or why it is the whole account's.
+func fireworksStatusNote(ctx context.Context, reader providersetup.EventReader, now time.Time) string {
+	return providersetup.ReadingNote(ctx, reader, eventschema.ProviderFireworks, now)
 }
 
 func renderVendorUsageText(cmd *cobra.Command, r vendorUsageReport) {
@@ -582,6 +604,9 @@ func renderVendorUsageText(cmd *cobra.Command, r vendorUsageReport) {
 		}
 		fmt.Fprintf(out, "%-26s %-30s %-9s %-12d %s\n",
 			s.Name, s.SourceTag, enabled, s.EventsInWin, s.ConfigHint)
+		if s.Note != "" {
+			fmt.Fprintf(out, "%-26s %s\n", "", s.Note)
+		}
 	}
 	fmt.Fprintln(out)
 	renderGrants(out, r.Grants)
