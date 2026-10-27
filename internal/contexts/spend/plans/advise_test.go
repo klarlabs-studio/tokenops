@@ -355,3 +355,45 @@ type rateErr string
 func (e rateErr) Error() string { return string(e) }
 
 const errNoRate = rateErr("no rate")
+
+// On the top tier with nothing higher to move to, a lockout must not
+// become "upgrade" to the plan already in force. The only acceptable
+// option is the same plan with metered overflow, which costs the same
+// (no window went over its cap), so the verdict used to fall through to
+// upgrade-to-self.
+func TestReplayAtTheTopTierNeverUpgradesToItself(t *testing.T) {
+	until := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	since := until.Add(-28 * 24 * time.Hour)
+	pro, five, twenty := maxTiers()
+	rs := make([]QuotaReading, 0, 8)
+	for i := range 4 {
+		reset := since.Add(time.Duration(i+1) * week)
+		// Exactly 100% on the top tier: a lockout, with nothing over the cap.
+		rs = append(rs, weekReadings(reset, []time.Duration{24 * time.Hour, 3 * 24 * time.Hour}, []float64{60, 100})...)
+	}
+	a := Replay(ReplayInput{
+		Provider: "anthropic", Since: since, Until: until, Readings: rs,
+		FactorAt: func(time.Time) (float64, bool) { return 20, true },
+		Current:  twenty, Candidates: []Tier{pro, five, twenty},
+		ListValueUSD: 4000, ListValueKnown: true,
+	})
+	if cur := optionFor(t, a, OptionPlan, "claude-max-20x"); cur.Lockouts == 0 {
+		t.Fatalf("setup: current = %+v, want lockouts", cur)
+	}
+	r := a.Recommendation
+	if r == nil {
+		t.Fatal("no recommendation")
+	}
+	if r.Verdict == VerdictUpgrade || r.Plan == "claude-max-20x" && r.Verdict != VerdictStay {
+		t.Fatalf("recommendation = %+v: top tier must not upgrade to itself", r)
+	}
+	if r.Verdict != VerdictStay || r.Plan != "claude-max-20x" {
+		t.Errorf("recommendation = %+v, want stay on the top tier", r)
+	}
+	if !strings.Contains(r.Summary, "top tier") {
+		t.Errorf("summary = %q, want the top tier named as the reason", r.Summary)
+	}
+	if a.WorthSaying() {
+		t.Error("staying on the top tier is not a finding")
+	}
+}

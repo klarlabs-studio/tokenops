@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- **plans:** plan advice no longer says "upgrade" to the plan you already have. On the top tier (Max 20x) with a lockout and nothing larger to move to, the replay recommended the same plan with metered overflow, which costs the same when no window went over its cap, and printed `upgrade` with `$0.00` saved. `tokenops team preview` and the team upload showed it as `upgrade`, recommended `claude-max-20x`. An upgrade now only goes to a larger allowance; with none, the verdict is `stay` and the summary says the plan is the top tier and the lockouts are the price of its allowance. The team wire verdicts are unchanged.
 - **daemon:** `tokenops daemon install`, which the Homebrew upgrade runs, restarts the daemon once when it does not answer after starting. On an upgrade to 0.113.1 launchd refused the first start of the new binary (exit reason `OS_REASON_CODESIGNING`, "spawn failed") and the daemon stayed down until restarted by hand, while the next start of the same file worked. The upgrade hook cannot fail the upgrade, so its error went unseen. It now waits five seconds, restarts the unit and checks again, and reports an error only when the retry does not come up either.
 
 ## 0.113.1 - 2026-10-27
