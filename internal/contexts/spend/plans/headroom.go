@@ -148,6 +148,10 @@ type HeadroomInputs struct {
 	// monthly ConsumedPct + overage risk directly, which is the only useful
 	// monthly signal for request-quota plans that publish no token cap.
 	MonthlyAuthoritative *AuthoritativeWindow
+	// UnmeteredSeat, when set, is a seat the vendor reports with no
+	// personal allowance (a Copilot organisation seat): there is no share
+	// to report, and the report says so rather than showing headroom.
+	UnmeteredSeat *UnmeteredSeat
 	// Now is the clock reference. Tests inject a fixed time; production
 	// passes time.Now().UTC().
 	Now time.Time
@@ -219,6 +223,11 @@ func computeWindowHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 	// that publish no token cap.
 	if in.MonthlyAuthoritative != nil {
 		return finishAuthoritativeMonthly(report, in, windowRisk)
+	}
+	if in.UnmeteredSeat != nil {
+		report.OverageRisk = windowRisk
+		report.Note = unmeteredNote(in.UnmeteredSeat)
+		return report
 	}
 
 	if report.QuotaTokens <= 0 {
