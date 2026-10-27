@@ -128,3 +128,22 @@ func TestNilRegistryIsUsable(t *testing.T) {
 		t.Errorf("a nil registry returned %+v", got)
 	}
 }
+
+// A reading that is usable but degraded says why, and the note is cleared
+// by the next clean poll rather than lingering.
+func TestRecorderNoticeIsKeptUntilTheNextSuccess(t *testing.T) {
+	rec := freshness.NewRecorder()
+	at := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
+
+	rec.Succeeded(at)
+	rec.Noted("using stale quota from the quota file", at)
+	got := rec.Poll()
+	if got.Notice != "using stale quota from the quota file" || got.LastError != nil {
+		t.Fatalf("after a note: %+v", got)
+	}
+
+	rec.Succeeded(at.Add(time.Minute))
+	if got := rec.Poll(); got.Notice != "" {
+		t.Errorf("a clean poll kept the note: %q", got.Notice)
+	}
+}

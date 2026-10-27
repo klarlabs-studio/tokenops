@@ -128,6 +128,11 @@ type Reading struct {
 	Subscription bool
 	// Windows are usage windows as the vendor reports them.
 	Windows []Window
+	// Notice says why this reading is degraded though usable, such as a
+	// quota taken from an older source because the newest record was in
+	// an unrecognised layout. It is reported in the source's health, not
+	// as a failure.
+	Notice string
 	// Counts are usage the vendor reports as a count with no allowance to
 	// measure it against (CodeRabbit's reviews this billing period), so no
 	// percentage, and no window.
