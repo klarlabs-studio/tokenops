@@ -1106,12 +1106,24 @@ until you bind another plan.
   quota. That figure is the whole account's, every member together, so
   where it is shown it is labelled "Account spend" with
   `account <id>, all members` (`spend_scope: account` and `spend_scope_label` in the API), not
-  as your own extra usage. Your user and account come from Nexus CLI's
-  `~/.nexus/minted-key.json` (`~/.fireconnect` on older versions); the
-  account can also come from the key. Fireworks has no call that names a
-  key's user, so when no file names yours, set it once:
-  `tokenops vendor-usage enable fireworks --user-id <your-user-id>`.
-  Until then the figures are the account's.
+  as your own extra usage. The account comes from the key (or Nexus CLI's
+  files). Your user comes, in order, from `--user-id`
+  (`vendor_usage.fireworks.user_id`), from `minted-key.json` in
+  `~/.nexus` (`~/.fireconnect` on older versions), or by email: the
+  account's members are looked up by `--email`
+  (`vendor_usage.fireworks.email`), else by the email Nexus CLI is signed
+  in with, read from an email field in its `config.json`,
+  `key-storage.json` or the JSON files under `cli/` (only such fields; key
+  fields are never read). The user found is kept in the daemon's memory
+  for a day, or until the key changes, and never written to your config.
+  When your own figure cannot be read, the account's is shown and says
+  why, in `tokenops glance`'s card ("account-wide: your user wasn't
+  found — set it with
+  `tokenops vendor-usage enable fireworks --user-id <id>`"), in
+  `tokenops vendor-usage status` and as `spend_scope_reason` in the API.
+- **A block.** When your cap blocks requests, the card says "Blocked
+  until 1 Nov" (your local date) and the API carries `limit_reached` and
+  `blocked_until`.
 - **Calls** go to `api.fireworks.ai` only. Turn them off with
   `tokenops vendor-usage enable fireworks --disable`.
 

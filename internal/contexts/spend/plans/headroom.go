@@ -57,6 +57,14 @@ type HeadroomReport struct {
 	// <id>, all members"), so it is not read as the operator's own spend.
 	// Empty for the operator's own figures.
 	SpendScopeLabel string `json:"spend_scope_label,omitempty"`
+	// SpendScopeReason says, in one line, why an account-wide figure
+	// stands in for the operator's own: their user was not found, the
+	// lookup or their own read failed, or they have no cap.
+	SpendScopeReason string `json:"spend_scope_reason,omitempty"`
+	// LimitReached is the vendor saying requests are blocked by the spend
+	// limit; BlockedUntil is when they may resume, when it says.
+	LimitReached bool       `json:"limit_reached,omitempty"`
+	BlockedUntil *time.Time `json:"blocked_until,omitempty"`
 
 	// SignalQuality types the trust the operator can place in this
 	// report. When the report is built from MCP-ping activity only,
@@ -400,6 +408,15 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 		// limit it enforces. No rate factor — they are already the rate.
 		report.SpendUSD, report.SpendLimitUSD, report.SpendSource = v.UsedUSD, v.LimitUSD, "vendor"
 		report.SpendScope, report.SpendScopeLabel = v.Scope, AccountScopeLabel(v.Scope, v.AccountID)
+		if v.Scope == "account" {
+			report.SpendScopeReason = v.ScopeReason
+		}
+		reached := v.LimitReached && (v.BlockedUntil.IsZero() || v.BlockedUntil.After(in.Now))
+		report.LimitReached = reached
+		if reached && !v.BlockedUntil.IsZero() {
+			until := v.BlockedUntil
+			report.BlockedUntil = &until
+		}
 		if v.LimitUSD <= 0 {
 			report.Note = "no spend limit is set on the account, so there is no percentage"
 			if days := int(v.UsedPeriod / (24 * time.Hour)); days > 0 {
@@ -409,7 +426,7 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 		}
 		report.SpendPct = math.Round(v.UsedUSD/v.LimitUSD*10000) / 100
 		report.OverageRisk = classifyWindowRisk(report.SpendPct)
-		if v.LimitReached {
+		if reached {
 			report.OverageRisk = RiskHigh
 			report.Note = "the vendor reports the spend limit as reached"
 		}

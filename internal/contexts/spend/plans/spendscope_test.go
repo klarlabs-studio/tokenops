@@ -51,3 +51,37 @@ func TestOwnVendorSpendCarriesNoAccountLabel(t *testing.T) {
 		t.Errorf("scope %q label %q", report.SpendScope, report.SpendScopeLabel)
 	}
 }
+
+// An account-wide figure that stands in for the operator's own says why,
+// so the fallback is never silent; a member blocked by their cap carries
+// the block and its end.
+func TestVendorSpendCarriesTheReasonAndTheBlock(t *testing.T) {
+	reading := func(attrs map[string]string) *VendorSpend {
+		base := map[string]string{"billing": "per_token", "account_id": "acme-test",
+			"extra_usage_currency": "USD", "extra_usage_limit": "100.00"}
+		for k, v := range attrs {
+			base[k] = v
+		}
+		env := &eventschema.Envelope{Type: eventschema.EventTypePrompt, Timestamp: vsNow.Add(-time.Minute),
+			Source: "fireworks-usage", Attributes: base,
+			Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderFireworks}}
+		return LatestVendorSpend(context.Background(), staticReader{env}, eventschema.ProviderFireworks, vsNow)
+	}
+	v := reading(map[string]string{"scope": "account", "extra_usage_used": "900.00", "scope_reason": "your user wasn't found"})
+	report, _ := ComputeHeadroom(PayAsYouGo, HeadroomInputs{VendorSpend: v, Now: vsNow})
+	if report.SpendScopeReason != "your user wasn't found" {
+		t.Errorf("reason %q", report.SpendScopeReason)
+	}
+	until := vsNow.Add(72 * time.Hour).UTC().Truncate(time.Second)
+	v = reading(map[string]string{"scope": "user", "extra_usage_used": "105.34", "extra_usage_limit_reached": "true",
+		"extra_usage_blocked_until": until.Format(time.RFC3339)})
+	report, _ = ComputeHeadroom(PayAsYouGo, HeadroomInputs{VendorSpend: v, Now: vsNow})
+	if !report.LimitReached || report.BlockedUntil == nil || !report.BlockedUntil.Equal(until) || report.SpendScopeReason != "" {
+		t.Errorf("limit reached %v until %v reason %q", report.LimitReached, report.BlockedUntil, report.SpendScopeReason)
+	}
+	// A block that has ended is not shown.
+	report, _ = ComputeHeadroom(PayAsYouGo, HeadroomInputs{VendorSpend: v, Now: until.Add(time.Minute)})
+	if report.BlockedUntil != nil {
+		t.Errorf("an ended block is still shown: %v", report.BlockedUntil)
+	}
+}

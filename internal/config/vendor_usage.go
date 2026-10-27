@@ -103,11 +103,14 @@ func (c AccountsUsageConfig) On() bool { return c.Enabled == nil || *c.Enabled }
 // Fireworks' API with the key Nexus CLI or FIREWORKS_API_KEY already
 // provides. It is on unless Enabled is false, and idle on a machine with
 // no Fireworks key. Interval defaults to 15 minutes. UserID names the
-// member whose own cap is read, when Nexus CLI's files do not.
+// member whose own cap is read, when Nexus CLI's files do not; without
+// it the member is found by Email, else by the email Nexus CLI is signed
+// in with.
 type FireworksUsageConfig struct {
 	Enabled  *bool         `yaml:"enabled,omitempty"`
 	Interval time.Duration `yaml:"interval,omitempty"`
 	UserID   string        `yaml:"user_id,omitempty"`
+	Email    string        `yaml:"email,omitempty"`
 }
 
 // On reports whether the reader runs: unless switched off.
