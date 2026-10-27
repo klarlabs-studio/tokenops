@@ -25,6 +25,17 @@ type CoachConfig struct {
 	// DefaultHoldoutPercent; 0 opts out; at most MaxHoldoutPercent. Tips
 	// about work about to stop are never held. A preset keeps it.
 	Holdout *int `yaml:"holdout,omitempty"`
+	// HeadroomNote puts a one-line plan headroom note in front of the
+	// agent through the per-turn prompt hook (route-guard), once per
+	// session and again when a window crosses 50, 25 or 10% left. Unset
+	// is on; false turns it off. It never enters a session's cached
+	// prefix. The inform power being off also silences it.
+	HeadroomNote *bool `yaml:"headroom_note,omitempty"`
+}
+
+// CoachHeadroomNote reports whether the headroom note is on.
+func (c Config) CoachHeadroomNote() bool {
+	return c.Coach.HeadroomNote == nil || *c.Coach.HeadroomNote
 }
 
 // The holdout's bounds: on by default, and small, because it withholds

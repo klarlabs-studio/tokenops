@@ -90,9 +90,13 @@ type Preparation struct {
 	LeftPct     float64                    `json:"left_pct"`
 	ResetsIn    string                     `json:"resets_in,omitempty"`
 	Estimate    windowshare.EstimateResult `json:"estimate"`
-	Suggestion  windowshare.Advice         `json:"suggestion"`
-	Summary     string                     `json:"summary"`
-	Caveat      string                     `json:"caveat,omitempty"`
+	// Spread is the p50 and p90 of past runs of the same kind with their
+	// count, or why there are too few to read one. Nil only when there
+	// was no history to read.
+	Spread     *windowshare.Spread `json:"spread,omitempty"`
+	Suggestion windowshare.Advice  `json:"suggestion"`
+	Summary    string              `json:"summary"`
+	Caveat     string              `json:"caveat,omitempty"`
 	// Recorded says the window's state was stored, so review can measure
 	// the task.
 	Recorded bool `json:"recorded"`
@@ -150,6 +154,7 @@ func Prepare(ctx context.Context, d Deps, req PrepareRequest, now time.Time) (*P
 	}
 	key := windowshare.Key{Kind: string(kind), Scope: scope, Provider: provider, Window: plan.RateLimitWindow}
 	est := windowshare.Estimate(hist, key, d.MinSamples)
+	spread := windowshare.SpreadOf(hist, key, est)
 	advice := windowshare.Advise(est, reading)
 	if advice.Action == windowshare.ActionLighterTier || advice.Action == windowshare.ActionDefer {
 		advice.SuggestedTier = lighterTier(provider, req.Model)
@@ -157,14 +162,14 @@ func Prepare(ctx context.Context, d Deps, req PrepareRequest, now time.Time) (*P
 	}
 
 	out.Status = string(est.Status)
-	out.WindowKnown, out.Estimate, out.Suggestion = reading.Known, est, advice
+	out.WindowKnown, out.Estimate, out.Spread, out.Suggestion = reading.Known, est, &spread, advice
 	if reading.Known {
 		out.UsedPct, out.LeftPct = reading.UsedPct, reading.LeftPct()
 		if in := reading.ResetsIn(); in > 0 {
 			out.ResetsIn = windowshare.Duration(in)
 		}
 	}
-	out.Summary = windowshare.Summary(est, reading, plan.RateLimitWindow)
+	out.Summary = windowshare.SummaryWithSpread(est, spread, reading, plan.RateLimitWindow)
 	out.Caveat = windowshare.Caveat
 
 	rec := estimateRecord{
