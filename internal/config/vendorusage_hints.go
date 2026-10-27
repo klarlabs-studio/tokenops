@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
@@ -27,6 +28,9 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 	case "opencode":
 		return configHintOpenCode(c.VendorUsage.OpenCode.Enabled)
 	case "gemini-cli":
+		if hint := c.planReadElsewhereHint(sourceTag); hint != "" {
+			return hint
+		}
 		if !c.VendorUsage.GeminiCLI.Enabled {
 			return "set vendor_usage.gemini_cli.enabled: true (reads Gemini CLI's chat recordings under ~/.gemini/tmp — per-turn tokens per model)"
 		}
@@ -68,6 +72,29 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 	default:
 		return c.registryHint(sourceTag)
 	}
+}
+
+// planReadElsewhereHint is the hint of a source whose provider's bound plan
+// it no longer serves (Plan.ReadBy): Google AI Pro left Gemini CLI for
+// Antigravity CLI. It names why and points at the source that reads the
+// plan, with that source's own hint; empty when the bound plan is served.
+func (c Config) planReadElsewhereHint(sourceTag string) string {
+	s, ok := providers.ForSource(sourceTag)
+	if !ok {
+		return ""
+	}
+	p, ok := plans.Lookup(c.Plans[string(s.Provider)])
+	if !ok || p.ReadBy == "" || p.ReadBy == sourceTag {
+		return ""
+	}
+	hint := p.Display + " is not read here: " + p.ReadByWhy
+	if other, ok := providers.ForSource(p.ReadBy); ok {
+		hint += "; its usage is read by " + providers.DisplayName(string(other.Provider)) + " (" + p.ReadBy + ")"
+	}
+	if next := c.VendorUsageConfigHint(p.ReadBy); next != "" {
+		hint += " — " + next
+	}
+	return hint
 }
 
 // registryHint is the hint of a source with no config block of its own:
