@@ -69,7 +69,7 @@ func configuredSources(cfg config.Config) []freshness.Source {
 		if !s.Enabled && !s.AlwaysOn {
 			continue
 		}
-		out = append(out, freshness.Source{Name: s.Name, Tag: s.SourceTag})
+		out = append(out, freshness.Source{Name: s.Name, Tag: s.SourceTag, AlwaysOn: s.AlwaysOn && !s.Enabled})
 	}
 	return out
 }

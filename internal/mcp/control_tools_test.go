@@ -2,12 +2,15 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"os"
 	"strings"
 	"testing"
 
+	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 )
 
 func newControlServer(t *testing.T, d ControlDeps) *Server {
@@ -221,5 +224,48 @@ func TestStatusToolNilStaleSourcesHook(t *testing.T) {
 	}
 	if !strings.Contains(out, `"state": "ready"`) {
 		t.Errorf("expected state=ready: %s", out)
+	}
+}
+
+// A live daemon's reader health decides the source warnings: a reader it
+// found idle says nothing although no events arrived, and a refused one
+// says so with its own remedy. Without an answer the counts apply.
+func TestStatusToolUsesDaemonSourceHealth(t *testing.T) {
+	cfg := config.Default()
+	cfg.Storage.Enabled = true
+	cfg.Rules.Enabled = true
+	cfg.Providers = map[string]string{"anthropic": "https://api.anthropic.com"}
+	health := []state.SourceReport{
+		{Tag: "gemini-cli", State: freshness.StateIdle, Severity: freshness.SeverityOK},
+		{Tag: "cursor-web", State: freshness.StateFailing, Severity: freshness.SeverityWarning, LastError: "401"},
+	}
+	var healthErr error
+	srv := newControlServer(t, ControlDeps{
+		Config:      &cfg,
+		ReadyCheck:  func() bool { return true },
+		DaemonProbe: func() DaemonReport { return DaemonReport{Alive: true, URL: "http://127.0.0.1:7878"} },
+		StaleSources: func() []config.StaleSource {
+			return []config.StaleSource{{Name: "gemini_cli", SourceTag: "gemini-cli", WindowHours: 48}}
+		},
+		SourceHealth: func(string) ([]state.SourceReport, error) { return health, healthErr },
+	})
+
+	out := execTool(t, srv, "tokenops_status", nil)
+	if strings.Contains(out, "gemini-cli") {
+		t.Errorf("an idle reader warned: %s", out)
+	}
+	for _, want := range []string{"cursor-web is being refused (401)", state.FailingSourceNextAction} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in output: %s", want, out)
+		}
+	}
+	if strings.Contains(out, config.StaleIngestionNextAction) {
+		t.Errorf("a refused reader drew the daemon remedy: %s", out)
+	}
+
+	healthErr = errors.New("404")
+	out = execTool(t, srv, "tokenops_status", nil)
+	if !strings.Contains(out, "ingestion stale [warning]: gemini-cli") {
+		t.Errorf("without the daemon's answer the count check should apply: %s", out)
 	}
 }

@@ -397,3 +397,40 @@ func TestASingleRefusalAfterRecentSuccessIsNotFailing(t *testing.T) {
 		t.Errorf("state %q, want healthy", r.State)
 	}
 }
+
+// An always-on reader runs on every machine and reads only where it finds
+// something to read with: a key, a sign-in, an installed client. One that
+// never found anything has not been connected, which is no fault. Grading
+// it stale put every unconnected provider on this list.
+func TestAnAlwaysOnReaderThatNeverRanIsIdle(t *testing.T) {
+	r := only(t, freshness.Assess(inputs(func(in *freshness.Inputs) {
+		in.Sources[0].AlwaysOn = true
+		in.EventsInWindow = nil
+		in.LastEventAt = nil
+	})))
+	if r.State != freshness.StateIdle {
+		t.Errorf("state = %q, want idle", r.State)
+	}
+
+	// Once it has tried, its polls decide, as for any other reader.
+	r = only(t, freshness.Assess(inputs(func(in *freshness.Inputs) {
+		in.Sources[0].AlwaysOn = true
+		in.EventsInWindow = nil
+		in.LastEventAt = nil
+		in.Polls = map[string]freshness.Poll{"claude_usage_meter": {
+			LastAttemptAt: ago(time.Minute), LastErrorAt: ago(time.Minute), LastError: errors.New("401"),
+		}}
+	})))
+	if r.State != freshness.StateFailing {
+		t.Errorf("refused always-on reader state = %q, want failing", r.State)
+	}
+
+	// A source the operator enabled stays stale when nothing confirms it.
+	r = only(t, freshness.Assess(inputs(func(in *freshness.Inputs) {
+		in.EventsInWindow = nil
+		in.LastEventAt = nil
+	})))
+	if r.State != freshness.StateStale {
+		t.Errorf("enabled source state = %q, want stale", r.State)
+	}
+}

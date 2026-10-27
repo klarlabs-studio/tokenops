@@ -17,6 +17,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/daemonreach"
+	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/presentation"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -78,7 +79,7 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 			// (like `vendor-usage status`); any failure degrades to "no
 			// warnings" rather than failing the status command.
 			if cfgErr == nil {
-				res.Warnings = statusStaleWarnings(cmd.Context(), rf, cfg)
+				res.Warnings = statusStaleWarnings(cmd.Context(), rf, cfg, base, mcp.FetchDaemonSources)
 			}
 			// Dropped rows come from the daemon itself rather than the
 			// store — the store is precisely where they failed to land,
@@ -328,16 +329,32 @@ func writeOfflineText(w io.Writer, base string, insight presentation.StatusInsig
 // like `vendor-usage status`. Best-effort by design: an unresolvable DB
 // path or an unopenable store degrades to "no warnings" so the status
 // command never fails on the health check.
-func statusStaleWarnings(ctx context.Context, rf *rootFlags, cfg config.Config) []string {
+func statusStaleWarnings(ctx context.Context, rf *rootFlags, cfg config.Config, base string, sources func(string) (mcp.DaemonSources, error)) []string {
+	var warnings []string
+	fromDaemon := false
+	// The daemon's own assessment comes first: only it knows which
+	// pollers succeeded with nothing new and which are refused, and a
+	// count of zero reads the same for both. The MCP status tool asks it
+	// the same way, so the two surfaces agree.
+	if sources != nil {
+		if ds, err := sources(base); err == nil && len(ds.Sources) > 0 {
+			w := state.SourceWarnings(ds.Sources)
+			warnings = append(append(warnings, w.Failing...), w.Stale...)
+			fromDaemon = true
+		}
+	}
 	dbPath, err := resolveAuditDB(rf, "")
 	if err != nil {
-		return nil
+		return warnings
 	}
 	store, err := sqlite.Open(ctx, dbPath, sqlite.Options{})
 	if err != nil {
-		return nil
+		return warnings
 	}
 	defer func() { _ = store.Close() }()
+	if fromDaemon {
+		return append(warnings, state.RetentionWarnings(ctx, cfg, store)...)
+	}
 	return state.LocalWarnings(ctx, cfg, store, time.Now())
 }
 

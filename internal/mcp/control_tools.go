@@ -25,6 +25,18 @@ func staleWarnings(d ControlDeps) []string {
 	return state.StaleWarnings(d.StaleSources())
 }
 
+// sourceWarnings words the sources that need attention, from the daemon's
+// own assessment when a live daemon gives one, else from the event counts.
+func sourceWarnings(d ControlDeps, r DaemonReport) (stale, failing []string) {
+	if d.SourceHealth != nil && r.Alive && r.URL != "" {
+		if reports, err := d.SourceHealth(r.URL); err == nil && len(reports) > 0 {
+			w := state.SourceWarnings(reports)
+			return w.Stale, w.Failing
+		}
+	}
+	return staleWarnings(d), nil
+}
+
 // ControlDeps wires the in-process state the control tools surface. The
 // daemon constructs this once at startup and passes it through alongside
 // the analytics deps; CLI talks to the same data via the HTTP control
@@ -60,6 +72,12 @@ type ControlDeps struct {
 	// check is unavailable (e.g. no store wired) and status omits
 	// warnings entirely. Surfaced as soft `warnings`, never blockers.
 	StaleSources func() []config.StaleSource
+	// SourceHealth, when set, asks the daemon at the given URL for each
+	// reader's health. It outranks StaleSources: only the daemon knows
+	// which pollers succeeded with nothing new and which are refused, and
+	// a count of zero reads the same for both. Asked only of a daemon the
+	// probe found alive; an error falls back to StaleSources.
+	SourceHealth func(url string) ([]state.SourceReport, error)
 	// DaemonProbe, when set, asks the ingestion daemon how it is doing:
 	// whether it is reachable, and how much telemetry it has failed to
 	// persist. Nil means the check is unavailable and status stays
@@ -213,7 +231,7 @@ func daemonVersion(d ControlDeps, r DaemonReport) string {
 }
 
 func statusInfo(d ControlDeps) statusResult {
-	in := state.StatusInputs{Config: d.activeConfig(), Stale: staleWarnings(d)}
+	in := state.StatusInputs{Config: d.activeConfig()}
 	if d.ReadyCheck != nil {
 		in.Ready = d.ReadyCheck()
 	}
@@ -225,6 +243,7 @@ func statusInfo(d ControlDeps) statusResult {
 		report = d.DaemonProbe()
 	}
 	in.Dropped = report.Dropped
+	in.Stale, in.Failing = sourceWarnings(d, report)
 	// serve is the MCP server and does not ingest; a refused daemon means
 	// nothing is writing to the store. Any other failure to reach it is
 	// reported as this server's view, with its class.

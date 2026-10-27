@@ -351,9 +351,13 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 // daemon's version and its domain-event counters, so both are read from it.
 func serveControlDeps(current func() *config.Config, ready func() bool, stale func() []config.StaleSource, drift func() mcp.BinaryDrift, probe func() mcp.DaemonReport) mcp.ControlDeps {
 	return mcp.ControlDeps{
-		ConfigGetter:       current,
-		ReadyCheck:         ready,
-		StaleSources:       stale,
+		ConfigGetter: current,
+		ReadyCheck:   ready,
+		StaleSources: stale,
+		SourceHealth: func(url string) ([]state.SourceReport, error) {
+			ds, err := mcp.FetchDaemonSources(url)
+			return ds.Sources, err
+		},
 		DaemonProbe:        probe,
 		DaemonVersion:      mcp.FetchDaemonVersion,
 		DaemonDomainEvents: mcp.FetchDaemonDomainEvents,
