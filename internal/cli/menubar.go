@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
-	"time"
 
 	"github.com/spf13/cobra"
+
+	"go.klarlabs.de/tokenops/internal/infra/menubarapp"
 )
 
 // The menu bar app ships next to the CLI in the macOS release archive.
@@ -20,14 +20,14 @@ import (
 // that stays put, and the cask's upgrade hook refreshes that copy.
 
 // menubarApp is the bundle's name.
-const menubarApp = "TokenOps.app"
+const menubarApp = menubarapp.AppName
 
 // menubarProcess matches the running app's command line for pgrep -f and
 // pkill -f (an extended regex): the bundle's own binary only, named for
 // the app by its packager. The bundle also holds the presence helper
 // (Contents/MacOS/tokenops-presence), which a refresh must never kill:
 // it may be holding the person's Touch ID dialog for an approval.
-const menubarProcess = menubarApp + "/Contents/MacOS/TokenOps( |$)"
+const menubarProcess = menubarapp.ProcessPattern
 
 // menubarInstalled is where `tokenops menubar` keeps the app.
 func menubarInstalled() (string, error) {
@@ -45,14 +45,7 @@ func menubarShipped() string {
 	if err != nil {
 		return ""
 	}
-	if real, err := filepath.EvalSymlinks(exe); err == nil {
-		exe = real
-	}
-	app := filepath.Join(filepath.Dir(exe), menubarApp)
-	if st, err := os.Stat(app); err == nil && st.IsDir() {
-		return app
-	}
-	return ""
+	return menubarapp.ShippedBeside(exe)
 }
 
 func newMenubarCmd() *cobra.Command {
@@ -100,13 +93,13 @@ func installMenubar(out io.Writer, src, dst string, refresh bool) error {
 	if src == "" && !installed {
 		return errors.New("the menu bar app is not beside this binary: it ships with the Homebrew install (brew install --cask klarlabs-studio/tap/tokenops); from a source checkout, run `make menubar`")
 	}
-	running := menubarRunning()
+	ops := menubarapp.System()
+	running := ops.Running()
 	if src != "" {
 		if running {
-			_ = exec.Command("pkill", "-f", menubarProcess).Run()
-			time.Sleep(500 * time.Millisecond)
+			ops.Quit()
 		}
-		if err := copyApp(src, dst); err != nil {
+		if err := ops.Replace(src, dst); err != nil {
 			return fmt.Errorf("install %s: %w", dst, err)
 		}
 		fmt.Fprintf(out, "Installed %s\n", dst)
@@ -114,32 +107,9 @@ func installMenubar(out io.Writer, src, dst string, refresh bool) error {
 	if refresh && !running {
 		return nil
 	}
-	if err := exec.Command("open", dst).Run(); err != nil {
+	if err := ops.Open(dst); err != nil {
 		return fmt.Errorf("open %s: %w", dst, err)
 	}
 	fmt.Fprintln(out, "TokenOps is in the menu bar: click the icon for the details, right-click it for Launch at Login and Alerts.")
 	return nil
-}
-
-// menubarRunning reports whether the app is running.
-func menubarRunning() bool {
-	return exec.Command("pgrep", "-f", menubarProcess).Run() == nil
-}
-
-// copyApp replaces dst with a copy of the bundle src. ditto keeps the
-// bundle's modes, symlinks and signature intact.
-func copyApp(src, dst string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	tmp := dst + ".new"
-	_ = os.RemoveAll(tmp)
-	if out, err := exec.Command("ditto", src, tmp).CombinedOutput(); err != nil {
-		return fmt.Errorf("%v: %s", err, out)
-	}
-	_ = exec.Command("xattr", "-dr", "com.apple.quarantine", tmp).Run()
-	if err := os.RemoveAll(dst); err != nil {
-		return err
-	}
-	return os.Rename(tmp, dst)
 }

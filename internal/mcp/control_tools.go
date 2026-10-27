@@ -196,7 +196,7 @@ func versionInfo(d ControlDeps) versionResult {
 	}
 	if drift := binaryDrift(d); drift.OutOfDate {
 		res.ServerOutOfDate = true
-		res.Warnings = []string{drift.Warning()}
+		res.Warnings = []string{driftWarning(drift)}
 		res.NextActions = []string{StaleServerNextAction}
 	}
 	return res
@@ -233,7 +233,7 @@ func statusInfo(d ControlDeps) statusResult {
 	}
 	drift := binaryDrift(d)
 	if drift.OutOfDate {
-		in.Drift = &state.Problem{Warning: drift.Warning(), NextAction: StaleServerNextAction}
+		in.Drift = &state.Problem{Warning: driftWarning(drift), NextAction: StaleServerNextAction}
 	}
 	st := state.ComputeStatus(in)
 	return statusResult{
