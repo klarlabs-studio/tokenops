@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/infra/selfexe"
@@ -28,13 +29,38 @@ const driftSettle = 2
 // installed binary.
 var ErrBinaryReplaced = errors.New("binary replaced by an install")
 
-// supervisedIn reports whether this process was started by a supervisor
-// unit rather than a terminal. launchd gives every job its label as
-// XPC_SERVICE_NAME; systemd sets INVOCATION_ID for every unit it starts.
-// Neither is set in a terminal, so the unit template needs no marker and
-// existing unit files stay as they are.
-func supervisedIn(getenv func(string) string) bool {
-	return getenv("XPC_SERVICE_NAME") == LaunchdLabel || getenv("INVOCATION_ID") != ""
+// supervisedIn reports whether this process was started by the tokenops
+// supervisor unit rather than a terminal. launchd gives every job its label
+// as XPC_SERVICE_NAME. systemd sets INVOCATION_ID for every unit it starts,
+// but desktop terminals often run as units themselves and their shells
+// inherit it, so on systemd the process must also sit in tokenops.service's
+// cgroup (cgroup is /proc/self/cgroup's content; empty elsewhere). The unit
+// template needs no marker and existing unit files stay as they are.
+func supervisedIn(getenv func(string) string, cgroup string) bool {
+	if getenv("XPC_SERVICE_NAME") == LaunchdLabel {
+		return true
+	}
+	return getenv("INVOCATION_ID") != "" && inSystemdUnit(cgroup, SystemdName)
+}
+
+// inSystemdUnit reports whether a /proc/self/cgroup listing places the
+// process in the named unit's cgroup.
+func inSystemdUnit(cgroup, unit string) bool {
+	for _, line := range strings.Split(cgroup, "\n") {
+		if strings.HasSuffix(strings.TrimSpace(line), "/"+unit) {
+			return true
+		}
+	}
+	return false
+}
+
+// selfCgroup reads this process's cgroup listing; empty where there is none.
+func selfCgroup() string {
+	b, err := os.ReadFile("/proc/self/cgroup")
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 // driftVerdict is what one check of the binary calls for.

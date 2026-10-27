@@ -525,7 +525,7 @@ func (s *startup) startBinaryWatch() {
 	ticker := time.NewTicker(driftCheckEvery)
 	watch := &driftWatch{
 		settle:     driftSettle,
-		supervised: supervisedIn(os.Getenv),
+		supervised: supervisedIn(os.Getenv, selfCgroup()),
 		exists:     isExecutableFile,
 	}
 	s.sup.Go("binary-watch", func(ctx context.Context) error {

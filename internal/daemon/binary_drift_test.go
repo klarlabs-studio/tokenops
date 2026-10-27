@@ -104,17 +104,23 @@ func TestSupervisedDetectsLaunchdAndSystemdOnly(t *testing.T) {
 		return func(k string) string { return m[k] }
 	}
 	cases := []struct {
-		name string
-		env  map[string]string
-		want bool
+		name   string
+		env    map[string]string
+		cgroup string
+		want   bool
 	}{
-		{"launchd job", map[string]string{"XPC_SERVICE_NAME": LaunchdLabel}, true},
-		{"systemd unit", map[string]string{"INVOCATION_ID": "abc123"}, true},
-		{"terminal", map[string]string{"XPC_SERVICE_NAME": "0"}, false},
-		{"plain shell", map[string]string{}, false},
+		{"launchd job", map[string]string{"XPC_SERVICE_NAME": LaunchdLabel}, "", true},
+		{"systemd unit", map[string]string{"INVOCATION_ID": "abc123"},
+			"0::/user.slice/user-1000.slice/user@1000.service/app.slice/tokenops.service\n", true},
+		// A desktop terminal runs as its own unit; its shells inherit
+		// INVOCATION_ID but are not in tokenops.service.
+		{"terminal under systemd", map[string]string{"INVOCATION_ID": "def456"},
+			"0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-gnome-terminal.scope\n", false},
+		{"terminal", map[string]string{"XPC_SERVICE_NAME": "0"}, "", false},
+		{"plain shell", map[string]string{}, "", false},
 	}
 	for _, c := range cases {
-		if got := supervisedIn(env(c.env)); got != c.want {
+		if got := supervisedIn(env(c.env), c.cgroup); got != c.want {
 			t.Errorf("%s: supervised = %v, want %v", c.name, got, c.want)
 		}
 	}
