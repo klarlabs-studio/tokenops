@@ -4,7 +4,14 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.113.0**.
+Current release: **v0.113.1**.
+
+## v0.113.1 — Upgrades that restart themselves
+
+The daemon now notices when an upgrade replaced its binary and restarts
+onto the new version within about a minute, and refreshes the menu bar app
+to match (reopening it only if it was open). Until now only the Homebrew
+upgrade hook did this, and Homebrew is retiring that kind of hook.
 
 ## v0.113.0 — Catch the loop, keep the cache warm
 
