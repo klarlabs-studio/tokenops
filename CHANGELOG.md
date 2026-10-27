@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **daemon, menu bar:** an upgrade restarts the daemon and refreshes the menu bar app itself, instead of relying on the Homebrew upgrade hook. Until now the hook was the only thing that moved a running daemon onto a new binary: a daemon started before an upgrade kept running the old code until the hook re-applied its unit, and a daemon installed without the hook kept it until restarted by hand. The daemon now checks every 30 seconds whether its binary has been replaced. A supervised daemon (launchd or systemd) that sees a replacement on two checks in a row stops cleanly and the supervisor starts the installed version, so the switch lands within about a minute of the upgrade. A foreground `tokenops start` logs one warning and keeps running. When the daemon starts, an installed menu bar app that differs from the one shipped with this version is replaced with it, and reopened only if it was open; an app that was never installed is left alone. This prepares moving off Homebrew's deprecated `postflight` cask hook, which Homebrew is replacing with declarative steps that cannot restart services.
+
 ## 0.113.0 - 2026-10-27
 
 ### Added
