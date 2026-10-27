@@ -16,7 +16,9 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/geminicli"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pisessions"
 	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 
 	_ "modernc.org/sqlite" // pure-Go driver registered as "sqlite"
@@ -70,7 +72,62 @@ func All(cfg config.Config) map[string]config.SourceProbe {
 			return newestOpenCodeMessage(root)
 		}
 	}
+	if cfg.VendorUsage.GeminiCLI.Enabled {
+		root := cfg.VendorUsage.GeminiCLI.Root
+		out["gemini-cli"] = func() (time.Time, bool) {
+			if root == "" {
+				r, err := geminicli.DefaultRoot()
+				if err != nil {
+					return time.Time{}, false
+				}
+				root = r
+			}
+			return newestFoundAt([]string{root}, geminicli.FindSessionFiles)
+		}
+	}
+	if cfg.VendorUsage.Pi.Enabled {
+		root := cfg.VendorUsage.Pi.Root
+		out["pi-sessions"] = func() (time.Time, bool) {
+			if root != "" {
+				return newestFoundAt([]string{root}, pisessions.FindSessionFiles)
+			}
+			roots, err := pisessions.DefaultRoots()
+			if err != nil {
+				return time.Time{}, false
+			}
+			return newestFoundAt(roots, pisessions.FindSessionFiles)
+		}
+	}
 	return out
+}
+
+// newestFoundAt reports the modification time of the newest file a
+// reader's own finder lists under roots, so the probe counts exactly what
+// the reader would ingest: a Gemini CLI home holding only logs.json has
+// nothing to read, however recent the file. No existing root is unknown,
+// as in newestJSONLAt.
+func newestFoundAt(roots []string, find func(string) ([]string, error)) (time.Time, bool) {
+	var newest time.Time
+	known := false
+	for _, root := range roots {
+		if info, err := os.Stat(root); err != nil || !info.IsDir() {
+			continue
+		}
+		files, err := find(root)
+		if err != nil {
+			continue
+		}
+		known = true
+		for _, f := range files {
+			if fi, err := os.Stat(f); err == nil && fi.ModTime().After(newest) {
+				newest = fi.ModTime()
+			}
+		}
+	}
+	if !known {
+		return time.Time{}, false
+	}
+	return newest.UTC(), true
 }
 
 // newestJSONLAt reports the modification time of the newest transcript

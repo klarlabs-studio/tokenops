@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **status:** Gemini CLI and Pi no longer warn "ingestion stale" when there is nothing to read. Only the Claude Code, Codex and opencode readers checked when their client last wrote anything, so an enabled Gemini CLI or Pi reader with no new events always warned, and the warning told the operator to restart the daemon. On a Mac that last used Gemini CLI months ago, where `~/.gemini/tmp` holds only `logs.json` and no chat recordings, `tokenops status` showed this warning on every run. Both readers now get the same check, using the reader's own file finder: Gemini CLI chat recordings under `chats/`, and Pi and OMP transcripts. A reader warns only when its client wrote data in the check window that was not ingested. A missing data directory still counts as unknown, so that case still warns.
+
 ## 0.114.0 - 2026-10-27
 
 ### Added

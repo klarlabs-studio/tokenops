@@ -266,3 +266,53 @@ func TestNewestOpenCodeMessage(t *testing.T) {
 		}
 	})
 }
+
+// Gemini CLI and Pi are probed through their readers' own file finders, so
+// the probe counts exactly what the reader would ingest. A Gemini home
+// holding only logs.json (prompts, no usage) is a real empty: a machine
+// that last ran Gemini CLI months ago must not warn forever.
+func TestAllProbesGeminiAndPi(t *testing.T) {
+	home := isolateHome(t)
+	t.Setenv("GEMINI_CLI_HOME", "")
+	t.Setenv("PI_CODING_AGENT_DIR", "")
+	t.Setenv("PI_CODING_AGENT_SESSION_DIR", "")
+	var c config.Config
+	c.VendorUsage.GeminiCLI.Enabled = true
+	c.VendorUsage.Pi.Enabled = true
+	probes := All(c)
+
+	for _, tag := range []string{"gemini-cli", "pi-sessions"} {
+		if probes[tag] == nil {
+			t.Fatalf("no %s probe", tag)
+		}
+		if at, ok := probes[tag](); ok || !at.IsZero() {
+			t.Errorf("%s with nothing installed = %v, %v; want unknown", tag, at, ok)
+		}
+	}
+
+	base := time.Date(2026, 1, 14, 9, 0, 0, 0, time.UTC)
+	touch(t, filepath.Join(home, ".gemini", "tmp", "abc", "logs.json"), base.Add(time.Hour))
+	if at, ok := probes["gemini-cli"](); !ok || !at.IsZero() {
+		t.Errorf("gemini-cli with only logs.json = %v, %v; want zero, true", at, ok)
+	}
+	touch(t, filepath.Join(home, ".gemini", "tmp", "abc", "chats", "session-1.json"), base)
+	if at, ok := probes["gemini-cli"](); !ok || !at.Equal(base) {
+		t.Errorf("gemini-cli = %v, %v; want %v, true", at, ok, base)
+	}
+
+	touch(t, filepath.Join(home, ".pi", "agent", "sessions", "p", "a.jsonl"), base)
+	touch(t, filepath.Join(home, ".omp", "agent", "sessions", "p", "b.jsonl"), base.Add(2*time.Hour))
+	if at, ok := probes["pi-sessions"](); !ok || !at.Equal(base.Add(2*time.Hour)) {
+		t.Errorf("pi-sessions = %v, %v; want newest across Pi and OMP", at, ok)
+	}
+
+	root := t.TempDir()
+	touch(t, filepath.Join(root, "x", "chats", "s.jsonl"), base.Add(3*time.Hour))
+	c.VendorUsage.GeminiCLI.Root = root
+	c.VendorUsage.Pi.Root = root
+	for _, tag := range []string{"gemini-cli", "pi-sessions"} {
+		if at, ok := All(c)[tag](); !ok || !at.Equal(base.Add(3*time.Hour)) {
+			t.Errorf("%s with configured root = %v, %v", tag, at, ok)
+		}
+	}
+}
