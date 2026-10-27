@@ -47,6 +47,8 @@ var deprecatedAliases = map[string]string{
 	"claude-code-pro": "claude-pro",
 	"codex-plus":      "gpt-plus",
 	"gpt-team":        "gpt-business",
+	// Google renamed Google One AI Premium to Google AI Pro.
+	"gemini-ai-premium": "gemini-ai-pro",
 }
 
 // PayAsYouGo binds a provider billed per token with no subscription, so

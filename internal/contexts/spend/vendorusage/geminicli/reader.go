@@ -7,6 +7,12 @@
 // each time it updates (google-gemini/gemini-cli, chatRecordingService).
 // Only the fields that carry usage are decoded; the content and thoughts
 // of a turn, and the user's prompts, are never read into memory as text.
+//
+// Since 2026-06-18 Gemini CLI serves Gemini Code Assist Standard and
+// Enterprise licences and paid API keys only: Google AI Pro, Ultra and the
+// free individual tier moved to Antigravity CLI, whose usage the
+// antigravity source reads. Recordings those accounts made before then are
+// still read.
 package geminicli
 
 import (
