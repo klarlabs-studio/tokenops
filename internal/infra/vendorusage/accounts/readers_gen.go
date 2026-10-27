@@ -89,6 +89,7 @@ var readers = []func() usage.Reader{
 	readerXAPI,
 	readerXKiro,
 	readerZAI,
+	readerZhipuAI,
 	readerZed,
 	readerZenMux,
 	readerZoomMate,
