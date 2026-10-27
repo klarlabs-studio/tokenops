@@ -35,8 +35,8 @@ dashes; `<Name>` is its Go name):
    set `Logo: true`. Without one the menu bar shows two letters.
 5. **Generate**: `go generate ./...` (with `GOTOOLCHAIN=go1.26.8`). It
    rewrites `registry_gen.go`, `readers_gen.go`, the docs tables between
-   `<!-- begin generated: ... -->` markers in `web/docs/guide/cli.md` and
-   `configuration.md`, the menu bar's `frontend/providers.js` and
+   `<!-- begin generated: ... -->` markers in `docs/reference/cli.md` and
+   `docs/reference/configuration.md`, the menu bar's `frontend/providers.js` and
    `providers_gen.go`, and the source list the config tests pin
    (`internal/config/testdata/vendor_usage_sources.golden`). When a rebase
    conflicts in any of these, take either side and generate again.

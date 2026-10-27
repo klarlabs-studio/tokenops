@@ -152,7 +152,7 @@ Prints every metric the daemon pushes to the OpenTelemetry collector in
 `otel.endpoint` — plan windows and pace, usage and its value, session
 grades, the coach's findings, cost per commit — computed now from this
 machine's data, and whether pushing is on. Figures only; see
-[OpenTelemetry export](/guide/configuration#opentelemetry-export).
+[OpenTelemetry export](./configuration.md#opentelemetry-export).
 
 ```bash
 tokenops otel
@@ -161,7 +161,7 @@ tokenops otel --json
 
 ### `tokenops team`
 
-Shares this machine's derived figures with the [team plane](/guide/team),
+Shares this machine's derived figures with the [team plane](https://team.klarlabs.de/guide/team),
 the service klarlabs hosts (the client is open source; the server is not):
 per UTC day, repository and kind of work, counts, time, tokens and cost.
 Nothing is sent until you join, and never a prompt, file, transcript,
@@ -183,7 +183,7 @@ tokenops team admin teams|create-team|invite|members|remove|role|grants|grant|re
 
 `create` and `admin login` show a short code to type into the server's
 page; the code is never part of a link. `admin` commands take `--server`, the listing ones `--json`
-(see [Team plane](/guide/team#manage-it)).
+(see [Team plane](https://team.klarlabs.de/guide/team#manage-it)).
 
 `join` takes `--name` (how people granted to see individual figures see
 you) and `--device`. The enrolment is kept in `~/.tokenops/team.json`
@@ -252,11 +252,11 @@ Instruction text is read in memory to classify it, and never written.
 Scaffolds the config (sqlite + rules on, idempotent) **and wires this
 machine**: it registers the MCP server with every installed host and
 installs the Claude Code hooks. A new config also gets the
-[headroom pause](/guide/boundaries#the-headroom-pause), in shadow: it
+[headroom pause](https://team.klarlabs.de/guide/boundaries#the-headroom-pause), in shadow: it
 records each session it would have paused once the tightest plan window
 is down to 10% left and binds nothing until you promote it; init installs the pause
 point (the boundary hook) to evaluate it. It also gets the
-[loop breaker](/guide/boundaries#the-loop-breaker), in shadow: it records
+[loop breaker](https://team.klarlabs.de/guide/boundaries#the-loop-breaker), in shadow: it records
 each session whose agent went round a loop of tool calls with no file
 changed. Re-running init on an existing
 config does not add it. `--detect` adds a report of the clients it
@@ -418,7 +418,7 @@ tokenops plan set anthropic claude-enterprise --spend-limit 500 --since 2026-10-
 tokenops plan set fireworks pay-as-you-go --spend-limit 200
 ```
 
-See [Switching plans](/guide/configuration#switching-plans) and ADR 0008.
+See [Switching plans](./configuration.md#switching-plans) and ADR 0008.
 
 #### Plans billed at API rates
 
@@ -536,7 +536,7 @@ don't hit a dead end. The self-report says why the connection failed
 (`reachability.class`: `permission_denied`, `refused`, `timeout` or
 `discovery`) and only calls the daemon "not running" when the
 connection was refused; see
-[Health and readiness](../runbook/health.md#when-tokenops-status-cannot-reach-the-daemon).
+[Health and readiness](https://team.klarlabs.de/runbook/health#when-tokenops-status-cannot-reach-the-daemon).
 
 ## Spend + plan headroom
 
@@ -752,7 +752,7 @@ same report; it holds derived figures only.
 
 `tokenops spend --by project` (or `client`, `cost_center`) sums the
 window's spend per value of an allocation tag, from the
-[allocation rules](/guide/configuration#allocation-rules-allocation) in
+[allocation rules](./configuration.md#allocation-rules-allocation) in
 your config:
 
 ```
@@ -800,7 +800,7 @@ the model or plan. A plan's charges and per-token charges are separate
 billing accounts (`anthropic/subscription`, `anthropic/pay-as-you-go`).
 Calendar months stand in for billing periods.
 
-With [allocation rules](/guide/configuration#allocation-rules-allocation)
+With [allocation rules](./configuration.md#allocation-rules-allocation)
 configured, the part of a day's charge that tagged work took is its own
 row, its tags in `Tags` as a JSON object (`{"client":"Acme Corp","project":"storefront"}`);
 the rest stays a row with `Tags` empty, and the rows still add up to the
@@ -834,7 +834,7 @@ never trip: use `--basis tokens` with `--limit-tokens`, or
 `--basis equivalent` to watch the API list-price value the subscription
 absorbed. `--workflow-id` and `--agent-id` scope a budget to one workflow
 or agent, and `--tag key=value` to the work an
-[allocation rule](/guide/configuration#allocation-rules-allocation) tags
+[allocation rule](./configuration.md#allocation-rules-allocation) tags
 (project, client or cost_center). A tagged budget gets threshold alerts,
 not forecasts.
 
@@ -917,7 +917,7 @@ CHR — Cache Hit Ratio (%):                  97.5 [A] · baseline 98.5 (-1.0, w
 the same: `self_baseline` (the window), and on each KPI `polarity` and
 `vs_baseline` (`baseline`, `delta`, `direction`).
 
-With [allocation rules](/guide/configuration#allocation-rules-allocation)
+With [allocation rules](./configuration.md#allocation-rules-allocation)
 configured, a line under SAC says how much of the period's spend (at API
 prices) they tag: `allocation tags on 81.0% of spend (project 81%, client 64%)`.
 It is reported, not graded. SAC itself counts calls traceable to a
@@ -1230,9 +1230,10 @@ vendor's windows, busiest first:
 | Windsurf | `POST windsurf.com/_backend/.../GetPlanStatus` | daily and weekly quota, live |
 | WorkBuddy (Tencent) | `POST /billing/meter/get-user-resource-summary` (www.workbuddy.cn) | the share of the credit packages' cycle used, and when it ends |
 | xKiro | `GET /v1/usage` | the plan's spend windows, today's free tokens and the wallet balance |
-| z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly token windows |
+| z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly coding-plan windows (token or credit rows) |
 | Zed | `GET cloud.zed.dev/client/users/me` | edit predictions used of the plan's allowance this billing cycle |
 | ZenMux | `GET /api/v1/management/subscription/detail` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance |
+| Zhipu AI | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly coding-plan windows |
 | ZoomMate | `GET /ai-computer/api/v1/credits/status` | AI credits used against the budget cap this billing cycle, and the credits left |
 <!-- end generated: provider-subscriptions -->
 
@@ -1331,7 +1332,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | CodeRabbit | `coderabbit-cli` | reviews this billing period, a count with no allowance (no percentage) | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 | Command Code | `commandcode-web` | 5-hour and weekly limits, the monthly credit grant used, and purchased credits | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Cursor | `cursor-hook` | per-turn consumption Cursor's stop hook records | local files | public docs and fixtures |
-|  | `cursor-web` | requests used against the month's allowance, from cursor.com | browser session | the vendor's client source and fixtures |
+|  | `cursor-web` | the weekly pool, or the billing cycle's included usage (legacy: requests), from cursor.com | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Deepgram | `deepgram-account` | prepaid USD balance left, across the key's projects | API key | CodexBar's source, the vendor's docs and fixtures |
 | DeepInfra | `deepinfra-account` | spend since the last invoice, the limit, prepaid credit | API key | public docs and fixtures |
 | DeepSeek | `deepseek-account` | prepaid USD balance left | API key | public docs and fixtures |
@@ -1344,7 +1345,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 |  | `factory-web` | the same windows and balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Fireworks | `fireworks-usage` | the month's spend against the account's or the member's cap | API key | against a real account |
 | Gemini | `gemini-cli` | per-turn tokens per model from Gemini CLI's chat recordings (Gemini Code Assist Standard or Enterprise, or an API key) | local files | public docs and fixtures |
-| Copilot | `github-copilot` | premium requests used against the month's allowance | another app's sign-in | the vendor's client source and fixtures |
+| Copilot | `github-copilot` | the month's AI Credits (premium requests on annual plans) against the allowance; an org seat with none says so | another app's sign-in | the vendor's client source and fixtures |
 | GitKraken AI | `gitkraken-account` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID | API key | CodexBar's source, the vendor's docs and fixtures |
 | Grok | `grok-account` | the SuperGrok credit window used, and the prepaid balance | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 |  | `grok-web` | the credit window used | browser session | CodexBar's source, the vendor's docs and fixtures |
@@ -1405,10 +1406,10 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | xAI | `xai-account` | the team's posted prepaid USD credit, and its spend over the last 30 days | API key | CodexBar's source, the vendor's docs and fixtures |
 | X API | `xapi-web` | prepaid credit left, purchased plus free (below zero when overdrawn) | browser session | CodexBar's source, the vendor's docs and fixtures |
 | xKiro | `xkiro-account` | the plan's spend windows, today's free tokens and the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
-| z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |
+| z.ai | `zai-account` | 5-hour and weekly coding-plan windows (token or credit rows) | API key | the vendor's client source and fixtures |
 | Zed | `zed-account` | edit predictions used of the plan's allowance this billing cycle | another app's sign-in, from the Keychain at setup | CodexBar's source, the vendor's docs and fixtures |
 | ZenMux | `zenmux-account` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance | API key | CodexBar's source, the vendor's docs and fixtures |
-| Zhipu AI | — | in the catalog only: z.ai's mainland-China platform: its endpoints, opencode IDs and prices are known; no reader reads its plan yet | — | — |
+| Zhipu AI | `zhipuai-account` | 5-hour and weekly coding-plan windows | API key | the vendor's client source and fixtures |
 | ZoomMate | `zoommate-account` | AI credits used against the budget cap this billing cycle, and the credits left | browser session | CodexBar's source, the vendor's docs and fixtures |
 <!-- end generated: provider-list -->
 
@@ -1617,7 +1618,7 @@ tokenops coach off                   # record only; say and do nothing
 
 Autonomy decides who acts; verbosity how much the coach says. A rung the
 coach cannot deliver here is shown one rung lower, with the reason.
-Approval requests are always shown. A [`model_policy`](/guide/configuration#model-policy-model-policy)
+Approval requests are always shown. A [`model_policy`](./configuration.md#model-policy-model-policy)
 applies whatever the coach is set to.
 
 ### `tokenops coach stats`
@@ -1631,7 +1632,7 @@ this shows what you would hear before you let it speak. A *Tip volume*
 section lists, for the last 7 days, the tips given per day by kind and the
 share nothing showed were seen, and the tips the coach stood down for
 because the vendor's own surface says them
-([the coach stands down where the vendor speaks](/guide/configuration#the-coach-stands-down-where-the-vendor-speaks)).
+([the coach stands down where the vendor speaks](./configuration.md#the-coach-stands-down-where-the-vendor-speaks)).
 `--json` gives `budget`, `read_guard`, `savings` and `tip_volume`.
 
 The savings ledger lists every intervention by kind with what it was
@@ -1760,7 +1761,7 @@ tokenops coach delivery intervene    # let the guard start blocking
 
 One key for every coaching channel, applied at call time — no need to
 re-run `tokenops hooks install`. See
-[Configuration](/guide/configuration) for how it differs from `mode`.
+[Configuration](./configuration.md) for how it differs from `mode`.
 
 ### `tokenops coach prompts`
 
@@ -2087,7 +2088,7 @@ TokenOps wires four hooks into a client, each independent:
 | `--coach` | end of turn | the coaching nudge, against a per-session budget |
 | `--read-guard` | before a file read | refuses a redundant re-read of an unchanged file |
 | `--route-guard` | when you submit a prompt | states the case for a cheaper model when the one in use is over-spec, and the [plan headroom note](#tokenops-coach-headroom-note-on-off) |
-| `--boundary` | before every tool call | checks your [action boundaries](/guide/boundaries); Claude Code and opencode only |
+| `--boundary` | before every tool call | checks your [action boundaries](https://team.klarlabs.de/guide/boundaries); Claude Code and opencode only |
 
 `--client` selects which client to act on, and **install, status and
 uninstall all take it**:
@@ -2305,7 +2306,7 @@ tokenops mode active
 ```
 
 Active mode does its work inside the daemon, so it is a no-op without one
-running. See [Configuration](/guide/configuration) for what each mode
+running. See [Configuration](./configuration.md) for what each mode
 does and how it differs from the coach's autonomy.
 
 ### `tokenops routing {proposals|decide|rule}`
@@ -2343,7 +2344,7 @@ when signed, and an agent cannot approve one at all.
 
 ### `tokenops boundaries {status|promote|demote|headroom-pause|loop-breaker}`
 
-[Action boundaries](/guide/boundaries) are limits you set in
+[Action boundaries](https://team.klarlabs.de/guide/boundaries) are limits you set in
 `config.yaml` before work starts: past $20 in a session, ask me; no
 subagents above Sonnet without an admin; no new work once the week's plan
 is under 5%; hold routes to Opus; ask before figures go to the team.
@@ -2388,7 +2389,7 @@ names and input hashes only, and is evaluated in Claude Code only.
 
 ### `tokenops boundaries presence {enroll|enforce|status|rotate}`
 
-[Presence-checked approval](/guide/boundaries#presence-checked-approval) on
+[Presence-checked approval](https://team.klarlabs.de/guide/boundaries#presence-checked-approval) on
 a Mac with a Secure Enclave: an approval signed by a key that asks for
 Touch ID, a paired Apple Watch or your password every time.
 

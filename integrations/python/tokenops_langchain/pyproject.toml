@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/klarlabs-studio/tokenops"
+Homepage = "https://team.klarlabs.de/"
 Documentation = "https://github.com/klarlabs-studio/tokenops/tree/main/integrations/python/tokenops_langchain"
 
 [tool.hatch.build.targets.wheel]

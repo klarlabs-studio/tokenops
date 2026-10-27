@@ -14,7 +14,7 @@ import (
 // read as an unclosed HTML tag, which fails the whole site build. Which
 // wraps break depends on where the line falls, so none are allowed.
 func TestDocsCodeSpansDoNotWrapAPlaceholder(t *testing.T) {
-	root := "../../web/docs"
+	root := "../../docs/reference"
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
