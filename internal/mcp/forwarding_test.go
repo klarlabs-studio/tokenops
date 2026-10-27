@@ -228,6 +228,21 @@ func TestCoachHoldoutForwards(t *testing.T) {
 	}
 }
 
+// The headroom note can be turned off through the public tool, confirmed.
+func TestCoachHeadroomNoteForwards(t *testing.T) {
+	srv, calls := spyServer(t)
+	op := accepted(true)
+	if err := execPublic(withOperator(op), t, srv, "tokenops_coach", map[string]any{"headroom_note": "off"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := calls["tokenops_coach"]; len(got) != 1 || got[0]["headroom_note"] != "off" {
+		t.Fatalf("inner calls = %v", got)
+	}
+	if want := "tokenops coach headroom-note off"; len(op.messages) != 1 || !strings.HasSuffix(op.messages[0], "terminal: "+want) {
+		t.Errorf("asked %q, want %q", op.messages, want)
+	}
+}
+
 // A budget's provider scope, windows and hard mode reach tokenops_budget_set
 // through the public tool, and the operator is shown the exact command.
 func TestBudgetForwardsEveryArgument(t *testing.T) {

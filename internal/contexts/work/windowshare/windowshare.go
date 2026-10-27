@@ -88,24 +88,12 @@ func Estimate(history []Sample, want Key, minSamples int) EstimateResult {
 	if minSamples <= 0 {
 		minSamples = DefaultMinSamples
 	}
-	var scoped, class []float64
-	for _, s := range history {
-		if s.Kind != want.Kind || s.Provider != want.Provider || s.Window != want.Window {
-			continue
-		}
-		class = append(class, s.SharePct)
-		if want.Scope != "" && s.Scope == want.Scope {
-			scoped = append(scoped, s.SharePct)
-		}
+	basis, shares, n := pick(history, want, minSamples)
+	out := EstimateResult{Status: StatusInsufficient, MinSamples: minSamples, Samples: n}
+	if basis == "" {
+		return out
 	}
-	out := EstimateResult{Status: StatusInsufficient, MinSamples: minSamples, Samples: len(class)}
-	switch {
-	case want.Scope != "" && len(scoped) >= minSamples:
-		return fill(out, BasisClassAndScope, scoped)
-	case len(class) >= minSamples:
-		return fill(out, BasisClass, class)
-	}
-	return out
+	return fill(out, basis, shares)
 }
 
 func fill(out EstimateResult, basis Basis, shares []float64) EstimateResult {

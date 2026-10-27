@@ -58,6 +58,10 @@ type Report struct {
 	// are held back and logged as shadow, so their realized saving can be
 	// measured (#656). 0 means the operator opted out.
 	HoldoutPercent int `json:"holdout_percent"`
+	// HeadroomNote says the per-turn plan headroom note is on: set by
+	// coach.headroom_note (on unless false) and silenced by the inform
+	// power being off.
+	HeadroomNote bool `json:"headroom_note"`
 	// Graduation is, per capability, its stage on the shadow → advise →
 	// act ladder and the published evidence bar for the next one (#662).
 	// It suggests; nothing is promoted on it. Only Status fills it.
@@ -140,6 +144,7 @@ func Build(cfg config.Config) Report {
 		}
 		r.Powers = append(r.Powers, p)
 	}
+	r.HeadroomNote = cfg.CoachHeadroomNote() && r.Effective(config.PowerInform) != config.AutonomyOff
 	if !cfg.ModelPolicy.Policy().Empty() {
 		mp := cfg.ModelPolicy
 		r.ModelPolicy = &mp

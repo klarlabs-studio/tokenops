@@ -71,3 +71,42 @@ func TestPrepareAndReviewWorkCarryTheWindowShare(t *testing.T) {
 		}
 	}
 }
+
+// The spread is added beside the window_share fields agents already read;
+// none of them is renamed or dropped.
+func TestPrepareWorkKeepsItsJSONAndAddsTheSpread(t *testing.T) {
+	d := tightWindowDeps(t)
+	srv := NewServer("tokenops", "test", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := RegisterRoutingAdviceTools(srv, d); err != nil {
+		t.Fatal(err)
+	}
+	out := execTool(t, srv, "tokenops_prepare_work", map[string]any{
+		"instruction": "fix the flaky timing test", "provider": "anthropic",
+		"model": "claude-opus-5", "repository": "tokenops",
+	})
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+		t.Fatalf("decode: %v\n%s", err, out)
+	}
+	for _, k := range []string{"workflow_id", "attribution_header", "review", "recommendation", "plan_headroom", "window_share"} {
+		if _, ok := raw[k]; !ok {
+			t.Errorf("prepare_work lost %q", k)
+		}
+	}
+	ws, _ := raw["window_share"].(map[string]any)
+	for _, k := range []string{"status", "task_class", "window", "window_known", "used_pct", "left_pct", "estimate", "suggestion", "summary", "recorded", "spread"} {
+		if _, ok := ws[k]; !ok {
+			t.Errorf("window_share lacks %q:\n%s", k, out)
+		}
+	}
+	est, _ := ws["estimate"].(map[string]any)
+	for _, k := range []string{"status", "samples", "min_samples"} {
+		if _, ok := est[k]; !ok {
+			t.Errorf("window_share.estimate lost %q", k)
+		}
+	}
+	sp, _ := ws["spread"].(map[string]any)
+	if sp["status"] != "too_few_samples" || sp["samples"] != float64(0) || sp["min_samples"] != float64(5) || sp["fallback"] != "none" {
+		t.Errorf("spread = %v, want too_few_samples, 0 of 5, no fallback", sp)
+	}
+}

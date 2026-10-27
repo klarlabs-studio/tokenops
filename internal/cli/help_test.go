@@ -166,7 +166,7 @@ var changesThings = map[string]bool{
 	"tokenops daemon install": true, "tokenops daemon uninstall": true, "tokenops daemon restart": true,
 	"tokenops hooks install": true, "tokenops hooks uninstall": true,
 	"tokenops statusline install": true, "tokenops statusline uninstall": true, "tokenops statusline subagents": true,
-	"tokenops plan set": true, "tokenops plan unset": true, "tokenops coach tip": true, "tokenops coach holdout": true,
+	"tokenops plan set": true, "tokenops plan unset": true, "tokenops coach tip": true, "tokenops coach holdout": true, "tokenops coach headroom-note": true,
 	"tokenops coach reinstate": true,
 	"tokenops budget set":      true, "tokenops budget unset": true,
 	"tokenops provider set": true, "tokenops provider unset": true,

@@ -63,11 +63,13 @@ type ChangeRequest struct {
 	// Holdout sets the percent of sessions whose cost and drift tips are
 	// held back to measure their saving: 0 opts out, at most 10.
 	Holdout *int `json:"holdout,omitempty"`
+	// HeadroomNote turns the per-turn plan headroom note on or off.
+	HeadroomNote *bool `json:"headroom_note,omitempty"`
 }
 
 // Empty reports whether the request changes nothing.
 func (r ChangeRequest) Empty() bool {
-	return r.Preset == "" && r.Autonomy == "" && r.Verbosity == "" && r.Power == "" && r.Rung == "" && r.Holdout == nil
+	return r.Preset == "" && r.Autonomy == "" && r.Verbosity == "" && r.Power == "" && r.Rung == "" && r.Holdout == nil && r.HeadroomNote == nil
 }
 
 // ErrPowerRung is a power without a rung or a rung without a power.
@@ -91,6 +93,10 @@ func Change(ctx context.Context, path string, l Ledger, levers ContextLevers, no
 		if req.Holdout != nil {
 			n := *req.Holdout
 			cfg.Coach.Holdout = &n
+		}
+		if req.HeadroomNote != nil {
+			on := *req.HeadroomNote
+			cfg.Coach.HeadroomNote = &on
 		}
 		if req.Power != "" {
 			if cfg.Coach.Powers == nil {

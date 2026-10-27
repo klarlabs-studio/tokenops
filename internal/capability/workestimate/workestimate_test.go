@@ -100,7 +100,7 @@ func TestPrepareEstimatesFromTheSameClassAndScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "typically 15–25% of your 5h window; 38% left, resets in 1h10"
+	want := "typically 15–25% of your 5h window (p50 20%, p90 28%, n=5); 38% left, resets in 1h10"
 	if got.Summary != want {
 		t.Errorf("summary = %q, want %q", got.Summary, want)
 	}
@@ -209,5 +209,57 @@ func TestPrepareNeverStoresTheInstruction(t *testing.T) {
 		if d, ok := env.Payload.(*eventschema.DomainEvent); ok && strings.Contains(string(d.Data), "sk-live") {
 			t.Fatalf("the instruction was stored: %s", d.Data)
 		}
+	}
+}
+
+// The preparation carries the spread of the same kind's measured history:
+// p50, p90 and n, beside the interquartile range it already offered.
+func TestPrepareCarriesTheSpreadOfPastRuns(t *testing.T) {
+	st := openStore(t)
+	seedActuals(t, st, 2, 4, 5, 6, 8, 10, 12, 15, 30, 60)
+	meter(t, st, t0.Add(-time.Minute), 62, t0.Add(70*time.Minute))
+	got, err := Prepare(context.Background(), Deps{Config: anthropicConfig(), Store: st}, PrepareRequest{
+		WorkflowID: "workflow:new", Instruction: "fix the flaky timing test", Scope: "tokenops",
+	}, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp := got.Spread
+	if sp == nil || !sp.Measured() || sp.Samples != 10 || sp.P50Pct != 9 || sp.P90Pct != 33 {
+		t.Fatalf("spread = %+v, want p50 9, p90 33 over 10 runs", sp)
+	}
+	if !strings.Contains(got.Summary, "p50 9%, p90 33%, n=10") {
+		t.Errorf("summary %q does not carry the spread", got.Summary)
+	}
+}
+
+// With fewer than five runs the spread says so and the answer stays the
+// estimate it was before, labelled as the fallback.
+func TestPrepareFallsBackBelowFiveRuns(t *testing.T) {
+	st := openStore(t)
+	seedActuals(t, st, 10, 20, 30)
+	meter(t, st, t0.Add(-time.Minute), 62, t0.Add(70*time.Minute))
+	got, err := Prepare(context.Background(), Deps{Config: anthropicConfig(), Store: st}, PrepareRequest{
+		WorkflowID: "workflow:new", Instruction: "fix the flaky timing test", Scope: "tokenops",
+	}, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp := got.Spread
+	if sp == nil || sp.Measured() || sp.Samples != 3 || sp.Fallback != windowshare.FallbackNone {
+		t.Fatalf("spread = %+v, want too few (3) with nothing to fall back to", sp)
+	}
+	if strings.Contains(got.Summary, "p90") || !strings.Contains(got.Summary, "no estimate yet: 3 of 5") {
+		t.Errorf("summary %q, want the earlier no-estimate answer", got.Summary)
+	}
+
+	got, err = Prepare(context.Background(), Deps{Config: anthropicConfig(), Store: st, MinSamples: 3}, PrepareRequest{
+		WorkflowID: "workflow:new-2", Instruction: "fix the flaky timing test", Scope: "tokenops",
+	}, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Spread == nil || got.Spread.Fallback != windowshare.FallbackInterquartile || !got.Estimate.Estimated() {
+		t.Fatalf("spread = %+v, want the interquartile estimate labelled as the fallback", got.Spread)
 	}
 }

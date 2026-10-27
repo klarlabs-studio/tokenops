@@ -99,8 +99,13 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 	} else {
 		fmt.Fprintln(out, "\n  holdout: off; no tip's saving can be measured against sessions without it")
 	}
+	if r.HeadroomNote {
+		fmt.Fprintln(out, "\n  headroom note: on; the agent is told the plan's binding window at its first prompt and again at 50, 25 and 10% left")
+	} else {
+		fmt.Fprintln(out, "\n  headroom note: off")
+	}
 	fmt.Fprintln(out, "\n  change: tokenops coach preset <observe|advise|guided|autopilot> · autonomy <off|advise|ask|autonomous> · verbosity <quiet|normal|verbose>")
-	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models|context> <rung> · tokenops coach off · tokenops coach holdout <off|on|percent>")
+	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models|context> <rung> · tokenops coach off · tokenops coach holdout <off|on|percent> · tokenops coach headroom-note <on|off>")
 }
 
 // renderMoveVerdicts shows, per kind of autonomous model move, whether it
@@ -306,6 +311,35 @@ held back. 'off' opts out; a preset keeps your choice.`,
 				return err
 			}
 			return mutateCoach(cmd, func(c *config.Config) { c.Coach.Holdout = &n })
+		},
+	}
+}
+
+func newCoachHeadroomNoteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "headroom-note [on|off]",
+		Short: "Show or set the plan headroom note the agent sees",
+		Long: `headroom-note puts one line in front of the agent, such as
+"Plan headroom: 5h window 38% left (resets 14:20), week 61% left.": only
+the binding window, and another within 25 points of it. Agents budget only
+what they can see.
+
+It travels with the prompt through the route-guard hook
+(UserPromptSubmit), never in CLAUDE.md, AGENTS.md or a session-start
+block, so it never changes the part of the context that is cached. It is
+said at a session's first prompt and again only when a window crosses 50,
+25 or 10% left. On by default; the inform power being off also silences
+it. Needs the route-guard hook: tokenops hooks install --route-guard.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return coachStatus(cmd, false)
+			}
+			on, err := coachcap.ParseHeadroomNote(args[0])
+			if err != nil {
+				return err
+			}
+			return mutateCoach(cmd, func(c *config.Config) { c.Coach.HeadroomNote = &on })
 		},
 	}
 }
