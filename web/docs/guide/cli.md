@@ -1109,12 +1109,16 @@ until you bind another plan.
   as your own extra usage. The account comes from the key (or Nexus CLI's
   files). Your user comes, in order, from `--user-id`
   (`vendor_usage.fireworks.user_id`), from `minted-key.json` in
-  `~/.nexus` (`~/.fireconnect` on older versions), or by email: the
+  `~/.nexus` (`~/.fireconnect` on older versions), from
+  `nexus status --json` when it names your user, or by email: the
   account's members are looked up by `--email`
-  (`vendor_usage.fireworks.email`), else by the email Nexus CLI is signed
-  in with, read from an email field in its `config.json`,
-  `key-storage.json` or the JSON files under `cli/` (only such fields; key
-  fields are never read). The user found is kept in the daemon's memory
+  (`vendor_usage.fireworks.email`), else by the email
+  `nexus status --json` reports, else by one read from an email field in Nexus CLI's
+  `config.json`, `key-storage.json` or the JSON files under `cli/` (only
+  such fields; key fields are never read). A user you set that the
+  account does not have, or an account that is not your key's, is named
+  as the reason instead of showing the account's figure as if it were
+  yours. The user found is kept in the daemon's memory
   for a day, or until the key changes, and never written to your config.
   When your own figure cannot be read, the account's is shown and says
   why, in `tokenops glance`'s card ("account-wide: your user wasn't

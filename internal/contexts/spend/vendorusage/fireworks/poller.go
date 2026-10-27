@@ -41,6 +41,10 @@ type PollerOptions struct {
 	// Finder finds the user by email when no file names them; nil leaves
 	// the reading account-wide. The daemon passes the HTTP client.
 	Finder UserFinder
+	// SignIn asks Nexus CLI who is signed in, before its files are
+	// scanned for an email; nil skips it. The daemon runs
+	// `nexus status --json`.
+	SignIn SignInSource
 	// Interval defaults to 15 minutes. Fireworks aggregates billing
 	// daily and refreshes user limits about once a minute.
 	Interval time.Duration
@@ -66,10 +70,12 @@ type Poller struct {
 // in the operator's config) until a day passes or the key, account or
 // email changes.
 type foundUser struct {
-	account, email, stamp string
-	user                  string
-	missing               bool
-	at                    time.Time
+	// email (the configured one), stamp and fileAccount are what the
+	// lookup was made with; account and user what it found.
+	email, stamp, fileAccount string
+	account, user             string
+	missing                   bool
+	at                        time.Time
 }
 
 // userLookupTTL is how long a found user is kept.
@@ -161,39 +167,61 @@ func (p *Poller) read(ctx context.Context) (Reading, bool) {
 		if r.Fallback == "" && user == "" {
 			r.Fallback = FallbackNoUser
 		}
+	} else if r.Scope == ScopeAccount && p.opts.UserID != "" {
+		// The operator named the user; a failure is theirs to fix.
+		r.Fallback += " — check `tokenops vendor-usage enable fireworks --user-id <id>`"
 	}
 	return r, true
 }
 
-// findUser finds the user by the sign-in email, from memory while that is
-// fresh. It returns the account (resolved from the key when the files name
-// none), the user, and why there is none.
+// findUser finds the user when no file names them, from memory while
+// that is fresh. Sources, in order: the configured email; Nexus CLI's
+// status (a user it names is used as is, an email it names is looked
+// up); the email in Nexus CLI's files. It returns the account (resolved
+// from the key when nothing names it), the user, and why there is none.
 func (p *Poller) findUser(ctx context.Context, account string, now time.Time) (string, string, string) {
-	email := strings.TrimSpace(p.opts.Email)
-	if email == "" {
-		email = SignInEmail(p.opts.Home)
-	}
-	if email == "" {
-		return account, "", FallbackNoUser
-	}
 	stamp, err := p.opts.Finder.KeyStamp(ctx)
 	if err != nil {
 		// No key: Read reports it the same way.
 		return account, "", ""
 	}
+	configured := strings.TrimSpace(p.opts.Email)
 	p.mu.Lock()
 	f := p.found
 	p.mu.Unlock()
-	if f.email == email && f.stamp == stamp && (account == "" || account == f.account) && now.Sub(f.at) < userLookupTTL {
+	if f.email == configured && f.stamp == stamp && f.fileAccount == account && now.Sub(f.at) < userLookupTTL {
 		if f.missing {
 			return f.account, "", FallbackNoMatch
 		}
 		return f.account, f.user, ""
 	}
+	keep := foundUser{email: configured, stamp: stamp, fileAccount: account, at: now}
+	email := configured
+	if email == "" {
+		for _, source := range p.signInSources() {
+			in := source(ctx)
+			if account == "" {
+				account = in.Account
+			}
+			if in.User != "" {
+				keep.account, keep.user = account, in.User
+				p.remember(keep)
+				return account, in.User, ""
+			}
+			if in.Email != "" {
+				email = in.Email
+				break
+			}
+		}
+	}
+	if email == "" {
+		return account, "", FallbackNoUser
+	}
 	resolved, user, err := p.opts.Finder.FindUser(ctx, account, email)
 	switch {
 	case errors.Is(err, ErrNoUserMatch):
-		p.remember(foundUser{account: resolved, email: email, stamp: stamp, missing: true, at: now})
+		keep.account, keep.missing = resolved, true
+		p.remember(keep)
 		return resolved, "", FallbackNoMatch
 	case err != nil:
 		// Not kept: the next poll tries again.
@@ -203,8 +231,19 @@ func (p *Poller) findUser(ctx context.Context, account string, now time.Time) (s
 		}
 		return resolved, "", FallbackLookupFailed(err)
 	}
-	p.remember(foundUser{account: resolved, email: email, stamp: stamp, user: user, at: now})
+	keep.account, keep.user = resolved, user
+	p.remember(keep)
 	return resolved, user, ""
+}
+
+// signInSources are where the signed-in user is looked for, first first:
+// Nexus CLI's status, then the email in its files.
+func (p *Poller) signInSources() []SignInSource {
+	var out []SignInSource
+	if p.opts.SignIn != nil {
+		out = append(out, p.opts.SignIn)
+	}
+	return append(out, func(context.Context) SignIn { return SignIn{Email: SignInEmail(p.opts.Home)} })
 }
 
 func (p *Poller) remember(f foundUser) {

@@ -202,7 +202,7 @@ func StartVendorUsagePollers(
 		p := fireworksusage.NewPoller(bus, fireworksusage.PollerOptions{
 			Health: sourceHealth.For("fireworks-usage"), Interval: cfg.VendorUsage.Fireworks.Interval, Logger: logger,
 			UserID: cfg.VendorUsage.Fireworks.UserID, Email: cfg.VendorUsage.Fireworks.Email,
-			Client: client, Finder: client,
+			Client: client, Finder: client, SignIn: fireworksapi.NexusStatus{}.SignIn,
 		})
 		sup.Go("fireworks-usage", refreshable(sig, p.Run))
 	}

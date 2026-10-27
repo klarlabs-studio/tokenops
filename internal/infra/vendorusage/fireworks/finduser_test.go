@@ -163,3 +163,18 @@ func TestReadSaysWhyItFellBack(t *testing.T) {
 		t.Errorf("no cap: %+v %v", r, err)
 	}
 }
+
+// A per-user 404 names the user and account the operator set; an account
+// that is not the key's is named too, and the key's account is read.
+func TestReadNamesAWrongUserOrAccount(t *testing.T) {
+	srv := nexusAPI(t, usersAda, limitsBlocked)
+	defer srv.Close()
+	r, err := client(srv).Read(context.Background(), "acme", "u-42", now)
+	if err != nil || r.Scope != usage.ScopeAccount || r.Fallback != "user u-42 not found in account acme" {
+		t.Errorf("wrong user: %+v %v", r, err)
+	}
+	r, err = client(srv).Read(context.Background(), "other", "u-ada", now)
+	if err != nil || r.AccountID != "acme" || r.Fallback != "account other is not your key's account (acme)" {
+		t.Errorf("wrong account: %+v %v", r, err)
+	}
+}

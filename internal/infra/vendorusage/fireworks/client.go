@@ -336,12 +336,27 @@ func (c *Client) Read(ctx context.Context, account, user string, now time.Time) 
 		case err == nil:
 			fallback = usage.FallbackNoCap
 		default:
-			fallback = usage.FallbackUserReadFailed(err)
+			account, fallback = c.whyUserFailed(ctx, account, user, err)
 		}
 	}
 	r, err := c.AccountMonth(ctx, account, now)
 	r.Fallback = fallback
 	return r, err
+}
+
+// whyUserFailed words a failed read of a member's own limit, so a wrong
+// user or account is not passed off as the account's figure. An account
+// that is not the key's is named, and the key's account is read instead.
+func (c *Client) whyUserFailed(ctx context.Context, account, user string, err error) (string, string) {
+	if errors.Is(err, usage.ErrAuth) || errors.Is(err, usage.ErrNotFound) {
+		if own, kerr := c.AccountID(ctx); kerr == nil && own != account {
+			return own, fmt.Sprintf("account %s is not your key's account (%s)", account, own)
+		}
+	}
+	if errors.Is(err, usage.ErrNotFound) {
+		return account, fmt.Sprintf("user %s not found in account %s", user, account)
+	}
+	return account, usage.FallbackUserReadFailed(err)
 }
 
 // Client satisfies the poller's ports.
