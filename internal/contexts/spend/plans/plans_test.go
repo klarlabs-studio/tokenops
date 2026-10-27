@@ -45,7 +45,7 @@ func TestCatalogCoversPublishedPlans(t *testing.T) {
 	want := []string{
 		"claude-max-5x", "claude-max-20x", "claude-pro",
 		"gpt-plus", "gpt-pro", "gpt-pro-5x", "gpt-pro-20x", "gpt-pro-500", "gpt-business",
-		"copilot-individual", "copilot-business",
+		"copilot-individual", "copilot-pro-plus", "copilot-max", "copilot-business", "copilot-enterprise",
 		"cursor-pro", "cursor-business",
 		"cursor-plus", "cursor-premium", "cursor-super", "cursor-ultra", "cursor-teams",
 	}

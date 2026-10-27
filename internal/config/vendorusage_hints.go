@@ -194,7 +194,7 @@ func configHintOpenCode(enabled bool) string {
 
 func configHintCopilot(cfg GitHubCopilotUsageConfig) string {
 	if !cfg.Enabled {
-		return "set vendor_usage.github_copilot.enabled: true (auto-discovers OAuth token from ~/.config/github-copilot)"
+		return "set vendor_usage.github_copilot.enabled: true (finds the OAuth token of the Copilot IDE plugins, the Copilot CLI or the GitHub CLI)"
 	}
 	return ""
 }

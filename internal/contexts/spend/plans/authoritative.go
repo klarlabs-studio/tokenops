@@ -176,14 +176,21 @@ func authoritativeKeys(provider eventschema.Provider, weekly bool) (usedKey, res
 
 // LatestAuthoritativeMonthly finds the newest vendor MONTHLY quota snapshot
 // for provider and converts it to an authoritative reading. Copilot reports
-// percent_remaining (inverted to used) + a reset date; Cursor reports
-// used_pct directly. Returns nil when no snapshot exists. This is the only
-// useful monthly signal for request-quota plans that publish no token cap.
+// percent_remaining (inverted to used) + a reset date per bucket; Cursor
+// reports used_pct directly. Returns nil when no snapshot exists. This is
+// the only useful monthly signal for request-quota plans that publish no
+// token cap.
 func LatestAuthoritativeMonthly(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) *AuthoritativeWindow {
-	usedKey, resetKey, isRemaining, source := monthlyAuthoritativeKeys(provider)
-	if usedKey == "" {
-		return nil
+	switch provider {
+	case eventschema.ProviderGitHub:
+		return latestCopilotMonthly(ctx, reader, now)
+	case eventschema.ProviderCursor:
+		return latestCursorMonthly(ctx, reader, now)
 	}
+	return nil
+}
+
+func latestCursorMonthly(ctx context.Context, reader EventReader, now time.Time) *AuthoritativeWindow {
 	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-35*24*time.Hour))
 	if err != nil {
 		return nil
@@ -193,7 +200,7 @@ func LatestAuthoritativeMonthly(ctx context.Context, reader EventReader, provide
 		if e == nil || e.Attributes == nil {
 			continue
 		}
-		if _, ok := e.Attributes[usedKey]; !ok {
+		if _, ok := e.Attributes["used_pct"]; !ok {
 			continue
 		}
 		if best == nil || e.Timestamp.After(best.Timestamp) {
@@ -203,29 +210,52 @@ func LatestAuthoritativeMonthly(ctx context.Context, reader EventReader, provide
 	if best == nil {
 		return nil
 	}
-	pct, err := strconv.ParseFloat(best.Attributes[usedKey], 64)
+	pct, err := strconv.ParseFloat(best.Attributes["used_pct"], 64)
 	if err != nil {
 		return nil
 	}
-	if isRemaining {
-		pct = 100 - pct
-	}
-	return &AuthoritativeWindow{
-		UsedPct:  pct,
-		ResetsIn: parseResetsIn(best.Attributes[resetKey], now),
-		Source:   source,
-	}
+	// Cursor's usage summary names the end of the billing cycle; the legacy
+	// requests endpoint names none, and the plan's nominal month applies.
+	return &AuthoritativeWindow{UsedPct: pct, ResetsIn: parseResetsIn(best.Attributes["billing_cycle_end"], now), Source: "cursor:monthly"}
 }
 
-func monthlyAuthoritativeKeys(provider eventschema.Provider) (usedKey, resetKey string, isRemaining bool, source string) {
-	switch provider {
-	case eventschema.ProviderGitHub:
-		return "percent_remaining", "quota_reset_date", true, "copilot:monthly"
-	case eventschema.ProviderCursor:
-		return "used_pct", "billing_cycle_end", false, "cursor:monthly"
-	default:
-		return "", "", false, ""
+// latestCopilotMonthly reads the newest Copilot poll. One poll stores a
+// snapshot per bucket at the same time, and only a bucket with an
+// allowance of its own has a share used: an unlimited bucket (entitlement
+// 0, as every bucket of an organisation seat reports) says 100% remaining
+// of nothing. Of the capped buckets, the busiest is the one that stops
+// work. A poll with no capped bucket has no monthly share (see
+// LatestUnmeteredSeat).
+func latestCopilotMonthly(ctx context.Context, reader EventReader, now time.Time) *AuthoritativeWindow {
+	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-35*24*time.Hour))
+	if err != nil {
+		return nil
 	}
+	var newest time.Time
+	for _, e := range events {
+		if e != nil && e.Attributes["percent_remaining"] != "" && e.Timestamp.After(newest) {
+			newest = e.Timestamp
+		}
+	}
+	var best *AuthoritativeWindow
+	for _, e := range events {
+		if e == nil || !e.Timestamp.Equal(newest) || e.Attributes["percent_remaining"] == "" ||
+			e.Attributes["unlimited"] == "true" || e.Attributes["entitlement"] == "0" {
+			continue
+		}
+		remaining, err := strconv.ParseFloat(e.Attributes["percent_remaining"], 64)
+		if err != nil {
+			continue
+		}
+		if best == nil || 100-remaining > best.UsedPct {
+			best = &AuthoritativeWindow{
+				UsedPct:  100 - remaining,
+				ResetsIn: parseResetsIn(e.Attributes["quota_reset_date"], now),
+				Source:   "copilot:monthly",
+			}
+		}
+	}
+	return best
 }
 
 // parseResetsIn turns a reset marker into a duration from now. It accepts

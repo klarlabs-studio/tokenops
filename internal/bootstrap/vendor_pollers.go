@@ -216,9 +216,11 @@ func StartVendorUsagePollers(
 		sup.Go("vendor-accounts", refreshable(sig, p.Run))
 	}
 	if cfg.VendorUsage.GitHubCopilot.Enabled {
+		home, _ := os.UserHomeDir()
 		p := copilotusage.NewPoller(bus, copilotusage.PollerOptions{
 			Health: sourceHealth.For("github-copilot"), OAuthToken: cfg.VendorUsage.GitHubCopilot.OAuthToken,
-			Interval: cfg.VendorUsage.GitHubCopilot.Interval, Logger: logger, NewClient: copilotapi.NewSource,
+			TokenSources: copilotapi.TokenSources(home, cfg.Keychain.Disabled, cfg.VendorUsage.GitHubCopilot.UseGHCLI),
+			Interval:     cfg.VendorUsage.GitHubCopilot.Interval, Logger: logger, NewClient: copilotapi.NewSource,
 		})
 		sup.Go("github-copilot", refreshable(sig, p.Run))
 		logger.Info("github copilot usage poller live", "interval", cfg.VendorUsage.GitHubCopilot.Interval)

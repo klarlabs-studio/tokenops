@@ -51,7 +51,7 @@ func TestClientUserHappyPath(t *testing.T) {
 	if !ok {
 		t.Fatal("chat snapshot missing")
 	}
-	if chat.PercentRemaining != 70.0 {
+	if chat.PercentRemaining == nil || *chat.PercentRemaining != 70.0 {
 		t.Errorf("chat percent_remaining = %v", chat.PercentRemaining)
 	}
 }

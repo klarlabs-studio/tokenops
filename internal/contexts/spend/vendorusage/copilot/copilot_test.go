@@ -97,7 +97,7 @@ func (b *captureBus) PublishedCount() int64 {
 func (b *captureBus) DroppedCount() int64         { return 0 }
 func (b *captureBus) Close(_ time.Duration) error { return nil }
 
-// Each quota_snapshots key yields one envelope. Re-running the same
+// Each quota_snapshots key yields one envelope, and the plan one more. Re-running the same
 // poll within the same response timestamp must be a no-op (server
 // data hasn't changed yet).
 func TestPollerEmitsOneEnvelopePerSnapshotAndDedupes(t *testing.T) {
@@ -108,15 +108,15 @@ func TestPollerEmitsOneEnvelopePerSnapshotAndDedupes(t *testing.T) {
 		NewClient:  sourceFor(fakeSource{body: sampleResponse}),
 		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
-	if err := p.ensureClient(); err != nil {
+	if err := p.ensureClient(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	p.scan(context.Background())
-	if got := bus.PublishedCount(); got != 2 {
-		t.Fatalf("want 2 envelopes (one per snapshot); got %d", got)
+	if got := bus.PublishedCount(); got != 3 {
+		t.Fatalf("want 3 envelopes (one per snapshot, one for the plan); got %d", got)
 	}
 	p.scan(context.Background())
-	if got := bus.PublishedCount(); got != 2 {
+	if got := bus.PublishedCount(); got != 3 {
 		t.Errorf("same timestamp_utc must dedupe; total %d", got)
 	}
 }
@@ -129,7 +129,7 @@ func TestPollerRecordsLastError(t *testing.T) {
 		NewClient:  sourceFor(fakeSource{err: errors.New("copilot user: status 401: ")}),
 		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
-	if err := p.ensureClient(); err != nil {
+	if err := p.ensureClient(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	p.scan(context.Background())

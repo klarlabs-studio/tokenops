@@ -206,6 +206,18 @@ func TestVendorUsageEnableSources(t *testing.T) {
 				if cfg.VendorUsage.GitHubCopilot.OAuthToken != "" {
 					t.Errorf("token should stay empty for auto-discovery; got %q", cfg.VendorUsage.GitHubCopilot.OAuthToken)
 				}
+				if cfg.VendorUsage.GitHubCopilot.UseGHCLI {
+					t.Error("the GitHub CLI's token is read only when asked for")
+				}
+			},
+		},
+		{
+			name: "github-copilot may ask the GitHub CLI",
+			args: []string{"github-copilot", "--use-gh-cli"},
+			assert: func(t *testing.T, cfg config.Config) {
+				if !cfg.VendorUsage.GitHubCopilot.Enabled || !cfg.VendorUsage.GitHubCopilot.UseGHCLI {
+					t.Errorf("copilot config %+v; want enabled with use_gh_cli", cfg.VendorUsage.GitHubCopilot)
+				}
 			},
 		},
 		{

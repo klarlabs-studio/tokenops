@@ -104,6 +104,7 @@ func AssembleHeadroomInputs(ctx context.Context, reader EventReader, counts Sour
 		Last7DayTokens:       cons.Last7DayTokens,
 		Now:                  now,
 		MonthlyAuthoritative: LatestAuthoritativeMonthly(ctx, reader, providerOf(provider), now),
+		UnmeteredSeat:        LatestUnmeteredSeat(ctx, reader, providerOf(provider), now),
 	}
 	p, ok := Lookup(planName)
 	if !ok {

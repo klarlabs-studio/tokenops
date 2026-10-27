@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
@@ -33,6 +34,11 @@ type PollerOptions struct {
 	// TokenPaths overrides the default discovery locations. Empty
 	// uses DefaultTokenPaths.
 	TokenPaths []string
+	// TokenSources are tried, in order, after the apps.json files when
+	// no token was found there: the Copilot CLI's environment variables,
+	// its Keychain item and plaintext config, the GitHub CLI. The daemon
+	// passes the adapters from internal/infra/vendorusage/copilot.
+	TokenSources []TokenSource
 	// Interval defaults to 2 minutes. GitHub doesn't document a rate
 	// limit on this endpoint but the IDE plugins poll on similar
 	// cadence.
@@ -71,9 +77,13 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 	return &Poller{bus: bus, opts: opts}
 }
 
+// Run polls until ctx ends. A token not found at start does not end it:
+// each scan looks again and records why, so the operator who signs in
+// later is read without a restart, and a status surface says what is
+// missing rather than nothing at all.
 func (p *Poller) Run(ctx context.Context) error {
-	if err := p.ensureClient(); err != nil {
-		return err
+	if p.opts.NewClient == nil {
+		return errNoClientFactory
 	}
 	t := pollnow.NewTicker(ctx, p.opts.Interval)
 	defer t.Stop()
@@ -107,7 +117,7 @@ func (p *Poller) LastError() (time.Time, error) {
 // errNoClientFactory reports a poller wired without PollerOptions.NewClient.
 var errNoClientFactory = errors.New("copilot poller: no client factory configured")
 
-func (p *Poller) ensureClient() error {
+func (p *Poller) ensureClient(ctx context.Context) error {
 	token := p.opts.OAuthToken
 	if token == "" {
 		paths := p.opts.TokenPaths
@@ -118,7 +128,8 @@ func (p *Poller) ensureClient() error {
 			}
 			paths = defaults
 		}
-		t, err := LoadToken(paths)
+		sources := append([]TokenSource{FileSource{Paths: paths}}, p.opts.TokenSources...)
+		t, err := FirstToken(ctx, sources)
 		if err != nil {
 			return err
 		}
@@ -133,7 +144,7 @@ func (p *Poller) ensureClient() error {
 
 func (p *Poller) scan(ctx context.Context) {
 	if p.client == nil {
-		if err := p.ensureClient(); err != nil {
+		if err := p.ensureClient(ctx); err != nil {
 			p.recordErr(err)
 			if errors.Is(err, ErrNoToken) {
 				p.opts.Logger.Debug("copilot poller: no oauth token available; idle")
@@ -150,6 +161,12 @@ func (p *Poller) scan(ctx context.Context) {
 			return
 		}
 		p.opts.Logger.Warn("copilot poller: User() failed", "err", err)
+		return
+	}
+	reading, err := resp.Reading()
+	if err != nil {
+		p.recordErr(err)
+		p.opts.Logger.Warn("copilot poller: unreadable user record", "err", err)
 		return
 	}
 	p.recordSuccess()
@@ -171,12 +188,13 @@ func (p *Poller) scan(ctx context.Context) {
 			ts = parsed
 		}
 	}
-	for key, snap := range resp.QuotaSnapshots {
-		env := newEnvelope(ts, resp, key, snap)
-		if p.bus != nil {
-			p.publishWait(ctx, env)
-		}
+	if p.bus == nil {
+		return
 	}
+	for key, snap := range resp.QuotaSnapshots {
+		p.publishWait(ctx, newEnvelope(ts, resp, key, snap))
+	}
+	p.publishWait(ctx, newPlanEnvelope(ts, resp, reading))
 }
 
 func (p *Poller) recordErr(err error) {
@@ -202,7 +220,7 @@ func (p *Poller) recordSuccess() {
 // can read it.
 func newEnvelope(ts time.Time, resp *UserResponse, snapshotKey string, snap QuotaSnapshot) *eventschema.Envelope {
 	h := sha256.Sum256([]byte("github-copilot|" + resp.Login + "|" + resp.TimestampUTC + "|" + snapshotKey))
-	return &eventschema.Envelope{
+	env := &eventschema.Envelope{
 		ID:            "ghc-" + hex.EncodeToString(h[:8]),
 		SchemaVersion: eventschema.SchemaVersion,
 		Type:          eventschema.EventTypePrompt,
@@ -211,21 +229,77 @@ func newEnvelope(ts time.Time, resp *UserResponse, snapshotKey string, snap Quot
 		Attributes: map[string]string{
 			// Quota-state snapshot, not a user message — plan window
 			// math must not count it (plans.ConsumptionInWindow).
-			"granularity":       "quota_snapshot",
-			"login":             resp.Login,
-			"snapshot":          snapshotKey,
-			"percent_remaining": fmt.Sprintf("%.2f", snap.PercentRemaining),
-			"remaining":         fmt.Sprintf("%.2f", snap.Remaining),
-			"entitlement":       fmt.Sprintf("%d", snap.Entitlement),
-			"overage_count":     fmt.Sprintf("%d", snap.OverageCount),
-			"unlimited":         fmt.Sprintf("%t", snap.Unlimited),
-			"quota_reset_date":  resp.QuotaResetDate,
-			"chat_enabled":      fmt.Sprintf("%t", resp.ChatEnabled),
+			"granularity":      "quota_snapshot",
+			"login":            resp.Login,
+			"snapshot":         snapshotKey,
+			"remaining":        fmt.Sprintf("%.2f", snap.Remaining),
+			"entitlement":      fmt.Sprintf("%d", snap.Entitlement),
+			"overage_count":    fmt.Sprintf("%d", snap.OverageCount),
+			"unlimited":        fmt.Sprintf("%t", snap.Unlimited),
+			"quota_reset_date": resp.QuotaResetDate,
+			"chat_enabled":     fmt.Sprintf("%t", resp.ChatEnabled),
+			"credit_billed":    fmt.Sprintf("%t", resp.TokenBasedBilling || snap.TokenBasedBilling),
 		},
 		Payload: &eventschema.PromptEvent{
 			Provider: eventschema.ProviderGitHub,
 			Status:   200,
 		},
+	}
+	// A bucket that does not report its share carries no
+	// percent_remaining: absent is not "0% left".
+	if snap.PercentRemaining != nil {
+		env.Attributes["percent_remaining"] = fmt.Sprintf("%.2f", *snap.PercentRemaining)
+	}
+	if snap.CreditsUsed != nil {
+		env.Attributes["credits_used"] = strconv.FormatFloat(*snap.CreditsUsed, 'f', -1, 64)
+	}
+	return env
+}
+
+// PlanSnapshot is the snapshot attribute of the one envelope per poll that
+// carries the plan as a whole: its capped allowances as windows, the AI
+// Credits used, and whether the seat is metered at all.
+const PlanSnapshot = "plan"
+
+// newPlanEnvelope stores the poll's Reading in the shape vendor account
+// readers use (window_<n>_{name,used_pct,reset_at}, used_credits), so
+// headroom shows Copilot's month as a window like any other vendor's.
+// seat is "metered" or "unmetered": an unmetered seat (an organisation
+// seat with no personal allowance) has no window, and headroom says so
+// instead of reading it as unlimited headroom.
+func newPlanEnvelope(ts time.Time, resp *UserResponse, r Reading) *eventschema.Envelope {
+	h := sha256.Sum256([]byte("github-copilot|" + resp.Login + "|" + resp.TimestampUTC + "|" + PlanSnapshot))
+	attrs := map[string]string{
+		"granularity": "quota_snapshot",
+		"snapshot":    PlanSnapshot,
+		"seat":        "metered",
+	}
+	if r.Unmetered {
+		attrs["seat"] = "unmetered"
+	}
+	if resp.CopilotPlan != "" {
+		attrs["plan_type"] = resp.CopilotPlan
+	}
+	if r.HasCredits {
+		attrs["used_credits"] = strconv.FormatFloat(r.CreditsUsed, 'f', -1, 64)
+		attrs["used_credits_unit"] = CreditsUnit
+	}
+	for i, m := range r.Meters {
+		k := "window_" + strconv.Itoa(i) + "_"
+		attrs[k+"name"] = m.Name
+		attrs[k+"used_pct"] = fmt.Sprintf("%.2f", m.UsedPct)
+		if !r.ResetsAt.IsZero() {
+			attrs[k+"reset_at"] = r.ResetsAt.Format(time.RFC3339)
+		}
+	}
+	return &eventschema.Envelope{
+		ID:            "ghc-" + hex.EncodeToString(h[:8]),
+		SchemaVersion: eventschema.SchemaVersion,
+		Type:          eventschema.EventTypePrompt,
+		Timestamp:     ts,
+		Source:        SourceTag,
+		Attributes:    attrs,
+		Payload:       &eventschema.PromptEvent{Provider: eventschema.ProviderGitHub, Status: 200},
 	}
 }
 
