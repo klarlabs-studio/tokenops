@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -72,6 +74,36 @@ func (f daemonFlags) resolve() (daemon.UnitKind, string, string, string, error) 
 // without a real supervisor.
 var applyUnit = daemon.ApplyUnit
 
+// restartUnit and startRetryPause drive the one retry of a start that never
+// answered. Vars so tests neither kick the real job nor wait.
+var (
+	restartUnit     = daemon.RestartUnit
+	startRetryPause = 5 * time.Second
+)
+
+// confirmStartedOrRetry waits for the daemon the unit just started and, if it
+// never answers, restarts the unit once and waits again. After an upgrade
+// launchd has refused the first start of a new binary (exit reason
+// OS_REASON_CODESIGNING, "spawn failed") and left the daemon down, while the
+// next start of the same file worked; the Homebrew hook that runs this
+// cannot fail the upgrade, so without the retry nobody saw it.
+func confirmStartedOrRetry(cmd *cobra.Command, rf *rootFlags, kind daemon.UnitKind) error {
+	err := confirmDaemonStarted(cmd, rf)
+	if err == nil {
+		return nil
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "The daemon did not answer (%v); restarting it once.\n", err)
+	select {
+	case <-cmd.Context().Done():
+		return err
+	case <-time.After(startRetryPause):
+	}
+	if rerr := restartUnit(kind); rerr != nil {
+		return errors.Join(err, fmt.Errorf("retry: %w", rerr))
+	}
+	return confirmDaemonStarted(cmd, rf)
+}
+
 func newDaemonInstallCmd(rf *rootFlags) *cobra.Command {
 	f := daemonFlags{}
 	cmd := &cobra.Command{
@@ -120,7 +152,7 @@ func newDaemonInstallCmd(rf *rootFlags) *cobra.Command {
 				fmt.Fprintln(out, "Run `tokenops daemon install` again; `tokenops daemon status` shows its state.")
 				return fmt.Errorf("start %s unit: %w", kind, err)
 			}
-			if err := confirmDaemonStarted(cmd, rf); err != nil {
+			if err := confirmStartedOrRetry(cmd, rf, kind); err != nil {
 				return err
 			}
 			fmt.Fprintln(out, "Running and healthy. `tokenops start` will now survive reboot.")

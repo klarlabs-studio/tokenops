@@ -184,6 +184,22 @@ func TestDaemonInstallPassesWhetherTheUnitChanged(t *testing.T) {
 	}
 }
 
+// stubStartRetry replaces the supervisor restart and the pause before it,
+// so no test kicks the real launchd job. It returns a pointer to the
+// number of restarts asked for.
+func stubStartRetry(t *testing.T) *int {
+	t.Helper()
+	prevRestart, prevPause := restartUnit, startRetryPause
+	restarts := 0
+	restartUnit = func(daemon.UnitKind) error { restarts++; return nil }
+	startRetryPause = 0
+	t.Cleanup(func() {
+		restartUnit = prevRestart
+		startRetryPause = prevPause
+	})
+	return &restarts
+}
+
 func TestDaemonInstallDoesNotClaimRunningBeforeHealthAnswers(t *testing.T) {
 	prevApply, prevAwait := applyUnit, awaitDaemonHealth
 	applyUnit = func(daemon.UnitKind, string, bool) error { return nil }
@@ -194,6 +210,7 @@ func TestDaemonInstallDoesNotClaimRunningBeforeHealthAnswers(t *testing.T) {
 		applyUnit = prevApply
 		awaitDaemonHealth = prevAwait
 	})
+	restarts := stubStartRetry(t)
 
 	out, err := executeRoot(t,
 		"daemon", "install",
@@ -207,5 +224,46 @@ func TestDaemonInstallDoesNotClaimRunningBeforeHealthAnswers(t *testing.T) {
 	}
 	if strings.Contains(out, "Running and healthy") {
 		t.Fatalf("install claimed a healthy daemon:\n%s", out)
+	}
+	if *restarts != 1 {
+		t.Errorf("restarts = %d, want exactly one retry before giving up", *restarts)
+	}
+}
+
+// After an upgrade, launchd has refused the first start of a new binary
+// (OS_REASON_CODESIGNING, "spawn failed") and left the daemon down, while
+// the next start of the same file worked. One retry recovers that.
+func TestDaemonInstallRetriesAStartThatNeverAnswered(t *testing.T) {
+	prevApply, prevAwait := applyUnit, awaitDaemonHealth
+	applyUnit = func(daemon.UnitKind, string, bool) error { return nil }
+	probes := 0
+	awaitDaemonHealth = func(context.Context, string, time.Duration) (bool, error) {
+		probes++
+		if probes == 1 {
+			return false, errors.New("connection refused")
+		}
+		return false, nil
+	}
+	t.Cleanup(func() {
+		applyUnit = prevApply
+		awaitDaemonHealth = prevAwait
+	})
+	restarts := stubStartRetry(t)
+
+	out, err := executeRoot(t,
+		"daemon", "install",
+		"--kind", "launchd",
+		"--bin", "/opt/homebrew/bin/tokenops",
+		"--home", "/Users/ada",
+		"--path", filepath.Join(t.TempDir(), "de.klarlabs.tokenops.plist"),
+	)
+	if err != nil {
+		t.Fatalf("install failed although the retry came up: %v\n%s", err, out)
+	}
+	if *restarts != 1 || probes != 2 {
+		t.Errorf("restarts = %d, probes = %d, want 1 and 2", *restarts, probes)
+	}
+	if !strings.Contains(out, "Running and healthy") {
+		t.Errorf("install did not report the recovered daemon:\n%s", out)
 	}
 }
