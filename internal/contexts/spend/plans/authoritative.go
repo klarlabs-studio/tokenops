@@ -222,7 +222,7 @@ func monthlyAuthoritativeKeys(provider eventschema.Provider) (usedKey, resetKey 
 	case eventschema.ProviderGitHub:
 		return "percent_remaining", "quota_reset_date", true, "copilot:monthly"
 	case eventschema.ProviderCursor:
-		return "used_pct", "", false, "cursor:monthly"
+		return "used_pct", "billing_cycle_end", false, "cursor:monthly"
 	default:
 		return "", "", false, ""
 	}

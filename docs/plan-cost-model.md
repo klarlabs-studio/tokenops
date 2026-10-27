@@ -51,8 +51,9 @@ Snapshot as of 2026-09:
 | `gpt-business` | ChatGPT Business | openai | model-dependent / 5h |
 | `copilot-individual` | GitHub Copilot Individual | github | no published cap |
 | `copilot-business` | GitHub Copilot Business | github | no published cap |
-| `cursor-pro` | Cursor Pro | cursor | 500 requests / month |
-| `cursor-business` | Cursor Business | cursor | 500 requests / month |
+| `cursor-plus` / `-premium` / `-super` / `-ultra` | Cursor | cursor | weekly pool shared with Grok: 1x / 4x / 15x / 50x Plus |
+| `cursor-teams` | Cursor Teams | cursor | per seat: the matching individual plan's weekly pool |
+| `cursor-pro` / `cursor-business` | Cursor Pro, Teams (legacy) | cursor | no allowance published; read from cursor.com |
 | `zai-glm-coding-lite` / `-pro` / `-max` | z.ai GLM Coding | zai | 2,000 / 12,000 / 28,000 credits / 5h |
 | `opencode-go` / `-plus` | opencode Go | opencode-go | dollar cap per model; 5h = 20% of it |
 | `alibaba-coding-pro` | Alibaba Cloud Coding Plan Pro | alibaba | 6,000 requests / 5h |

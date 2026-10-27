@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 // underlying endpoint is undocumented.
 const SourceTag = "cursor-web"
 
-// PollerOptions configures the periodic call to cursor.com/api/usage.
+// PollerOptions configures the periodic read of cursor.com's usage.
 type PollerOptions struct {
 	// Health, when set, receives this poller's own success/failure
 	// record. It is what lets a status surface tell a reader being
@@ -38,9 +39,9 @@ type PollerOptions struct {
 	NewClient func(cookie, userID string) UsageSource
 }
 
-// Poller fetches one /api/usage snapshot per tick and emits one
-// envelope per (model row) so per-model aggregation in the store
-// stays clean.
+// Poller fetches one usage snapshot per tick and emits one envelope for
+// the weekly pool or the billing cycle, or, from the legacy endpoint, one
+// per model row so per-model aggregation in the store stays clean.
 type Poller struct {
 	bus  events.Bus
 	opts PollerOptions
@@ -142,11 +143,22 @@ func (p *Poller) scan(ctx context.Context) {
 	p.lastSeenKey = key
 	p.mu.Unlock()
 	ts := time.Now().UTC()
-	for model, m := range resp.Models {
-		env := newEnvelope(ts, p.opts.UserID, resp.StartOfMonth, model, m)
-		if p.bus != nil {
-			p.publishWait(ctx, env)
+	var envs []*eventschema.Envelope
+	switch {
+	case resp.Pool != nil:
+		envs = append(envs, poolEnvelope(ts, p.opts.UserID, resp))
+	case resp.Summary != nil:
+		envs = append(envs, summaryEnvelope(ts, p.opts.UserID, resp.Summary))
+	default:
+		for model, m := range resp.Models {
+			envs = append(envs, newEnvelope(ts, p.opts.UserID, resp.StartOfMonth, model, m))
 		}
+	}
+	if p.bus == nil {
+		return
+	}
+	for _, env := range envs {
+		p.publishWait(ctx, env)
 	}
 }
 
@@ -170,6 +182,13 @@ func (p *Poller) recordSuccess() {
 func snapshotKey(resp *UsageResponse) string {
 	h := sha256.New()
 	_, _ = fmt.Fprintf(h, "som=%s|", resp.StartOfMonth)
+	if pl := resp.Pool; pl != nil {
+		_, _ = fmt.Fprintf(h, "pool=%.4f/%s|", pl.UsedPct, pl.ResetsAt.Format(time.RFC3339))
+	}
+	if s := resp.Summary; s != nil {
+		r, _ := s.Read()
+		_, _ = fmt.Fprintf(h, "summary=%s|%.4f/%.0f/%.0f/%t|", s.BillingCycleEnd, r.UsedPct, r.UsedCents, r.LimitCents, r.IsUnlimited)
+	}
 	// Map iteration order isn't deterministic; we don't need order
 	// stability here because the hash collapses any permutation of
 	// the same content to the same digest is not guaranteed... so
@@ -197,9 +216,19 @@ func snapshotKey(resp *UsageResponse) string {
 // session_budget should read the exact counts from Attributes.
 func newEnvelope(ts time.Time, userID, startOfMonth, model string, m ModelUsage) *eventschema.Envelope {
 	h := sha256.Sum256([]byte("cursor-web|" + userID + "|" + startOfMonth + "|" + model + "|" + fmt.Sprintf("%d", m.NumRequests)))
-	pct := -1.0
+	attrs := map[string]string{
+		// Monthly per-model usage snapshot, not a user message —
+		// plan window math must not count it.
+		"granularity":       "monthly_snapshot",
+		"user_id":           userID,
+		"start_of_month":    startOfMonth,
+		"num_requests":      fmt.Sprintf("%d", m.NumRequests),
+		"max_request_usage": fmt.Sprintf("%d", m.MaxRequestUsage),
+	}
+	// A row without an allowance has no share: it carried -1, which the
+	// monthly reading took for the plan's.
 	if m.MaxRequestUsage > 0 {
-		pct = 100.0 * float64(m.NumRequests) / float64(m.MaxRequestUsage)
+		attrs["used_pct"] = fmt.Sprintf("%.2f", 100.0*float64(m.NumRequests)/float64(m.MaxRequestUsage))
 	}
 	return &eventschema.Envelope{
 		ID:            "cur-" + hex.EncodeToString(h[:8]),
@@ -207,16 +236,84 @@ func newEnvelope(ts time.Time, userID, startOfMonth, model string, m ModelUsage)
 		Type:          eventschema.EventTypePrompt,
 		Timestamp:     ts,
 		Source:        SourceTag,
-		Attributes: map[string]string{
-			// Monthly per-model usage snapshot, not a user message —
-			// plan window math must not count it.
-			"granularity":       "monthly_snapshot",
-			"user_id":           userID,
-			"start_of_month":    startOfMonth,
-			"num_requests":      fmt.Sprintf("%d", m.NumRequests),
-			"max_request_usage": fmt.Sprintf("%d", m.MaxRequestUsage),
-			"used_pct":          fmt.Sprintf("%.2f", pct),
+		Attributes:    attrs,
+		Payload: &eventschema.PromptEvent{
+			Provider:     eventschema.ProviderCursor,
+			RequestModel: model,
+			Status:       200,
 		},
+	}
+}
+
+// Request models of the snapshots that are not a model's row.
+const (
+	planModel = "cursor-plan"
+	poolModel = "cursor-weekly-pool"
+)
+
+// summaryEnvelope is the billing cycle's reading from usage-summary: the
+// share used (used_pct, which the monthly headroom reads, with the cycle's
+// end as its reset), whose allowance it is, and the cents behind it.
+func summaryEnvelope(ts time.Time, userID string, s *Summary) *eventschema.Envelope {
+	r, _ := s.Read()
+	attrs := map[string]string{
+		"granularity":       "monthly_snapshot",
+		"user_id":           userID,
+		"usage_source":      "usage-summary",
+		"membership_type":   s.MembershipType,
+		"billing_cycle_end": s.BillingCycleEnd,
+	}
+	if s.BillingCycleStart != "" {
+		attrs["start_of_month"] = s.BillingCycleStart
+	}
+	if r.HasUsedPct {
+		attrs["used_pct"] = fmt.Sprintf("%.2f", r.UsedPct)
+		attrs["usage_scope"] = r.Scope
+	}
+	if r.HasCents {
+		attrs["used_cents"] = strconv.FormatFloat(r.UsedCents, 'f', -1, 64)
+		attrs["limit_cents"] = strconv.FormatFloat(r.LimitCents, 'f', -1, 64)
+	}
+	if r.IsUnlimited {
+		attrs["unlimited"] = "true"
+	}
+	return snapshotEnvelope(ts, userID, planModel, s.BillingCycleEnd+"|"+attrs["used_pct"]+"|"+attrs["used_cents"], attrs)
+}
+
+// poolEnvelope is the weekly pool, written as an account reader writes a
+// window so headroom shows it beside the other vendors' windows. It
+// carries no used_pct: the monthly figures usage-summary still reports
+// for these accounts are stale.
+func poolEnvelope(ts time.Time, userID string, resp *UsageResponse) *eventschema.Envelope {
+	pl := resp.Pool
+	attrs := map[string]string{
+		"granularity":           "quota_snapshot",
+		"billing":               "subscription",
+		"user_id":               userID,
+		"usage_source":          "get-sand-usage-status",
+		"window_0_name":         "week",
+		"window_0_used_pct":     fmt.Sprintf("%.2f", pl.UsedPct),
+		"window_0_duration_min": strconv.Itoa(int(7 * 24 * time.Hour / time.Minute)),
+		"window_0_reset_at":     pl.ResetsAt.UTC().Format(time.RFC3339),
+	}
+	if pl.PlanName != "" {
+		attrs["plan_name"] = pl.PlanName
+	}
+	if resp.Summary != nil {
+		attrs["membership_type"] = resp.Summary.MembershipType
+	}
+	return snapshotEnvelope(ts, userID, poolModel, attrs["window_0_reset_at"]+"|"+attrs["window_0_used_pct"], attrs)
+}
+
+func snapshotEnvelope(ts time.Time, userID, model, key string, attrs map[string]string) *eventschema.Envelope {
+	h := sha256.Sum256([]byte("cursor-web|" + userID + "|" + model + "|" + key))
+	return &eventschema.Envelope{
+		ID:            "cur-" + hex.EncodeToString(h[:8]),
+		SchemaVersion: eventschema.SchemaVersion,
+		Type:          eventschema.EventTypePrompt,
+		Timestamp:     ts,
+		Source:        SourceTag,
+		Attributes:    attrs,
 		Payload: &eventschema.PromptEvent{
 			Provider:     eventschema.ProviderCursor,
 			RequestModel: model,

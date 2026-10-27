@@ -109,6 +109,20 @@ func TestLatestAuthoritativeMonthly_CursorUsedPct(t *testing.T) {
 	}
 }
 
+// usage-summary's reading resets when the billing cycle ends, which the
+// Cursor poller writes as billing_cycle_end.
+func TestLatestAuthoritativeMonthly_CursorResetsAtTheCycleEnd(t *testing.T) {
+	now := time.Unix(2_000_000, 0).UTC()
+	end := now.Add(36 * time.Hour).Format("2006-01-02T15:04:05.000Z")
+	reader := authFakeReader{events: []*eventschema.Envelope{
+		env(now.Add(-time.Minute), map[string]string{"used_pct": "62.50", "billing_cycle_end": end}),
+	}}
+	a := LatestAuthoritativeMonthly(context.Background(), reader, eventschema.ProviderCursor, now)
+	if a == nil || a.UsedPct != 62.5 || a.ResetsIn != 36*time.Hour {
+		t.Fatalf("cursor monthly: got %+v want 62.5%% resetting in 36h", a)
+	}
+}
+
 // A provider with no monthly meter (e.g. anthropic) yields nil.
 func TestLatestAuthoritativeMonthly_NoneForWindowProviders(t *testing.T) {
 	now := time.Unix(3_000_000, 0).UTC()
