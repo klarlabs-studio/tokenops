@@ -4,7 +4,22 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.112.1**.
+Current release: **v0.113.0**.
+
+## v0.113.0 — Catch the loop, keep the cache warm
+
+An agent stuck in a loop now has a breaker: a new `loop-breaker` rule
+counts calls that repeat with no file changed and, once promoted, pauses
+the fourth. It starts in shadow and reports the sessions it would have
+paused, so you can see it is right before it binds. Cache rebuilds in the
+waste report now say why they happened (an idle gap past the cache
+lifetime, a model switch, a changed prompt prefix), the status line warns
+"cache cold in 1m" before it expires, and `tokenops coach lint-context`
+finds the date or session ID in your always-loaded context that breaks
+the cache for every session. `tokenops_prepare_work` adds the median and
+the 90th percentile of past runs to its range, and the agent sees one line
+of plan headroom at its first prompt and when a window crosses 50, 25 or
+10% left, without touching the cached prefix.
 
 ## v0.112.1 — Fireworks through Nexus CLI
 
