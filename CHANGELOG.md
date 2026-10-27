@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **brand, menu bar:** one set of design tokens for every TokenOps surface. The menu bar, the docs site and the team app each carried their own copy of the lime-and-ink palette, and the copies had drifted: the dark lime used for links and text was `#3F6B0B` in the menu bar and `#4D7C0F` on the docs site, which is 4.99:1 on white and so just short of the 5:1 the brand promises; the quietest text was `#70757F`, 4.24:1 on the menu bar panel's grey fills. `assets/brand/tokens.json` now holds the colours (light and dark), type scale and font stacks, spacing, radii, shadows and motion, and `go generate ./internal/tools/gen/designtokens` writes them as CSS custom properties (`assets/brand/tokens.css`, `--tok-` prefixed, following the system appearance or pinned with `data-theme`) and as the token table with measured contrast ratios in `assets/brand/README.md`. A test fails when a generated file is stale or a colour falls below the contrast it names. The menu bar panel reads its colours, fonts, radii, shadows and timings from the tokens; other surfaces copy `tokens.css` as it is. What changes on screen: the faintest text is `#686D77` (5.19:1 on white), hairlines are `#E4E6EA` (`#262C3C` on ink), quiet fills `#F7F8F9` (`#1B2030`), and the bar and select border on the selected lime tab are ink instead of white, which the brand never puts on lime. `#4D7C0F` stays the logo's ring on light grounds and is never text.
+
 ### Fixed
 
 - **plans:** plan advice no longer says "upgrade" to the plan you already have. On the top tier (Max 20x) with a lockout and nothing larger to move to, the replay recommended the same plan with metered overflow, which costs the same when no window went over its cap, and printed `upgrade` with `$0.00` saved. `tokenops team preview` and the team upload showed it as `upgrade`, recommended `claude-max-20x`. An upgrade now only goes to a larger allowance; with none, the verdict is `stay` and the summary says the plan is the top tier and the lockouts are the price of its allowance. The team wire verdicts are unchanged.
