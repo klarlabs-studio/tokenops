@@ -1344,7 +1344,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 |  | `factory-web` | the same windows and balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Fireworks | `fireworks-usage` | the month's spend against the account's or the member's cap | API key | against a real account |
 | Gemini | `gemini-cli` | per-turn tokens per model from Gemini CLI's chat recordings | local files | public docs and fixtures |
-| Copilot | `github-copilot` | premium requests used against the month's allowance | another app's sign-in | the vendor's client source and fixtures |
+| Copilot | `github-copilot` | the month's AI Credits (premium requests on annual plans) against the allowance; an org seat with none says so | another app's sign-in | the vendor's client source and fixtures |
 | GitKraken AI | `gitkraken-account` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID | API key | CodexBar's source, the vendor's docs and fixtures |
 | Grok | `grok-account` | the SuperGrok credit window used, and the prepaid balance | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 |  | `grok-web` | the credit window used | browser session | CodexBar's source, the vendor's docs and fixtures |

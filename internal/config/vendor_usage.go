@@ -119,11 +119,19 @@ func (c FireworksUsageConfig) On() bool { return c.Enabled == nil || *c.Enabled 
 // GitHubCopilotUsageConfig wires the api.github.com/copilot_internal/user
 // poller. OAuthToken empty → poller reads it from
 // ~/.config/github-copilot/apps.json (or hosts.json) — same file the
-// IDE plugins use. Interval defaults to 2 minutes.
+// IDE plugins use — then where the Copilot CLI keeps it: the
+// COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN variables, the
+// "copilot-cli" Keychain item (read quietly), ~/.copilot/config.json, and,
+// with UseGHCLI, `gh auth token`. Interval defaults to 2 minutes.
 type GitHubCopilotUsageConfig struct {
 	Enabled    bool          `yaml:"enabled"`
 	OAuthToken string        `yaml:"oauth_token"`
 	Interval   time.Duration `yaml:"interval"`
+	// UseGHCLI lets the reader ask the GitHub CLI for its token when no
+	// Copilot sign-in is found, as the Copilot CLI does. The GitHub CLI's
+	// token is another application's sign-in, so it is read only when the
+	// operator set this (ADR 0013).
+	UseGHCLI bool `yaml:"use_gh_cli,omitempty"`
 }
 
 // CursorUsageConfig wires the cursor.com/api/usage poller. Cookie +

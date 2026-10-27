@@ -49,8 +49,11 @@ Snapshot as of 2026-09:
 | `gpt-pro-20x` | ChatGPT Pro More usage ($200) | openai | 20x Plus, 10x from 2026-10-30 / 5h |
 | `gpt-pro-500` | ChatGPT Pro Max usage ($500) | openai | 25x Plus / 5h |
 | `gpt-business` | ChatGPT Business | openai | model-dependent / 5h |
-| `copilot-individual` | GitHub Copilot Individual | github | no published cap |
-| `copilot-business` | GitHub Copilot Business | github | no published cap |
+| `copilot-individual` | GitHub Copilot Pro | github | 1,500 AI credits / month |
+| `copilot-pro-plus` | GitHub Copilot Pro+ | github | 7,000 AI credits / month |
+| `copilot-max` | GitHub Copilot Max | github | 20,000 AI credits / month |
+| `copilot-business` | GitHub Copilot Business | github | 1,900 AI credits / user / month |
+| `copilot-enterprise` | GitHub Copilot Enterprise | github | 3,900 AI credits / user / month |
 | `cursor-pro` | Cursor Pro | cursor | 500 requests / month |
 | `cursor-business` | Cursor Business | cursor | 500 requests / month |
 | `zai-glm-coding-lite` / `-pro` / `-max` | z.ai GLM Coding | zai | 2,000 / 12,000 / 28,000 credits / 5h |

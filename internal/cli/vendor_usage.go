@@ -44,6 +44,7 @@ type vendorUsageEnableFlags struct {
 	adminKey    string
 	bucketWidth string
 	oauthToken  string
+	useGHCLI    bool
 	root        string
 	interval    time.Duration
 	disable     bool
@@ -150,8 +151,12 @@ Sources:
   cursor              cursor.com /api/usage cookie scraper. Required: --cookie
                       (or env TOKENOPS_CURSOR_COOKIE) and --user-id.
   github-copilot      api.github.com/copilot_internal/user quota poller.
-                      Auto-discovers the OAuth token from
-                      ~/.config/github-copilot; pass --oauth-token to override.
+                      Finds the OAuth token of the Copilot IDE plugins
+                      (~/.config/github-copilot) or the Copilot CLI
+                      (COPILOT_GITHUB_TOKEN, GH_TOKEN, GITHUB_TOKEN, its
+                      Keychain item, ~/.copilot/config.json); --use-gh-cli
+                      also asks the GitHub CLI (gh auth token); pass
+                      --oauth-token to override.
   codex-jsonl         ~/.codex/sessions/**/*.jsonl reader. No secrets;
                       --root overrides the default scan root.
   claude-code-jsonl   ~/.claude/projects/**/*.jsonl reader. No secrets;
@@ -205,6 +210,7 @@ Where secrets end up:
 	cmd.Flags().StringVar(&f.adminKey, "admin-key", "", "Anthropic admin key (anthropic-admin); \"-\" reads stdin; env TOKENOPS_ANTHROPIC_ADMIN_KEY")
 	cmd.Flags().StringVar(&f.bucketWidth, "bucket-width", "", "anthropic-admin bucket width (1m|1h|1d); empty keeps current")
 	cmd.Flags().StringVar(&f.oauthToken, "oauth-token", "", "GitHub Copilot OAuth token (github-copilot); \"-\" reads stdin; env TOKENOPS_COPILOT_OAUTH_TOKEN. Empty = auto-discover")
+	cmd.Flags().BoolVar(&f.useGHCLI, "use-gh-cli", false, "github-copilot: also ask the GitHub CLI for its token (gh auth token) when no Copilot sign-in is found")
 	cmd.Flags().StringVar(&f.root, "root", "", "filesystem root for jsonl readers (codex-jsonl, claude-code-jsonl); empty = default")
 	cmd.Flags().DurationVar(&f.interval, "interval", 0, "poll interval; zero keeps the existing or default")
 	cmd.Flags().BoolVar(&f.disable, "disable", false, "set enabled=false instead of true; clears no secrets")
@@ -281,6 +287,9 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		cfg.VendorUsage.GitHubCopilot.Enabled = enabled
 		if token != "" {
 			cfg.VendorUsage.GitHubCopilot.OAuthToken = token
+		}
+		if f.useGHCLI {
+			cfg.VendorUsage.GitHubCopilot.UseGHCLI = true
 		}
 		if f.interval > 0 {
 			cfg.VendorUsage.GitHubCopilot.Interval = f.interval
