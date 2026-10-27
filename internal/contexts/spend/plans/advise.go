@@ -180,6 +180,21 @@ type Advice struct {
 	Recommendation *Recommendation `json:"recommendation,omitempty"`
 	Confidence     string          `json:"confidence"`
 	Caveats        []string        `json:"caveats,omitempty"`
+	// EarlyResets is what the vendor's early resets did to the current
+	// plan's lockouts; nil when none ended one.
+	EarlyResets *EarlyResetCut `json:"early_resets,omitempty"`
+}
+
+// EarlyResetCut is the lockouts a vendor's early resets ended, and the
+// blocked time they ended at: from running out to the early reset, not to
+// the window's scheduled reset.
+type EarlyResetCut struct {
+	Count          int    `json:"count"`
+	BlockedMinutes int    `json:"blocked_minutes"`
+	Vendor         string `json:"vendor"`
+	// Window names the window in words ("weekly", "5-hour"); "" when the
+	// early resets were on windows of different lengths.
+	Window string `json:"window,omitempty"`
 }
 
 // WorthSaying is true when the advice belongs on an ambient surface: a
@@ -208,6 +223,10 @@ type ReplayInput struct {
 	ListValueUSD     float64
 	ListValueKnown   bool
 	UnpricedRequests int
+	// EarlyResets are the vendor's early resets of this provider's windows
+	// in the period (EarlyResetsIn). A lockout one ended is blocked only
+	// until it, not until the window's scheduled reset.
+	EarlyResets []EarlyReset
 }
 
 // QuotaReadingsFrom is every window reading of provider's plan in
@@ -352,14 +371,18 @@ type simulation struct {
 	blocked    time.Duration
 	peakPct    float64
 	peakWindow string
+	// cut are the early resets that ended a lockout, and cutBlocked the
+	// blocked time up to them.
+	cut        []EarlyReset
+	cutBlocked time.Duration
 	// overflowShare is the share of the period's demand above the tier's
 	// allowance, in the window kind where it is largest.
 	overflowShare float64
 }
 
-func simulate(ws []windowInstance, factor float64, until time.Time) simulation {
+func simulate(ws []windowInstance, factor float64, until time.Time, early []EarlyReset) simulation {
 	var s simulation
-	var spans [][2]time.Time
+	var spans, cutSpans [][2]time.Time
 	total, over := map[string]float64{}, map[string]float64{}
 	for _, w := range ws {
 		pct := math.Round(w.peak/factor*1000) / 10
@@ -373,14 +396,22 @@ func simulate(ws []windowInstance, factor float64, until time.Time) simulation {
 			continue
 		}
 		s.lockouts++
-		end := w.reset
+		end, by := w.reset, EarlyReset{}
+		if e, ok := earlyResetEnding(w, at, early); ok {
+			end, by = e.ObservedAt, e
+			s.cut = append(s.cut, e)
+		}
 		if end.After(until) {
 			end = until
 		}
 		if end.After(at) {
 			spans = append(spans, [2]time.Time{at, end})
+			if !by.ObservedAt.IsZero() {
+				cutSpans = append(cutSpans, [2]time.Time{at, end})
+			}
 		}
 	}
+	s.cutBlocked = unionLength(cutSpans)
 	for label, t := range total {
 		if t > 0 {
 			s.overflowShare = math.Max(s.overflowShare, over[label]/t)
@@ -388,6 +419,18 @@ func simulate(ws []windowInstance, factor float64, until time.Time) simulation {
 	}
 	s.blocked = unionLength(spans)
 	return s
+}
+
+// earlyResetEnding is the early reset that ended the instance's lockout,
+// the one that reset the window after it ran out at at. The instance's
+// scheduled reset is the one the early reset replaced.
+func earlyResetEnding(w windowInstance, at time.Time, early []EarlyReset) (EarlyReset, bool) {
+	for _, e := range early {
+		if e.PrevResetsAt.Sub(w.reset).Abs() <= instanceResetGranularity && e.ObservedAt.After(at) && e.ObservedAt.Before(w.reset) {
+			return e, true
+		}
+	}
+	return EarlyReset{}, false
 }
 
 // unionLength is how long the spans cover together.
@@ -440,7 +483,7 @@ func Replay(in ReplayInput) Advice {
 	}
 	sims := map[string]simulation{}
 	for _, t := range candidates {
-		s := simulate(ws, t.Factor, in.Until)
+		s := simulate(ws, t.Factor, in.Until, in.EarlyResets)
 		sims[t.Name] = s
 		o := Option{Kind: OptionPlan, Plan: t.Name, Display: t.Display, Current: t.Name == in.Current.Name,
 			Lockouts: s.lockouts, BlockedMinutes: int(s.blocked.Round(time.Minute) / time.Minute),
@@ -478,7 +521,12 @@ func Replay(in ReplayInput) Advice {
 	}
 	a.Confidence = confidence(in, a.Days, ws)
 	a.Caveats = caveats(in, cur, candidates)
-	a.Recommendation = recommend(a.Options, cur, perMonth)
+	if cur != nil && len(sims[cur.Plan].cut) > 0 {
+		s := sims[cur.Plan]
+		a.EarlyResets = &EarlyResetCut{Count: len(s.cut), BlockedMinutes: int(s.cutBlocked.Round(time.Minute) / time.Minute),
+			Vendor: vendorName(in.Provider), Window: windowWord(s.cut)}
+	}
+	a.Recommendation = recommend(a.Options, cur, perMonth, a.EarlyResets)
 	return a
 }
 
@@ -564,7 +612,7 @@ func acceptable(o Option, perMonth float64) bool {
 
 var kindRank = map[string]int{OptionPlan: 0, OptionPlanOverflow: 1, OptionAPI: 2}
 
-func recommend(os []Option, cur *Option, perMonth float64) *Recommendation {
+func recommend(os []Option, cur *Option, perMonth float64, cut *EarlyResetCut) *Recommendation {
 	if cur == nil || cur.MonthlyUSD == nil {
 		return nil
 	}
@@ -609,6 +657,12 @@ func recommend(os []Option, cur *Option, perMonth float64) *Recommendation {
 	switch {
 	case best.Current:
 		r.Verdict = VerdictStay
+		if !acceptable(*cur, perMonth) && !hasLargerPlan(os, cur) {
+			// The top tier runs out too often and nothing larger exists:
+			// "fits" would be wrong, so say why it stays.
+			r.Summary = topTierSummary(cur, cut)
+			return r
+		}
 	case saving > 0 && (material || !acceptable(*cur, perMonth)):
 		// Cheaper, and either worth the switch or running out less.
 		r.Verdict = VerdictSwitch
@@ -621,9 +675,7 @@ func recommend(os []Option, cur *Option, perMonth float64) *Recommendation {
 		up := cheapestHigherAcceptable(os, cur, perMonth)
 		if up == nil {
 			r.Verdict, r.Kind, r.Plan, r.Display, r.SavingsUSD, r.Material = VerdictStay, cur.Kind, cur.Plan, cur.Display, 0, false
-			r.Summary = fmt.Sprintf("%s ran out %d time(s) (about %s blocked) and is the top tier: no larger plan to move to, "+
-				"so it stays; the lockouts are the price of this tier's allowance.",
-				cur.Display, cur.Lockouts, hoursWords(cur.BlockedMinutes))
+			r.Summary = topTierSummary(cur, cut)
 			return r
 		}
 		best = up
@@ -651,6 +703,18 @@ func cheapestHigherAcceptable(os []Option, cur *Option, perMonth float64) *Optio
 		}
 	}
 	return best
+}
+
+// hasLargerPlan is true when a plan with a larger allowance than cur's is
+// among the options.
+func hasLargerPlan(os []Option, cur *Option) bool {
+	curFactor := planFactor(cur.Plan)
+	for i := range os {
+		if os[i].Kind == OptionPlan && planFactor(os[i].Plan) > curFactor {
+			return true
+		}
+	}
+	return false
 }
 
 // planFactor is a plan's allowance as a multiple of its family's base; zero
@@ -709,6 +773,72 @@ func joinAnd(names []string) string {
 		return strings.Join(names, "")
 	}
 	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
+// topTierSummary says why the top tier stays. When the vendor's early
+// resets ended some of its lockouts, it says so and how much blocked time
+// they cut out.
+func topTierSummary(cur *Option, cut *EarlyResetCut) string {
+	if cut == nil || cut.Count == 0 {
+		return fmt.Sprintf("%s ran out %d time(s) (about %s blocked) and is the top tier: no larger plan to move to, "+
+			"so it stays; the lockouts are the price of this tier's allowance.",
+			cur.Display, cur.Lockouts, hoursWords(cur.BlockedMinutes))
+	}
+	window := "the window"
+	if cut.Window != "" {
+		window = "the " + cut.Window + " window"
+	}
+	when := fmt.Sprintf("%d of those times", cut.Count)
+	if cut.Count == cur.Lockouts {
+		when = map[int]string{1: "that time", 2: "both times"}[cut.Count]
+		if cut.Count > 2 {
+			when = "each time"
+		}
+	}
+	return fmt.Sprintf("%s is the top tier; it ran out %s, but %s reset %s early %s, so about %s were lost. "+
+		"No larger plan to move to, so it stays.",
+		cur.Display, lockoutCount(cur.Lockouts), cut.Vendor, window, when, hoursWords(cut.BlockedMinutes))
+}
+
+// lockoutCount is a count of lockouts in words for a sentence.
+func lockoutCount(n int) string {
+	switch n {
+	case 1:
+		return "once"
+	case 2:
+		return "twice"
+	}
+	return fmt.Sprintf("%d times", n)
+}
+
+// windowWord names the windows the early resets were on: "weekly" or
+// "5-hour" when they all share one length, "" when they differ.
+func windowWord(early []EarlyReset) string {
+	word := ""
+	for _, e := range early {
+		w := ""
+		switch e.Duration {
+		case week:
+			w = "weekly"
+		case 5 * time.Hour:
+			w = "5-hour"
+		}
+		if word != "" && w != word {
+			return ""
+		}
+		word = w
+	}
+	return word
+}
+
+// vendorName is the vendor's name for a provider id, as it reads in a
+// sentence.
+func vendorName(provider string) string {
+	names := map[string]string{"openai": "OpenAI", "anthropic": "Anthropic"}
+	if n, ok := names[provider]; ok {
+		return n
+	}
+	return provider
 }
 
 func ptrFloat(v float64) *float64 { return &v }
