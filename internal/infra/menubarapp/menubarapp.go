@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -98,7 +99,20 @@ func Refresh(src, dst string, ops Ops) (Result, error) {
 		ops.Quit()
 	}
 	if err := ops.Replace(src, dst); err != nil {
-		return Result{}, fmt.Errorf("install %s: %w", dst, err)
+		err = fmt.Errorf("install %s: %w", dst, err)
+		// The copy goes to a temporary bundle first, so the old app is
+		// usually still in place: reopen what was quit rather than leave
+		// the menu bar empty.
+		if !running {
+			return Result{}, err
+		}
+		if _, statErr := os.Stat(dst); statErr != nil {
+			return Result{}, err
+		}
+		if openErr := ops.Open(dst); openErr != nil {
+			return Result{}, errors.Join(err, fmt.Errorf("reopen %s: %w", dst, openErr))
+		}
+		return Result{Relaunched: true}, err
 	}
 	res := Result{Refreshed: true}
 	if !running {

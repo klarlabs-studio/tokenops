@@ -47,7 +47,7 @@ func refreshMenubarAt(src, dst string, ops menubarapp.Ops, logger *slog.Logger) 
 	res, err := menubarapp.Refresh(src, dst, ops)
 	switch {
 	case err != nil:
-		logger.Warn("menu bar app refresh failed; the daemon is unaffected", "app", dst, "err", err)
+		logger.Warn("menu bar app refresh failed; the daemon is unaffected", "app", dst, "reopened_old", res.Relaunched, "err", err)
 	case res.Refreshed:
 		logger.Info("menu bar app refreshed to this version", "app", dst, "relaunched", res.Relaunched)
 	}

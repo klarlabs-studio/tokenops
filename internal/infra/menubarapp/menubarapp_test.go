@@ -196,9 +196,10 @@ func TestRefreshWithoutShippedBundleIsNoOp(t *testing.T) {
 	}
 }
 
-// A failed copy must not relaunch the old app or claim success: the
-// caller logs the error and the daemon keeps running.
-func TestRefreshCopyFailureIsReportedAndNotRelaunched(t *testing.T) {
+// A failed copy is reported and never claims a refresh. The app the
+// refresh quit is reopened when its old copy is still in place, so a failed
+// upgrade does not leave the menu bar empty; the daemon keeps running.
+func TestRefreshCopyFailureReopensTheOldAppAndIsReported(t *testing.T) {
 	root := t.TempDir()
 	shipped := bundle(t, filepath.Join(root, "s"), "0.66.0", "1", "new")
 	installed := bundle(t, filepath.Join(root, "Applications"), "0.65.0", "1", "old")
@@ -207,8 +208,25 @@ func TestRefreshCopyFailureIsReportedAndNotRelaunched(t *testing.T) {
 	if err == nil {
 		t.Fatal("copy failure not reported")
 	}
-	if res.Refreshed || res.Relaunched || len(f.opened) != 0 {
-		t.Errorf("after failed copy: result=%+v opened=%v", res, f.opened)
+	if res.Refreshed || !res.Relaunched || len(f.opened) != 1 || f.opened[0] != installed {
+		t.Errorf("after failed copy: result=%+v opened=%v, want the old app reopened", res, f.opened)
+	}
+}
+
+// When the failed copy took the old app with it, there is nothing to reopen.
+func TestRefreshCopyFailureWithAppGoneOpensNothing(t *testing.T) {
+	root := t.TempDir()
+	shipped := bundle(t, filepath.Join(root, "s"), "0.66.0", "1", "new")
+	installed := bundle(t, filepath.Join(root, "Applications"), "0.65.0", "1", "old")
+	f := &fakeOps{running: true}
+	ops := f.ops()
+	ops.Replace = func(src, dst string) error {
+		_ = os.RemoveAll(dst)
+		return os.ErrPermission
+	}
+	res, err := Refresh(shipped, installed, ops)
+	if err == nil || res.Refreshed || res.Relaunched || len(f.opened) != 0 {
+		t.Errorf("result=%+v err=%v opened=%v, want error and nothing opened", res, err, f.opened)
 	}
 }
 
