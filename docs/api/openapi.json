@@ -3456,6 +3456,24 @@
                           "display": {
                             "type": "string"
                           },
+                          "early_resets": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "blocked_minutes": {
+                                "type": "integer"
+                              },
+                              "count": {
+                                "type": "integer"
+                              },
+                              "vendor": {
+                                "type": "string"
+                              },
+                              "window": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
                           "list_value_usd": {
                             "type": "number"
                           },
@@ -4492,6 +4510,24 @@
                           },
                           "display": {
                             "type": "string"
+                          },
+                          "early_resets": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "blocked_minutes": {
+                                "type": "integer"
+                              },
+                              "count": {
+                                "type": "integer"
+                              },
+                              "vendor": {
+                                "type": "string"
+                              },
+                              "window": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
                           },
                           "list_value_usd": {
                             "type": "number"
