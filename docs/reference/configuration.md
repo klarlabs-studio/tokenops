@@ -351,7 +351,7 @@ Two more things keep a tip from being said twice. Past the session budget
 the coach speaks once; each further step over it (200%, 300%, …) only
 updates the status line. And a tip you answer with `tokenops coach tip`
 (`ack`, `expected`, `snooze`) closes its episode: see
-[`tokenops coach tip`](/guide/cli#tokenops-coach-tip-ack-expected-snooze).
+[`tokenops coach tip`](./cli.md#tokenops-coach-tip-ack-expected-snooze).
 
 Mode, budgets, and routing rules are also editable through the MCP
 server — `tokenops_configure` with `setting` mode, budget, and
@@ -1129,7 +1129,7 @@ system in Germany is billed in euros. See
 ## Team plane (`team`)
 
 Nothing is uploaded until `tokenops team join` enrols this machine with the
-hosted [team plane](/guide/team); there is no default server, the invite
+hosted [team plane](https://team.klarlabs.de/guide/team); there is no default server, the invite
 names it. These keys only shape what is sent and how
 often; the enrolment (server URL, device token) is kept in
 `~/.tokenops/team.json`, mode 0600, not here.

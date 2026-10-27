@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **docs:** the documentation site moves to https://team.klarlabs.de/, served from the root of the team service. It is no longer built from this repository: `web/docs` and the GitHub Pages workflow (`pages.yml`) are removed, so the site stops deploying from here. GitHub Pages stays on until the new site is live; the maintainer turns it off afterwards, and old `klarlabs-studio.github.io/tokenops/` links need a redirect then. The CLI, configuration and API reference pages stay in the repository under `docs/reference/`, where the generated provider tables and the tests that check the CLI and API docs read them. Homepage links in the README, the issue template, the goreleaser cask, the npm and Python packages, and the systemd unit point at team.klarlabs.de.
+
 ### Fixed
 
 - **daemon:** `tokenops daemon install`, which the Homebrew upgrade runs, restarts the daemon once when it does not answer after starting. On an upgrade to 0.113.1 launchd refused the first start of the new binary (exit reason `OS_REASON_CODESIGNING`, "spawn failed") and the daemon stayed down until restarted by hand, while the next start of the same file worked. The upgrade hook cannot fail the upgrade, so its error went unseen. It now waits five seconds, restarts the unit and checks again, and reports an error only when the retry does not come up either.
