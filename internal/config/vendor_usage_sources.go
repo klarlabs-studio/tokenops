@@ -190,6 +190,13 @@ type StaleSource struct {
 	// real incident ran 27 days while the text never changed, and the fixed
 	// window made a month-long blackout look like a slow afternoon.
 	SilentFor time.Duration `json:"silent_for,omitempty"`
+
+	// LastSeenUnknown says the store could not say when this source last
+	// produced an event, so a zero SilentFor is not "never". Warning
+	// then names the window it checked instead: on a loaded machine that
+	// lookup missed its deadline and the warning claimed nothing had ever
+	// been ingested from sources holding thousands of events.
+	LastSeenUnknown bool `json:"last_seen_unknown,omitempty"`
 }
 
 // Staleness severity tiers. A warning that never escalates gets tuned out,
@@ -246,6 +253,11 @@ const DaemonRunRemedy = "'tokenops daemon restart' if it is supervised, 'tokenop
 func (s StaleSource) Warning() string {
 	const remedy = "if you've been using it, make sure the ingestion daemon runs (" + DaemonRunRemedy + ") — note that 'tokenops serve' is the MCP server and does not ingest"
 
+	if s.SilentFor <= 0 && s.LastSeenUnknown {
+		return fmt.Sprintf(
+			"ingestion stale [%s]: %s has produced no events in the last %dh — %s",
+			s.Severity(), s.SourceTag, s.WindowHours, remedy)
+	}
 	if s.SilentFor <= 0 {
 		return fmt.Sprintf(
 			"ingestion stale [%s]: %s is enabled but no events have ever been ingested from it — %s",
@@ -280,10 +292,15 @@ func (c Config) CheckStaleIngestion(ctx context.Context, counter SourceCounter, 
 	// How long each source has actually been quiet, when the store can say.
 	// Best-effort: a counter without this still produces warnings, only
 	// without the gap — which is the pre-existing behaviour, not a regression.
-	var lastSeen map[string]time.Time
+	var (
+		lastSeen        map[string]time.Time
+		lastSeenUnknown bool
+	)
 	if seer, ok := counter.(SourceLastSeen); ok {
 		if seen, lErr := seer.LastEventBySource(ctx); lErr == nil {
 			lastSeen = seen
+		} else {
+			lastSeenUnknown = true
 		}
 	}
 
@@ -313,9 +330,10 @@ func (c Config) CheckStaleIngestion(ctx context.Context, counter SourceCounter, 
 			}
 		}
 		entry := StaleSource{
-			Name:        s.Name,
-			SourceTag:   s.SourceTag,
-			WindowHours: windowHours,
+			Name:            s.Name,
+			SourceTag:       s.SourceTag,
+			WindowHours:     windowHours,
+			LastSeenUnknown: lastSeenUnknown,
 		}
 		if last, ok := lastSeen[s.SourceTag]; ok && !last.IsZero() && now.After(last) {
 			entry.SilentFor = now.Sub(last)

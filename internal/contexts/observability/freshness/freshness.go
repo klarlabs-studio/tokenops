@@ -107,6 +107,12 @@ type Poll struct {
 	LastError error
 	// LastErrorAt is when that failure happened.
 	LastErrorAt time.Time
+	// FailingSince is when the current run of failures began: the first
+	// failure after a success, or since the reader started. Zero while
+	// the last attempt succeeded. It dates a refusal when neither a
+	// success nor an event since can: a reader refused on every poll
+	// since the daemon started has neither.
+	FailingSince time.Time
 	// Notice says why the last reading is degraded, when it is usable
 	// but not the whole picture; empty otherwise.
 	Notice string
@@ -128,9 +134,16 @@ type Inputs struct {
 	// EventsInWindow is how many events each source produced in the
 	// window.
 	EventsInWindow map[string]int64
+	// EventsUnknown says the store could not count the window. A count
+	// that could not be read is not a count of zero, so silence is not
+	// judged; what the readers themselves report still is.
+	EventsUnknown bool
 	// LastEventAt is the most recent event per source. A missing entry
-	// means nothing was ever ingested from it.
+	// means nothing was ever ingested from it, unless LastEventUnknown.
 	LastEventAt map[string]time.Time
+	// LastEventUnknown says the store could not say when each source
+	// last produced an event, so a missing entry is not "never".
+	LastEventUnknown bool
 	// OriginNewest is what each source's upstream holds. Optional.
 	OriginNewest map[string]Origin
 	// Polls is what each source's poller reports about itself. Optional:
@@ -169,6 +182,9 @@ type Report struct {
 	SilentFor time.Duration `json:"silent_for,omitempty"`
 	// EventsInWindow is what it produced in the window.
 	EventsInWindow int64 `json:"events_in_window"`
+	// EventsUnknown says the store could not count the window, so
+	// EventsInWindow is not a count and silence was not judged.
+	EventsUnknown bool `json:"events_unknown,omitempty"`
 
 	// LastPollAt is when its reader last tried. Zero for sources with no
 	// poller, or none that reported in.
@@ -235,10 +251,13 @@ func assessOne(s Source, in Inputs, window time.Duration, now time.Time) Report 
 		Tag:            s.Tag,
 		Window:         window,
 		EventsInWindow: in.EventsInWindow[s.Tag],
+		EventsUnknown:  in.EventsUnknown,
 	}
 
 	last, seen := in.LastEventAt[s.Tag]
 	switch {
+	case (!seen || last.IsZero()) && in.LastEventUnknown:
+		// Unknown is not never: the store did not answer.
 	case !seen || last.IsZero():
 		r.NeverSeen = true
 	default:
@@ -281,6 +300,13 @@ const refusedAfter = 15 * time.Minute
 
 // refusedFor is how long the poller has been refused without a success or
 // an event in between; zero when its last attempt succeeded.
+//
+// The run is dated from the later of the last success and the last
+// event. When neither is known — the daemon started since the last
+// success and the store did not say when the last event was — it is dated
+// from when the failures began, which the recorder kept. Without that,
+// a reader refused on every poll since a restart counted as refused for
+// no time at all, and its earlier events kept it healthy.
 func refusedFor(p Poll, lastEvent time.Time) time.Duration {
 	if p.LastError == nil || p.LastErrorAt.IsZero() {
 		return 0
@@ -288,6 +314,9 @@ func refusedFor(p Poll, lastEvent time.Time) time.Duration {
 	since := lastEvent
 	if p.LastSuccessAt.After(since) {
 		since = p.LastSuccessAt
+	}
+	if since.IsZero() {
+		since = p.FailingSince
 	}
 	if since.IsZero() || !p.LastErrorAt.After(since) {
 		return 0
@@ -308,6 +337,12 @@ func stateOf(s Source, r Report, origin Origin, hasOrigin bool, poll Poll, hasPo
 	// go on showing a reading that has stopped being true.
 	if hasPoll && refusedFor(poll, r.LastEventAt) >= refusedAfter {
 		return StateFailing
+	}
+	// The store could not count the window. Silence cannot be judged on a
+	// count nobody read, and grading it stale told an operator to restart
+	// a daemon that was running; the next assessment, with counts, will.
+	if r.EventsUnknown {
+		return StateIdle
 	}
 	if r.EventsInWindow > 0 {
 		return StateHealthy
