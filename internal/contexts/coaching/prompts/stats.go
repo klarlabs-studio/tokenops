@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -119,7 +120,7 @@ func ComputeTurnStats(opts ExtractOptions) (TurnStats, error) {
 		if opts.Source == SourceCodex {
 			root = filepath.Join(home, ".codex", "sessions")
 		} else {
-			root = filepath.Join(home, ".claude", "projects")
+			root = claudehome.Join("projects")
 		}
 	}
 	return computeTurnStatsRoot(root, opts)
@@ -135,7 +136,7 @@ func computeTurnStatsAuto(opts ExtractOptions) (TurnStats, error) {
 	}
 	var acc TurnStats
 	for _, root := range []string{
-		filepath.Join(home, ".claude", "projects"),
+		claudehome.Join("projects"),
 		filepath.Join(home, ".codex", "sessions"),
 	} {
 		if _, statErr := os.Stat(root); statErr != nil {

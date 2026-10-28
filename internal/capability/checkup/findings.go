@@ -2,6 +2,7 @@ package checkup
 
 import (
 	"fmt"
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"os"
 	"path/filepath"
 	"sort"
@@ -113,7 +114,7 @@ var ruleFiles = []string{"CLAUDE.md", "AGENTS.md", filepath.Join(".claude", "CLA
 // whole context, so a file loaded at the start of a session is paid for
 // on every turn after.
 func standingContext(home string, turnsByDir map[string]int, all Usage) []Finding {
-	global := fileTokens(filepath.Join(home, ".claude", "CLAUDE.md"))
+	global := fileTokens(filepath.Join(claudehome.Resolve(os.Getenv, home), "CLAUDE.md"))
 	var weighted int64
 	turns := 0
 	for dir, n := range turnsByDir {
@@ -144,7 +145,7 @@ func standingContext(home string, turnsByDir map[string]int, all Usage) []Findin
 // own and each parent's up to home, as Claude Code does.
 func dirRuleTokens(dir, home string) int64 {
 	var n int64
-	global := filepath.Join(home, ".claude", "CLAUDE.md")
+	global := filepath.Join(claudehome.Resolve(os.Getenv, home), "CLAUDE.md")
 	for d := filepath.Clean(dir); ; d = filepath.Dir(d) {
 		for _, f := range ruleFiles {
 			// The global file is counted once, by the caller.

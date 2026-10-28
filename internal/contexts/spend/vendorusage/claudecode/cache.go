@@ -26,8 +26,8 @@ package claudecode
 import (
 	"encoding/json"
 	"fmt"
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -83,11 +83,7 @@ type Model struct {
 // CLAUDE_HOME). Empty home → an error so the caller surfaces a clear
 // hint instead of silently reading from "/stats-cache.json".
 func DefaultPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
-	}
-	return filepath.Join(home, ".claude", "stats-cache.json"), nil
+	return claudehome.Join("stats-cache.json"), nil
 }
 
 // Read parses the cache at path. Returns os.ErrNotExist when the file

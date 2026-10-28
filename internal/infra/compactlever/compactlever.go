@@ -29,6 +29,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -115,7 +116,7 @@ func DefaultPaths() (Paths, error) {
 	configHome := envOr("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	cacheHome := envOr("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
 	return Paths{
-		ClaudeSettings: filepath.Join(home, ".claude", "settings.json"),
+		ClaudeSettings: claudehome.Join("settings.json"),
 		CodexConfig:    filepath.Join(envOr("CODEX_HOME", filepath.Join(home, ".codex")), "config.toml"),
 		OpencodeConfig: filepath.Join(configHome, "opencode", "opencode.json"),
 		OpencodeModels: filepath.Join(cacheHome, "opencode", "models.json"),

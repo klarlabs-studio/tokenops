@@ -13,9 +13,9 @@ package claudesettings
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
+
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 )
 
 // BaseURL is the ANTHROPIC_BASE_URL Claude Code is configured with, or ""
@@ -31,24 +31,10 @@ func BaseURL() string {
 	return ""
 }
 
-// settingsFiles lists the files to read, highest precedence first.
+// settingsFiles lists the files to read, highest precedence first: the
+// managed settings (drop-ins included), then the user's settings.json.
 func settingsFiles() []string {
-	var out []string
-	switch runtime.GOOS {
-	case "darwin":
-		out = append(out, "/Library/Application Support/ClaudeCode/managed-settings.json")
-	case "linux":
-		out = append(out, "/etc/claude-code/managed-settings.json")
-	}
-	dir := os.Getenv("CLAUDE_CONFIG_DIR")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return out
-		}
-		dir = filepath.Join(home, ".claude")
-	}
-	return append(out, filepath.Join(dir, "settings.local.json"), filepath.Join(dir, "settings.json"))
+	return claudehome.SettingsFiles()
 }
 
 // baseURLIn reads env.ANTHROPIC_BASE_URL from one settings file. A

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"io"
 	"os"
 	"path/filepath"
@@ -179,7 +180,7 @@ func clientInstalled(client string) bool {
 		return false
 	}
 	dir := map[string]string{
-		hookClientClaudeCode: filepath.Join(home, ".claude"),
+		hookClientClaudeCode: claudehome.Dir(),
 		hookClientCodex:      filepath.Join(home, ".codex"),
 		hookClientCursor:     filepath.Join(home, ".cursor"),
 	}[client]

@@ -17,6 +17,7 @@ package modellever
 import (
 	"encoding/json"
 	"errors"
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -57,7 +58,7 @@ func DefaultPaths() (Paths, error) {
 		return Paths{}, err
 	}
 	return Paths{
-		ClaudeSettings: filepath.Join(home, ".claude", "settings.json"),
+		ClaudeSettings: claudehome.Join("settings.json"),
 		State:          filepath.Join(home, ".tokenops", "coach", "default-model.json"),
 	}, nil
 }

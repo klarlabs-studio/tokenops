@@ -1,19 +1,14 @@
 package cli
 
 import (
-	"os"
-	"path/filepath"
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 )
 
 func resolveSettingsPath(override string) string {
 	if override != "" {
 		return override
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return filepath.Join(".claude", "settings.json")
-	}
-	return filepath.Join(home, ".claude", "settings.json")
+	return claudehome.Join("settings.json")
 }
 
 // commandEntry builds a Claude Code command-hook entry.

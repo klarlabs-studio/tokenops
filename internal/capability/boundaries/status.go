@@ -1,6 +1,7 @@
 package boundaries
 
 import (
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,7 +117,7 @@ type Status struct {
 func Installed(claudeSettings, opencodePluginDir string) map[string]bool {
 	home, _ := os.UserHomeDir()
 	if claudeSettings == "" {
-		claudeSettings = filepath.Join(home, ".claude", "settings.json")
+		claudeSettings = claudehome.Join("settings.json")
 	}
 	if opencodePluginDir == "" {
 		opencodePluginDir = filepath.Join(home, ".config", "opencode", "plugins")

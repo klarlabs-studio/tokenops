@@ -1,6 +1,7 @@
 package sourceprobe
 
 import (
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"os"
 	"path/filepath"
 )
@@ -16,7 +17,7 @@ func PresentLocalReaders() []string {
 	}
 	claudeDir := os.Getenv("CLAUDE_CONFIG_DIR")
 	if claudeDir == "" {
-		claudeDir = filepath.Join(home, ".claude")
+		claudeDir = claudehome.Dir()
 	}
 	codexDir := os.Getenv("CODEX_HOME")
 	if codexDir == "" {
