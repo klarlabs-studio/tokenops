@@ -86,6 +86,14 @@ func TestEndpointCatalogPaths(t *testing.T) {
 		{"https://api.minimax.io/anthropic", "minimax", "minimax"},
 		{"https://coding-intl.dashscope.aliyuncs.com/apps/anthropic", "alibaba", "alibaba"},
 		{"https://api.deepseek.com/anthropic", "deepseek", "deepseek"},
+		// Together moved its API to api.together.ai; the old host still answers.
+		{"https://api.together.ai/v1", "together", "together"},
+		{"https://api.together.xyz/v1", "together", "together"},
+		// Azure OpenAI: the classic host, the Azure AI Foundry host, and
+		// the AI Services host a resource key can be called on.
+		{"https://myres.openai.azure.com/openai/v1/", "azure-openai", "azure-openai"},
+		{"https://myres.services.ai.azure.com/openai/v1/", "azure-openai", "azure-openai"},
+		{"https://myres.cognitiveservices.azure.com/openai/", "azure-openai", "azure-openai"},
 	} {
 		e, ok := EndpointFor(tc.url)
 		if !ok || string(e.Provider) != tc.provider {
