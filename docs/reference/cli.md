@@ -168,7 +168,7 @@ Nothing is sent until you join, and never a prompt, file, transcript,
 path, commit message or model output.
 
 ```bash
-tokenops team create --server <url>  # sign up with GitHub, start an organisation (14-day trial), join this machine
+tokenops team create --server <url>  # sign up with GitHub, start an organisation (free during the beta), join this machine
 tokenops team join <url> <invite>   # enrol with an invite; the URL comes with it
 tokenops team preview          # exactly what the next upload holds; sends nothing
 tokenops team preview --json   # the upload byte for byte

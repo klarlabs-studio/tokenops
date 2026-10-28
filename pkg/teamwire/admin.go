@@ -203,6 +203,9 @@ type AuditEntry struct {
 const (
 	// PlanTrialing: within the free trial; uploads are accepted.
 	PlanTrialing = "trialing"
+	// PlanBeta: free while the team plane is in beta; uploads are
+	// accepted, nothing is billed and no trial clock runs.
+	PlanBeta = "beta"
 	// PlanActive: a paid subscription; uploads are accepted.
 	PlanActive = "active"
 	// PlanPastDue: a payment failed and is being retried; uploads are

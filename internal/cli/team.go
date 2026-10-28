@@ -45,7 +45,7 @@ people an owner explicitly granted, and you see who, why, and every view
 (` + "`tokenops team status`" + `).
 
 Starting a team for your organisation: ` + "`tokenops team create --server <url>`" + `
-signs you up in the browser with a 14-day free trial; ` + "`tokenops team admin`" + `
+signs you up in the browser, free during the beta; ` + "`tokenops team admin`" + `
 then invites people and manages teams, roles, grants and billing.`,
 	}
 	cmd.AddCommand(newTeamCreateCmd(rf), newTeamAdminCmd(rf), newTeamJoinCmd(rf), newTeamStatusCmd(rf), newTeamPreviewCmd(rf), newTeamSyncCmd(rf),

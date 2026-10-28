@@ -10,6 +10,8 @@
 
   A new index on the event store's source and time (built once, on the first start after upgrading) lets the lookup read only the index. A store query that misses its deadline is now reported as unknown, not as zero: no source is called never seen, and silence is not judged on counts nobody read. The daemon reuses its previous last-event answer when a lookup fails, since those times only move forward. Each reader also keeps when its current run of failures began, so a refusal that started after a restart is counted from then and turns into a warning after 15 minutes. When the stale warning cannot say when a source last produced an event, it names the window it checked instead of saying "never".
 
+- **team:** a team plane that is free during its beta says so. The klarlabs team plane is free while it is in beta, with no trial clock and no checkout, and its server reports such an organisation as `beta`. `tokenops team status` and `tokenops team admin billing` printed no plan line for it, and `billing` still suggested `--checkout`, which the server refuses. They now say "Free during the beta: nothing is billed, and uploads are never paused for billing" and suggest no checkout. `tokenops team create` and `tokenops team` no longer promise a 14-day trial.
+
 ## 0.114.1 - 2026-10-28
 
 ### Fixed
