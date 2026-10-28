@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 // A hook an administrator put in managed settings runs for every session, so

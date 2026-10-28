@@ -15,7 +15,7 @@ import (
 	"os"
 	"strings"
 
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 // BaseURL is the ANTHROPIC_BASE_URL Claude Code is configured with, or ""

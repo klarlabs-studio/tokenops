@@ -16,7 +16,7 @@ import (
 	"runtime"
 	"sort"
 
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 // Confidence describes how sure the detector is. The init wizard

@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 func resolveSettingsPath(override string) string {

@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 // PresentLocalReaders lists the local transcript readers whose data is on

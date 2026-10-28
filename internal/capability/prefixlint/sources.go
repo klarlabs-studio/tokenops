@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 // Sources are the places the lint reads. Every path is explicit so a test

@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 )
 
 // AssistantReply is one model-emitted turn from a session log.

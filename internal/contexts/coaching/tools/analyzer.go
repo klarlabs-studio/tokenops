@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 // ExtractOptions mirrors prompts.ExtractOptions so callers can keep

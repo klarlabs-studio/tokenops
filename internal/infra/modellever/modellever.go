@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
 )
 

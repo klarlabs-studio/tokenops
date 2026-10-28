@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/infra/scanscope"
 )
 

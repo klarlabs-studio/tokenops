@@ -41,8 +41,8 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/jsonltail"
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 )
 
 // Turn is one parsed assistant turn from a JSONL file. SessionID +

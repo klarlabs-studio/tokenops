@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/config"
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"go.klarlabs.de/tokenops/internal/infra/opencodeplugin"
 	"go.klarlabs.de/tokenops/internal/infra/teamclient"
 )

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 func TestBaseURLReadsTheUsersSettings(t *testing.T) {

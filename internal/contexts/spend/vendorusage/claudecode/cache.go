@@ -29,7 +29,7 @@ import (
 	"os"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 // StatsCache is the subset of the Claude Code cache TokenOps reads.
