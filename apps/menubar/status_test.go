@@ -24,7 +24,7 @@ const glanceSample = `{"insight":{"level":"clear","summary":"Claude Max 20x reco
 
 // The tray shows whatever stops work first, across every plan.
 func TestStatusShowsTheBusiestWindow(t *testing.T) {
-	st := statusOf([]byte(glanceSample))
+	st := statusOf([]byte(glanceSample), "")
 	if st.Title != "Codex 51% left" || st.Pct != 49 || !st.Known {
 		t.Fatalf("status %+v", st)
 	}
@@ -40,7 +40,7 @@ func TestStatusShowsTheBusiestWindow(t *testing.T) {
 // starts at the next request.
 func TestStatusSaysAnUnstartedWindowStartsAtTheNextRequest(t *testing.T) {
 	st := statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"openai","display":"ChatGPT Pro",
-	 "windows":[{"name":"week","used_pct":0,"not_started":true}]}]}}`))
+	 "windows":[{"name":"week","used_pct":0,"not_started":true}]}]}}`), "")
 	if !strings.Contains(st.Tooltip, "Codex · week 100% left · starts at your next request") || strings.Contains(st.Tooltip, "resets in") {
 		t.Errorf("tooltip:\n%s", st.Tooltip)
 	}
@@ -51,21 +51,21 @@ func TestStatusSaysAnUnstartedWindowStartsAtTheNextRequest(t *testing.T) {
 func TestStatusIsTheTightestWindow(t *testing.T) {
 	st := statusOf([]byte(`{"plan_headroom":{"reports":[
 	  {"provider":"anthropic","windows":[{"name":"5h","used_pct":70},{"name":"week","used_pct":20}]},
-	  {"provider":"openai","windows":[{"name":"week","used_pct":40}]}]}}`))
+	  {"provider":"openai","windows":[{"name":"week","used_pct":40}]}]}}`), "")
 	if st.Pct != 70 || !st.Known || st.Stale {
 		t.Errorf("status %+v", st)
 	}
-	st = statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"anthropic","windows":[{"name":"5h","used_pct":30,"stale":true}]}]}}`))
+	st = statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"anthropic","windows":[{"name":"5h","used_pct":30,"stale":true}]}]}}`), "")
 	if !st.Stale || gaugeLevel(st) != gaugeUnknown {
 		t.Errorf("stale %+v", st)
 	}
 }
 
 func TestStatusWithNothingToShow(t *testing.T) {
-	if st := statusOf([]byte(`{"plan_headroom":{"error":"plans_unconfigured","hint":"bind a plan"}}`)); st.Title != "—" || !strings.Contains(st.Tooltip, "bind a plan") || gaugeLevel(st) != gaugeUnknown {
+	if st := statusOf([]byte(`{"plan_headroom":{"error":"plans_unconfigured","hint":"bind a plan"}}`), ""); st.Title != "—" || !strings.Contains(st.Tooltip, "bind a plan") || gaugeLevel(st) != gaugeUnknown {
 		t.Errorf("unconfigured %+v", st)
 	}
-	if st := statusOf([]byte(`not json`)); st.Title != "—" {
+	if st := statusOf([]byte(`not json`), ""); st.Title != "—" {
 		t.Errorf("garbage %+v", st)
 	}
 }
@@ -136,8 +136,8 @@ func TestTrayIconIsATemplateGauge(t *testing.T) {
 
 // A new reading changes the tray: setTray is handed the icon of the new level.
 func TestTrayFollowsTheReading(t *testing.T) {
-	a := trayIcon(gaugeLevel(statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"anthropic","windows":[{"name":"week","used_pct":10}]}]}}`))))
-	b := trayIcon(gaugeLevel(statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"anthropic","windows":[{"name":"week","used_pct":100}]}]}}`))))
+	a := trayIcon(gaugeLevel(statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"anthropic","windows":[{"name":"week","used_pct":10}]}]}}`), "")))
+	b := trayIcon(gaugeLevel(statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"anthropic","windows":[{"name":"week","used_pct":100}]}]}}`), "")))
 	if string(a) == string(b) {
 		t.Error("a used-up plan draws the same icon as a nearly full one")
 	}

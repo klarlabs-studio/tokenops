@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **menu bar:** choose which plan the ring shows. The icon always followed the tightest window across every plan, so with Claude, Codex and another plan bound it showed whichever was busiest at the moment, and nothing kept it on the plan you watch. A plan's tab in the panel now has **Show in menu bar**, which pins the ring to that plan however tight the others are; the pinned tab says **In the menu bar · Auto**, and Auto, or **Ring: tightest plan** in the right-click menu, goes back to following the tightest plan, which stays the default. The choice is kept across launches (`ring` in the menu bar's `menubar.json`). A pinned plan with no reading right now shows the tightest plan instead, never an unknown ring, and the tooltip's first line says so. The tooltip still lists every plan's windows, and alerts still fire for every plan.
+
 ## 0.114.2 - 2026-10-28
 
 ### Fixed
