@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.114.2 - 2026-10-28
+
 ### Fixed
 
 - **status:** source health stays right on a busy machine. To say when each source last produced an event, the daemon grouped the whole event table, about 345,000 rows on one Mac, by an expression no index could answer. Under load that query, and the window count before it, missed the assessment's 5-second deadline, and the error was dropped. Every source then read as never having produced an event, with nothing in the window. Two wrong answers followed:
