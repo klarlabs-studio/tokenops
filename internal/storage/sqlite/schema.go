@@ -161,6 +161,19 @@ END;
 		Name:    "events_changes",
 		SQL:     eventsChangesMigration,
 	},
+	{
+		Version: 8,
+		Name:    "events_source_ts_index",
+		SQL: `
+-- Source health asks when each source last produced an event. Grouping
+-- the whole table by source read every row: on a store of ~345,000
+-- events and a loaded machine it missed the assessment's 5-second
+-- deadline, and every source was reported as never having produced one.
+-- With this index the newest event of each source is read from the
+-- index alone (LastEventBySource, TestLastEventBySourceIsCovered).
+CREATE INDEX events_source_ts_idx ON events (source, timestamp_ns);
+`,
+	},
 }
 
 // eventsChangesMigration replaces events_generation (migration 6) with a
