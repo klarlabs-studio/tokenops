@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.114.1 - 2026-10-28
+
 ### Fixed
 
 - **daemon:** `GET /api/sources` and the daemon's status answer at once. Each request reran every store query and origin check, which took 10–15 seconds on a busy machine. `tokenops status` and the MCP status tool wait 2 seconds, so they fell back to the event counts and never saw a refused reader. The daemon now keeps the latest assessment, redoes it every 30 seconds, and never serves one older than 2 minutes: past that, the next reader gets a new one, and readers arriving meanwhile share it.
