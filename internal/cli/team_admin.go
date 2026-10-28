@@ -530,17 +530,19 @@ func newTeamAdminBillingCmd(rf *rootFlags, af *adminFlags) *cobra.Command {
 				return writeControlJSON(cmd, b)
 			}
 			writePlan(out, &b.Plan, time.Now())
-			fmt.Fprintf(out, "Seats: %d (one per member; the subscription follows members joining and leaving).\n", b.Seats)
+			if b.Status == teamwire.PlanBeta {
+				fmt.Fprintf(out, "Seats: %d (one per member).\n", b.Seats)
+			} else {
+				fmt.Fprintf(out, "Seats: %d (one per member; the subscription follows members joining and leaving).\n", b.Seats)
+			}
 			if b.CurrentPeriodEnd != nil {
 				fmt.Fprintf(out, "Current period ends %s.\n", b.CurrentPeriodEnd.Local().Format("2006-01-02"))
 			}
 			if b.CancelAt != nil {
 				fmt.Fprintf(out, "The subscription ends on %s.\n", b.CancelAt.Local().Format("2006-01-02"))
 			}
-			if b.Status == teamwire.PlanActive || b.Status == teamwire.PlanPastDue {
-				fmt.Fprintln(out, "Invoices and payment details: `tokenops team admin billing --portal`.")
-			} else {
-				fmt.Fprintln(out, "Subscribe: `tokenops team admin billing --checkout`.")
+			if step := billingNextStep(b.Status); step != "" {
+				fmt.Fprintln(out, step)
 			}
 			if b.ManageURL != "" {
 				fmt.Fprintf(out, "In the web view: %s\n", b.ManageURL)
@@ -596,4 +598,18 @@ func newTeamAdminAuditCmd(rf *rootFlags, af *adminFlags) *cobra.Command {
 	}
 	cmd.Flags().IntVar(&limit, "limit", 50, "show at most this many entries (0: all the server returns)")
 	return cmd
+}
+
+// billingNextStep is the billing command to suggest for an organisation's
+// state: invoices for a subscription, a checkout otherwise, and nothing
+// while the team plane is free during its beta, whose server refuses a
+// checkout.
+func billingNextStep(status string) string {
+	switch status {
+	case teamwire.PlanBeta:
+		return ""
+	case teamwire.PlanActive, teamwire.PlanPastDue:
+		return "Invoices and payment details: `tokenops team admin billing --portal`."
+	}
+	return "Subscribe: `tokenops team admin billing --checkout`."
 }

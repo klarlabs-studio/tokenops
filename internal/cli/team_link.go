@@ -129,6 +129,8 @@ func writePlan(out io.Writer, p *teamwire.Plan, now time.Time) {
 		} else {
 			fmt.Fprintln(out, "Free trial.")
 		}
+	case teamwire.PlanBeta:
+		fmt.Fprintln(out, "Free during the beta: nothing is billed, and uploads are never paused for billing.")
 	case teamwire.PlanActive:
 		fmt.Fprintln(out, "Subscription active.")
 	case teamwire.PlanPastDue:
@@ -151,13 +153,13 @@ func newTeamCreateCmd(rf *rootFlags) *cobra.Command {
 	var noBrowser bool
 	cmd := &cobra.Command{
 		Use:   "create --server <url>",
-		Short: "Start a team: sign up in the browser, create an organisation with a free trial, and join this machine",
+		Short: "Start a team: sign up in the browser, create an organisation, and join this machine",
 		Long: `create opens the team server's sign-up page in your browser. Sign in with
 GitHub (the server reads your verified primary e-mail address and name,
 nothing else from your account), or sign up with an e-mail address and a
 password (the address is verified by a link before anything else); if
-you have no organisation yet, name one and you become its owner, with a
-14-day free trial. Then type the code this command shows into the page:
+you have no organisation yet, name one and you become its owner; it is
+free while the team plane is in beta. Then type the code this command shows into the page:
 that approves this machine, which joins the organisation and receives an
 administrator's credential for ` + "`tokenops team admin`" + `.
 
