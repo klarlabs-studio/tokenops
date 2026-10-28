@@ -6,6 +6,10 @@
 
 - **dependencies:** golang.org/x/net v0.62.0, which fixes GO-2026-6860 and GO-2026-6866 (code scanning VULN-001). The affected HTML packages are not linked into the shipped binaries, so no user-visible behaviour changes.
 
+### Fixed
+
+- **synthetic:** the request quota's reset time is read whether Synthetic sends it as `renewsAt`, the spelling its docs give, or as `renewAt`, which its quota API has been seen to send. Before, a quota sent as `renewAt` showed its usage with no reset time. A quota with neither field still shows its usage, with the reset unknown.
+
 ## 0.114.3 - 2026-10-28
 
 ### Added
