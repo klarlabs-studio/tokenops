@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Security
+
+- **dependencies:** golang.org/x/net v0.62.0, which fixes GO-2026-6860 and GO-2026-6866 (code scanning VULN-001). The affected HTML packages are not linked into the shipped binaries, so no user-visible behaviour changes.
+
 ## 0.114.3 - 2026-10-28
 
 ### Added
