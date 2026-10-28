@@ -83,6 +83,7 @@ func TestFindSessionFilesWalksNestedLayout(t *testing.T) {
 }
 
 func TestDefaultRoot(t *testing.T) {
+	t.Setenv("CODEX_HOME", "")
 	t.Setenv("HOME", filepath.FromSlash("/tmp/test-home"))
 	p, err := DefaultRoot()
 	if err != nil {

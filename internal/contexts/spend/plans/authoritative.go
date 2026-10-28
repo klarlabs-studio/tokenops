@@ -83,7 +83,9 @@ func latestCodexWindow(ctx context.Context, reader EventReader, p Plan, now time
 	}
 	var best *eventschema.Envelope
 	for _, e := range events {
-		if e == nil || e.Attributes == nil {
+		if e == nil || e.Attributes == nil || codexLimit(e) != "" {
+			// A reading for another Codex limit is not the window the
+			// session draws on; the default limit's is.
 			continue
 		}
 		if _, primary := e.Attributes["primary_used_pct"]; !primary {

@@ -92,6 +92,7 @@ func StartVendorUsagePollers(
 			Root: cfg.VendorUsage.CodexJSONL.Root, Interval: cfg.VendorUsage.CodexJSONL.Interval,
 			Logger: logger, CostSource: PlanCostSource(cfg, eventschema.ProviderOpenAI),
 			ProviderBaseURL: codexsettings.ProviderBaseURL,
+			Health:          sourceHealth.For(codexjsonl.SourceTag),
 		})
 		sup.Go("codex-jsonl", refreshable(sig, p.Run))
 		logger.Info("codex jsonl poller live", "interval", cfg.VendorUsage.CodexJSONL.Interval, "root", cfg.VendorUsage.CodexJSONL.Root)

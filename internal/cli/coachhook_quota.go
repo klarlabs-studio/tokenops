@@ -2,14 +2,13 @@ package cli
 
 import (
 	"context"
-	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
+	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -109,7 +108,7 @@ func hookProvider(in stopHookInput, cursor, opencode bool) (eventschema.Provider
 	switch {
 	case cursor || opencode:
 		return "", false
-	case strings.Contains(filepath.ToSlash(in.TranscriptPath), "/.codex/"):
+	case codexsettings.OwnsPath(in.TranscriptPath):
 		return eventschema.ProviderOpenAI, true
 	default:
 		return eventschema.ProviderAnthropic, true

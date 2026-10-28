@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
+	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
 	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -217,11 +218,11 @@ func resolveHookConfigPath(client, override string) (string, error) {
 		return override, nil
 	}
 	if strings.EqualFold(client, hookClientCodex) {
-		home, err := os.UserHomeDir()
+		dir, err := codexsettings.Home()
 		if err != nil {
-			return "", fmt.Errorf("resolve home for ~/.codex/hooks.json: %w", err)
+			return "", fmt.Errorf("resolve Codex home for hooks.json: %w", err)
 		}
-		return filepath.Join(home, ".codex", "hooks.json"), nil
+		return filepath.Join(dir, "hooks.json"), nil
 	}
 	if strings.EqualFold(client, hookClientCursor) {
 		home, err := os.UserHomeDir()

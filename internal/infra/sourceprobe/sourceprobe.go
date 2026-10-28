@@ -16,6 +16,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexrollout"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/geminicli"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pisessions"
@@ -151,7 +152,8 @@ func newestJSONLAt(root string) (time.Time, bool) {
 		if err != nil {
 			return nil // unreadable subtree: skip it rather than fail the probe
 		}
-		if d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
+		// A cold Codex rollout is only ever its compressed copy.
+		if d.IsDir() || (!strings.HasSuffix(path, ".jsonl") && !codexrollout.IsCompressed(path)) {
 			return nil
 		}
 		fi, ierr := d.Info()

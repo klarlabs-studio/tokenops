@@ -1,5 +1,6 @@
 // Package codexjsonl reads Codex CLI's per-session conversation logs
-// (~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-<id>.jsonl) and emits
+// ($CODEX_HOME/sessions/<yyyy>/<mm>/<dd>/rollout-<id>.jsonl, or the
+// .jsonl.zst copy Codex writes once a rollout is cold) and emits
 // one PromptEvent per turn. Each session file contains a stream of
 // records with mixed types (session_meta, response_item, agent_message,
 // reasoning, event_msg, token_count, …); we key on the token_count
@@ -38,6 +39,8 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexhome"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexrollout"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/jsonltail"
 )
 
@@ -74,6 +77,11 @@ type RateLimits struct {
 	SecondaryWindowMinutes int     // vendor-reported duration
 	SecondaryResetsAtUnix  int64
 	PlanType               string // plus|pro|team|business
+	// LimitID names the limit the snapshot is for. Codex keeps several per
+	// account (e.g. one per model family); "" and "codex" are the default
+	// bucket. LimitName is its display name, when Codex sends one.
+	LimitID   string
+	LimitName string
 }
 
 // rawLine matches the outer record of a Codex JSONL entry. We only
@@ -97,7 +105,9 @@ type rawLine struct {
 			ModelContextWindow int64 `json:"model_context_window"`
 		} `json:"info"`
 		RateLimits *struct {
-			Primary *struct {
+			LimitID   string `json:"limit_id"`
+			LimitName string `json:"limit_name"`
+			Primary   *struct {
 				UsedPercent   float64 `json:"used_percent"`
 				WindowMinutes int     `json:"window_minutes"`
 				ResetsAt      int64   `json:"resets_at"`
@@ -123,19 +133,28 @@ type sessionMeta struct {
 	} `json:"payload"`
 }
 
-// DefaultRoot returns the conventional Codex sessions directory
-// (~/.codex/sessions). Operators may override via config.
+// DefaultRoot returns the conventional Codex sessions directory:
+// $CODEX_HOME/sessions, or ~/.codex/sessions when CODEX_HOME is unset.
+// Operators may override via config.
 func DefaultRoot() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
-	}
-	return filepath.Join(home, ".codex", "sessions"), nil
+	return codexhome.SessionsDir()
 }
 
-// FindSessionFiles globs every rollout-*.jsonl under root recursively.
-// Codex organises sessions under yyyy/mm/dd/ — we walk that tree.
-// Returns paths sorted lexicographically.
+// IsCompressed reports whether a rollout path is a compressed copy.
+func IsCompressed(path string) bool {
+	return codexrollout.IsCompressed(path)
+}
+
+// OpenRollout opens a rollout for reading, decompressing a .jsonl.zst
+// copy as it is read; see codexrollout.Open.
+func OpenRollout(path string) (io.ReadCloser, error) {
+	return codexrollout.Open(path)
+}
+
+// FindSessionFiles globs every rollout under root recursively: the
+// plain rollout-*.jsonl and the compressed rollout-*.jsonl.zst copies
+// of cold sessions. Codex organises sessions under yyyy/mm/dd/ — we
+// walk that tree. Returns paths sorted lexicographically.
 func FindSessionFiles(root string) ([]string, error) {
 	var matches []string
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -145,7 +164,8 @@ func FindSessionFiles(root string) ([]string, error) {
 		if info.IsDir() {
 			return nil
 		}
-		if strings.HasSuffix(info.Name(), ".jsonl") && strings.HasPrefix(info.Name(), "rollout-") {
+		name := info.Name()
+		if strings.HasPrefix(name, "rollout-") && codexrollout.IsRolloutName(name) {
 			matches = append(matches, path)
 		}
 		return nil
@@ -162,7 +182,7 @@ func FindSessionFiles(root string) ([]string, error) {
 // session_meta first-line is parsed to seed the session ID. The
 // visit callback may return non-nil to abort.
 func ReadFile(path string, visit func(Turn) error) error {
-	f, err := os.Open(path)
+	f, err := OpenRollout(path)
 	if err != nil {
 		return err
 	}
@@ -186,6 +206,11 @@ type readState struct {
 	// is where Codex states it.
 	model string
 	seq   int
+	// unrecognised counts token_count records whose shape this reader does
+	// not know; shapeErr is the first of them. They are skipped, so a
+	// reader must report them rather than read an empty result as success.
+	unrecognised int
+	shapeErr     error
 }
 
 // readLines reads r's complete lines through st; see jsonltail.ReadLines
@@ -209,6 +234,9 @@ func (st *readState) visitLine(line []byte, visit func(Turn) error) error {
 	}
 	var raw rawLine
 	if err := json.Unmarshal(line, &raw); err != nil {
+		if isTokenCount(line) {
+			st.noteUnrecognised(err)
+		}
 		return nil
 	}
 	// Codex states the model on its own turn_context record, ahead of
@@ -237,11 +265,14 @@ func (st *readState) visitLine(line []byte, visit func(Turn) error) error {
 	}
 	ts, err := time.Parse(time.RFC3339Nano, raw.Timestamp)
 	if err != nil {
+		st.noteUnrecognised(fmt.Errorf("timestamp %q: %w", raw.Timestamp, err))
 		return nil
 	}
 	rl := RateLimits{}
 	if raw.Payload.RateLimits != nil {
 		rl.PlanType = raw.Payload.RateLimits.PlanType
+		rl.LimitID = raw.Payload.RateLimits.LimitID
+		rl.LimitName = raw.Payload.RateLimits.LimitName
 		if p := raw.Payload.RateLimits.Primary; p != nil {
 			rl.PrimaryUsedPercent = p.UsedPercent
 			rl.PrimaryWindowMinutes = p.WindowMinutes
@@ -270,6 +301,36 @@ func (st *readState) visitLine(line []byte, visit func(Turn) error) error {
 	})
 }
 
+// noteUnrecognised records a token_count record of a shape this reader
+// does not decode. The record is still skipped, so the rest of the file
+// is read; the poller reports it to health.
+func (st *readState) noteUnrecognised(err error) {
+	st.unrecognised++
+	if st.shapeErr == nil {
+		st.shapeErr = fmt.Errorf("unrecognised token_count record: %w", err)
+	}
+}
+
+// isTokenCount reports whether a line is an event_msg record whose
+// payload is meant to be a token_count. A payload that does not decode
+// as an object counts too: that is a shape change, not another event.
+func isTokenCount(line []byte) bool {
+	var outer struct {
+		Type    string          `json:"type"`
+		Payload json.RawMessage `json:"payload"`
+	}
+	if json.Unmarshal(line, &outer) != nil || outer.Type != "event_msg" {
+		return false
+	}
+	var inner struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(outer.Payload, &inner); err != nil {
+		return true
+	}
+	return inner.Type == "token_count"
+}
+
 // SessionProviders maps each rollout's session ID to its model_provider,
 // reading only the session_meta line that starts every rollout. Sessions
 // on Codex's built-in "openai" provider are left out.
@@ -290,7 +351,7 @@ func SessionProviders(root string) (map[string]string, error) {
 
 // readSessionMeta reads a rollout's first line.
 func readSessionMeta(path string) (id, provider string, ok bool) {
-	f, err := os.Open(path) //nolint:gosec // a rollout under the sessions root
+	f, err := OpenRollout(path)
 	if err != nil {
 		return "", "", false
 	}

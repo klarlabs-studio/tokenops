@@ -9,15 +9,14 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexhome"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexrollout"
 )
 
 // CodexDefaultRoot returns the conventional Codex CLI sessions directory.
 func CodexDefaultRoot() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".codex", "sessions"), nil
+	return codexhome.SessionsDir()
 }
 
 // ExtractCodex reads Codex CLI rollout transcripts into Records.
@@ -44,7 +43,7 @@ func ExtractCodex(opts ExtractOptions) ([]Record, error) {
 		if err != nil {
 			return nil //nolint:nilerr // an unreadable subtree is skipped, not fatal
 		}
-		if !d.IsDir() && strings.HasSuffix(path, ".jsonl") {
+		if !d.IsDir() && codexrollout.IsRolloutName(path) {
 			files = append(files, path)
 		}
 		return nil
@@ -63,7 +62,7 @@ func ExtractCodex(opts ExtractOptions) ([]Record, error) {
 			out = append(out, cache.codex(path, info, opts.Since)...)
 			continue
 		}
-		f, err := os.Open(path) //nolint:gosec // operator's own transcript dir
+		f, err := codexrollout.Open(path)
 		if err != nil {
 			continue
 		}
@@ -79,15 +78,10 @@ func ExtractCodex(opts ExtractOptions) ([]Record, error) {
 // sessionIDFromPath recovers the session id from a rollout filename of
 // the form rollout-<timestamp>-<uuid>.jsonl.
 func sessionIDFromPath(path string) string {
-	name := strings.TrimSuffix(filepath.Base(path), ".jsonl")
-	if i := strings.LastIndex(name, "-"); i >= 0 && i+1 < len(name) {
-		// The uuid's last segment alone is not unique enough; keep the
-		// tail from the timestamp onward.
-		if j := strings.Index(name, "rollout-"); j == 0 {
-			return name[len("rollout-"):]
-		}
+	if id, ok := codexrollout.SessionID(path); ok {
+		return id
 	}
-	return name
+	return strings.TrimSuffix(filepath.Base(path), codexrollout.PlainSuffix)
 }
 
 type codexLine struct {

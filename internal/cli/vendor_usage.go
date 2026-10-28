@@ -157,7 +157,8 @@ Sources:
                       Keychain item, ~/.copilot/config.json); --use-gh-cli
                       also asks the GitHub CLI (gh auth token); pass
                       --oauth-token to override.
-  codex-jsonl         ~/.codex/sessions/**/*.jsonl reader. No secrets;
+  codex-jsonl         $CODEX_HOME/sessions/**/*.jsonl[.zst] reader
+                      (~/.codex when CODEX_HOME is unset). No secrets;
                       --root overrides the default scan root.
   claude-code-jsonl   ~/.claude/projects/**/*.jsonl reader. No secrets;
                       --root overrides the default scan root.

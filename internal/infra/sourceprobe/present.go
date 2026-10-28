@@ -3,6 +3,8 @@ package sourceprobe
 import (
 	"os"
 	"path/filepath"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexhome"
 )
 
 // PresentLocalReaders lists the local transcript readers whose data is on
@@ -18,10 +20,7 @@ func PresentLocalReaders() []string {
 	if claudeDir == "" {
 		claudeDir = filepath.Join(home, ".claude")
 	}
-	codexDir := os.Getenv("CODEX_HOME")
-	if codexDir == "" {
-		codexDir = filepath.Join(home, ".codex")
-	}
+	codexDir, _ := codexhome.Dir()
 	geminiDir := filepath.Join(home, ".gemini")
 	if h := os.Getenv("GEMINI_CLI_HOME"); h != "" {
 		geminiDir = filepath.Join(h, ".gemini")

@@ -216,8 +216,9 @@ type ClaudeCodeOAuthConfig struct {
 }
 
 // CodexJSONLUsageConfig enables the Codex CLI session-log reader.
-// Parses ~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-*.jsonl. Empty
-// Root defaults to ~/.codex/sessions.
+// Parses $CODEX_HOME/sessions/<yyyy>/<mm>/<dd>/rollout-*.jsonl, and the
+// .jsonl.zst copies Codex makes of cold rollouts. Empty Root defaults to
+// $CODEX_HOME/sessions (~/.codex/sessions when CODEX_HOME is unset).
 type CodexJSONLUsageConfig struct {
 	Enabled bool `yaml:"enabled"`
 	// SwitchedOff records that the operator switched the reader off, so

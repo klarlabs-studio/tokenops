@@ -19,7 +19,8 @@ type VendorWindow struct {
 	// OtherLimit for a window the vendor names in no way we know.
 	Name string `json:"name"`
 	// VendorLabel is the vendor's own key for an OtherLimit window, so it
-	// can be traced; empty for every window with a known meaning.
+	// can be traced, and the limit_id of a Codex limit other than the
+	// default one; empty for every window of the default limit.
 	VendorLabel string        `json:"vendor_label,omitempty"`
 	UsedPct     float64       `json:"used_pct"`
 	Duration    time.Duration `json:"duration_ns,omitempty"`
@@ -125,18 +126,20 @@ func vendorWindows(ctx context.Context, reader EventReader, provider eventschema
 	return out
 }
 
-// newestTwo finds each source's newest reading that passes usable, and the
-// reading before it, which marks a window as not started.
+// newestTwo finds each reading source's newest reading that passes usable,
+// and the reading before it, which marks a window as not started. A source
+// that reports several Codex limits is read per limit, so one limit's
+// newest reading does not hide another's.
 func newestTwo(events []*eventschema.Envelope, sources []string, usable func(*eventschema.Envelope) bool) (newest, prior map[string]*eventschema.Envelope) {
-	bySource := map[string][]*eventschema.Envelope{}
+	byReading := map[string][]*eventschema.Envelope{}
 	for _, e := range events {
 		if e == nil || !slices.Contains(sources, e.Source) || e.Attributes == nil || !usable(e) {
 			continue
 		}
-		bySource[e.Source] = append(bySource[e.Source], e)
+		byReading[readingKey(e)] = append(byReading[readingKey(e)], e)
 	}
 	newest, prior = map[string]*eventschema.Envelope{}, map[string]*eventschema.Envelope{}
-	for src, es := range bySource {
+	for src, es := range byReading {
 		sort.SliceStable(es, func(i, j int) bool { return es[i].Timestamp.After(es[j].Timestamp) })
 		newest[src] = es[0]
 		if len(es) > 1 {
@@ -238,8 +241,33 @@ func claudeWindows(attrs map[string]string, now time.Time) []VendorWindow {
 	return out
 }
 
-// codexWindows reads Codex's primary and secondary rate limits.
+// DefaultCodexLimit is the limit_id of Codex's default bucket.
+const DefaultCodexLimit = "codex"
+
+// codexLimit is the non-default Codex limit a reading is for, "" for the
+// default bucket. Codex names a limit by limit_id; readings from before
+// Codex named limits carry none and are the default.
+func codexLimit(e *eventschema.Envelope) string {
+	if id := e.Attributes["limit_id"]; id != DefaultCodexLimit {
+		return id
+	}
+	return ""
+}
+
+// readingKey is the source a reading counts as: its reader, and for a
+// non-default Codex limit, that limit too.
+func readingKey(e *eventschema.Envelope) string {
+	if limit := codexLimit(e); limit != "" {
+		return e.Source + "|" + limit
+	}
+	return e.Source
+}
+
+// codexWindows reads Codex's primary and secondary rate limits. A limit
+// other than the default is named after its model family, when Codex
+// names it, else its limit_id: "5h (Example Model)".
 func codexWindows(attrs map[string]string, now time.Time) []VendorWindow {
+	limit := codexLimit(&eventschema.Envelope{Attributes: attrs})
 	var out []VendorWindow
 	for _, slot := range []string{"primary", "secondary"} {
 		pct, err := strconv.ParseFloat(attrs[slot+"_used_pct"], 64)
@@ -257,10 +285,23 @@ func codexWindows(attrs map[string]string, now time.Time) []VendorWindow {
 			// (a weekly-only plan reports an empty secondary).
 			continue
 		}
+		if limit != "" {
+			w.Name += " (" + codexLimitName(attrs, limit) + ")"
+			w.VendorLabel = limit
+		}
 		setReset(&w, attrs[slot+"_resets_at"], now)
 		out = append(out, w)
 	}
 	return out
+}
+
+// codexLimitName is what a non-default Codex limit is called: its
+// limit_name when Codex sent one, else its limit_id.
+func codexLimitName(attrs map[string]string, limit string) string {
+	if name := attrs["limit_name"]; name != "" {
+		return name
+	}
+	return limit
 }
 
 func setReset(w *VendorWindow, raw string, now time.Time) {

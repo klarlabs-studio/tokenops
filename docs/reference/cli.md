@@ -1768,7 +1768,7 @@ re-run `tokenops hooks install`. See
 ### `tokenops coach prompts`
 
 Heuristic prompt-quality feedback. Walks
-`~/.claude/projects/**/*.jsonl` AND `~/.codex/sessions/**/*.jsonl`,
+`~/.claude/projects/**/*.jsonl` AND `$CODEX_HOME/sessions/**/*.jsonl` (`~/.codex` when unset),
 extracts human-typed turns, reports length distribution
 (under-5-word, 5-15, 15-50, 50-200, >200), vague-short count
 (<15 chars / ≤3 words), pure acknowledgements (yes/no/ok/continue),
@@ -2098,7 +2098,7 @@ uninstall all take it**:
 | `--client` | Where the hooks live |
 |---|---|
 | `claude-code` *(default)* | `~/.claude/settings.json` |
-| `codex` | `~/.codex/hooks.json` |
+| `codex` | `$CODEX_HOME/hooks.json` (default `~/.codex/hooks.json`) |
 | `cursor` | `~/.cursor/hooks.json` |
 | `opencode` | a generated plugin in `~/.config/opencode/plugins` |
 
@@ -2121,7 +2121,7 @@ is what a stale `hooks install` from an older install looks like.
 
 ### `tokenops hooks install --client codex`
 
-Codex keeps hooks in `~/.codex/hooks.json`, in the same nested shape
+Codex keeps hooks in `$CODEX_HOME/hooks.json` (`~/.codex/hooks.json` when `CODEX_HOME` is unset), in the same nested shape
 Claude Code uses inside `settings.json`, and sends the same `Stop` payload
 under the same field names. So the coaching nudge is one handler for both
 clients:
