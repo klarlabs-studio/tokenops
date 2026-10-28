@@ -26,6 +26,7 @@ func sourceFreshnessFn(cfg config.Config, store state.SourceCounter, health *sta
 	if store == nil {
 		return nil
 	}
+	store = carryLastSeen(store)
 	return func() []state.SourceReport {
 		// A status query must not hang behind a busy database. Answering
 		// late is the same as not answering.
@@ -33,6 +34,36 @@ func sourceFreshnessFn(cfg config.Config, store state.SourceCounter, health *sta
 		defer cancel()
 		return state.AssessSources(ctx, cfg, store, health, stoppedReaders(sup), time.Now())
 	}
+}
+
+// lastSeenCarry answers the last-event lookup with the previous answer
+// when the store misses its deadline. A source's last event only moves
+// forward, so the previous answer is a true lower bound; losing it made
+// every source read as never seen on the next assessment. With nothing
+// to carry, the failure is passed on and reported as unknown.
+type lastSeenCarry struct {
+	state.SourceCounter
+
+	mu   sync.Mutex
+	last map[string]time.Time
+}
+
+func carryLastSeen(store state.SourceCounter) *lastSeenCarry {
+	return &lastSeenCarry{SourceCounter: store}
+}
+
+func (c *lastSeenCarry) LastEventBySource(ctx context.Context) (map[string]time.Time, error) {
+	seen, err := c.SourceCounter.LastEventBySource(ctx)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err != nil {
+		if c.last == nil {
+			return nil, err
+		}
+		return c.last, nil
+	}
+	c.last = seen
+	return seen, nil
 }
 
 // stoppedReaders reports which supervised readers have exited. A reader

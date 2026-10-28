@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+
+- **status:** source health stays right on a busy machine. To say when each source last produced an event, the daemon grouped the whole event table, about 345,000 rows on one Mac, by an expression no index could answer. Under load that query, and the window count before it, missed the assessment's 5-second deadline, and the error was dropped. Every source then read as never having produced an event, with nothing in the window. Two wrong answers followed:
+  - after a restart, `tokenops status` warned that Claude Code and Codex had never been ingested, while the store held thousands of their events, and told the operator to restart a daemon that was running;
+  - a reader refused on every poll since the restart (the claude.ai usage meter, after its browser cookie expired) stayed healthy. Its refusal was dated from its last success and its last event, and both were unknown, so it had been refused for no time at all.
+
+  A new index on the event store's source and time (built once, on the first start after upgrading) lets the lookup read only the index. A store query that misses its deadline is now reported as unknown, not as zero: no source is called never seen, and silence is not judged on counts nobody read. The daemon reuses its previous last-event answer when a lookup fails, since those times only move forward. Each reader also keeps when its current run of failures began, so a refusal that started after a restart is counted from then and turns into a warning after 15 minutes. When the stale warning cannot say when a source last produced an event, it names the window it checked instead of saying "never".
+
 ## 0.114.1 - 2026-10-28
 
 ### Fixed
