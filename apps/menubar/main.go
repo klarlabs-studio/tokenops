@@ -94,9 +94,11 @@ type view struct {
 	// is. The panel says how long it has been fetching.
 	LoadingSince time.Time `json:"loading_since,omitzero"`
 	// Refreshing is a refresh the operator asked for, still coming in.
-	Refreshing bool      `json:"refreshing,omitempty"`
-	Updated    time.Time `json:"updated"`
-	err        error
+	Refreshing bool `json:"refreshing,omitempty"`
+	// Ring is the provider pinned to the menu bar icon; empty is Auto.
+	Ring    string    `json:"ring,omitempty"`
+	Updated time.Time `json:"updated"`
+	err     error
 }
 
 // costs is one provider's usage over two windows, its last 30 days day by
@@ -188,12 +190,12 @@ func newMenubar(host app.DesktopHost, d *daemon, sink audit.Sink) (*menubar, err
 // register grants the panel what it needs and registers its commands.
 func (m *menubar) register() error {
 	grant, err := domain.NewCapabilityGrant(
-		"panel", "read the glance, ask the daemon to poll now, change the coach preset, answer boundaries, act on and hide findings, close the panel",
+		"panel", "read the glance, ask the daemon to poll now, change the coach preset, answer boundaries, act on and hide findings, choose the plan the menu bar ring shows, close the panel",
 		[]domain.WindowID{panelWindow},
 		[]domain.Origin{domain.OriginPackagedLocal},
 		[]domain.PermissionSpec{
 			{Name: "glance.read"}, {Name: "glance.refresh"}, {Name: "coach.change"},
-			{Name: "boundaries.deny"}, {Name: "boundaries.approve"}, {Name: "findings.answer"}, {Name: "panel.close"},
+			{Name: "boundaries.deny"}, {Name: "boundaries.approve"}, {Name: "findings.answer"}, {Name: "ring.choose"}, {Name: "panel.close"},
 		},
 	)
 	if err != nil {
@@ -279,6 +281,14 @@ func (m *menubar) register() error {
 				return m.refresh(ctx), nil
 			},
 		}),
+		vitra.Register(m.rt, vitra.Command[ringInput, view]{
+			Name:        "ring.pin",
+			Description: "Pin the menu bar ring to a plan, or return it to the tightest plan with an empty provider",
+			Permission:  "ring.choose",
+			Handler: func(ctx context.Context, _ domain.Invocation, in ringInput) (view, error) {
+				return m.pinRing(ctx, in)
+			},
+		}),
 		vitra.Register(m.rt, vitra.Command[struct{}, vitra.Void]{
 			Name:        "panel.close",
 			Description: "Hide the tray panel",
@@ -349,6 +359,7 @@ func (m *menubar) refresh(ctx context.Context) view {
 		notes = m.alerts.observe(v.Glance)
 	}
 	on := m.settings.alertsOn()
+	v.Ring = m.settings.Ring
 	if time.Now().Before(m.noteUntil) {
 		v.Note, v.NoteWarn = m.note, m.noteWarn
 	}
@@ -358,7 +369,7 @@ func (m *menubar) refresh(ctx context.Context) view {
 	}
 	st := status{Title: "—", Tooltip: "TokenOps: " + v.Error}
 	if v.Glance != nil {
-		st = statusOf(v.Glance)
+		st = statusOf(v.Glance, v.Ring)
 	}
 	m.setTray(st)
 	_ = m.app.Emit(ctx, viewEvent, v)
@@ -377,7 +388,7 @@ func (m *menubar) startRead(ctx context.Context) {
 	}
 	m.loadingSince = time.Now()
 	v := m.last
-	v.LoadingSince, v.Refreshing = m.loadingSince, m.refreshing
+	v.LoadingSince, v.Refreshing, v.Ring = m.loadingSince, m.refreshing, m.settings.Ring
 	if time.Now().Before(m.noteUntil) {
 		v.Note, v.NoteWarn = m.note, m.noteWarn
 	}
@@ -557,6 +568,7 @@ func (m *menubar) menu() []platform.MenuItem {
 		{Separator: true},
 		{ID: actionLogin, Label: "Launch at Login", Checked: login, Disabled: err != nil},
 		{ID: actionAlerts, Label: "Alerts", Checked: m.alertsOn(), Disabled: m.notify == nil},
+		m.ringItem(),
 		{Separator: true},
 		{ID: actionQuit, Label: "Quit"},
 	}
@@ -579,6 +591,11 @@ func (m *menubar) onAction(id string) {
 		m.refresh(ctx)
 	case actionAlerts:
 		m.toggleAlerts()
+		m.refresh(ctx)
+	case actionRingAuto:
+		if m.ring() != "" {
+			_ = m.setRing("")
+		}
 		m.refresh(ctx)
 	case actionQuit:
 		m.app.Quit()

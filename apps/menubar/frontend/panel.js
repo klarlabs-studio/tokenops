@@ -291,6 +291,7 @@
     left.appendChild(h);
     var age = v.updated ? Math.round((Date.now() - new Date(v.updated)) / 60000) : 0;
     left.appendChild(el("div", "muted", age < 1 ? "Updated just now" : "Updated " + age + "m ago"));
+    left.appendChild(ringControl(r, v));
     head.appendChild(left);
     var right = el("div", "who");
     var account = v.glance && v.glance.accounts && v.glance.accounts[r.provider];
@@ -452,6 +453,43 @@
       box.appendChild(el("div", "note", "Sessions read " + (mins < 60 ? mins + "m" : Math.round(mins / 60) + "h") + " ago."));
     }
     main.appendChild(box);
+  }
+
+  // Which plan the menu bar ring shows: the tightest one (Auto) unless a
+  // plan is pinned from its tab here; the pinned plan's tab offers the way
+  // back to Auto.
+  function ringControl(r, v) {
+    var row = el("div", "ring-choice");
+    var busy = state.busy === "ring";
+    if (v.ring === r.provider) {
+      row.appendChild(el("span", "ring-pinned", "In the menu bar"));
+      var auto = button("link", "Auto", "Show the tightest plan in the menu bar instead of " + name(r.provider));
+      auto.disabled = busy;
+      auto.addEventListener("click", function () { pinRing(""); });
+      row.appendChild(document.createTextNode(" · "));
+      row.appendChild(auto);
+    } else {
+      var pin = button("quiet", "Show in menu bar", "Show " + name(r.provider) + " in the menu bar ring");
+      pin.disabled = busy;
+      pin.addEventListener("click", function () { pinRing(r.provider); });
+      row.appendChild(pin);
+    }
+    return row;
+  }
+
+  function pinRing(provider) {
+    state.busy = "ring";
+    render();
+    invoke("ring.pin", { provider: provider }).then(function (v) {
+      state.busy = null;
+      show(v);
+    }, function (err) {
+      failed("ring.pin", err);
+      state.busy = null;
+      state.view = state.view || {};
+      state.view.error = "The menu bar ring wasn't changed. Try again in a moment.";
+      render();
+    });
   }
 
   function button(cls, text, label) {
