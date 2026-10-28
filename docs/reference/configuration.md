@@ -982,7 +982,7 @@ can have several billers. TokenOps works them out on its own:
   `~/.tokenops/route-history.jsonl`. When Nexus CLI (or FireConnect)
   switched it, its settings backup dates the switch.
 - **Codex**: from each session's `model_provider` and its `base_url` in
-  `~/.codex/config.toml`.
+  `$CODEX_HOME/config.toml` (`~/.codex/config.toml` when unset).
 - **opencode**: from the provider it records on every message.
 
 A gateway's own models are billed by the gateway, at its own rates

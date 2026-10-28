@@ -8,6 +8,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexrollout"
 )
 
 // TranscriptCache keeps what each transcript file yielded, so a repeated
@@ -154,7 +156,7 @@ func (c *TranscriptCache) codex(path string, info os.FileInfo, since time.Time) 
 	same := e != nil && e.stamp == stamp &&
 		(e.since.Equal(since) || e.first.IsZero() || (notBefore(e.first, since) && notBefore(e.first, e.since)))
 	if !same {
-		f, err := os.Open(path) //nolint:gosec // operator's own transcript dir
+		f, err := codexrollout.Open(path)
 		if err != nil {
 			delete(c.codexs, path)
 			return nil

@@ -70,9 +70,10 @@ func (p *Poller) Run(ctx context.Context) error {
 	}
 }
 
-// Scan asks Codex once.
+// Scan asks Codex once, and stores one reading per limit bucket whose
+// windows changed since the last scan.
 func (p *Poller) Scan(ctx context.Context) {
-	snap, err := Read(ctx, p.opts.Dial)
+	buckets, err := ReadAll(ctx, p.opts.Dial)
 	now := p.opts.Now()
 	if err != nil {
 		p.opts.Health.Failed(err, now)
@@ -80,13 +81,21 @@ func (p *Poller) Scan(ctx context.Context) {
 		return
 	}
 	p.opts.Health.Succeeded(now)
-	env := Envelope(snap, now.UTC())
-	key := attributesKey(env.Attributes)
-	if key == p.lastKey {
+	envs := make([]*eventschema.Envelope, 0, len(buckets))
+	var key strings.Builder
+	for _, b := range buckets {
+		env := Envelope(b, now.UTC())
+		envs = append(envs, env)
+		key.WriteString(attributesKey(env.Attributes) + "|")
+	}
+	if key.String() == p.lastKey {
 		return
 	}
-	p.lastKey = key
-	if p.bus != nil {
+	p.lastKey = key.String()
+	if p.bus == nil {
+		return
+	}
+	for _, env := range envs {
 		if err := p.bus.PublishWait(ctx, env); err != nil {
 			p.opts.Logger.Warn("codex-app-server: reading not stored", "err", err)
 		}
@@ -94,9 +103,16 @@ func (p *Poller) Scan(ctx context.Context) {
 }
 
 // Envelope is a snapshot as a reading: no model and no tokens, so usage
-// queries never count it as a request (#549).
+// queries never count it as a request (#549). A limit other than the
+// default names itself with limit_id, and its windows are its own.
 func Envelope(s Snapshot, at time.Time) *eventschema.Envelope {
 	attrs := map[string]string{"granularity": "quota_snapshot", "plan_type": s.PlanType}
+	if !s.IsDefault() {
+		attrs["limit_id"] = s.LimitID
+		if s.LimitName != "" {
+			attrs["limit_name"] = s.LimitName
+		}
+	}
 	for slot, w := range map[string]*Window{"primary": s.Primary, "secondary": s.Secondary} {
 		if w == nil {
 			continue
@@ -108,7 +124,7 @@ func Envelope(s Snapshot, at time.Time) *eventschema.Envelope {
 	if s.RateLimitReachedType != "" {
 		attrs["limit_reached"] = s.RateLimitReachedType
 	}
-	h := sha256.Sum256([]byte(SourceTag + "|" + strconv.FormatInt(at.UnixNano(), 10)))
+	h := sha256.Sum256([]byte(SourceTag + "|" + strconv.FormatInt(at.UnixNano(), 10) + "|" + s.LimitID))
 	return &eventschema.Envelope{
 		ID:            "cas-" + hex.EncodeToString(h[:8]),
 		SchemaVersion: eventschema.SchemaVersion,

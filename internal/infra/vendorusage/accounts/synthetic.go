@@ -13,7 +13,9 @@ func readerSynthetic() usage.Reader { return Synthetic{} }
 
 // Synthetic reads the subscription's request quota from GET /v2/quotas
 // (https://dev.synthetic.new/docs/synthetic/quotas). Asking does not
-// count against the quota.
+// count against the quota. The reset comes from renewsAt (the docs'
+// spelling) or renewAt (seen in observed responses); with neither, the
+// window is kept and its reset stays unknown.
 type Synthetic struct {
 	BaseURL string
 	HTTP    *http.Client
@@ -29,6 +31,7 @@ func (s Synthetic) Read(ctx context.Context, key string) (usage.Reading, error) 
 			Limit    number `json:"limit"`
 			Requests number `json:"requests"`
 			RenewsAt string `json:"renewsAt"`
+			RenewAt  string `json:"renewAt"`
 		} `json:"subscription"`
 	}
 	if err := getJSON(ctx, s.HTTP, base(s.BaseURL, "https://api.synthetic.new")+"/v2/quotas", key, &resp); err != nil {
@@ -39,6 +42,14 @@ func (s Synthetic) Read(ctx context.Context, key string) (usage.Reading, error) 
 		return usage.Reading{Scope: "account"}, nil
 	}
 	return usage.Reading{Scope: "account", Subscription: true, Windows: []usage.Window{{
-		Name: "requests", UsedPct: pct(sub.Requests.v, sub.Limit.v), ResetsAt: parseTime(sub.RenewsAt),
+		Name: "requests", UsedPct: pct(sub.Requests.v, sub.Limit.v), ResetsAt: parseTime(renewal(sub.RenewsAt, sub.RenewAt)),
 	}}}, nil
+}
+
+// renewal is the first non-empty of the two spellings the quota API uses.
+func renewal(renewsAt, renewAt string) string {
+	if renewsAt != "" {
+		return renewsAt
+	}
+	return renewAt
 }
