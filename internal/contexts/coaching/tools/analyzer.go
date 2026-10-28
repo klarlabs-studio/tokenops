@@ -20,13 +20,14 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 )
 
 // ExtractOptions mirrors prompts.ExtractOptions so callers can keep

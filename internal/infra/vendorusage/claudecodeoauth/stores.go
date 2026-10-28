@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 
 	oauth "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"go.klarlabs.de/tokenops/internal/infra/keychain"
 )
 

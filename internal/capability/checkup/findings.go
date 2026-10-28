@@ -2,7 +2,6 @@ package checkup
 
 import (
 	"fmt"
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,6 +11,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/modeltier"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 

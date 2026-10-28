@@ -1,9 +1,10 @@
 package sourceprobe
 
 import (
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"os"
 	"path/filepath"
+
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 )
 
 // PresentLocalReaders lists the local transcript readers whose data is on

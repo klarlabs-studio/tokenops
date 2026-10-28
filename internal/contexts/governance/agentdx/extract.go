@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"go.klarlabs.de/tokenops/internal/infra/scanscope"
 )
 

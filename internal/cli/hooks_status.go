@@ -2,13 +2,13 @@ package cli
 
 import (
 	"fmt"
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"go.klarlabs.de/tokenops/internal/infra/opencodeplugin"
 	"go.klarlabs.de/tokenops/internal/version"
 )

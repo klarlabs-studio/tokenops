@@ -26,9 +26,10 @@ package claudecode
 import (
 	"encoding/json"
 	"fmt"
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"os"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 )
 
 // StatsCache is the subset of the Claude Code cache TokenOps reads.

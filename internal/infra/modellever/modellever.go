@@ -17,12 +17,12 @@ package modellever
 import (
 	"encoding/json"
 	"errors"
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
 )
 

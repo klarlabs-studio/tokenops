@@ -14,7 +14,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -22,6 +21,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 )
 
 // AssistantReply is one model-emitted turn from a session log.

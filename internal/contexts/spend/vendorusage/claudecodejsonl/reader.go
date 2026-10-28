@@ -35,7 +35,6 @@ package claudecodejsonl
 import (
 	"encoding/json"
 	"fmt"
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"io"
 	"os"
 	"path/filepath"
@@ -43,6 +42,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/jsonltail"
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 )
 
 // Turn is one parsed assistant turn from a JSONL file. SessionID +

@@ -10,12 +10,13 @@
 package detect
 
 import (
-	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
+
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 )
 
 // Confidence describes how sure the detector is. The init wizard
