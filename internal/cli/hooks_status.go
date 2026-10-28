@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"go.klarlabs.de/tokenops/internal/infra/claudehome"
 	"os"
 	"path/filepath"
 	"strings"
@@ -126,17 +127,32 @@ func hooksStatusOf(client, settingsPath, exe string) (hooksStatus, error) {
 		return st, err
 	}
 	st.Config = path
-	settings, existed, err := loadSettings(path)
-	if err != nil || !existed {
+	settings, _, err := loadSettings(path)
+	if err != nil {
 		return st, err
 	}
-	hooks := hooksMap(settings)
-	for _, marker := range hookMarkers {
-		for _, loc := range findMarkerEntries(hooks, marker) {
-			st.Hooks = append(st.Hooks, wiredHook{Hook: marker, Event: loc.event, Matcher: loc.matcher, Command: loc.command, ThisBinary: commandRunsExe(loc.command, exe)})
+	st.Hooks = append(st.Hooks, wiredHooksIn(hooksMap(settings), exe)...)
+	if client == hookClientClaudeCode {
+		// Managed settings run for every session too, and win over the
+		// operator's file: a hook wired there counts as wired.
+		for _, f := range claudehome.ManagedFiles() {
+			if m, ok, err := loadSettings(f); err == nil && ok {
+				st.Hooks = append(st.Hooks, wiredHooksIn(hooksMap(m), exe)...)
+			}
 		}
 	}
 	return st, nil
+}
+
+// wiredHooksIn lists the TokenOps hooks found in one settings file's hooks map.
+func wiredHooksIn(hooks map[string]any, exe string) []wiredHook {
+	var out []wiredHook
+	for _, marker := range hookMarkers {
+		for _, loc := range findMarkerEntries(hooks, marker) {
+			out = append(out, wiredHook{Hook: marker, Event: loc.event, Matcher: loc.matcher, Command: loc.command, ThisBinary: commandRunsExe(loc.command, exe)})
+		}
+	}
+	return out
 }
 
 // commandRunsExe reports whether a wired entry calls this binary.

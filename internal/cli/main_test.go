@@ -3,9 +3,11 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/infra/presence/presencetest"
 )
 
@@ -48,6 +50,11 @@ func TestMain(m *testing.M) {
 	// Currency detection reads the machine's region; tests see USD unless
 	// they say otherwise.
 	detectCurrency = func() (string, string) { return "USD", "test default" }
+
+	// Managed settings are read from a fixed system directory, and hooks
+	// status reads them too: point it at an empty fixture so no test sees
+	// this machine's managed policy.
+	claudehome.ManagedDir = filepath.Join(sandbox, "managed")
 
 	code := m.Run()
 	_ = os.RemoveAll(sandbox)

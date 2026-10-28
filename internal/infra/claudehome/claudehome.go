@@ -57,7 +57,7 @@ func Resolve(getenv func(string) string, home string) string {
 	if d := getenv(EnvVar); d != "" {
 		return d
 	}
-	for _, f := range managedFiles() {
+	for _, f := range ManagedFiles() {
 		if d := envValue(f, EnvVar); d != "" {
 			return d
 		}
@@ -80,13 +80,13 @@ func Join(elem ...string) string {
 // then the user's settings.json in Dir. Files that do not exist are
 // included; callers skip them.
 func SettingsFiles() []string {
-	return append(managedFiles(), Join("settings.json"))
+	return append(ManagedFiles(), Join("settings.json"))
 }
 
-// managedFiles lists the managed settings files, highest precedence first.
+// ManagedFiles lists the managed settings files, highest precedence first.
 // Claude Code merges managed-settings.json first and then each *.json
 // drop-in in alphabetical order, so a later file overrides an earlier one.
-func managedFiles() []string {
+func ManagedFiles() []string {
 	var out []string
 	drops, _ := filepath.Glob(filepath.Join(ManagedDir, "managed-settings.d", "*.json"))
 	sort.Strings(drops)
