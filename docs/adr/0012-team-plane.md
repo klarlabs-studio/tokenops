@@ -1,6 +1,6 @@
 # ADR 0012 — The team plane: hosted, derived figures only, aggregate by default
 
-- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation.
+- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*.
 - **Date:** 2026-10-08
 - **Deciders:** TokenOps maintainers
 - **Related:** issue #250, ADR 0004 (local-first; no BI product), ADR 0010 §5 (the API's privacy line)
@@ -63,13 +63,45 @@ An organisation is started and run without klarlabs' involvement:
   refused with `402` and `code: uploads_paused`, which the client explains;
   the figures held stay viewable, read-only, for 30 days and are then
   deleted. Weekly totals appear three days after a week ends, and the web
-  view and `tokenops team status` say when the first one will.
+  view and `tokenops team status` say when the first one will. While the
+  beta is on (see *Beta billing*), the trial is replaced by the `beta`
+  state, and the rest of this bullet applies from the end of the beta.
 - **Personal data** the server now also stores: members' e-mail
   addresses and names from sign-up, password hashes and encrypted
   two-factor secrets for password accounts, billing identifiers, and the audit
   log of administration. Transactional e-mail (address confirmation,
   password reset, trial and billing notices) is sent through a processor
   under the same Art. 28 terms.
+
+## Beta billing (amended 2026-10-28)
+
+While the hosted plane is in beta, billing runs in a `beta` mode, a
+server setting that is on by default:
+
+- A new organisation is created in the `beta` billing state. It has no
+  trial clock, no checkout, and is not billed. Uploads are never paused for
+  billing, and the figures are kept and shown as in any other state.
+- When the mode is switched on, every organisation still in its `trialing`
+  state moves to `beta`. Each move is written to the audit log.
+- Switching the mode off restores the 14-day trial for new organisations.
+
+The reason is that Paddle, the merchant of record, is not yet configured
+for production, so a subscription cannot be taken or charged. The team plane
+is therefore free during its beta, and that is said plainly to members:
+`tokenops team status` and `tokenops team admin billing` show "Free during
+the beta" and suggest no checkout. The public client knows the plan status
+`beta` (`pkg/teamwire.PlanBeta`).
+
+Ending the beta requires two things, in this order:
+
+1. Paddle in production, with the subscription per active member per month
+   from *Billing* above working end to end.
+2. Every beta organisation moved onto a trial or a subscription, with notice
+   to its owners first. No organisation loses uploads, or is charged, without
+   that notice having been sent and the change being visible to it in advance.
+
+Until both are done, the beta state stays and this ADR's *Billing* bullet
+describes the end state, not the current one.
 
 ## Context
 
