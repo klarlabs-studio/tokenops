@@ -80,6 +80,10 @@ func SourceWarnings(reports []SourceReport) Warnings {
 				SourceTag:   r.Tag,
 				WindowHours: int(r.Window / time.Hour),
 				SilentFor:   r.SilentFor,
+				// Never seen is a claim the assessment makes only when
+				// the store answered; without it, the last event is
+				// unknown, not absent.
+				LastSeenUnknown: !r.NeverSeen && r.LastEventAt.IsZero(),
 			}.Warning())
 		}
 	}

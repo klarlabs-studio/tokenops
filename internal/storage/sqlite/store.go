@@ -927,6 +927,11 @@ func (s *Store) EachEventID(ctx context.Context, fn func(id []byte)) error {
 // in-memory store).
 func (s *Store) Path() string { return s.path }
 
+// lastEventBySourceQuery groups the raw source column, so the newest event
+// of each source is read from events_source_ts_idx alone. Grouping an
+// expression over the column read every row of the table instead.
+const lastEventBySourceQuery = `SELECT source, MAX(timestamp_ns) FROM events GROUP BY source`
+
 // LastEventBySource returns the most recent event timestamp per source.
 //
 // CountBySource answers "were there events in a window", which is enough to
@@ -942,9 +947,7 @@ func (s *Store) LastEventBySource(ctx context.Context) (map[string]time.Time, er
 	if s == nil || s.db == nil {
 		return nil, errors.New("sqlite: store not initialised")
 	}
-	const q = `SELECT COALESCE(NULLIF(source, ''), '(none)') AS src, MAX(timestamp_ns)
-	           FROM events GROUP BY src`
-	rows, err := s.db.QueryContext(ctx, q)
+	rows, err := s.db.QueryContext(ctx, lastEventBySourceQuery)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: last-event-by-source: %w", err)
 	}
@@ -953,7 +956,7 @@ func (s *Store) LastEventBySource(ctx context.Context) (map[string]time.Time, er
 	out := map[string]time.Time{}
 	for rows.Next() {
 		var (
-			src string
+			src sql.NullString
 			ns  sql.NullInt64
 		)
 		if err := rows.Scan(&src, &ns); err != nil {
@@ -962,7 +965,14 @@ func (s *Store) LastEventBySource(ctx context.Context) (map[string]time.Time, er
 		if !ns.Valid {
 			continue
 		}
-		out[src] = time.Unix(0, ns.Int64).UTC()
+		key := src.String
+		if key == "" {
+			key = "(none)"
+		}
+		// NULL and '' are separate groups that both read as "(none)".
+		if at := time.Unix(0, ns.Int64).UTC(); at.After(out[key]) {
+			out[key] = at
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("sqlite: last-event-by-source rows: %w", err)

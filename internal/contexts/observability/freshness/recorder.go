@@ -43,6 +43,7 @@ func (r *Recorder) Succeeded(at time.Time) {
 	r.poll.LastSuccessAt = at
 	r.poll.LastError = nil
 	r.poll.LastErrorAt = time.Time{}
+	r.poll.FailingSince = time.Time{}
 	r.poll.Notice = ""
 }
 
@@ -62,7 +63,9 @@ func (r *Recorder) Noted(note string, at time.Time) {
 
 // Failed records an attempt that did not complete. The last success is
 // deliberately left intact: how long a reader has been failing is the
-// diagnosis, and overwriting it would throw that away.
+// diagnosis, and overwriting it would throw that away. The first failure
+// after a success, or since the reader started, begins a run that lasts
+// until the next success.
 func (r *Recorder) Failed(err error, at time.Time) {
 	if r == nil || err == nil {
 		return
@@ -72,6 +75,9 @@ func (r *Recorder) Failed(err error, at time.Time) {
 	r.poll.LastAttemptAt = at
 	r.poll.LastError = err
 	r.poll.LastErrorAt = at
+	if r.poll.FailingSince.IsZero() {
+		r.poll.FailingSince = at
+	}
 }
 
 // Poll returns a snapshot of what this reader has reported.

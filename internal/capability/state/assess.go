@@ -30,14 +30,16 @@ type SourceCounter interface {
 //
 // A store read that fails reports the sources without counts rather than
 // nothing at all: the poll records and origin probes still say something
-// useful, and an empty list would read as "no sources configured".
+// useful, and an empty list would read as "no sources configured". The
+// failure is passed on as an unknown, never as an empty answer: a store
+// that missed its deadline is not a store with no events.
 func AssessSources(ctx context.Context, cfg config.Config, store SourceCounter, registry *SourceRegistry, stopped map[string]error, now time.Time) []SourceReport {
-	counts, err := store.CountBySource(ctx, now.Add(-freshness.DefaultWindow), now)
-	if err != nil {
+	counts, countErr := store.CountBySource(ctx, now.Add(-freshness.DefaultWindow), now)
+	if countErr != nil {
 		counts = nil
 	}
-	lastSeen, err := store.LastEventBySource(ctx)
-	if err != nil {
+	lastSeen, seenErr := store.LastEventBySource(ctx)
+	if seenErr != nil {
 		lastSeen = nil
 	}
 	var polls map[string]freshness.Poll
@@ -45,14 +47,16 @@ func AssessSources(ctx context.Context, cfg config.Config, store SourceCounter, 
 		polls = registry.Polls()
 	}
 	return freshness.Assess(freshness.Inputs{
-		Now:            now,
-		Window:         freshness.DefaultWindow,
-		Sources:        configuredSources(cfg),
-		EventsInWindow: counts,
-		LastEventAt:    lastSeen,
-		OriginNewest:   originsOf(cfg),
-		Polls:          polls,
-		Stopped:        stopped,
+		Now:              now,
+		Window:           freshness.DefaultWindow,
+		Sources:          configuredSources(cfg),
+		EventsInWindow:   counts,
+		EventsUnknown:    countErr != nil,
+		LastEventAt:      lastSeen,
+		LastEventUnknown: seenErr != nil,
+		OriginNewest:     originsOf(cfg),
+		Polls:            polls,
+		Stopped:          stopped,
 	})
 }
 
