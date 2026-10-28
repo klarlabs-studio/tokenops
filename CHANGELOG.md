@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **antigravity:** an installed Antigravity whose quota cannot be read says why and what to do. When its language server refused the quota request, or did not answer, status and the glance showed only a raw HTTP error or "not listening yet", with nothing about Antigravity or the fix. The error now says Antigravity is installed but its quota cannot be read, gives the reason, and says to keep the app open and signed in. It is still reported as a failing source, never as an empty reading.
+
 ## 0.114.3 - 2026-10-28
 
 ### Added
