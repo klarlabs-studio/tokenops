@@ -8,7 +8,7 @@
 
 ### Fixed
 
-- **attribution:** requests to Together AI's current API host, `api.together.ai`, and to the Azure AI Foundry and AI Services hosts of an Azure OpenAI resource (`*.services.ai.azure.com`, `*.cognitiveservices.azure.com`) are billed to Together AI and Azure OpenAI. The classic hosts, `api.together.xyz` and `*.openai.azure.com`, still are. Before, requests to the new hosts were not attributed to any provider, so their spend was not counted for it.
+- **attribution:** requests to Together AI's current API host, `api.together.ai`, and to the Azure AI Foundry and AI Services hosts of an Azure OpenAI resource (`*.services.ai.azure.com`, `*.cognitiveservices.azure.com`) are billed to Together AI and Azure OpenAI. The classic hosts, `api.together.xyz` and `*.openai.azure.com`, still are. The `together` proxy route now forwards to `api.together.ai`, Together's documented host, instead of `api.together.xyz`. Before, requests to the new hosts were not attributed to any provider, so their spend was not counted for it.
 
 
 ## 0.114.3 - 2026-10-28
