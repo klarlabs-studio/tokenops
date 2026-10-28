@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexhome"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -117,7 +118,7 @@ func ComputeTurnStats(opts ExtractOptions) (TurnStats, error) {
 	home, _ := os.UserHomeDir()
 	if root == "" {
 		if opts.Source == SourceCodex {
-			root = filepath.Join(home, ".codex", "sessions")
+			root, _ = codexhome.SessionsDir()
 		} else {
 			root = filepath.Join(home, ".claude", "projects")
 		}
@@ -133,10 +134,14 @@ func computeTurnStatsAuto(opts ExtractOptions) (TurnStats, error) {
 	if err != nil {
 		return TurnStats{}, err
 	}
+	codexRoot, err := codexhome.SessionsDir()
+	if err != nil {
+		return TurnStats{}, err
+	}
 	var acc TurnStats
 	for _, root := range []string{
 		filepath.Join(home, ".claude", "projects"),
-		filepath.Join(home, ".codex", "sessions"),
+		codexRoot,
 	} {
 		if _, statErr := os.Stat(root); statErr != nil {
 			continue

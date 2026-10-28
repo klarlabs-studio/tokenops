@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexhome"
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
 )
 
@@ -94,7 +95,7 @@ func Extract(opts ExtractOptions) ([]AssistantReply, error) {
 	if root == "" {
 		switch src {
 		case SourceCodex:
-			root = filepath.Join(home, ".codex", "sessions")
+			root, _ = codexhome.SessionsDir()
 		default:
 			root = filepath.Join(home, ".claude", "projects")
 			if src == SourceAuto {
@@ -103,7 +104,7 @@ func Extract(opts ExtractOptions) ([]AssistantReply, error) {
 		}
 	}
 	if src == SourceAuto {
-		if strings.Contains(root, ".codex") {
+		if codexhome.Owns(root) {
 			src = SourceCodex
 		} else {
 			src = SourceClaudeCode
