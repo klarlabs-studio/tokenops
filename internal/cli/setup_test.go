@@ -185,6 +185,7 @@ func TestRunSetupTouchesOnlyItsTarget(t *testing.T) {
 // Codex reports Plus.
 func writeHomeWithEvidence(t *testing.T) string {
 	t.Helper()
+	t.Setenv("CODEX_HOME", "") // the evidence lives under home, not a CODEX_HOME set on this machine
 	home := t.TempDir()
 	if err := os.WriteFile(filepath.Join(home, ".claude.json"),
 		[]byte(`{"oauthAccount":{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_20x"}}`), 0o600); err != nil {

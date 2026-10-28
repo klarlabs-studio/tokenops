@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+
+- **codex:** Codex usage that Codex had moved out of its plain files, and a second Codex limit, no longer disappear or overwrite the first. Three things in how TokenOps reads Codex's own files were out of date:
+  - Codex compresses a session once it has been idle for a week, into `rollout-….jsonl.zst`, and removes the plain `.jsonl`. TokenOps read only the plain file, so those sessions were skipped without a word: their spend, their agent-DX records and their origin freshness were all missing. The compressed copies are now read, once per change, and a corrupt one is reported as a failure, not read as empty.
+  - An account can hold several Codex limits, one per model family, and each reading names its own `limit_id`. TokenOps ignored it, so a second limit's 5-hour or weekly window was filed under the first's name and the newer reading replaced the older one. The session budget could also take its figure from a different limit than the one the session draws on. Each limit is now its own window, named after the limit Codex gives it (`5h (Example Model)`, or its `limit_id` when Codex sends no name), and the session budget keeps reading the default limit. An account with one limit shows exactly what it showed before.
+  - Codex's home is `CODEX_HOME` when that is set, and `~/.codex` otherwise. TokenOps always used `~/.codex`, so with `CODEX_HOME` set it read the wrong sessions and config, and its hooks, setup and doctor hints pointed at the wrong place. Every reader, the origin probe and the setup hints now follow `CODEX_HOME`.
+  - A token_count record in a shape TokenOps does not recognise was skipped silently. The Codex JSONL reader now reports it in its source health, so `tokenops status` says the reader is failing rather than quiet.
+
 ## 0.114.3 - 2026-10-28
 
 ### Added

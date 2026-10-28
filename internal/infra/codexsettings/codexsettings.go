@@ -10,17 +10,25 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexhome"
 )
+
+// Home is Codex's home directory: CODEX_HOME, or ~/.codex when it is unset.
+func Home() (string, error) {
+	return codexhome.Dir()
+}
+
+// OwnsPath reports whether a transcript path lies under Codex's home.
+func OwnsPath(path string) bool {
+	return codexhome.Owns(path)
+}
 
 // ConfigPath is Codex's config.toml, honouring CODEX_HOME.
 func ConfigPath() string {
-	dir := os.Getenv("CODEX_HOME")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		dir = filepath.Join(home, ".codex")
+	dir, err := codexhome.Dir()
+	if err != nil {
+		return ""
 	}
 	return filepath.Join(dir, "config.toml")
 }
