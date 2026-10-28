@@ -186,6 +186,9 @@ func capitalize(s string) string {
 type settings struct {
 	// Alerts is whether windows notify; nil is on.
 	Alerts *bool `json:"alerts,omitempty"`
+	// Ring is the provider whose plan the icon shows; empty is Auto, the
+	// tightest plan across every one.
+	Ring string `json:"ring,omitempty"`
 }
 
 func (s settings) alertsOn() bool { return s.Alerts == nil || *s.Alerts }

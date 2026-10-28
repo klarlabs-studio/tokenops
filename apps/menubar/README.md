@@ -11,8 +11,17 @@ template image, so macOS tints it for a light or dark menu bar. A click opens
 the panel under it with every plan's details;
 hovering lists each window's share and reset (for example
 **Codex · week 25% left · resets in 5d 14h**); a right click has Refresh,
-Launch at Login, Alerts and Quit. Built on
+Launch at Login, Alerts, Ring: tightest plan and Quit. Built on
 [Vitra](https://github.com/klarlabs-studio/vitra).
+
+The ring follows the tightest plan unless you choose one: **Show in menu
+bar** under a plan's name in the panel pins the ring to that plan, however
+tight the others are, and the pinned plan's tab says **In the menu bar ·
+Auto**, where Auto goes back to the tightest plan (so does **Ring: tightest
+plan** in the right-click menu). The choice is kept across launches. A
+pinned plan with no reading right now (its plan unbound, its reader down)
+shows the tightest plan instead, and the tooltip's first line says so.
+Alerts fire for every plan whichever one the ring shows.
 
 The panel switches between plans with a tab per vendor, busiest first, each
 with a small bar of its fullest window. A plan's header names the account

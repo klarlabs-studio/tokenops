@@ -92,10 +92,14 @@ func shortName(provider string) string {
 // left is the share of a window still available.
 func left(used float64) float64 { return math.Max(0, math.Min(100, 100-used)) }
 
-// statusOf picks the busiest measure across every plan: a vendor window,
-// else spend against a limit. That is the one that stops work first, and
-// its plan is the one the icon shows.
-func statusOf(raw json.RawMessage) status {
+// statusOf picks what the icon shows. With ring empty (Auto) that is the
+// busiest measure across every plan: a vendor window, else spend against a
+// limit, the one that stops work first. With ring naming a provider it is
+// that plan's busiest measure, however tight the others are; a pinned plan
+// with no reading right now falls back to Auto and the tooltip says so,
+// rather than the icon showing nothing. The tooltip lists every plan's
+// windows either way.
+func statusOf(raw json.RawMessage, ring string) status {
 	var g glanceView
 	if json.Unmarshal(raw, &g) != nil {
 		return status{Title: "—", Tooltip: "TokenOps: unreadable answer from the daemon"}
@@ -104,31 +108,13 @@ func statusOf(raw json.RawMessage) status {
 		return status{Title: "—", Tooltip: "TokenOps: " + g.PlanHeadroom.Hint}
 	}
 	var (
-		best  status
-		found bool
-		lines []string
+		best, pinned       status
+		found, pinnedFound bool
+		lines              []string
 	)
 	for _, r := range g.PlanHeadroom.Reports {
-		name := shortName(r.Provider)
-		rs := status{}
-		for _, w := range r.Windows {
-			line := fmt.Sprintf("%s · %s %.0f%% left", name, w.Name, left(w.UsedPct))
-			switch {
-			case w.NotStarted:
-				line += " · starts at your next request"
-			case w.ResetsIn != "":
-				line += " · resets in " + humanDuration(w.ResetsIn)
-			}
-			lines = append(lines, line)
-			if w.UsedPct >= rs.Pct {
-				rs.Pct, rs.Stale = w.UsedPct, w.Stale
-				rs.Title = fmt.Sprintf("%s %.0f%% left", name, left(w.UsedPct))
-			}
-		}
-		if len(r.Windows) == 0 && r.SpendLimitUSD > 0 {
-			lines = append(lines, fmt.Sprintf("%s · $%.2f of $%.2f", name, r.SpendUSD, r.SpendLimitUSD))
-			rs.Pct, rs.Title = r.SpendPct, fmt.Sprintf("%s %.0f%% left", name, left(r.SpendPct))
-		}
+		rs, rl := reportStatus(r)
+		lines = append(lines, rl...)
 		if rs.Title == "" {
 			continue
 		}
@@ -136,12 +122,50 @@ func statusOf(raw json.RawMessage) status {
 		if !found || rs.Pct > best.Pct {
 			best, found = rs, true
 		}
+		if ring != "" && r.Provider == ring {
+			pinned, pinnedFound = rs, true
+		}
+	}
+	switch {
+	case pinnedFound:
+		best = pinned
+	case ring != "" && found:
+		lines = append([]string{"Pinned plan " + shortName(ring) + " has no reading; showing the tightest plan."}, lines...)
 	}
 	if !found {
 		return status{Title: "TokenOps", Tooltip: "TokenOps: " + g.Insight.Summary}
 	}
 	best.Tooltip = strings.Join(lines, "\n")
 	return best
+}
+
+// reportStatus is one plan's busiest measure and its tooltip lines; a plan
+// with nothing to measure has an empty Title.
+func reportStatus(r report) (status, []string) {
+	name := shortName(r.Provider)
+	var (
+		rs    status
+		lines []string
+	)
+	for _, w := range r.Windows {
+		line := fmt.Sprintf("%s · %s %.0f%% left", name, w.Name, left(w.UsedPct))
+		switch {
+		case w.NotStarted:
+			line += " · starts at your next request"
+		case w.ResetsIn != "":
+			line += " · resets in " + humanDuration(w.ResetsIn)
+		}
+		lines = append(lines, line)
+		if w.UsedPct >= rs.Pct {
+			rs.Pct, rs.Stale = w.UsedPct, w.Stale
+			rs.Title = fmt.Sprintf("%s %.0f%% left", name, left(w.UsedPct))
+		}
+	}
+	if len(r.Windows) == 0 && r.SpendLimitUSD > 0 {
+		lines = append(lines, fmt.Sprintf("%s · $%.2f of $%.2f", name, r.SpendUSD, r.SpendLimitUSD))
+		rs.Pct, rs.Title = r.SpendPct, fmt.Sprintf("%s %.0f%% left", name, left(r.SpendPct))
+	}
+	return rs, lines
 }
 
 // humanDuration words a Go duration string as the menu bar shows it:
