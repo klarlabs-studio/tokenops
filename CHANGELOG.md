@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- **homebrew:** the cask's install hook moves to GoReleaser v2.19's declarative install steps. Homebrew deprecated the raw Ruby `postflight` that the cask ran, so every `brew install` and `brew upgrade` printed a deprecation warning and asked for a report to the tap. Homebrew runs the new steps in a sandbox with a fake home directory and no localhost, which the old hook never had: it cannot reach the real `~/Library` or launchd. The step still clears Gatekeeper's quarantine flag from the unpacked archive, which the cask needs because the release is not notarized. The rest of the old hook is now done by tokenops itself, and the unit is no longer re-applied on upgrade:
+  - the daemon restarts onto the installed binary within about a minute of the upgrade (since 0.113.1);
+  - the daemon refreshes `~/Applications/TokenOps.app` when it starts, and the copy has no quarantine flag;
+  - the launchd or systemd unit is not rewritten by an upgrade. Its binary path is the stable `bin/tokenops` link, so it changes only in a release that changes the unit template. Such a release says so in its changelog, and the cask's caveats say to run `tokenops daemon install` once after it.
+
+  The release workflows pin GoReleaser v2.19.0 (from v2.18.2).
+
 ## 0.114.3 - 2026-10-28
 
 ### Added
