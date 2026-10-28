@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/state"
@@ -48,4 +49,95 @@ func stoppedReaders(sup *lifecycle.Supervisor) map[string]error {
 		return nil
 	}
 	return sup.Failed()
+}
+
+// How old an assessment may be before it is redone, and how often the
+// daemon redoes it unasked. An assessment runs every store query and
+// origin check again; on a loaded machine that took 10–15 seconds, past
+// the 2-second limit `tokenops status` and the MCP status tool allow, so
+// both fell back to the event counts and never saw a refused reader.
+const (
+	sourceSnapshotMaxAge  = 2 * time.Minute
+	sourceSnapshotRefresh = 30 * time.Second
+)
+
+// sourceSnapshot keeps the latest source assessment, so GET /api/sources
+// and the daemon's status answer from it at once. It is never served
+// past maxAge: a reader asking then gets a new assessment, and readers
+// arriving meanwhile wait for that one rather than starting their own.
+type sourceSnapshot struct {
+	assess func() []state.SourceReport
+	maxAge time.Duration
+	now    func() time.Time
+
+	run sync.Mutex // one assessment at a time
+
+	mu      sync.Mutex
+	reports []state.SourceReport
+	at      time.Time
+}
+
+func newSourceSnapshot(assess func() []state.SourceReport, maxAge time.Duration) *sourceSnapshot {
+	return &sourceSnapshot{assess: assess, maxAge: maxAge, now: time.Now}
+}
+
+// Reports is the latest assessment, redone first when it is too old.
+func (s *sourceSnapshot) Reports() []state.SourceReport {
+	if r, ok := s.current(); ok {
+		return r
+	}
+	s.run.Lock()
+	defer s.run.Unlock()
+	if r, ok := s.current(); ok {
+		return r
+	}
+	return s.store(s.assess())
+}
+
+// Refresh redoes the assessment now.
+func (s *sourceSnapshot) Refresh() {
+	s.run.Lock()
+	defer s.run.Unlock()
+	s.store(s.assess())
+}
+
+func (s *sourceSnapshot) current() ([]state.SourceReport, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.at.IsZero() || s.now().Sub(s.at) > s.maxAge {
+		return nil, false
+	}
+	return s.reports, true
+}
+
+func (s *sourceSnapshot) store(r []state.SourceReport) []state.SourceReport {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reports, s.at = r, s.now()
+	return r
+}
+
+// sourceSnapshotFn wraps the assessment in a snapshot the supervisor
+// refreshes every sourceSnapshotRefresh, so a status caller finds one
+// ready. Nil in, nil out: no store means the route stays unmounted.
+func sourceSnapshotFn(assess func() []state.SourceReport, sup *lifecycle.Supervisor) func() []state.SourceReport {
+	if assess == nil {
+		return nil
+	}
+	snap := newSourceSnapshot(assess, sourceSnapshotMaxAge)
+	if sup != nil {
+		sup.Go("source-freshness", func(ctx context.Context) error {
+			t := time.NewTicker(sourceSnapshotRefresh)
+			defer t.Stop()
+			for {
+				snap.Refresh()
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-t.C:
+				}
+			}
+		})
+	}
+	return snap.Reports
 }

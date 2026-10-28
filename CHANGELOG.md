@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- **daemon:** `GET /api/sources` and the daemon's status answer at once. Each request reran every store query and origin check, which took 10–15 seconds on a busy machine. `tokenops status` and the MCP status tool wait 2 seconds, so they fell back to the event counts and never saw a refused reader. The daemon now keeps the latest assessment, redoes it every 30 seconds, and never serves one older than 2 minutes: past that, the next reader gets a new one, and readers arriving meanwhile share it.
 - **status:** `tokenops status` and the `tokenops_status` tool now judge every provider's reader the same way, by its health, not only by event counts. They warned only about the dozen readers turned on in the config, and only when no events arrived, so a reader whose key was refused looked the same as one with nothing new to read, and both were told to restart the daemon. Both surfaces now ask the daemon how each reader is doing:
   - a reader that is refused says so, with the vendor's reason and how to reconnect it, not a daemon restart;
   - a reader that stopped says it will not come back on its own;

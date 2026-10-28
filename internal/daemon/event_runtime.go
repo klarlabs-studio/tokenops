@@ -127,13 +127,15 @@ func initializeEventRuntime(
 	rt.detach = wireCanonicalObservers(rt.Bus, counter, logger)
 	rt.AuditSubscriber = auditlog.Follow(rt.Bus, rt.Store, logger, "daemon")
 	logger.Info("event store ready", "path", path)
+	// One snapshot serves the sources route and the daemon's status.
+	sources := sourceSnapshotFn(sourceFreshnessFn(cfg, rt.Store, sourceHealth, sup), sup)
 	rt.ProxyOptions = append(rt.ProxyOptions,
 		proxy.WithEventBus(rt.Bus),
-		proxy.WithSourceFreshness(sourceFreshnessFn(cfg, rt.Store, sourceHealth, sup)),
+		proxy.WithSourceFreshness(sources),
 		proxy.WithPlans(plansDeps(cfg, glance, components.Spend)),
 		proxy.WithActions(actionDeps(cfg, rt.Store, logger)),
 		proxy.WithSessions(func() proxy.SessionRoots { return proxy.SessionRoots{} }),
-		proxy.WithState(stateDeps(cfg, rt.Store, sourceFreshnessFn(cfg, rt.Store, sourceHealth, sup), rt.Bus.DroppedCount)),
+		proxy.WithState(stateDeps(cfg, rt.Store, sources, rt.Bus.DroppedCount)),
 		proxy.WithTokenizer(components.Tokenizers),
 		proxy.WithCostEngine(components.Spend),
 		proxy.WithEventDrops(rt.Bus.DroppedCount),
