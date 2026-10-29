@@ -62,13 +62,19 @@ func TestLocalModelsAreFreeLookupTier(t *testing.T) {
 // own provider name, and pricing them as "unknown" understates spend.
 func TestCrossProviderNormalisation(t *testing.T) {
 	c := New(table(), nil)
-	for _, tc := range []struct{ provider, model string }{
-		{"github", "claude-opus-4.6"},
-		{"opencode", "claude-opus-4-6"},
+	// Copilot is a reseller the rate card itself prices at the vendor's
+	// rate, so its model is priced by the card; opencode's is matched by
+	// name.
+	for _, tc := range []struct {
+		provider, model string
+		basis           Basis
+	}{
+		{"github", "claude-opus-4.6", BasisCard},
+		{"opencode", "claude-opus-4-6", BasisNormalised},
 	} {
 		got := c.Resolve(eventschema.Provider(tc.provider), tc.model)
-		if got.Basis != BasisNormalised {
-			t.Errorf("%s/%s Basis = %q, want %q", tc.provider, tc.model, got.Basis, BasisNormalised)
+		if got.Basis != tc.basis {
+			t.Errorf("%s/%s Basis = %q, want %q", tc.provider, tc.model, got.Basis, tc.basis)
 		}
 		if got.CostPerMillion != 30 {
 			t.Errorf("%s/%s cost = %v, want 30 (5+25 from anthropic)", tc.provider, tc.model, got.CostPerMillion)
