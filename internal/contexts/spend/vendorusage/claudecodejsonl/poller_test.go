@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -203,3 +204,73 @@ func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) e
 	b.Publish(env)
 	return nil
 }
+
+// storeBus writes every envelope into a real event store, so a test sees
+// what the store keeps rather than what the poller tried to publish.
+type storeBus struct {
+	store *sqlite.Store
+}
+
+func (b storeBus) Publish(env *eventschema.Envelope) {
+	_ = b.store.Append(context.Background(), env)
+}
+func (b storeBus) PublishedCount() int64 { return 0 }
+func (b storeBus) PublishWait(ctx context.Context, env *eventschema.Envelope) error {
+	return b.store.Append(ctx, env)
+}
+func (b storeBus) DroppedCount() int64         { return 0 }
+func (b storeBus) Close(_ time.Duration) error { return nil }
+
+// A transcript that cleanup or a rewrite replaced with a longer file that
+// still holds turns already published is read again from its start. The
+// turns are older than the poller's in-memory seen-set horizon, so the
+// repeat is caught by the store: envelope IDs are deterministic per message,
+// and the store keeps the first row for an ID.
+func TestRewrittenTranscriptDedupesOnStoredEventIDs(t *testing.T) {
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "events.db"), sqlite.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	root := t.TempDir()
+	proj := filepath.Join(root, "proj")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(proj, "sess.jsonl")
+	if err := os.WriteFile(path, []byte(sampleTurn+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := NewPoller(storeBus{store: store}, PollerOptions{Root: root, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	p.scan(ctx, root)
+	// The same turn behind an unrelated line, so the head changes, then a
+	// second turn: the saved offset now points into different content.
+	rewritten := `{"type":"summary","summary":"rewritten"}` + "\n" + sampleTurn + "\n" + sampleTurnTwo + "\n"
+	if err := os.WriteFile(path, []byte(rewritten), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p.scan(ctx, root)
+	n, err := store.Count(ctx, sqlite.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Errorf("store holds %d events after the rewrite, want 2 (msg_a once, msg_b once)", n)
+	}
+}
+
+// DefaultRoot follows CLAUDE_CONFIG_DIR, Claude Code's own override.
+func TestDefaultRootHonorsClaudeConfigDir(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "/srv/tenant-a")
+	got, err := DefaultRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join("/srv/tenant-a", "projects"); got != want {
+		t.Errorf("DefaultRoot() = %q, want %q", got, want)
+	}
+}
+
+const sampleTurnTwo = `{"type":"assistant","timestamp":"2026-05-14T09:24:10.000Z","sessionId":"s1","message":{"id":"msg_b","model":"claude-opus-4-7","usage":{"input_tokens":12,"output_tokens":34,"cache_read_input_tokens":1100,"cache_creation_input_tokens":0}}}`

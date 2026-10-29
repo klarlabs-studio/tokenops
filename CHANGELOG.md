@@ -10,14 +10,15 @@
   - Codex's home is `CODEX_HOME` when that is set, and `~/.codex` otherwise. TokenOps always used `~/.codex`, so with `CODEX_HOME` set it read the wrong sessions and config, and its hooks, setup and doctor hints pointed at the wrong place. Every reader, the origin probe and the setup hints now follow `CODEX_HOME`.
   - Not yet: compressed rollouts under `archived_sessions/` are not read. Codex compresses archived sessions too, so a compressed archived session is still skipped; that is a follow-up.
   - A token_count record in a shape TokenOps does not recognise was skipped silently. The Codex JSONL reader now reports it in its source health, so `tokenops status` says the reader is failing rather than quiet.
+- **claude code:** TokenOps follows `CLAUDE_CONFIG_DIR` and managed settings. Claude Code keeps its settings, transcripts, credentials and `CLAUDE.md` under `CLAUDE_CONFIG_DIR` when it is set (default `~/.claude`), but TokenOps read `~/.claude` in about twenty places: the transcript reader, the statusline and stats readers, the hooks and statusline installers, the origin freshness probe, the instruction-file checkup and the setup hints. An operator who moved Claude Code's directory saw no sessions and wrong "not installed" answers. Every reader now resolves the directory the way Claude Code does: the environment first, then `env.CLAUDE_CONFIG_DIR` in managed settings, then in the user's `settings.json`, then `~/.claude`.
+  - managed settings are read as Claude Code reads them: `managed-settings.json` and the `managed-settings.d/` drop-ins in the system directory (macOS, Linux and WSL, Windows), with the drop-ins overriding the file in alphabetical order and both overriding the user's `settings.json`. TokenOps had read only the one file on macOS and Linux, and it also read a `settings.local.json` in the user directory, which Claude Code does not read.
+  - `tokenops hooks status` counts a TokenOps hook wired in managed settings. It reported "no hooks wired" for an organisation that had deployed them, and that hook runs for every session.
+- **transcripts:** a Claude Code transcript that is rewritten is read again from its start. TokenOps resumed each transcript from the byte offset it had reached, and a file that was replaced by one of the same or a larger size (a transcript that was restored, moved in or rewritten under the same name) was read from that offset into the new content. Claude Code's `cleanupPeriodDays` deletes old transcripts whole; it does not rewrite them. Its first lines were skipped, or a line was cut in half. A transcript is now read from its start when its inode changes, when it is shorter than the offset, or when its first bytes change. The turns it still holds are not counted again: the event store keeps one row per turn ID.
+- **synthetic:** the request quota's reset time is read whether Synthetic sends it as `renewsAt`, the spelling its docs give, or as `renewAt`, which its quota API has been seen to send. Before, a quota sent as `renewAt` showed its usage with no reset time. A quota with neither field still shows its usage, with the reset unknown.
 
 ### Security
 
 - **dependencies:** golang.org/x/net v0.62.0, which fixes GO-2026-6860 and GO-2026-6866 (code scanning VULN-001). The affected HTML packages are not linked into the shipped binaries, so no user-visible behaviour changes.
-
-### Fixed
-
-- **synthetic:** the request quota's reset time is read whether Synthetic sends it as `renewsAt`, the spelling its docs give, or as `renewAt`, which its quota API has been seen to send. Before, a quota sent as `renewAt` showed its usage with no reset time. A quota with neither field still shows its usage, with the reset unknown.
 
 ## 0.114.3 - 2026-10-28
 

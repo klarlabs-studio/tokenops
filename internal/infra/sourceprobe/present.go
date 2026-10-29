@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexhome"
 )
 
@@ -18,7 +19,7 @@ func PresentLocalReaders() []string {
 	}
 	claudeDir := os.Getenv("CLAUDE_CONFIG_DIR")
 	if claudeDir == "" {
-		claudeDir = filepath.Join(home, ".claude")
+		claudeDir = claudehome.Dir()
 	}
 	codexDir, _ := codexhome.Dir()
 	geminiDir := filepath.Join(home, ".gemini")

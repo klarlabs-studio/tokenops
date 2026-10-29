@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 // Confidence describes how sure the detector is. The init wizard
@@ -123,7 +125,7 @@ func detectClaudeCode(env Env) []Detection {
 	if err != nil {
 		return nil
 	}
-	candidate := filepath.Join(home, ".claude")
+	candidate := claudehome.Resolve(env.Getenv, home)
 	if info, err := env.Stat(candidate); err == nil && info.IsDir() {
 		// Claude Code uses ~/.claude. Tier (Max 5x / Max 20x / Pro)
 		// cannot be inferred without an API call — the wizard must

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/infra/scanscope"
 )
 
@@ -70,11 +71,7 @@ func (o ExtractOptions) cache() *TranscriptCache {
 
 // DefaultRoot returns the conventional Claude Code projects directory.
 func DefaultRoot() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("agentdx: resolve home: %w", err)
-	}
-	return filepath.Join(home, ".claude", "projects"), nil
+	return claudehome.Join("projects"), nil
 }
 
 // Extract walks the transcripts and flattens them into Records.

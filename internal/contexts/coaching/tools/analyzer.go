@@ -26,6 +26,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 // ExtractOptions mirrors prompts.ExtractOptions so callers can keep
@@ -95,11 +97,7 @@ const scanBufSize = 4 * 1024 * 1024
 func Extract(opts ExtractOptions) ([]ToolEvent, error) {
 	root := opts.Root
 	if root == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, err
-		}
-		root = filepath.Join(home, ".claude", "projects")
+		root = claudehome.Join("projects")
 	}
 	var out []ToolEvent
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {

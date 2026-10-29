@@ -3,7 +3,8 @@ package prefixlint
 import (
 	"os"
 	"path/filepath"
-	"runtime"
+
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 // Sources are the places the lint reads. Every path is explicit so a test
@@ -43,25 +44,17 @@ func UserSources() Sources {
 	home, _ := os.UserHomeDir()
 	s := Sources{Home: home}
 	if home != "" {
-		s.ClaudeDir = filepath.Join(home, ".claude")
 		s.CodexDir = filepath.Join(home, ".codex")
 		s.OpencodeDir = filepath.Join(home, ".config", "opencode")
 	}
-	if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
-		s.ClaudeDir = d
-	}
+	s.ClaudeDir = claudehome.Resolve(os.Getenv, home)
 	if d := os.Getenv("CODEX_HOME"); d != "" {
 		s.CodexDir = d
 	}
 	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
 		s.OpencodeDir = filepath.Join(d, "opencode")
 	}
-	switch runtime.GOOS {
-	case "darwin":
-		s.ManagedSettings = "/Library/Application Support/ClaudeCode/managed-settings.json"
-	case "linux":
-		s.ManagedSettings = "/etc/claude-code/managed-settings.json"
-	}
+	s.ManagedSettings = filepath.Join(claudehome.ManagedDir, "managed-settings.json")
 	return s
 }
 

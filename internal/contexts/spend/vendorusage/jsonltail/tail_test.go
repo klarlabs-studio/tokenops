@@ -180,3 +180,49 @@ func TestReadLinesFinalReadsTheLastLine(t *testing.T) {
 		t.Errorf("got %v consuming %d bytes, want [a b] consuming 3", got, n)
 	}
 }
+
+// A file rewritten to a size past the saved offset is not a continuation:
+// its first bytes changed, so it is read again from the start. Resuming at
+// the old offset would read only the tail of the new content.
+func TestScanRereadsAFileRewrittenPastItsOffset(t *testing.T) {
+	f := newFixture(t)
+	f.write("aaaa\nbbbb\n")
+	f.scan()
+	f.write("cccc\ndddd\neeee\n")
+	f.scan()
+	if got := strings.Join(f.texts(), ","); got != "aaaa,bbbb,cccc,dddd,eeee" {
+		t.Errorf("lines = %s, want the rewritten file read from its start", got)
+	}
+}
+
+// A replacement of the same size with a different first line is caught
+// by the content of the head, not by its size or the offset.
+func TestScanRereadsAFileWhoseHeadChangedAtTheSameSize(t *testing.T) {
+	f := newFixture(t)
+	f.write("aaaa\nbbbb\n")
+	f.scan()
+	f.write("cccc\ndddd\n")
+	f.scan()
+	if got := strings.Join(f.texts(), ","); got != "aaaa,bbbb,cccc,dddd" {
+		t.Errorf("lines = %s, want the replacement read from its start", got)
+	}
+}
+
+// A replaced file under a new inode is read from the start even when the
+// bytes at the head match what was read before.
+func TestScanRereadsAFileReplacedByANewInode(t *testing.T) {
+	f := newFixture(t)
+	f.write("aaaa\nbbbb\n")
+	f.scan()
+	tmp := f.path + ".new"
+	if err := os.WriteFile(tmp, []byte("aaaa\nbbbb\ncccc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmp, f.path); err != nil {
+		t.Fatal(err)
+	}
+	f.scan()
+	if got := strings.Join(f.texts(), ","); got != "aaaa,bbbb,aaaa,bbbb,cccc" {
+		t.Errorf("lines = %s, want the new file read from its start", got)
+	}
+}
