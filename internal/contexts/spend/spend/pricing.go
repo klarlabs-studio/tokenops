@@ -227,9 +227,50 @@ func (t Table) Lookup(provider eventschema.Provider, model string) (Rate, error)
 		if strings.HasSuffix(model, FreeVariantSuffix) {
 			return Rate{}, nil
 		}
+		// A reseller's model its own list does not price is valued at
+		// its vendor's list price, as the lists that do price it are.
+		if vendor, vendorModel, ok := resoldModel(provider, model); ok {
+			return t.Lookup(vendor, vendorModel)
+		}
 		return Rate{}, fmt.Errorf("%w: provider=%s model=%s", ErrUnknownModel, provider, model)
 	}
 	return bestRate, nil
+}
+
+// resellers are the providers that serve other vendors' models at those
+// vendors' list prices: models.dev's GitHub Copilot list prices each model
+// at its vendor's rate, so a model missing from it takes the vendor's.
+var resellers = map[eventschema.Provider]bool{eventschema.ProviderGitHub: true}
+
+// vendorFamilies names the vendor behind a model by its family prefix.
+var vendorFamilies = []struct {
+	prefix string
+	vendor eventschema.Provider
+}{
+	{"claude-", eventschema.ProviderAnthropic},
+	{"gpt-", eventschema.ProviderOpenAI},
+	{"gemini-", eventschema.ProviderGemini},
+	{"grok-", eventschema.ProviderXAI},
+}
+
+// resoldModel is the vendor and the vendor's own ID of a model a reseller
+// serves; false for a provider that is not a reseller or a model of no
+// known family. Copilot writes Claude versions with dots
+// ("claude-opus-4.6") where Anthropic writes dashes ("claude-opus-4-6").
+func resoldModel(provider eventschema.Provider, model string) (eventschema.Provider, string, bool) {
+	if !resellers[provider] {
+		return "", "", false
+	}
+	for _, f := range vendorFamilies {
+		if !strings.HasPrefix(model, f.prefix) {
+			continue
+		}
+		if f.vendor == eventschema.ProviderAnthropic {
+			model = strings.ReplaceAll(model, ".", "-")
+		}
+		return f.vendor, model, true
+	}
+	return "", "", false
 }
 
 // FreeVariantSuffix marks a router's free tier of a model.
