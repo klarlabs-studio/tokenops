@@ -16,7 +16,7 @@ import (
 // spendExport serves the window's spend and usage as a FOCUS dataset, the
 // FinOps billing format, from the capability `tokenops spend export` uses:
 //
-//	GET /api/spend/export?format=focus&since=&until=&include_sources=
+//	GET /api/spend/export?format=focus&version=&since=&until=&include_sources=
 //
 // The plans in force come from the plan routes' configuration, when they
 // are mounted, and the plan history. Like every route it serves derived
@@ -26,7 +26,7 @@ func (s *Server) spendExport(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, fmt.Errorf("format %q is not supported; the export format is focus", f))
 		return
 	}
-	q := spending.FocusQuery{IncludeSources: includeSources(r), Now: time.Now()}
+	q := spending.FocusQuery{IncludeSources: includeSources(r), Now: time.Now(), Version: r.URL.Query().Get("version")}
 	if r.URL.Query().Get("since") != "" || r.URL.Query().Get("until") != "" {
 		since, until, err := sinceUntil(r)
 		if err != nil {
@@ -53,7 +53,7 @@ func (s *Server) spendExport(w http.ResponseWriter, r *http.Request) {
 		q.History = h
 	}
 	d, err := spending.FocusExport(r.Context(), s.analytics.aggregator, q)
-	if errors.Is(err, spending.ErrEmptyWindow) {
+	if errors.Is(err, spending.ErrEmptyWindow) || errors.Is(err, spending.ErrUnsupportedFocusVersion) {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}

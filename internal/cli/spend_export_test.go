@@ -56,19 +56,39 @@ func seedFocusExportFixture(t *testing.T) (dbPath, cfgPath string) {
 }
 
 // TestSpendExportFocusGolden pins `tokenops spend export --format focus`
-// end to end: the store and the plan binding in, FOCUS CSV out.
+// end to end, in each FOCUS version: the store and the plan binding in,
+// FOCUS CSV out.
 func TestSpendExportFocusGolden(t *testing.T) {
-	db, cfg := seedFocusExportFixture(t)
-	out, err := executeRoot(t, "spend", "export", "--format", "focus", "--db", db, "--config", cfg,
-		"--since", "2026-09-01T00:00:00Z", "--until", "2026-09-03T00:00:00Z")
-	if err != nil {
-		t.Fatalf("export: %v", err)
+	for _, tc := range []struct{ version, golden string }{
+		{"", "spend/focus-1.4.csv"},
+		{"1.2", "spend/focus.csv"},
+	} {
+		t.Run(tc.golden, func(t *testing.T) {
+			db, cfg := seedFocusExportFixture(t)
+			args := []string{"spend", "export", "--format", "focus", "--db", db, "--config", cfg,
+				"--since", "2026-09-01T00:00:00Z", "--until", "2026-09-03T00:00:00Z"}
+			if tc.version != "" {
+				args = append(args, "--focus-version", tc.version)
+			}
+			out, err := executeRoot(t, args...)
+			if err != nil {
+				t.Fatalf("export: %v", err)
+			}
+			assertGolden(t, tc.golden, out)
+			for _, private := range []string{"session-secret-title", "private-repo", "sha256:"} {
+				if strings.Contains(out, private) {
+					t.Errorf("the export carries %q; only derived fields may leave", private)
+				}
+			}
+		})
 	}
-	assertGolden(t, "spend/focus.csv", out)
-	for _, private := range []string{"session-secret-title", "private-repo", "sha256:"} {
-		if strings.Contains(out, private) {
-			t.Errorf("the export carries %q; only derived fields may leave", private)
-		}
+}
+
+func TestSpendExportRefusesAnUnknownVersion(t *testing.T) {
+	db, cfg := seedFocusExportFixture(t)
+	_, err := executeRoot(t, "spend", "export", "--focus-version", "1.3", "--db", db, "--config", cfg)
+	if err == nil || !strings.Contains(err.Error(), "1.4") {
+		t.Fatalf("want an error naming the supported versions, got %v", err)
 	}
 }
 
@@ -87,7 +107,7 @@ func TestSpendExportWritesTheFileItIsGiven(t *testing.T) {
 	if !strings.HasPrefix(string(data), "BilledCost,BillingAccountId,") {
 		t.Errorf("the file is not the FOCUS CSV:\n%s", data)
 	}
-	if !strings.Contains(out, "wrote "+path) || !strings.Contains(out, "FOCUS 1.2") {
+	if !strings.Contains(out, "wrote "+path) || !strings.Contains(out, "FOCUS 1.4") {
 		t.Errorf("say where it went and what it is:\n%s", out)
 	}
 }

@@ -98,7 +98,8 @@ func (o oracleStore) usageBuckets(ctx context.Context, f analytics.Filter, width
 			groupKey       string
 			r              analytics.Row
 		)
-		if err := rows.Scan(&bucketStartSec, &groupKey, &r.Requests, &r.InputTokens, &r.OutputTokens, &r.TotalTokens, &r.CostUSD); err != nil {
+		if err := rows.Scan(&bucketStartSec, &groupKey, &r.Requests, &r.InputTokens, &r.OutputTokens, &r.TotalTokens, &r.CostUSD,
+			&r.CacheReadTokens, &r.CacheWriteTokens, &r.CacheWrite1hTokens); err != nil {
 			return nil, err
 		}
 		r.BucketStart = time.Unix(bucketStartSec, 0).UTC()
@@ -123,6 +124,11 @@ func oracleUsageBucketsQuery(f analytics.Filter, widthSec int64, group analytics
 		"COALESCE(SUM(output_tokens), 0) AS output_tokens",
 		"COALESCE(SUM(total_tokens), 0)  AS total_tokens",
 		"COALESCE(SUM(cost_usd), 0)      AS cost_usd",
+		// The cache sums came after the single read; they are summed here
+		// so the oracle answers the same Row.
+		"COALESCE(SUM(COALESCE("+cacheReadExpr+", 0)), 0)",
+		"COALESCE(SUM(COALESCE("+cacheWriteExpr+", 0)), 0)",
+		"COALESCE(SUM(COALESCE("+cacheWrite1hExpr+", 0)), 0)",
 	)
 	q := "SELECT " + strings.Join(selectCols, ", ") + " FROM events"
 	if len(conds) > 0 {

@@ -130,7 +130,13 @@ type Row struct {
 	InputTokens  int64
 	OutputTokens int64
 	TotalTokens  int64
-	CostUSD      float64
+	// CacheReadTokens, CacheWriteTokens and CacheWrite1hTokens are the
+	// cache portions of InputTokens, as SessionTurn splits them. Only
+	// BucketUsage fills them; they stay out of the spend reports' JSON.
+	CacheReadTokens    int64 `json:"-"`
+	CacheWriteTokens   int64 `json:"-"`
+	CacheWrite1hTokens int64 `json:"-"`
+	CostUSD            float64
 	// APIEquivalentUSD is what this row would have billed at API list
 	// prices: CostUSD plus a list-price recompute of its plan-included
 	// and trial traffic (which is $0 real). For metered rows it equals

@@ -239,7 +239,7 @@ func sampleDataset() ([]focus.Usage, []focus.Purchase) {
 func TestExportConformsToFOCUS12(t *testing.T) {
 	usage, purchases := sampleDataset()
 	var buf bytes.Buffer
-	if err := focus.WriteCSV(&buf, focus.Build(usage, purchases)); err != nil {
+	if err := focus.V1_2.WriteCSV(&buf, focus.V1_2.Build(usage, purchases)); err != nil {
 		t.Fatal(err)
 	}
 	for _, v := range validate(t, buf.Bytes()) {
@@ -250,7 +250,7 @@ func TestExportConformsToFOCUS12(t *testing.T) {
 // An empty window is still a dataset: the header names every column.
 func TestEmptyExportStillHasTheMandatoryHeader(t *testing.T) {
 	var buf bytes.Buffer
-	if err := focus.WriteCSV(&buf, nil); err != nil {
+	if err := focus.V1_2.WriteCSV(&buf, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, v := range validate(t, buf.Bytes()) {
@@ -280,14 +280,14 @@ func TestTheConformanceCheckRejectsViolations(t *testing.T) {
 // cells.
 func headerOf(t *testing.T) string {
 	t.Helper()
-	return joinCSV(t, focus.Columns)
+	return joinCSV(t, focus.V1_2.Columns)
 }
 
 func rowWith(t *testing.T, change map[string]string) string {
 	t.Helper()
 	usage, _ := sampleDataset()
-	rec := focus.Build(usage[2:3], nil)[0].Record()
-	for i, name := range focus.Columns {
+	rec := focus.V1_2.Record(focus.V1_2.Build(usage[2:3], nil)[0])
+	for i, name := range focus.V1_2.Columns {
 		if v, ok := change[name]; ok {
 			rec[i] = v
 		}

@@ -30,7 +30,7 @@ func TestSpendExportRouteServesFOCUSCSV(t *testing.T) {
 	if cd := resp.Header.Get("Content-Disposition"); !strings.Contains(cd, "attachment") || !strings.Contains(cd, ".csv") {
 		t.Errorf("Content-Disposition %q", cd)
 	}
-	if v := resp.Header.Get("X-Focus-Version"); v != "1.2" {
+	if v := resp.Header.Get("X-Focus-Version"); v != "1.4" {
 		t.Errorf("X-Focus-Version %q", v)
 	}
 	records, err := csv.NewReader(strings.NewReader(string(body))).ReadAll()
@@ -46,7 +46,16 @@ func TestSpendExportRouteServesFOCUSCSV(t *testing.T) {
 		}
 	}
 
-	for _, bad := range []string{"/api/spend/export?format=parquet", "/api/spend/export?since=yesterday"} {
+	old, err := http.Get(base + "/api/spend/export?version=1.2&since=72h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = old.Body.Close()
+	if v := old.Header.Get("X-Focus-Version"); old.StatusCode != http.StatusOK || v != "1.2" {
+		t.Errorf("?version=1.2: status %d, X-Focus-Version %q", old.StatusCode, v)
+	}
+
+	for _, bad := range []string{"/api/spend/export?format=parquet", "/api/spend/export?since=yesterday", "/api/spend/export?version=1.3"} {
 		resp, err := http.Get(base + bad)
 		if err != nil {
 			t.Fatal(err)

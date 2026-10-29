@@ -82,7 +82,7 @@ operator's instruction text and local file paths.
 | `GET /api/spend/waste` | Avoidable usage by waste class, each token in one class, in API-equivalent dollars and plan-window share (`?since=`; the last 7 days when omitted), what was realized beside it, and the guardrail to switch on next |
 | `GET /api/spend/burn-rate` | Usage over the last hours |
 | `GET /api/spend/tags` | Spend per project, client or cost centre, tagged on the daemon by your allocation rules (`?by=project\|client\|cost_center&since=&until=`; project over the last 30 days when omitted), with the untagged work kept apart |
-| `GET /api/spend/export` | Spend and usage as FOCUS 1.2 CSV for FinOps tools (`?since=&until=`; the month so far when omitted) |
+| `GET /api/spend/export` | Spend and usage as FOCUS 1.4 CSV for FinOps tools (`?since=&until=`; the month so far when omitted; `?version=1.2` for FOCUS 1.2) |
 | `GET /api/scorecard` | The wedge KPI scorecard |
 | `GET /api/pricing` | The rate card TokenOps costs with |
 | `GET /api/workflows` | Recorded workflows |

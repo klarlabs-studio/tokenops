@@ -6820,6 +6820,15 @@
             }
           },
           {
+            "description": "FOCUS version, 1.4 or 1.2; 1.4 when omitted",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "RFC 3339 time or a duration such as 720h, floored to its UTC day; the start of this month when omitted",
             "in": "query",
             "name": "since",
@@ -6865,7 +6874,7 @@
             "description": "Missing or wrong API token"
           }
         },
-        "summary": "Spend and usage as a FOCUS 1.2 dataset (CSV) for FinOps tools: plan fees as purchases, plan-covered usage billed 0 at its API list price"
+        "summary": "Spend and usage as a FOCUS dataset (CSV) for FinOps tools: plan fees as purchases, usage per kind of token at its API list rate, TokenOps' estimate in x_EstimatedCost"
       }
     },
     "/api/spend/forecast": {
