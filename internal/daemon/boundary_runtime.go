@@ -31,7 +31,7 @@ const budgetFiguresEvery = 5
 // minute while a rule, local or the organisation's, compares one of them;
 // otherwise, with budgets configured, it measures the budget windows every
 // five minutes for the coach and the glance.
-func startBoundaryFiguresRuntime(cfg config.Config, glance func() headroom.Deps, source budgets.Source, sup *lifecycle.Supervisor, logger *slog.Logger) {
+func startBoundaryFiguresRuntime(cfg config.Config, glance func() headroom.Deps, bill budgets.Bill, source budgets.Source, sup *lifecycle.Supervisor, logger *slog.Logger) {
 	if sup == nil {
 		return
 	}
@@ -50,7 +50,7 @@ func startBoundaryFiguresRuntime(cfg config.Config, glance func() headroom.Deps,
 		now := time.Now().UTC()
 		var readings []budgets.Reading
 		if hasBudgets {
-			readings = budgets.Read(ctx, source, limits, now)
+			readings = budgets.ReadBilled(ctx, source, bill, limits, now)
 		}
 		used := budgets.UsedPctOf(readings)
 		fig := bcap.Figures(nil, used, now)

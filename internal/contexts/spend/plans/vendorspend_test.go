@@ -162,7 +162,8 @@ func TestVendorSpendOverATrailingPeriod(t *testing.T) {
 		t.Fatalf("vendor spend = %+v", v)
 	}
 	report := computeSpendHeadroom(Plan{Name: "payg"}, HeadroomInputs{VendorSpend: v, Now: vsNow})
-	if report.SpendUSD != 1.76 || report.SpendSource != "vendor" || report.Note != "spend is the vendor's figure for the last 30 days; no spend limit is set on the account, so there is no percentage" {
+	if report.SpendUSD != 1.76 || report.SpendSource != "vendor" || report.SpendTrailingDays != 30 ||
+		report.Note != "spend is the vendor's figure for the last 30 days; no spend limit is set on the account, so there is no percentage" {
 		t.Errorf("report %+v", report)
 	}
 }
