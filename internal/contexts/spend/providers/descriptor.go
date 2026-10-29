@@ -62,6 +62,11 @@ type Descriptor struct {
 	// listed at $0, is not one: plan turns are valued at the vendor's
 	// pay-as-you-go rate.
 	ModelsDev []string
+	// ModelsDevZeroIsFree says a model this provider's models.dev listing
+	// prices at $0 is a free model the provider offers, not a price
+	// missing: opencode Zen lists its free models, Big Pickle among them,
+	// that way. Elsewhere only a model named free is taken as free at $0.
+	ModelsDevZeroIsFree bool
 	// LiteLLMGateway are the LiteLLM provider IDs that list this gateway's
 	// models under its account namespace ("fireworks_ai/accounts/fireworks/
 	// models/kimi-k3"). Their rates fill in the models models.dev does not
