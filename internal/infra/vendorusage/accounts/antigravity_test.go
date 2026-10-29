@@ -197,3 +197,36 @@ func TestAntigravityGroupTitles(t *testing.T) {
 		}
 	}
 }
+
+// Installed but unreadable is an error that says why and what to do, and
+// keeps its ErrAuth or other cause, never an empty reading.
+func TestAntigravityUnreadableSaysWhyAndHowToFixIt(t *testing.T) {
+	port := antigravityLS(t, "", "")
+	for _, tc := range []struct {
+		name string
+		r    Antigravity
+		tok  string
+		want []string
+		auth bool
+	}{
+		{"refused", antigravityReader(port), agToken("other"),
+			[]string{"installed", "cannot be read", "refused", "Fix:", "keep the Antigravity app open"}, true},
+		{"not listening", Antigravity{Ports: func(context.Context, int) ([]int, error) { return nil, nil }}, agToken("token"),
+			[]string{"installed", "cannot be read", "not listening", "Fix:"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.r.ReadAppLogin(context.Background(), tc.tok)
+			if err == nil {
+				t.Fatalf("read %+v with no error; an unreadable quota must not look like a reading", got)
+			}
+			if errors.Is(err, usage.ErrAuth) != tc.auth {
+				t.Errorf("ErrAuth = %v, want %v: %v", errors.Is(err, usage.ErrAuth), tc.auth, err)
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q lacks %q", err, want)
+				}
+			}
+		})
+	}
+}

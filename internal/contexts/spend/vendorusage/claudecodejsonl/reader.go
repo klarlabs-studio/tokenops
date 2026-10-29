@@ -41,6 +41,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/jsonltail"
 )
 
@@ -108,11 +109,7 @@ type rawLine struct {
 // DefaultRoot returns the conventional Claude Code projects directory
 // (~/.claude/projects). Operators may override via the config block.
 func DefaultRoot() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
-	}
-	return filepath.Join(home, ".claude", "projects"), nil
+	return claudehome.Join("projects"), nil
 }
 
 // FindSessionFiles globs every *.jsonl under root (recursive, one

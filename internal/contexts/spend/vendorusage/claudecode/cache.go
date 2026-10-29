@@ -27,8 +27,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 // StatsCache is the subset of the Claude Code cache TokenOps reads.
@@ -83,11 +84,7 @@ type Model struct {
 // CLAUDE_HOME). Empty home → an error so the caller surfaces a clear
 // hint instead of silently reading from "/stats-cache.json".
 func DefaultPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
-	}
-	return filepath.Join(home, ".claude", "stats-cache.json"), nil
+	return claudehome.Join("stats-cache.json"), nil
 }
 
 // Read parses the cache at path. Returns os.ErrNotExist when the file

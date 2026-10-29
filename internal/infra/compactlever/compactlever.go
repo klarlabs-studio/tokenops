@@ -35,6 +35,8 @@ import (
 	"slices"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/claudehome"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexhome"
 	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
 )
 
@@ -114,9 +116,13 @@ func DefaultPaths() (Paths, error) {
 	// their files under the home directory.
 	configHome := envOr("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	cacheHome := envOr("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+	codexDir, err := codexhome.Dir()
+	if err != nil {
+		return Paths{}, err
+	}
 	return Paths{
-		ClaudeSettings: filepath.Join(home, ".claude", "settings.json"),
-		CodexConfig:    filepath.Join(envOr("CODEX_HOME", filepath.Join(home, ".codex")), "config.toml"),
+		ClaudeSettings: claudehome.Join("settings.json"),
+		CodexConfig:    filepath.Join(codexDir, "config.toml"),
 		OpencodeConfig: filepath.Join(configHome, "opencode", "opencode.json"),
 		OpencodeModels: filepath.Join(cacheHome, "opencode", "models.json"),
 		State:          filepath.Join(home, ".tokenops", "coach", "compaction.json"),
