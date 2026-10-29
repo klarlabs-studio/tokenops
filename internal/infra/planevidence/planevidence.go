@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexhome"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 )
 
@@ -44,7 +45,7 @@ func All(home string) []Evidence {
 	if e, ok := Claude(home); ok {
 		out = append(out, e)
 	}
-	if e, ok := Codex(filepath.Join(home, ".codex", "sessions")); ok {
+	if e, ok := Codex(filepath.Join(codexhome.In(home), "sessions")); ok {
 		out = append(out, e)
 	}
 	return out

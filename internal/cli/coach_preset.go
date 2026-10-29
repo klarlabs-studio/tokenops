@@ -14,8 +14,10 @@ import (
 
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
+	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
 )
 
 func newCoachPresetCmd() *cobra.Command {
@@ -178,9 +180,13 @@ func clientInstalled(client string) bool {
 	if err != nil {
 		return false
 	}
+	codexDir, err := codexsettings.Home()
+	if err != nil {
+		return false
+	}
 	dir := map[string]string{
-		hookClientClaudeCode: filepath.Join(home, ".claude"),
-		hookClientCodex:      filepath.Join(home, ".codex"),
+		hookClientClaudeCode: claudehome.Dir(),
+		hookClientCodex:      codexDir,
 		hookClientCursor:     filepath.Join(home, ".cursor"),
 	}[client]
 	if client == hookClientOpencode {

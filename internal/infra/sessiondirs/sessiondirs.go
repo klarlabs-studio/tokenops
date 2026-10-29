@@ -14,6 +14,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexrollout"
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
 	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 )
@@ -119,7 +120,7 @@ func claudeDir(path string) (string, Dir, bool) {
 
 // codexDir reads a Codex rollout's session_meta line.
 func codexDir(path string) (string, Dir, bool) {
-	f, err := os.Open(path) //nolint:gosec // a rollout under Codex's sessions directory
+	f, err := codexrollout.Open(path)
 	if err != nil {
 		return "", Dir{}, false
 	}

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	oauth "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
 	"go.klarlabs.de/tokenops/internal/infra/keychain"
 )
@@ -108,7 +109,7 @@ func runCommand(ctx context.Context, name string, args ...string) ([]byte, error
 // read quietly unless prompting is wanted: only a setup command the
 // operator ran prompts.
 func Stores(home string, useKeychain, prompting bool) []oauth.Store {
-	out := []oauth.Store{FileStore{Path: filepath.Join(home, ".claude", ".credentials.json")}}
+	out := []oauth.Store{FileStore{Path: filepath.Join(claudehome.Resolve(os.Getenv, home), ".credentials.json")}}
 	if useKeychain {
 		out = append(out, KeychainStore{Quiet: !prompting})
 	}
