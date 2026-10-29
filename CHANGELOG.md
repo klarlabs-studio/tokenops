@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.114.5 - 2026-10-29
+
 ### Fixed
 
 - **budgets:** a monthly budget on one provider's bill counts that provider's own figure for your spend this month when it reports one (Fireworks' usage limits), instead of an estimate from the price list. The estimate leaves out every model without a list price, so a Fireworks budget could read a few dollars while the limit was already spent, and its alert never fired. Budgets narrowed by workflow, agent or tag, on tokens, or over a day or a week keep the estimate; an account-wide figure or a trailing 30 days is not taken as your month.
