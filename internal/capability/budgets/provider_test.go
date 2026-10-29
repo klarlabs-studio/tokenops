@@ -118,3 +118,76 @@ func TestAProviderBudgetIsForecastFromItsOwnHistory(t *testing.T) {
 		t.Errorf("forecast history asked %+v; want fireworks only", src.daily)
 	}
 }
+
+// fireworksBill is a provider reporting the operator's own spend this
+// month: a bill of $130 against the $40 the price list could cost.
+func fireworksBill(_ context.Context, provider string, _ time.Time) (float64, bool) {
+	if provider == "fireworks" {
+		return 130, true
+	}
+	return 0, false
+}
+
+// A monthly money budget on one provider counts that provider's own bill
+// when it reports one: the price list cannot cost every model it routes
+// to, so the estimate can read a fraction of a limit already spent.
+func TestAMonthlyProviderBudgetCountsTheProvidersBill(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	limits := []budget.Limit{
+		{Name: "fw", ID: "fw:monthly", Window: budget.WindowMonthly, LimitUSD: 100, Provider: "fireworks"},
+		{Name: "claude", ID: "claude:monthly", Window: budget.WindowMonthly, LimitUSD: 1000, Provider: "anthropic"},
+	}
+	rs := ReadBilled(context.Background(), newBilled(), fireworksBill, limits, now)
+	if len(rs) != 2 {
+		t.Fatalf("readings = %+v", rs)
+	}
+	if r := rs[0]; r.Used != 130 || r.UsedPct != 130 || r.Source != SourceVendor {
+		t.Errorf("fireworks reading = %+v; want the bill's 130, sourced from the vendor", r)
+	}
+	if r := rs[1]; r.Used != 500 || r.Source != "" {
+		t.Errorf("anthropic reading = %+v; a provider without a bill keeps the estimate", r)
+	}
+}
+
+// Only a budget that counts what the bill counts takes it: money spent
+// with the provider this calendar month, unnarrowed.
+func TestANarrowedBudgetKeepsTheEstimate(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	base := budget.Limit{Name: "fw", Window: budget.WindowMonthly, LimitUSD: 100, LimitTokens: 5000, Provider: "fireworks"}
+	for name, mut := range map[string]func(*budget.Limit){
+		"daily":          func(l *budget.Limit) { l.Window = budget.WindowDaily },
+		"weekly":         func(l *budget.Limit) { l.Window = budget.WindowWeekly },
+		"tokens":         func(l *budget.Limit) { l.Basis = budget.BasisTokens },
+		"equivalent":     func(l *budget.Limit) { l.Basis = budget.BasisEquivalent },
+		"tag":            func(l *budget.Limit) { l.Tag = "client=acme-test" },
+		"workflow":       func(l *budget.Limit) { l.WorkflowID = "wf" },
+		"agent":          func(l *budget.Limit) { l.AgentID = "ag" },
+		"every provider": func(l *budget.Limit) { l.Provider = "" },
+	} {
+		l := base
+		mut(&l)
+		rs := ReadBilled(context.Background(), newBilled(), fireworksBill, []budget.Limit{l}, now)
+		if len(rs) != 1 || rs[0].Source == SourceVendor || rs[0].Used == 130 {
+			t.Errorf("%s: readings = %+v; want the estimate", name, rs)
+		}
+	}
+}
+
+// The watcher alerts on the bill: a budget the provider says is spent is
+// exceeded, and it is not forecast from the estimate's history.
+func TestTheWatcherAlertsOnTheBill(t *testing.T) {
+	src := newBilled()
+	pub := &events{}
+	l := budget.Limit{Name: "fw", Window: budget.WindowMonthly, LimitUSD: 100, Provider: "fireworks"}
+	w := &Watcher{Source: src, Limits: []budget.Limit{l}, Publish: pub, Bill: fireworksBill}
+	r := w.Tick(context.Background(), time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC))
+	if len(pub.got) != 1 {
+		t.Errorf("published %d budget.exceeded events; want 1 for the bill's 130 of 100", len(pub.got))
+	}
+	if len(r.Alerts) == 0 {
+		t.Errorf("no alert for a budget the bill has spent")
+	}
+	if len(src.daily) != 0 {
+		t.Errorf("forecast asked %+v; a billed budget is not forecast from the estimate", src.daily)
+	}
+}

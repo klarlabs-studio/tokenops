@@ -57,6 +57,10 @@ type HeadroomReport struct {
 	// <id>, all members"), so it is not read as the operator's own spend.
 	// Empty for the operator's own figures.
 	SpendScopeLabel string `json:"spend_scope_label,omitempty"`
+	// SpendTrailingDays is the trailing period a vendor's spend covers
+	// when it reports the last N days (xAI's 30) rather than this calendar
+	// month; 0 is the month.
+	SpendTrailingDays int `json:"spend_trailing_days,omitempty"`
 	// SpendScopeReason says, in one line, why an account-wide figure
 	// stands in for the operator's own: their user was not found, the
 	// lookup or their own read failed, or they have no cap.
@@ -426,9 +430,10 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 			until := v.BlockedUntil
 			report.BlockedUntil = &until
 		}
+		report.SpendTrailingDays = int(v.UsedPeriod / (24 * time.Hour))
 		if v.LimitUSD <= 0 {
 			report.Note = "no spend limit is set on the account, so there is no percentage"
-			if days := int(v.UsedPeriod / (24 * time.Hour)); days > 0 {
+			if days := report.SpendTrailingDays; days > 0 {
 				report.Note = fmt.Sprintf("spend is the vendor's figure for the last %d days; ", days) + report.Note
 			}
 			return report

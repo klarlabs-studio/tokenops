@@ -40,7 +40,10 @@ type eventRuntime struct {
 	Bus             *events.AsyncBus
 	AuditSubscriber *auditlog.Subscriber
 	ProxyOptions    []proxy.Option
-	detach          func()
+	// Bills is the providers' own monthly figures for the budget
+	// runtimes; nil without storage.
+	Bills  budgets.Bill
+	detach func()
 }
 
 // initializeEventRuntime opens persistence (when enabled), migrates legacy
@@ -117,7 +120,9 @@ func initializeEventRuntime(
 	if components.Aggregator != nil {
 		budgetSource = taggedBudgetSource(cfg, components.Aggregator)
 	}
-	startBoundaryFiguresRuntime(cfg, plansDeps(cfg, glance, components.Spend), budgetSource, sup, logger)
+	deps := plansDeps(cfg, glance, components.Spend)
+	rt.Bills = newVendorBills(deps).Bill
+	startBoundaryFiguresRuntime(cfg, deps, rt.Bills, budgetSource, sup, logger)
 
 	// Plan stamping ensures all sources inherit the plan_included contract.
 	rt.Bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{

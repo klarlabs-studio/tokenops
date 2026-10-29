@@ -337,10 +337,13 @@ func scopeNote(r plans.HeadroomReport) string {
 
 // spendTitle names a spend limit's bar. An account-wide figure (every
 // member of an organisation together) is the account's spend, not the
-// operator's extra usage.
+// operator's extra usage; on pay as you go the limit is the whole plan.
 func spendTitle(r plans.HeadroomReport) string {
-	if r.SpendScope == "account" {
+	switch {
+	case r.SpendScope == "account":
 		return "Account spend"
+	case r.PlanName == plans.PayAsYouGo:
+		return "Monthly spend limit"
 	}
 	return "Extra usage"
 }
@@ -352,7 +355,8 @@ func details(r plans.HeadroomReport, cost *spending.ProviderCost, late bool, use
 		if u.UtilizationPct != nil {
 			out = append(out, detail{"Plan used, 7d", fmt.Sprintf("%.0f%% of %s", *u.UtilizationPct, u.UtilizationWindow), porcelain})
 		}
-		if u.CoveragePct != nil {
+		// Pay as you go has no plan to carry tokens: the share is always 0.
+		if u.CoveragePct != nil && r.PlanName != plans.PayAsYouGo {
 			out = append(out, detail{"On the plan", fmt.Sprintf("%.0f%% of tokens", *u.CoveragePct), porcelain})
 		}
 	}

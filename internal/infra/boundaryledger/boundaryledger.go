@@ -574,6 +574,9 @@ type BudgetReading struct {
 	Used     float64 `json:"used"`
 	Limit    float64 `json:"limit"`
 	UsedPct  float64 `json:"used_pct"`
+	// Source is "vendor" when Used is the provider's own bill rather than
+	// TokenOps' estimate from the price list; empty for the estimate.
+	Source string `json:"source,omitempty"`
 	// WarnPct and CritPct are the window's alert thresholds, in percent.
 	WarnPct     float64   `json:"warn_pct"`
 	CritPct     float64   `json:"crit_pct"`

@@ -245,20 +245,30 @@
     main.appendChild(box);
   }
 
+  // What a budget does at its limit.
+  function budgetMode(b) {
+    if (b.rule && b.enforced) return "Hard: " + (b.require === "deny" ? "refuses" : "asks") + " at the limit";
+    if (b.rule) return "Hard, in shadow: stops nothing yet";
+    return "Soft: notifies";
+  }
+
   // The operator's own budgets on this provider's bill (budget set
   // --provider), each window as a meter: their limit, apart from any cap
-  // the provider sets on the account.
-  function providerBudgets(main, r, v) {
+  // the provider sets on the account. A monthly budget measured by the
+  // provider's own bill with the same limit as the provider's cap is that
+  // cap: it is not drawn twice, its mode goes under the cap's bar.
+  function providerBudgets(main, r, v, cap) {
     var all = (v.glance && v.glance.spend_budgets) || [];
     all.filter(function (b) { return b.provider === r.provider && b.limit > 0; }).forEach(function (b) {
+      if (cap && b.source === "vendor" && b.window === "monthly" && Math.abs(b.limit - r.spend_limit_usd) < 0.005) {
+        cap.appendChild(pair("metric-line", "Budget " + b.budget + " · " + budgetMode(b), ""));
+        return;
+      }
       var amt = b.basis === "tokens"
         ? tokens(b.used) + " of " + tokens(b.limit) + " tokens spent"
         : money(b.used) + " of " + money(b.limit) + " spent";
       var s = windowSection("Budget " + b.budget + " · " + b.window, b.used_pct, amt);
-      var mode = "Soft: notifies";
-      if (b.rule && b.enforced) mode = "Hard: " + (b.require === "deny" ? "refuses" : "asks") + " at the limit";
-      else if (b.rule) mode = "Hard, in shadow: stops nothing yet";
-      s.appendChild(pair("metric-line", mode, ""));
+      s.appendChild(pair("metric-line", budgetMode(b), ""));
       main.appendChild(s);
     });
   }
@@ -275,7 +285,10 @@
     if (u.utilization_pct != null) {
       grid.appendChild(stat("Plan used, 7 days", Math.round(u.utilization_pct) + "% of " + u.utilization_window));
     }
-    if (u.coverage_pct != null) grid.appendChild(stat("On the plan, 7 days", Math.round(u.coverage_pct) + "% of tokens"));
+    // Pay as you go has no plan to carry tokens: the share is always 0.
+    var covered = u.coverage_pct != null && r.plan_name !== "pay-as-you-go";
+    if (u.utilization_pct == null && !covered) return;
+    if (covered) grid.appendChild(stat("On the plan, 7 days", Math.round(u.coverage_pct) + "% of tokens"));
     box.appendChild(grid);
     main.appendChild(box);
   }
@@ -319,17 +332,21 @@
     // operator's own: it is titled and labelled as the account's.
     var whole = r.spend_scope === "account";
     var whose = whole && r.spend_scope_label ? " — " + r.spend_scope_label : "";
+    // On pay as you go the limit is the whole plan, not extra usage.
+    var cap = null;
     if (r.spend_limit_usd > 0) {
-      var s = windowSection(whole ? "Account spend" : "Extra usage", r.spend_pct,
+      var spendTitle = whole ? "Account spend" : r.plan_name === "pay-as-you-go" ? "Monthly spend limit" : "Extra usage";
+      var s = windowSection(spendTitle, r.spend_pct,
         money(r.spend_usd) + " of " + money(r.spend_limit_usd) + " this month" + whose);
       main.appendChild(s);
+      if (!whole && r.spend_source === "vendor") cap = s;
     } else if (r.spend_usd > 0) {
       main.appendChild(el("p", "plain", (whole ? "Account this month: " : "This month: ") + money(r.spend_usd) + ", no limit known" + whose));
     }
     if (r.balance_usd !== undefined && r.balance_usd !== null) {
       main.appendChild(el("p", "plain", money(r.balance_usd) + " credit left"));
     }
-    providerBudgets(main, r, v);
+    providerBudgets(main, r, v, cap);
     planUse(main, r, v);
     var c = v.costs && v.costs[r.provider];
     if (c) usage(main, r, c);
