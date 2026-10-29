@@ -64,7 +64,7 @@ archives:
       - LICENSE
       - README.md
   # The menu bar app is ad hoc signed, not notarized (there is no Developer
-  # ID); the cask's post-install hook clears its quarantine flag along with
+  # ID); the cask's install steps clear its quarantine flag along with
   # the binaries', and `tokenops menubar` installs it to ~/Applications.
   # tokenops-presence is the presence helper (ADR 0015), built with the app
   # on the macOS runner (scripts/build-presence-helper.sh), ad hoc signed,
@@ -147,35 +147,33 @@ homebrew_casks:
       `tokenops start` runs the pollers; the unit above keeps it alive.
 
       On macOS, `tokenops menubar` puts TokenOps in the menu bar.
+
+      A new release that changes the daemon's unit says so in its changelog;
+      after that upgrade, run `tokenops daemon install` once.
     hooks:
       post:
-        # The release archives are not notarized, so Gatekeeper quarantines both
-        # binaries on first run. A formula was never subject to this; a cask is,
-        # so without this neither tokenops nor tokenopsd will start.
+        # The release archives are not notarized, so Gatekeeper quarantines the
+        # binaries (and TokenOps.app and tokenops-presence in the same archive)
+        # on first run. A formula was never subject to this; a cask is, so
+        # without this none of them will start.
         #
-        # An upgrade replaces the binary under a daemon that keeps running the
-        # old one until restarted. Where the unit is installed, re-apply it:
-        # `daemon install` restarts an unchanged unit in place, or reloads a
-        # changed one. Operators used to be told to run it themselves, and on
-        # a running daemon it could stop the old one and fail to start the
-        # new. must_succeed: false — a daemon that will not come up is
-        # reported, but never fails the upgrade itself.
-        install: |
-          if OS.mac?
-            system_command "xattr", args: ["-dr", "com.apple.quarantine", staged_path]
-          end
-          unit = if OS.mac?
-            File.expand_path("~/Library/LaunchAgents/de.klarlabs.tokenops.plist")
-          else
-            File.expand_path("~/.config/systemd/user/tokenops.service")
-          end
-          bin = "#{HOMEBREW_PREFIX}/bin/tokenops"
-          if File.exist?(unit)
-            system_command bin, args: ["daemon", "install", "--bin", bin], print_stdout: true, print_stderr: true, must_succeed: false
-          end
-          # A menu bar app installed with `tokenops menubar` lives in
-          # ~/Applications; replace it with this version's and restart it if
-          # it was running. It does nothing where it was never installed.
-          if OS.mac?
-            system_command bin, args: ["menubar", "--refresh"], print_stdout: true, print_stderr: true, must_succeed: false
+        # Homebrew runs install steps sandboxed, with a fake HOME and no
+        # localhost, so nothing in them can reach the real ~/Library, launchd
+        # or the running daemon. The raw-Ruby hook this replaces did, and
+        # Homebrew deprecated it. What it did, and where that now happens:
+        #
+        # - restart the daemon onto the new binary: the daemon checks its own
+        #   binary every 30 seconds; when supervised it exits, and launchd or
+        #   systemd starts the installed one (internal/daemon/binary_drift.go).
+        # - refresh ~/Applications/TokenOps.app: the daemon does it at start,
+        #   and copies the app without its quarantine flag
+        #   (internal/daemon/menubar_refresh.go, internal/infra/menubarapp).
+        # - re-apply the launchd or systemd unit: not done any more. The unit
+        #   embeds the binary path (the stable bin/tokenops link), so it only
+        #   changes in a release that changes the unit template. Such a release
+        #   says so, and the caveats above tell the operator to run
+        #   `tokenops daemon install`.
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}"]
           end

@@ -13,7 +13,7 @@ jobs:
   # The presence helper (tokenops-presence, Swift, ADR 0015) is built with
   # it, inside the bundle and beside it.
   # It is ad hoc signed: there is no Developer ID to notarize it with, and
-  # the cask's post-install hook clears its quarantine flag.
+  # the cask's install steps clear its quarantine flag.
   menubar-app:
     runs-on: macos-latest
     env:
@@ -125,7 +125,7 @@ jobs:
         with:
           # Exact, not "~> 2": a range fetches whichever goreleaser is newest
           # at tag time into a job holding the tap credential. Bump deliberately.
-          version: "v2.18.2"
+          version: "v2.19.0"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
