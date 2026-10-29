@@ -38,3 +38,31 @@ func TestLookupResolvesLatestAliasesAndFreeVariants(t *testing.T) {
 		t.Errorf("an alias of an unknown model stays unknown: %v", err)
 	}
 }
+
+// A Copilot model its own list does not price takes its vendor's list
+// price, Claude's dotted versions written the vendor's way; a model of no
+// known family, or a provider that resells nothing, stays unknown.
+func TestLookupPricesAResellersModelAtItsVendorsRate(t *testing.T) {
+	tbl := Table{Rates: map[Key]Rate{
+		{Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-6"}: {InputPerMillion: 5, OutputPerMillion: 25},
+		{Provider: eventschema.ProviderGitHub, Model: "claude-sonnet-4.6"}:  {InputPerMillion: 3, OutputPerMillion: 15},
+		{Provider: eventschema.ProviderOpenAI, Model: "gpt-5.4"}:            {InputPerMillion: 2.5, OutputPerMillion: 15},
+	}}
+	if r, err := tbl.Lookup(eventschema.ProviderGitHub, "claude-opus-4.6"); err != nil || r.InputPerMillion != 5 {
+		t.Errorf("Copilot's claude-opus-4.6 = %+v, %v; want Anthropic's claude-opus-4-6", r, err)
+	}
+	if r, err := tbl.Lookup(eventschema.ProviderGitHub, "gpt-5.4"); err != nil || r.InputPerMillion != 2.5 {
+		t.Errorf("Copilot's gpt-5.4 = %+v, %v", r, err)
+	}
+	if r, err := tbl.Lookup(eventschema.ProviderGitHub, "claude-sonnet-4.6"); err != nil || r.InputPerMillion != 3 {
+		t.Errorf("Copilot's own list wins: %+v, %v", r, err)
+	}
+	for _, c := range []struct {
+		provider eventschema.Provider
+		model    string
+	}{{eventschema.ProviderGitHub, "raptor-mini"}, {eventschema.ProviderCursor, "claude-opus-4.6"}} {
+		if _, err := tbl.Lookup(c.provider, c.model); !errors.Is(err, ErrUnknownModel) {
+			t.Errorf("%s/%s = %v, want ErrUnknownModel", c.provider, c.model, err)
+		}
+	}
+}
