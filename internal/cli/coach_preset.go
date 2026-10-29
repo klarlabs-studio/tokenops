@@ -14,6 +14,7 @@ import (
 
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
@@ -184,7 +185,7 @@ func clientInstalled(client string) bool {
 		return false
 	}
 	dir := map[string]string{
-		hookClientClaudeCode: filepath.Join(home, ".claude"),
+		hookClientClaudeCode: claudehome.Dir(),
 		hookClientCodex:      codexDir,
 		hookClientCursor:     filepath.Join(home, ".cursor"),
 	}[client]

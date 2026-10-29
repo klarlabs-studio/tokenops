@@ -35,6 +35,7 @@ import (
 	"slices"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexhome"
 	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
 )
@@ -120,7 +121,7 @@ func DefaultPaths() (Paths, error) {
 		return Paths{}, err
 	}
 	return Paths{
-		ClaudeSettings: filepath.Join(home, ".claude", "settings.json"),
+		ClaudeSettings: claudehome.Join("settings.json"),
 		CodexConfig:    filepath.Join(codexDir, "config.toml"),
 		OpencodeConfig: filepath.Join(configHome, "opencode", "opencode.json"),
 		OpencodeModels: filepath.Join(cacheHome, "opencode", "models.json"),
