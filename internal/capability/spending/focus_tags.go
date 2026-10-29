@@ -71,6 +71,9 @@ func splitByTags(charges []analytics.Charge, turns []allocation.TaggedTurn) []ta
 		p.Requests++
 		p.InputTokens += t.InputTokens
 		p.OutputTokens += t.OutputTokens
+		p.CacheReadTokens += t.CacheReadTokens
+		p.CacheWriteTokens += t.CacheWriteTokens
+		p.CacheWrite1hTokens += t.CacheWrite1hTokens
 		p.ListUSD += t.APIEquivalentUSD
 		p.CostUSD += t.BilledUSD()
 		p.Unpriced = p.Unpriced || !t.Priced
@@ -99,10 +102,14 @@ func splitByTags(charges []analytics.Charge, turns []allocation.TaggedTurn) []ta
 			}
 			part := c
 			part.Requests, part.InputTokens, part.OutputTokens = p.Requests, p.InputTokens, p.OutputTokens
+			part.CacheReadTokens, part.CacheWriteTokens, part.CacheWrite1hTokens = p.CacheReadTokens, p.CacheWriteTokens, p.CacheWrite1hTokens
 			part.CostUSD, part.ListUSD, part.Unpriced = p.CostUSD, p.ListUSD, p.Unpriced
 			rest.Requests -= p.Requests
 			rest.InputTokens -= p.InputTokens
 			rest.OutputTokens -= p.OutputTokens
+			rest.CacheReadTokens -= p.CacheReadTokens
+			rest.CacheWriteTokens -= p.CacheWriteTokens
+			rest.CacheWrite1hTokens -= p.CacheWrite1hTokens
 			rest.CostUSD -= p.CostUSD
 			rest.ListUSD -= p.ListUSD
 			split = append(split, taggedCharge{Charge: part, Tags: p.tags})
@@ -113,12 +120,17 @@ func splitByTags(charges []analytics.Charge, turns []allocation.TaggedTurn) []ta
 		}
 		if rest.Requests > 0 {
 			rest.InputTokens, rest.OutputTokens = max(rest.InputTokens, 0), max(rest.OutputTokens, 0)
+			rest.CacheReadTokens, rest.CacheWriteTokens = max(rest.CacheReadTokens, 0), max(rest.CacheWriteTokens, 0)
+			rest.CacheWrite1hTokens = max(rest.CacheWrite1hTokens, 0)
 			rest.CostUSD, rest.ListUSD = max(rest.CostUSD, 0), max(rest.ListUSD, 0)
 			split = append(split, taggedCharge{Charge: rest})
 		} else {
 			last := &split[len(split)-1]
 			last.InputTokens = max(last.InputTokens+rest.InputTokens, 0)
 			last.OutputTokens = max(last.OutputTokens+rest.OutputTokens, 0)
+			last.CacheReadTokens = max(last.CacheReadTokens+rest.CacheReadTokens, 0)
+			last.CacheWriteTokens = max(last.CacheWriteTokens+rest.CacheWriteTokens, 0)
+			last.CacheWrite1hTokens = max(last.CacheWrite1hTokens+rest.CacheWrite1hTokens, 0)
 			last.CostUSD = max(last.CostUSD+rest.CostUSD, 0)
 			last.ListUSD = max(last.ListUSD+rest.ListUSD, 0)
 		}

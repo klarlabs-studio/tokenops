@@ -776,23 +776,46 @@ leave it: no team upload carries them.
 #### Export to FinOps tools (FOCUS)
 
 `tokenops spend export` writes spend and usage as
-[FOCUS](https://focus.finops.org/) 1.2 CSV, the billing format FinOps tools
-such as Vantage, CloudZero and Cloudability ingest:
+[FOCUS](https://focus.finops.org/) 1.4 CSV, the billing format FinOps tools
+such as Vantage, CloudZero and Cloudability ingest. `--focus-version 1.2`
+writes FOCUS 1.2 for a tool that does not read 1.4 yet:
 
 ```bash
 tokenops spend export --format focus > september.csv          # this month so far
 tokenops spend export --since 2026-09-01T00:00:00Z --until 2026-10-01T00:00:00Z -o september.csv
+tokenops spend export --focus-version 1.2 -o september-1.2.csv
 ```
 
-Each row is one charge:
+FOCUS 1.4 requires `BilledCost` to be what the vendor invoiced, never an
+estimate, and 0 on rows from anyone who issues no invoice, so that a
+dataset merged with the vendor's own counts no charge twice. TokenOps
+issues no invoice, so in 1.4:
 
-| What | FOCUS row |
+| What | FOCUS 1.4 rows |
+|---|---|
+| A plan's fee | `Purchase`, `Recurring`, prorated over the days it was in force and split at calendar months; the monthly price is the `ListUnitPrice`, the prorated fee is `x_EstimatedCost` |
+| Usage a plan covered | `Usage`, a row per kind of token at its API list rate; `ContractedUnitPrice` and `ContractedCost` are 0, so ListCost against ContractedCost is what the plan was worth |
+| Usage billed per token | `Usage`, a row per kind of token at its API list rate; what it cost is `x_EstimatedCost`, split across the kinds by list price |
+
+`BilledCost` and `EffectiveCost` are 0 on every row. The kinds of token
+are input, cache read, cache write (5-minute and 1-hour) and output:
+`SkuPriceId` is the model and the kind (`claude-opus-5/cache-read`),
+`ListUnitPrice` the rate per million tokens on the rate card of that day,
+and `ListCost` the rate times `PricingQuantity`. A model with no rate is
+one row whose unit prices are written as 0, which its `ChargeDescription`
+says. `ServiceProviderName`, `HostProviderName` and `InvoiceIssuerName`
+are the vendor.
+
+In FOCUS 1.2, usage is one row per model and day, and TokenOps' estimate
+is the `BilledCost` and `EffectiveCost`:
+
+| What | FOCUS 1.2 row |
 |---|---|
 | A plan's fee | `Purchase`, `Recurring`, prorated over the days it was in force and split at calendar months; your price where you gave one, the US list price otherwise |
 | Usage a plan covered | `Usage` with `BilledCost` and `EffectiveCost` 0 and `ListCost` at the API price, so ListCost against EffectiveCost is what the plan was worth |
 | Usage billed per token | `Usage` at what it cost |
 
-Usage is one row per UTC day, provider and model. Tokens are the
+In both versions, usage is per UTC day, provider and model. Tokens are the
 `ConsumedQuantity` (`Tokens`); `PricingQuantity` counts millions of tokens,
 the unit API prices are published in. `ServiceCategory` is
 `AI and Machine Learning`, `ServiceSubcategory` `Generative AI`, `SkuId`
@@ -809,7 +832,7 @@ dataset has one user-defined tag scheme.
 
 Only derived figures are written: providers, models, plans, counts, money
 and your own allocation tags. No session title, path or prompt is in it. `GET /api/spend/export`
-serves the same CSV from the daemon.
+serves the same CSV from the daemon; `?version=1.2` asks for FOCUS 1.2.
 
 ### `tokenops budget {list|set|unset}`
 

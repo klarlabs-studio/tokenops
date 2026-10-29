@@ -31,7 +31,7 @@ func TestFocusExportSplitsChargesByAllocationTag(t *testing.T) {
 			InputTokens: 1000, OutputTokens: 100, APIEquivalentUSD: 2, Priced: true},
 	}
 	rules := []allocation.Rule{{Match: allocation.Match{Dir: "/w/acme"}, Tags: allocation.Tags{Client: "Acme Corp"}}}
-	got, err := FocusExport(context.Background(), src, FocusQuery{
+	got, err := FocusExport(context.Background(), src, FocusQuery{Version: "1.2",
 		Since: sep3, Until: sep3.Add(24 * time.Hour), Now: sep3.Add(24 * time.Hour),
 		Allocation: &allocation.Deps{
 			Turns: func(context.Context, time.Time) ([]analytics.SessionTurn, error) { return turns, nil },
@@ -91,7 +91,7 @@ func TestFocusExportLeavesNoEmptyRemainder(t *testing.T) {
 	}}
 	turns := []analytics.SessionTurn{{SessionID: "s", Source: "codex-jsonl", At: sep3.Add(time.Hour), Provider: "openai",
 		Model: "gpt-5", InputTokens: 100, OutputTokens: 10, APIEquivalentUSD: 0.3, Priced: true}}
-	got, err := FocusExport(context.Background(), src, FocusQuery{
+	got, err := FocusExport(context.Background(), src, FocusQuery{Version: "1.2",
 		Since: sep3, Until: sep3.Add(24 * time.Hour), Now: sep3.Add(24 * time.Hour),
 		Allocation: &allocation.Deps{
 			Turns: func(context.Context, time.Time) ([]analytics.SessionTurn, error) { return turns, nil },
