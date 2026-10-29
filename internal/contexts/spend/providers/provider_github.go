@@ -23,7 +23,10 @@ func providerGitHub() Descriptor {
 				Shows:   "the month's AI Credits (premium requests on annual plans) against the allowance; an org seat with none says so"},
 		},
 		Opencode: []OpencodeID{{ID: "github-copilot"}, {ID: "github"}},
-		Docs:     Docs{Label: "GitHub Copilot", Setup: "`vendor_usage.github_copilot.enabled: true`; the OAuth token is found where the Copilot IDE plugins (~/.config/github-copilot) or the Copilot CLI (its environment variables, Keychain item or ~/.copilot/config.json) keep it; `use_gh_cli: true` also asks the GitHub CLI"},
+		// models.dev lists the models Copilot serves at their vendors'
+		// per-token prices: the API-equivalent value of a Copilot turn.
+		ModelsDev: []string{"github-copilot"},
+		Docs:      Docs{Label: "GitHub Copilot", Setup: "`vendor_usage.github_copilot.enabled: true`; the OAuth token is found where the Copilot IDE plugins (~/.config/github-copilot) or the Copilot CLI (its environment variables, Keychain item or ~/.copilot/config.json) keep it; `use_gh_cli: true` also asks the GitHub CLI"},
 		// Since 2026-06-01 every monthly plan bills in GitHub AI Credits
 		// (1 credit = 0.01 USD), reset at 00:00 UTC on the 1st. The
 		// allowance is in the SourceURL; the vendor's own meter carries

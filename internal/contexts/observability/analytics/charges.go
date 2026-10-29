@@ -128,7 +128,7 @@ func (a *Aggregator) RateAt(provider, model string, at time.Time) (spend.Rate, b
 	if a.spend == nil {
 		return spend.Rate{}, false
 	}
-	rate, err := a.spend.TableAt(at).Lookup(eventschema.Provider(provider), model)
+	rate, err := a.spend.LookupAt(eventschema.Provider(provider), model, at)
 	if err != nil {
 		return spend.Rate{}, false
 	}

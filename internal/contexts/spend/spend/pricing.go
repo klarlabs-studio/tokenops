@@ -215,10 +215,25 @@ func (t Table) Lookup(provider eventschema.Provider, model string) (Rate, error)
 		if bare := gatewayModel(model); bare != model {
 			return t.Lookup(provider, bare)
 		}
+		// A "-latest" alias points at the vendor's current version, which
+		// the card keys by its own name ("gpt-5.2-chat-latest" is
+		// "gpt-5.2-chat").
+		if base, ok := strings.CutSuffix(model, "-latest"); ok && base != "" {
+			return t.Lookup(provider, base)
+		}
+		// A ":free" variant is a router's free tier of a model
+		// (OpenRouter, Kilo): it costs nothing, whether or not the card
+		// lists it, and catalogs drop the variants as they rotate.
+		if strings.HasSuffix(model, FreeVariantSuffix) {
+			return Rate{}, nil
+		}
 		return Rate{}, fmt.Errorf("%w: provider=%s model=%s", ErrUnknownModel, provider, model)
 	}
 	return bestRate, nil
 }
+
+// FreeVariantSuffix marks a router's free tier of a model.
+const FreeVariantSuffix = ":free"
 
 // gatewayModel drops a gateway account namespace from a model ID,
 // "accounts/<account>/models/<name>" or ".../routers/<name>".

@@ -1,6 +1,7 @@
 package spend
 
 import (
+	"errors"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -104,19 +105,50 @@ func normalizeTables(tables []DatedTable) []DatedTable {
 // tableFor returns the rate card in effect at ts: the table with the
 // greatest EffectiveFrom <= ts. When ts predates every table (including the
 // zero time), it returns the earliest table so pricing never fails for lack
-// of a dated table. The selected table is authoritative for that instant —
-// a missing (provider, model) is NOT resolved against a different-dated
-// table.
+// of a dated table.
 func (e *Engine) tableFor(ts time.Time) Table {
 	tables := e.dated()
-	selected := tables[0].Table // earliest, the never-fail default
-	for _, dt := range tables {
+	return tables[indexFor(tables, ts)].Table
+}
+
+// indexFor is the index of the table in effect at ts in tables, sorted
+// ascending: the earliest when ts predates them all.
+func indexFor(tables []DatedTable, ts time.Time) int {
+	selected := 0
+	for i, dt := range tables {
 		if dt.EffectiveFrom.After(ts) {
 			break
 		}
-		selected = dt.Table
+		selected = i
 	}
 	return selected
+}
+
+// LookupAt is provider's model on the rate card in effect at ts. The card
+// in force is authoritative for every model it prices. A model it does not
+// price is priced by the nearest card that does: the latest earlier one,
+// whose rate was in force when the model was last listed, else the
+// earliest later one, which first listed it. A turn that was recorded used
+// a model that existed, so the card nearest in time is better evidence of
+// its price than none (ADR 0002, amended 2026-10-29).
+func (e *Engine) LookupAt(provider eventschema.Provider, model string, ts time.Time) (Rate, error) {
+	tables := e.dated()
+	at := indexFor(tables, ts)
+	rate, err := tables[at].Table.Lookup(provider, model)
+	if err == nil || !errors.Is(err, ErrUnknownModel) {
+		return rate, err
+	}
+	for i := at - 1; i >= 0; i-- {
+		if r, lerr := tables[i].Table.Lookup(provider, model); lerr == nil {
+			return r, nil
+		}
+	}
+	for i := at + 1; i < len(tables); i++ {
+		if r, lerr := tables[i].Table.Lookup(provider, model); lerr == nil {
+			return r, nil
+		}
+	}
+	return Rate{}, err
 }
 
 // Currency returns the ISO 4217 code costs are denominated in, taken from
@@ -175,8 +207,9 @@ func (e *Engine) ComputeAt(p *eventschema.PromptEvent, at time.Time) (float64, e
 		// Prefer the model the provider actually billed against.
 		model = p.ResponseModel
 	}
-	// Price at the rate card that was in effect at the event's timestamp.
-	rate, err := e.tableFor(at).Lookup(p.Provider, model)
+	// Price at the rate card that was in effect at the event's timestamp,
+	// or the nearest one that lists the model.
+	rate, err := e.LookupAt(p.Provider, model, at)
 	if err != nil {
 		return 0, err
 	}

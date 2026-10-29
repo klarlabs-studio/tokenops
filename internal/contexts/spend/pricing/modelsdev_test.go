@@ -97,3 +97,39 @@ type fixedSource struct {
 
 func (f fixedSource) Name() string                            { return f.name }
 func (f fixedSource) Fetch(context.Context) (Snapshot, error) { return f.snap, nil }
+
+// A $0 listing is a free model where the model is named free, or where the
+// provider lists its free models that way (opencode Zen's Big Pickle). A
+// router's $0 ("auto") is not a price, and stays unpriced; a coding plan
+// stays unmapped. Copilot's models price GitHub's turns.
+func TestParseModelsDevPricesFreeModelsAtZero(t *testing.T) {
+	body := `{
+	  "opencode": {"models": {
+	    "big-pickle": {"cost": {"input": 0, "output": 0}},
+	    "kimi-k2.5": {"cost": {"input": 0.6, "output": 3}}
+	  }},
+	  "openrouter": {"models": {
+	    "openai/gpt-oss-120b:free": {"cost": {"input": 0, "output": 0}},
+	    "openrouter/auto": {"cost": {"input": 0, "output": 0}}
+	  }},
+	  "zai-coding-plan": {"models": {"glm-5.3": {"cost": {"input": 0, "output": 0}}}},
+	  "github-copilot": {"models": {"claude-sonnet-4.6": {"cost": {"input": 3, "output": 15}}}}
+	}`
+	snap, err := ParseModelsDev([]byte(body), "https://fixture.invalid/api.json", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, free := range []string{"opencode/big-pickle", "openrouter/openai/gpt-oss-120b:free"} {
+		if r, ok := snap.Rates[free]; !ok || r != (Rate{}) {
+			t.Errorf("%s = %+v (listed %v); want a zero rate", free, r, ok)
+		}
+	}
+	for _, unpriced := range []string{"openrouter/openrouter/auto", "zai/glm-5.3"} {
+		if r, ok := snap.Rates[unpriced]; ok {
+			t.Errorf("%s = %+v; a router's or a plan's $0 is not a price", unpriced, r)
+		}
+	}
+	if r := snap.Rates["github/claude-sonnet-4.6"]; r.InputPerMillion != 3 {
+		t.Errorf("Copilot's model = %+v", r)
+	}
+}

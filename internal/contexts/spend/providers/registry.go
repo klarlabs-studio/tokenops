@@ -256,6 +256,21 @@ func ModelsDevPricing() map[string][]string {
 	return out
 }
 
+// ModelsDevZeroIsFree is the set of models.dev provider IDs whose $0
+// listings are free models.
+func ModelsDevZeroIsFree() map[string]bool {
+	out := map[string]bool{}
+	for _, d := range all {
+		if !d.ModelsDevZeroIsFree {
+			continue
+		}
+		for _, id := range d.ModelsDev {
+			out[id] = true
+		}
+	}
+	return out
+}
+
 // LiteLLMGateways maps a LiteLLM provider ID that is a gateway to the
 // provider whose turns its rates price.
 func LiteLLMGateways() map[string]string {

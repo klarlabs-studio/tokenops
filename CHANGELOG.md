@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+
+- **pricing:** fewer models without a price. On one machine the models with no price fell from 28 to 5 and the unpriced requests from 59,000 to 13,000, which adds their value to the API-equivalent figures.
+  - An event is priced by the rate card in force on its day. A model that card did not list was unpriced, even when an earlier or later card listed it, which left older Codex and opencode models unpriced. It now takes the nearest card that lists it (ADR 0002, amended).
+  - Free models are priced at $0 instead of unpriced: a model named free (`-free`, `:free`) and opencode Zen's free models such as Big Pickle, which models.dev lists at $0. A router's $0 ("auto") still means its price depends on the model it routes to, and stays unpriced.
+  - A router's `:free` variant (OpenRouter, Kilo) costs nothing even when no catalog lists it.
+  - GitHub Copilot's models are priced from models.dev's Copilot list.
+  - A `-latest` alias is priced as the version it names (`gpt-5.2-chat-latest` as `gpt-5.2-chat`).
+  - `codex-auto-review` stays unpriced: OpenAI publishes no price for the model behind Codex's auto-review.
+
 ### Added
 
 - **sessions:** cost per task. `tokenops story --runtime`, the `tokenops_task_runtime` tool and `GET /api/story/runtime` give each inferred task what its recorded turns used and cost: turns, input, output and cache tokens, what was billed and the API-equivalent value. A turn goes to the task of its session that started last at or before it, so subagent turns count toward their task. The summaries add the median and p90 of value, billed cost and tokens per task, over the tasks that have recorded usage. A task whose session the event store has no turns for has no usage, not zero. Unit costs already gave the cost per commit, merged pull request and recorded outcome; this one needs neither a commit nor an outcome.
