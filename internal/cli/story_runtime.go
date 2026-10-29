@@ -4,22 +4,59 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
+
+// runtimeTurns opens the event store the runtime report's usage and cost
+// per task come from. A machine with no store gets the report without
+// them, which the report says; any other failure is warned about.
+func runtimeTurns(cmd *cobra.Command, rf *rootFlags) (commits.TurnReader, func()) {
+	none := func() {}
+	cfg, err := loadConfig(rf)
+	if err != nil {
+		warnRead(cmd, []string{"usage per task is left out: " + err.Error()})
+		return nil, none
+	}
+	path, err := resolvePlanDBIn("", cfg.Storage.Path)
+	if err != nil {
+		return nil, none
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, none
+	}
+	store, err := sqlite.Open(cmd.Context(), path, sqlite.Options{})
+	if err != nil {
+		warnRead(cmd, []string{"usage per task is left out: open event store: " + err.Error()})
+		return nil, none
+	}
+	eng, err := buildSpendEngine(cfg)
+	if err != nil {
+		_ = store.Close()
+		warnRead(cmd, []string{"usage per task is left out: " + err.Error()})
+		return nil, none
+	}
+	return spending.NewAggregator(store, eng), func() { _ = store.Close() }
+}
 
 // writeRuntime renders `story --runtime`: the coverage report, as text or
 // as the derived-only JSON export the tokenops_sessions runtime view
 // returns.
-func writeRuntime(cmd *cobra.Command, w sessions.Window, limit int, idleGap time.Duration, jsonOut bool) error {
+func writeRuntime(cmd *cobra.Command, rf *rootFlags, w sessions.Window, limit int, idleGap time.Duration, jsonOut bool) error {
 	// The flag's 0 is "all"; the capability's is its default.
 	if limit == 0 {
 		limit = -1
 	}
-	rt := sessions.ComputeRuntime(w, sessions.RuntimeOptions{Limit: limit, IdleGap: idleGap}, time.Now())
+	turns, closeTurns := runtimeTurns(cmd, rf)
+	defer closeTurns()
+	rt := sessions.ComputeRuntime(cmd.Context(), w, sessions.RuntimeOptions{Limit: limit, IdleGap: idleGap, Turns: turns}, time.Now())
 	warnRead(cmd, rt.Warnings)
 	out := cmd.OutOrStdout()
 	if jsonOut {
@@ -69,6 +106,7 @@ func writeRuntimeText(w io.Writer, rt sessions.Runtime) {
 			secondsOrUnknown(s.ToolCriticalPath.Median), secondsOrUnknown(s.ToolResource.Median))
 		fmt.Fprintln(w, "  Concurrent calls overlap: the critical path is what the task waited on, the sum what the tools used.")
 	}
+	writeRuntimeUsage(w, rt)
 	if s.HarnessTTFT.N > 0 {
 		fmt.Fprintf(w, "\nTIME TO FIRST TOKEN  (as the harness recorded it) median %s over %d samples\n",
 			secondsOrUnknown(s.HarnessTTFT.Median), s.HarnessTTFT.N)
@@ -83,6 +121,42 @@ func writeRuntimeText(w io.Writer, rt sessions.Runtime) {
 		fmt.Fprintf(w, "  · %s\n", u)
 	}
 	fmt.Fprintln(w, "\nPer-task figures with origins and coverage: tokenops story --runtime --json")
+}
+
+// writeRuntimeUsage is the cost per task, over the samples with
+// recorded usage; nothing when no turns were read.
+func writeRuntimeUsage(w io.Writer, rt sessions.Runtime) {
+	s := rt.Summary
+	if rt.UsageMethod == "" {
+		return
+	}
+	fmt.Fprintf(w, "\nCOST PER TASK  (recorded turns, at list prices; %d of %d samples have recorded usage)\n",
+		s.UsageSamples, s.RuntimeSamples)
+	if s.UsageSamples == 0 {
+		fmt.Fprintln(w, "  no recorded turn fell in these tasks: their sessions are not in the event store")
+		return
+	}
+	fmt.Fprintf(w, "  value median %s · p90 %s   billed median %s · p90 %s   tokens median %s\n",
+		usdOrUnknown(s.APIEquivalentUSD.Median), usdOrUnknown(s.APIEquivalentUSD.P90),
+		usdOrUnknown(s.BilledUSD.Median), usdOrUnknown(s.BilledUSD.P90), tokensOrUnknown(s.Tokens.Median))
+	if s.UsageUnpriced > 0 {
+		fmt.Fprintf(w, "  %d task%s include turns with no list price, so their value understates\n", s.UsageUnpriced, plural(s.UsageUnpriced))
+	}
+	fmt.Fprintf(w, "  Placed by %s.\n", rt.UsageMethod)
+}
+
+func usdOrUnknown(v *float64) string {
+	if v == nil {
+		return "unknown"
+	}
+	return fmt.Sprintf("$%.2f", *v)
+}
+
+func tokensOrUnknown(v *float64) string {
+	if v == nil {
+		return "unknown"
+	}
+	return humanTokens(int64(*v))
 }
 
 // secondsOrUnknown renders a duration that may not exist.

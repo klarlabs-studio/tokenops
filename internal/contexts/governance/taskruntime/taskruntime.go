@@ -190,6 +190,9 @@ type Task struct {
 	// Verified is whether anything independently checked the result.
 	// Transcripts cannot say; it is always "unknown" here.
 	Verified string `json:"verified_success"`
+	// Usage is what the task's recorded turns used and cost, from the
+	// event store; null when no recorded turn fell in the task.
+	Usage *Usage `json:"usage"`
 
 	// sessionKey is kept for grouping open status; never exported.
 	sessionKey string
