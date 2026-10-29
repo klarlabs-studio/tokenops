@@ -310,6 +310,9 @@ func (s *Store) BucketUsage(ctx context.Context, f analytics.Filter, widthSec in
 		b.row.InputTokens += r.in
 		b.row.OutputTokens += r.out
 		b.row.TotalTokens += r.total
+		b.row.CacheReadTokens += r.cacheRead
+		b.row.CacheWriteTokens += r.cacheWrite
+		b.row.CacheWrite1hTokens += r.cacheWrite1h
 		if r.cost.Valid {
 			b.cost.add(r.cost.Float64)
 		}

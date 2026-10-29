@@ -5,6 +5,9 @@ import (
 	"context"
 	"slices"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Charge is one UTC day's usage of one provider's model, accounted one
@@ -19,8 +22,12 @@ type Charge struct {
 	// billed nothing at the margin.
 	PlanCovered bool
 	Requests    int64
-	// InputTokens includes cache reads and writes.
-	InputTokens, OutputTokens int64
+	// InputTokens includes cache reads and writes: CacheReadTokens read
+	// from the prompt cache, CacheWriteTokens written to it
+	// (CacheWrite1hTokens of them at the one-hour rate).
+	InputTokens, OutputTokens         int64
+	CacheReadTokens, CacheWriteTokens int64
+	CacheWrite1hTokens                int64
 	// CostUSD is what was billed: zero for plan-covered usage, the stored
 	// or recomputed cost otherwise.
 	CostUSD float64
@@ -67,12 +74,15 @@ func (a *Aggregator) DailyCharges(ctx context.Context, f Filter) ([]Charge, erro
 		}
 		metered := Charge{
 			Day: r.BucketStart, Provider: provider, Model: model,
-			Requests:     r.Requests - p.Requests,
-			InputTokens:  r.InputTokens - p.InputTokens,
-			OutputTokens: r.OutputTokens - p.OutputTokens,
-			CostUSD:      r.CostUSD,
-			ListUSD:      r.CostUSD,
-			Unpriced:     !r.Cost.Complete(),
+			Requests:           r.Requests - p.Requests,
+			InputTokens:        r.InputTokens - p.InputTokens,
+			OutputTokens:       r.OutputTokens - p.OutputTokens,
+			CacheReadTokens:    r.CacheReadTokens - p.CacheReadTokens,
+			CacheWriteTokens:   r.CacheWriteTokens - p.CacheWriteTokens,
+			CacheWrite1hTokens: r.CacheWrite1hTokens - p.CacheWrite1hTokens,
+			CostUSD:            r.CostUSD,
+			ListUSD:            r.CostUSD,
+			Unpriced:           !r.Cost.Complete(),
 		}
 		if metered.Requests > 0 {
 			out = append(out, metered)
@@ -96,6 +106,9 @@ func (a *Aggregator) planCoveredCharges(groups []PricingGroup) map[rowKey]Charge
 		c.Requests += g.Events
 		c.InputTokens += g.InputTokens
 		c.OutputTokens += g.OutputTokens
+		c.CacheReadTokens += g.CacheReadTokens
+		c.CacheWriteTokens += g.CacheWriteTokens
+		c.CacheWrite1hTokens += g.CacheWrite1hTokens
 		if a.spend == nil {
 			c.Unpriced = true
 		} else if v, err := a.spend.ComputeAt(g.promptEvent(), g.At); err != nil {
@@ -106,4 +119,18 @@ func (a *Aggregator) planCoveredCharges(groups []PricingGroup) map[rowKey]Charge
 		out[k] = c
 	}
 	return out
+}
+
+// RateAt is the list rate of provider's model on the rate card in effect
+// at at; false when the aggregator has no rate card or the card has no
+// rate for the model.
+func (a *Aggregator) RateAt(provider, model string, at time.Time) (spend.Rate, bool) {
+	if a.spend == nil {
+		return spend.Rate{}, false
+	}
+	rate, err := a.spend.TableAt(at).Lookup(eventschema.Provider(provider), model)
+	if err != nil {
+		return spend.Rate{}, false
+	}
+	return rate, true
 }

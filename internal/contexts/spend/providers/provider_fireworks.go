@@ -23,6 +23,9 @@ func providerFireworks() Descriptor {
 		Opencode:  []OpencodeID{{ID: "fireworks-ai", Endpoint: "fireworks"}, {ID: "fireworks", Endpoint: "fireworks"}},
 		EnvVars:   []string{"FIREWORKS_API_KEY"},
 		ModelsDev: []string{"fireworks-ai"},
-		Docs:      Docs{Setup: "nothing: Nexus CLI's key or FIREWORKS_API_KEY is used"},
+		// models.dev lists a few dozen Fireworks models; LiteLLM lists the
+		// rest of the serverless catalog.
+		LiteLLMGateway: []string{"fireworks_ai"},
+		Docs:           Docs{Setup: "nothing: Nexus CLI's key or FIREWORKS_API_KEY is used"},
 	}
 }

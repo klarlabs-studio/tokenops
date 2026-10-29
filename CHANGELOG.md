@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+
+- **pricing:** most Fireworks models had no price, so their turns showed no cost and no API equivalent. The rate card took Fireworks prices only from models.dev, which lists a few dozen; it now also reads LiteLLM's list of Fireworks' serverless catalog, about 290 models, including the `-us` and `-spot` variants at their own prices. Where both list a model, models.dev's price is used; they agreed on every model they share. The daemon picks the prices up at its next rate-card refresh, with nothing to run.
+
+### Changed
+
+- **spend:** `tokenops spend export` writes FOCUS 1.4, the current FinOps billing format, by default; `--focus-version 1.2` (or `GET /api/spend/export?version=1.2`) still writes the old file. FOCUS 1.4 requires `BilledCost` to be what the vendor invoiced and 0 on rows from anyone who issues no invoice, so a dataset merged with the vendor's own counts nothing twice. TokenOps issues no invoice, so its 1.4 rows bill 0 and carry its estimate in `x_EstimatedCost`. Each day's usage of a model is a row per kind of token (input, cache read, cache write, output) at its API list rate, which FOCUS 1.4's `SkuPriceId`, `ListUnitPrice` and `ContractedUnitPrice` need. Usage a plan covered has a contracted price of 0, so ListCost against ContractedCost is what the plan was worth. `ServiceProviderName` and `HostProviderName` replace 1.2's `ProviderName` and `PublisherName`. A FinOps tool that reads only 1.2 needs `--focus-version 1.2`.
+- **otel:** the OTLP exporter follows the current OpenTelemetry GenAI conventions (`semantic-conventions-genai`). The provider is `gen_ai.provider.name`, with the convention's well-known values (`gcp.gemini`, `x_ai`); `gen_ai.system`, the key it replaced, is still written beside it so collector queries written against it keep working, and goes in a later release. Prompt-cache reads and writes are `gen_ai.usage.cache_read.input_tokens` and `gen_ai.usage.cache_write.input_tokens` (`tokenops.usage.cached_input_tokens` stays). `gen_ai.response.finish_reasons` is sent as the string array the convention defines, not a single string.
+
 ## 0.114.5 - 2026-10-29
 
 ### Fixed

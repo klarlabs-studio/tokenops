@@ -113,7 +113,7 @@ Consumers:
 | `Envelope.ID` | UUIDv7 generated in proxy | None | Storage (PK), OTLP (attribute) |
 | `Envelope.Timestamp` | `time.Now().UTC()` at proxy | Nanosecond precision | Storage (indexed), OTLP (timeUnixNano) |
 | `Envelope.TraceID` | W3C traceparent header | Pass-through | Storage, OTLP |
-| `PromptEvent.Provider` | Route config mapping | Normalized to enum | Storage (indexed), OTLP (gen_ai.system), Analytics (group) |
+| `PromptEvent.Provider` | Route config mapping | Normalized to enum | Storage (indexed), OTLP (gen_ai.provider.name, and gen_ai.system until it is removed), Analytics (group) |
 | `PromptEvent.RequestModel` | `provider.Normalize(body)` | Canonicalized | Storage (indexed), OTLP (gen_ai.request.model), Spend engine |
 | `PromptEvent.InputTokens` | `tokenizer.PreflightCount` | Tokenized | Storage (indexed), OTLP, Spend engine |
 | `PromptEvent.OutputTokens` | `tokenizer.CountText(response)` | Tokenized | Storage (indexed), OTLP, Spend engine |
@@ -216,13 +216,14 @@ domain JSONL is read-only migration input; it is never appended after migration.
 | Field | Type | Required | SQLite | OTLP | Constraints |
 |---|---|---|---|---|---|
 | `PromptHash` | string | yes | (payload) | `tokenops.prompt.hash` | SHA-256 hex; 64 chars |
-| `Provider` | Provider | yes | `provider` | `gen_ai.system` | One of: openai, anthropic, gemini |
+| `Provider` | Provider | yes | `provider` | `gen_ai.provider.name` (and the older `gen_ai.system`) | The convention's well-known value where one applies (`gcp.gemini`, `x_ai`), the provider's name otherwise |
 | `RequestModel` | string | yes | `model` | `gen_ai.request.model` | Max 128 chars |
 | `ResponseModel` | *string | no | — | `gen_ai.response.model` | Max 128 chars |
 | `InputTokens` | int64 | yes | `input_tokens` | `gen_ai.usage.input_tokens` | ≥0 |
 | `OutputTokens` | int64 | yes | `output_tokens` | `gen_ai.usage.output_tokens` | ≥0 |
-| `TotalTokens` | int64 | yes | `total_tokens` | `gen_ai.usage.total_tokens` | InputTokens + OutputTokens |
-| `CachedInputTokens` | *int64 | no | — | `tokenops.usage.cached_input_tokens` | ≥0; ≤InputTokens |
+| `TotalTokens` | int64 | yes | `total_tokens` | `gen_ai.usage.total_tokens` (not a convention key; kept for existing queries) | InputTokens + OutputTokens |
+| `CachedInputTokens` | *int64 | no | — | `gen_ai.usage.cache_read.input_tokens` and `tokenops.usage.cached_input_tokens` | ≥0; ≤InputTokens |
+| `CacheWriteInputTokens` | *int64 | no | — | `gen_ai.usage.cache_write.input_tokens` | ≥0; ≤InputTokens |
 | `ContextSize` | int64 | yes | — | `tokenops.prompt.context_size` | ≥0 |
 | `CostUSD` | *float64 | no | `cost_usd` | `tokenops.cost_usd` | ≥0 when set |
 | `WorkflowID` | *string | no | `workflow_id` | `tokenops.workflow.id` | From header or empty |
@@ -317,7 +318,7 @@ domain JSONL is read-only migration input; it is never appended after migration.
 | `Path` | *string | no | (payload) | `tokenops.rule.path` | Forward-slash repo-relative; redacted by `redaction.RedactEnvelope` |
 | `RepoID` | *string | no | (payload) | `tokenops.rule.repo_id` | Opaque identifier; allows cross-repo aggregation |
 | `Tokenizer` | *string | no | (payload) | `tokenops.rule.tokenizer` | Label e.g. `openai/cl100k_base` |
-| `Provider` | Provider | no | (payload) | `gen_ai.system` | Tokenizer's provider |
+| `Provider` | Provider | no | (payload) | `gen_ai.provider.name` (and `gen_ai.system`) | Tokenizer's provider |
 | `TotalTokens` | int64 | yes | (payload) | `tokenops.rule.total_tokens` | ≥0; sum of section tokens |
 | `TotalChars` | *int64 | no | (payload) | — | ≥0 |
 | `Hash` | *string | no | (payload) | — | SHA-256 hex prefixed `sha256:` |

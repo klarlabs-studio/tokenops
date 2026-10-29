@@ -22,23 +22,30 @@ const formatFocus = "focus"
 // FOCUS dataset a FinOps tool ingests.
 func newSpendExportCmd(rf *rootFlags) *cobra.Command {
 	var (
-		dbPath, sinceFlag, untilFlag, format, output string
-		includeSrcs                                  []string
+		dbPath, sinceFlag, untilFlag, format, output, version string
+		includeSrcs                                           []string
 	)
 	cmd := &cobra.Command{
 		Use:   "export",
 		Short: "Export spend and usage as a FOCUS dataset (CSV) for FinOps tools",
-		Long: `export writes the window's spend and usage as FOCUS 1.2 CSV, the FinOps
-billing format that Vantage, CloudZero, Cloudability and other FinOps tools
-ingest.
+		Long: `export writes the window's spend and usage as FOCUS CSV, the FinOps billing
+format that Vantage, CloudZero, Cloudability and other FinOps tools ingest.
+It writes FOCUS 1.4; --focus-version 1.2 writes the older format for tools
+that do not read 1.4 yet.
 
   - a plan's fee is a Purchase, prorated over the days it was in force
-  - usage a plan covered is a Usage row billed 0, with ListCost at the
-    API price, so ListCost against EffectiveCost is what the plan saved
-  - usage billed per token is a Usage row at what it cost
-  - tokens are the ConsumedQuantity
+  - each day's usage of a model is a Usage row per kind of token (input,
+    cache read, cache write, output) at its API list rate; usage a plan
+    covered has a ContractedCost of 0, so ListCost against ContractedCost
+    is what the plan saved
+  - TokenOps issues no invoice, so BilledCost and EffectiveCost are 0, as
+    FOCUS 1.4 requires, and the cost TokenOps estimates is x_EstimatedCost;
+    merged with the vendor's own FOCUS data, nothing is counted twice
   - with allocation rules configured, the usage they tag is its own row,
     its project, client and cost_center in the Tags column
+
+FOCUS 1.2 writes one Usage row per model and day, with the estimate in
+BilledCost and EffectiveCost.
 
 Only derived figures are written: providers, models, plans, counts, money
 and your own allocation tags. No session title, path or prompt is in it.
@@ -57,7 +64,8 @@ The window defaults to the current month so far, in UTC days.`,
 			if err != nil {
 				return err
 			}
-			q := spending.FocusQuery{Plans: cfg.Plans, Now: time.Now(), Allocation: &allocation.Deps{Rules: cfg.AllocationRules()}}
+			q := spending.FocusQuery{Plans: cfg.Plans, Now: time.Now(), Allocation: &allocation.Deps{Rules: cfg.AllocationRules()},
+				Version: version}
 			if sinceFlag != "" {
 				if q.Since, err = parseSince(sinceFlag); err != nil {
 					return fmt.Errorf("--since: %w", err)
@@ -102,7 +110,8 @@ The window defaults to the current month so far, in UTC days.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&format, "format", formatFocus, "export format: focus (FOCUS 1.2, CSV)")
+	cmd.Flags().StringVar(&format, "format", formatFocus, "export format: focus (CSV)")
+	cmd.Flags().StringVar(&version, "focus-version", "", "FOCUS version to write: 1.4 (default) or 1.2")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "write to this file instead of stdout")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to config.storage.path)")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "lower bound (RFC3339 or duration), floored to its UTC day; default the start of this month")

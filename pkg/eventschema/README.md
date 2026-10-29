@@ -30,7 +30,7 @@ payload.
 ## OpenTelemetry compatibility
 
 `otel.go` declares the canonical attribute keys. Where the OpenTelemetry GenAI
-semantic conventions exist (`gen_ai.system`, `gen_ai.usage.input_tokens`, ...)
+semantic conventions exist (`gen_ai.provider.name`, `gen_ai.usage.input_tokens`, ...)
 TokenOps reuses them. Everything else lives under the `tokenops.*` namespace.
 The OTLP exporter (task `otel-exporter`) translates Envelope + payload fields
 into these keys; storage backends use the same vocabulary so traces, metrics,
