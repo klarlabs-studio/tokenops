@@ -19,7 +19,7 @@ import (
 // happened in this one" — what you asked for, what the agent did about
 // it, what it cost, and where it went sideways. The aggregate tells you
 // there is a problem; the account tells you what the problem was.
-func newStoryCmd() *cobra.Command {
+func newStoryCmd(rf *rootFlags) *cobra.Command {
 	var (
 		root     string
 		source   string
@@ -84,7 +84,7 @@ same filters tokenops_sessions takes.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			win := cohort.apply(transcriptWindow(root, source, days, includeScratch))
 			if runtime {
-				return writeRuntime(cmd, win, limit, idleGap, jsonOut)
+				return writeRuntime(cmd, rf, win, limit, idleGap, jsonOut)
 			}
 			// The narrative needs the words; Units reads them.
 			units, err := sessions.Units(win, time.Now())

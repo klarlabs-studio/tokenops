@@ -8759,6 +8759,42 @@
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "api_equivalent_usd": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "median": {
+                                "type": "number"
+                              },
+                              "method": {
+                                "type": "string"
+                              },
+                              "n": {
+                                "type": "integer"
+                              },
+                              "p90": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "billed_usd": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "median": {
+                                "type": "number"
+                              },
+                              "method": {
+                                "type": "string"
+                              },
+                              "n": {
+                                "type": "integer"
+                              },
+                              "p90": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
                           "categories": {
                             "items": {
                               "additionalProperties": false,
@@ -8909,6 +8945,24 @@
                           "tasks": {
                             "type": "integer"
                           },
+                          "tokens": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "median": {
+                                "type": "number"
+                              },
+                              "method": {
+                                "type": "string"
+                              },
+                              "n": {
+                                "type": "integer"
+                              },
+                              "p90": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
                           "tool_critical_path_seconds": {
                             "additionalProperties": false,
                             "properties": {
@@ -8945,6 +8999,12 @@
                             },
                             "type": "object"
                           },
+                          "usage_samples": {
+                            "type": "integer"
+                          },
+                          "usage_unpriced": {
+                            "type": "integer"
+                          },
                           "verified_success": {
                             "type": "integer"
                           }
@@ -8959,6 +9019,42 @@
                     "summary": {
                       "additionalProperties": false,
                       "properties": {
+                        "api_equivalent_usd": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "median": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "n": {
+                              "type": "integer"
+                            },
+                            "p90": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "billed_usd": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "median": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "n": {
+                              "type": "integer"
+                            },
+                            "p90": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
                         "categories": {
                           "items": {
                             "additionalProperties": false,
@@ -9109,6 +9205,24 @@
                         "tasks": {
                           "type": "integer"
                         },
+                        "tokens": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "median": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "n": {
+                              "type": "integer"
+                            },
+                            "p90": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
                         "tool_critical_path_seconds": {
                           "additionalProperties": false,
                           "properties": {
@@ -9144,6 +9258,12 @@
                             }
                           },
                           "type": "object"
+                        },
+                        "usage_samples": {
+                          "type": "integer"
+                        },
+                        "usage_unpriced": {
+                          "type": "integer"
                         },
                         "verified_success": {
                           "type": "integer"
@@ -9287,6 +9407,36 @@
                           "unanswered": {
                             "type": "integer"
                           },
+                          "usage": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "api_equivalent_usd": {
+                                "type": "number"
+                              },
+                              "billed_usd": {
+                                "type": "number"
+                              },
+                              "cache_read_tokens": {
+                                "type": "integer"
+                              },
+                              "cache_write_tokens": {
+                                "type": "integer"
+                              },
+                              "input_tokens": {
+                                "type": "integer"
+                              },
+                              "output_tokens": {
+                                "type": "integer"
+                              },
+                              "turns": {
+                                "type": "integer"
+                              },
+                              "unpriced_turns": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
+                          },
                           "verified_success": {
                             "type": "string"
                           }
@@ -9300,6 +9450,9 @@
                         "type": "string"
                       },
                       "type": "array"
+                    },
+                    "usage_method": {
+                      "type": "string"
                     },
                     "warnings": {
                       "items": {

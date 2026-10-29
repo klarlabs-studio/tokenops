@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 )
 
@@ -12,6 +13,9 @@ import (
 // conventional transcript directory.
 type StoryDeps struct {
 	Root string
+	// Turns reads the recorded turns the runtime report's usage and cost
+	// per task come from; nil leaves them null.
+	Turns commits.TurnReader
 }
 
 type storyInput struct {
@@ -61,9 +65,9 @@ func RegisterStoryTools(s *Server, d StoryDeps) error {
 			return &res, nil
 		})
 	s.Tool("tokenops_task_runtime").
-		Description("Where recent tasks' time went, as far as the transcripts record it: each task's status (completed when the harness recorded its last turn ending, open when it may still be running, last_observed otherwise), its observed interval, and that interval split into model_request, tool_execution, approval_wait, idle and unattributed time, each with its origin and coverage. A category a harness does not record is null, never zero. Tool time is given as critical path and as summed resource time. Summaries are per harness, model and role with nearest-rank median and p90 and their denominators. Derived figures only: no instruction text, paths or session ids. Never add task durations up as waiting time.").
+		Description("Where recent tasks' time went, as far as the transcripts record it: each task's status (completed when the harness recorded its last turn ending, open when it may still be running, last_observed otherwise), its observed interval, and that interval split into model_request, tool_execution, approval_wait, idle and unattributed time, each with its origin and coverage. A category a harness does not record is null, never zero. Tool time is given as critical path and as summed resource time. Each task's usage is what its recorded turns used and cost (tokens, billed, API-equivalent value), null when the event store recorded none for its session; summaries give its median and p90. Summaries are per harness, model and role with nearest-rank median and p90 and their denominators. Derived figures only: no instruction text, paths or session ids. Never add task durations up as waiting time.").
 		OutputSchema(runtimeResult{}).
-		Handler(func(_ context.Context, in storyInput) (*runtimeResult, error) {
+		Handler(func(ctx context.Context, in storyInput) (*runtimeResult, error) {
 			if in.Quote {
 				return nil, errors.New("quote does not apply to the runtime report: it is derived figures only")
 			}
@@ -71,7 +75,7 @@ func RegisterStoryTools(s *Server, d StoryDeps) error {
 			if err != nil {
 				return nil, err
 			}
-			res := sessions.ComputeRuntime(w, sessions.RuntimeOptions{Limit: in.Limit}, time.Now())
+			res := sessions.ComputeRuntime(ctx, w, sessions.RuntimeOptions{Limit: in.Limit, Turns: d.Turns}, time.Now())
 			return &res, nil
 		})
 	return nil

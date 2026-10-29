@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **sessions:** cost per task. `tokenops story --runtime`, the `tokenops_task_runtime` tool and `GET /api/story/runtime` give each inferred task what its recorded turns used and cost: turns, input, output and cache tokens, what was billed and the API-equivalent value. A turn goes to the task of its session that started last at or before it, so subagent turns count toward their task. The summaries add the median and p90 of value, billed cost and tokens per task, over the tasks that have recorded usage. A task whose session the event store has no turns for has no usage, not zero. Unit costs already gave the cost per commit, merged pull request and recorded outcome; this one needs neither a commit nor an outcome.
+
 ### Fixed
 
 - **pricing:** most Fireworks models had no price, so their turns showed no cost and no API equivalent. The rate card took Fireworks prices only from models.dev, which lists a few dozen; it now also reads LiteLLM's list of Fireworks' serverless catalog, about 290 models, including the `-us` and `-spot` variants at their own prices. Where both list a model, models.dev's price is used; they agreed on every model they share. The daemon picks the prices up at its next rate-card refresh, with nothing to run.

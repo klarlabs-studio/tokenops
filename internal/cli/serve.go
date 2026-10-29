@@ -263,7 +263,11 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterExperimentTools(srv, mcp.ExperimentDeps{Manager: experiments.New(components.Store)}); err != nil {
 		return err
 	}
-	if err := mcp.RegisterStoryTools(srv, mcp.StoryDeps{}); err != nil {
+	storyDeps := mcp.StoryDeps{}
+	if components.Aggregator != nil {
+		storyDeps.Turns = components.Aggregator
+	}
+	if err := mcp.RegisterStoryTools(srv, storyDeps); err != nil {
 		return fmt.Errorf("register story tools: %w", err)
 	}
 	if err := mcp.RegisterRoutingAdviceTools(srv, mcp.RoutingAdviceDeps{
