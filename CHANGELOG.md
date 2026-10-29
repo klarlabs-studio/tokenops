@@ -6,6 +6,12 @@
 
 - **sessions:** cost per task. `tokenops story --runtime`, the `tokenops_task_runtime` tool and `GET /api/story/runtime` give each inferred task what its recorded turns used and cost: turns, input, output and cache tokens, what was billed and the API-equivalent value. A turn goes to the task of its session that started last at or before it, so subagent turns count toward their task. The summaries add the median and p90 of value, billed cost and tokens per task, over the tasks that have recorded usage. A task whose session the event store has no turns for has no usage, not zero. Unit costs already gave the cost per commit, merged pull request and recorded outcome; this one needs neither a commit nor an outcome.
 
+||||||| 71d2180
+
+### Fixed
+
+- **pricing:** most Fireworks models had no price, so their turns showed no cost and no API equivalent. The rate card took Fireworks prices only from models.dev, which lists a few dozen; it now also reads LiteLLM's list of Fireworks' serverless catalog, about 290 models, including the `-us` and `-spot` variants at their own prices. Where both list a model, models.dev's price is used; they agreed on every model they share. The daemon picks the prices up at its next rate-card refresh, with nothing to run.
+
 ### Changed
 
 - **spend:** `tokenops spend export` writes FOCUS 1.4, the current FinOps billing format, by default; `--focus-version 1.2` (or `GET /api/spend/export?version=1.2`) still writes the old file. FOCUS 1.4 requires `BilledCost` to be what the vendor invoiced and 0 on rows from anyone who issues no invoice, so a dataset merged with the vendor's own counts nothing twice. TokenOps issues no invoice, so its 1.4 rows bill 0 and carry its estimate in `x_EstimatedCost`. Each day's usage of a model is a row per kind of token (input, cache read, cache write, output) at its API list rate, which FOCUS 1.4's `SkuPriceId`, `ListUnitPrice` and `ContractedUnitPrice` need. Usage a plan covered has a contracted price of 0, so ListCost against ContractedCost is what the plan was worth. `ServiceProviderName` and `HostProviderName` replace 1.2's `ProviderName` and `PublisherName`. A FinOps tool that reads only 1.2 needs `--focus-version 1.2`.
