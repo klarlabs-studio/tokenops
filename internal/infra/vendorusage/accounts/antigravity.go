@@ -94,9 +94,35 @@ func (a Antigravity) ReadAppLogin(ctx context.Context, token string) (usage.Read
 		lastErr = err
 	}
 	if lastErr == nil {
-		lastErr = errors.New("accounts: Antigravity is running but not listening yet")
+		lastErr = errors.New("its language server is not listening yet")
 	}
-	return usage.Reading{}, lastErr
+	return usage.Reading{}, unreadable(lastErr)
+}
+
+// antigravityFix is what the operator does about an installed Antigravity
+// whose quota cannot be read.
+const antigravityFix = "Fix: keep the Antigravity app open and signed in; its quota is read from the app's own language server on the next poll"
+
+// unreadableError says, for an installed Antigravity whose quota cannot be
+// read, why and what to do. The cause stays reachable, so errors.Is still
+// finds usage.ErrAuth behind a refusal.
+type unreadableError struct {
+	reason string
+	cause  error
+}
+
+func (e unreadableError) Error() string {
+	return "accounts: Antigravity is installed but its quota cannot be read: " + e.reason + ". " + antigravityFix
+}
+
+func (e unreadableError) Unwrap() error { return e.cause }
+
+// unreadable wraps the last failure of the language-server calls.
+func unreadable(cause error) error {
+	if errors.Is(cause, usage.ErrAuth) {
+		return unreadableError{reason: "its language server refused the quota request", cause: cause}
+	}
+	return unreadableError{reason: cause.Error(), cause: cause}
 }
 
 // readServer asks one port for the quota summary, falling back to the
