@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
 // LiteLLMSourceName is the Source name, and Snapshot.Source, of the LiteLLM
@@ -28,6 +30,36 @@ type litellmEntry struct {
 	// CacheCreation1hCost is the one-hour cache-write price, where the
 	// vendor charges one.
 	CacheCreation1hCost float64 `json:"cache_creation_input_token_cost_above_1hr"`
+	// Mode is what the entry serves: chat, embedding, image_generation, …
+	Mode string `json:"mode"`
+}
+
+// litellmGateways maps a LiteLLM gateway provider to the TokenOps provider
+// its rates price.
+var litellmGateways = providers.LiteLLMGateways()
+
+// gatewayModes are the modes whose per-token rates price a gateway turn.
+// Image and audio models are priced per image or second, not per token.
+var gatewayModes = map[string]bool{"": true, "chat": true, "completion": true, "responses": true, "embedding": true}
+
+// litellmGatewayModel is the bare model name of a gateway entry,
+// "fireworks_ai/accounts/fireworks/models/kimi-k3" → "kimi-k3"; false for
+// an entry that names no model in an account namespace, such as LiteLLM's
+// size-tier placeholders ("fireworks-ai-up-to-4b").
+func litellmGatewayModel(id, gateway string) (string, bool) {
+	rest := strings.TrimPrefix(id, gateway+"/")
+	model := GatewayModelID(rest)
+	return model, model != rest
+}
+
+func (e litellmEntry) rate() Rate {
+	return Rate{
+		InputPerMillion:        perMillionCost(e.InputCostPerToken),
+		OutputPerMillion:       perMillionCost(e.OutputCost),
+		CachedInputPerMillion:  perMillionCost(e.CacheReadCost),
+		CacheWritePerMillion:   perMillionCost(e.CacheCreationCost),
+		CacheWrite1hPerMillion: perMillionCost(e.CacheCreation1hCost),
+	}
 }
 
 // perMillion converts a per-token cost to per-million tokens.
@@ -46,8 +78,8 @@ func perMillionCost(perToken float64) float64 {
 // provider string used in the catalog. Only providers the embedded catalog can
 // price are listed; an entry whose litellm_provider is absent here is skipped,
 // so the fetched snapshot's key-space stays aligned with the baseline and the
-// diff remains meaningful. Multiplexers (fireworks, together, openrouter) are
-// intentionally excluded — a static card cannot price their namespaced models.
+// diff remains meaningful. Gateways are not here: litellmGateways keys their
+// namespaced models by bare name instead.
 var litellmProviderMap = map[string]string{
 	"anthropic":                 "anthropic",
 	"openai":                    "openai",
@@ -106,6 +138,7 @@ func ParseLiteLLM(body []byte, sourceURL string, fetchedAt time.Time) (Snapshot,
 		rate Rate
 	}
 	groups := make(map[string][]candidate)
+	gatewayIDs := map[string]string{}
 	for id, msg := range raw {
 		if id == "sample_spec" { // LiteLLM's schema doc row, not a model
 			continue
@@ -113,6 +146,21 @@ func ParseLiteLLM(body []byte, sourceURL string, fetchedAt time.Time) (Snapshot,
 		var e litellmEntry
 		if json.Unmarshal(msg, &e) != nil {
 			continue // non-model or unexpected shape → skip, don't fail
+		}
+		if gateway, ok := litellmGateways[strings.ToLower(e.Provider)]; ok {
+			model, named := litellmGatewayModel(id, strings.ToLower(e.Provider))
+			if !named || !gatewayModes[e.Mode] || (e.InputCostPerToken == 0 && e.OutputCost == 0) {
+				continue
+			}
+			// Two accounts may publish a model of one name; the
+			// lexically-first ID wins, so a refresh is deterministic.
+			key := snapKey(gateway, model)
+			if prev, taken := gatewayIDs[key]; taken && prev < id {
+				continue
+			}
+			gatewayIDs[key] = id
+			snap.Rates[key] = e.rate()
+			continue
 		}
 		provider, ok := litellmProviderMap[strings.ToLower(e.Provider)]
 		if !ok {
@@ -126,16 +174,7 @@ func ParseLiteLLM(body []byte, sourceURL string, fetchedAt time.Time) (Snapshot,
 			continue // no usable price
 		}
 		key := snapKey(provider, mapModelKey(id, providerKeys))
-		groups[key] = append(groups[key], candidate{
-			id: id,
-			rate: Rate{
-				InputPerMillion:        perMillionCost(e.InputCostPerToken),
-				OutputPerMillion:       perMillionCost(e.OutputCost),
-				CachedInputPerMillion:  perMillionCost(e.CacheReadCost),
-				CacheWritePerMillion:   perMillionCost(e.CacheCreationCost),
-				CacheWrite1hPerMillion: perMillionCost(e.CacheCreation1hCost),
-			},
-		})
+		groups[key] = append(groups[key], candidate{id: id, rate: e.rate()})
 	}
 	for key, cands := range groups {
 		best := cands[0]
