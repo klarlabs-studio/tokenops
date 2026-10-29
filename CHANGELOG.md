@@ -17,6 +17,10 @@
 - **synthetic:** the request quota's reset time is read whether Synthetic sends it as `renewsAt`, the spelling its docs give, or as `renewAt`, which its quota API has been seen to send. Before, a quota sent as `renewAt` showed its usage with no reset time. A quota with neither field still shows its usage, with the reset unknown.
 - **attribution:** requests to Together AI's current API host, `api.together.ai`, and to the Azure AI Foundry and AI Services hosts of an Azure OpenAI resource (`*.services.ai.azure.com`, `*.cognitiveservices.azure.com`) are billed to Together AI and Azure OpenAI. The classic hosts, `api.together.xyz` and `*.openai.azure.com`, still are. The `together` proxy route now forwards to `api.together.ai`, Together's documented host, instead of `api.together.xyz`. Before, requests to the new hosts were not attributed to any provider, so their spend was not counted for it.
 
+### Changed
+
+- **antigravity:** an installed Antigravity whose quota cannot be read says why and what to do. When its language server refused the quota request, or did not answer, status and the glance showed only a raw HTTP error or "not listening yet", with nothing about Antigravity or the fix. The error now says Antigravity is installed but its quota cannot be read, gives the reason, and says to keep the app open and signed in. It is still reported as a failing source, never as an empty reading.
+
 ### Security
 
 - **dependencies:** golang.org/x/net v0.62.0, which fixes GO-2026-6860 and GO-2026-6866 (code scanning VULN-001). The affected HTML packages are not linked into the shipped binaries, so no user-visible behaviour changes.
