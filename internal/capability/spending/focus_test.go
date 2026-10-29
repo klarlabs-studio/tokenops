@@ -2,17 +2,28 @@ package spending
 
 import (
 	"context"
+	"maps"
+	"math"
 	"strings"
 	"testing"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 type chargesStub struct {
 	got     Window
 	charges []analytics.Charge
+	// rates are the list rates by model; a model missing has none.
+	rates map[string]spend.Rate
+}
+
+func (c *chargesStub) RateAt(_, model string, _ time.Time) (spend.Rate, bool) {
+	r, ok := c.rates[model]
+	return r, ok
 }
 
 func (c *chargesStub) DailyCharges(_ context.Context, w Window) ([]analytics.Charge, error) {
@@ -35,7 +46,7 @@ func TestFocusExportMapsChargesAndPlanFees(t *testing.T) {
 	}
 	now := time.Date(2026, 9, 11, 0, 0, 0, 0, time.UTC)
 	got, err := FocusExport(context.Background(), src, FocusQuery{
-		History: history, Plans: map[string]string{"anthropic": "claude-max-5x"}, Now: now,
+		History: history, Plans: map[string]string{"anthropic": "claude-max-5x"}, Now: now, Version: "1.2",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -80,5 +91,72 @@ func TestFocusExportRefusesAnEmptyWindow(t *testing.T) {
 	_, err := FocusExport(context.Background(), &chargesStub{}, FocusQuery{Since: now, Until: now.Add(-time.Hour), Now: now})
 	if err == nil {
 		t.Fatal("a window that ends before it starts must be refused")
+	}
+}
+
+// In FOCUS 1.4 each charge is priced per kind of token at the rate card of
+// its day: the kinds' list prices add up to what the spend engine prices
+// the charge at, cache reads and writes clamped to the input, and the
+// estimate adds up to what the charge cost.
+func TestFocusExport14PricesEachKindOfToken(t *testing.T) {
+	sep3 := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
+	rate := spend.Rate{InputPerMillion: 5, OutputPerMillion: 25, CachedInputPerMillion: 0.5,
+		CacheWritePerMillion: 6.25, CacheWrite1hPerMillion: 10}
+	covered := analytics.Charge{Day: sep3, Provider: "anthropic", Model: "claude-opus-5", PlanCovered: true,
+		Requests: 3, InputTokens: 1_000_000, CacheReadTokens: 600_000, CacheWriteTokens: 300_000,
+		CacheWrite1hTokens: 100_000, OutputTokens: 50_000}
+	metered := analytics.Charge{Day: sep3, Provider: "anthropic", Model: "claude-opus-5", Requests: 1,
+		InputTokens: 2_000, OutputTokens: 1_000, CostUSD: 0.04, ListUSD: 0.04}
+	unknown := analytics.Charge{Day: sep3, Provider: "openai", Model: "gpt-next", Requests: 1,
+		InputTokens: 10, OutputTokens: 5, CostUSD: 0.001, ListUSD: 0.001}
+	src := &chargesStub{charges: []analytics.Charge{covered, metered, unknown},
+		rates: map[string]spend.Rate{"claude-opus-5": rate}}
+	got, err := FocusExport(context.Background(), src, FocusQuery{Now: sep3.Add(24 * time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Version != "1.4" {
+		t.Fatalf("the default version is 1.4, got %s", got.Version)
+	}
+	engine := spend.NewEngine(spend.Table{Rates: map[spend.Key]spend.Rate{
+		{Provider: "anthropic", Model: "claude-opus-5"}: rate}})
+	want, err := engine.Compute(&eventschema.PromptEvent{Provider: "anthropic", RequestModel: "claude-opus-5",
+		InputTokens: covered.InputTokens, CachedInputTokens: covered.CacheReadTokens,
+		CacheWriteInputTokens: covered.CacheWriteTokens, CacheWrite1hInputTokens: covered.CacheWrite1hTokens,
+		OutputTokens: covered.OutputTokens})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list, estimate float64
+	kinds := map[string]int64{}
+	var unknownRows int
+	for _, r := range got.Rows {
+		if r.BilledCost != 0 || r.EffectiveCost != 0 {
+			t.Errorf("TokenOps bills nothing in 1.4: %+v", r)
+		}
+		switch {
+		case r.ChargeCategory != "Usage":
+		case r.SkuID == "gpt-next":
+			unknownRows++
+		case r.ServiceName == "Claude Max 5x" || r.BillingAccountID == "anthropic/subscription":
+			list += r.ListCost
+			kinds[r.SkuPriceID] += *r.ConsumedQuantity
+		default:
+			estimate += r.EstimatedCost
+		}
+	}
+	if math.Abs(list-want) > 1e-9 {
+		t.Errorf("the kinds' list prices add up to %v, the engine prices the charge at %v", list, want)
+	}
+	wantKinds := map[string]int64{"claude-opus-5/input": 100_000, "claude-opus-5/cache-read": 600_000,
+		"claude-opus-5/cache-write-5m": 200_000, "claude-opus-5/cache-write-1h": 100_000, "claude-opus-5/output": 50_000}
+	if !maps.Equal(kinds, wantKinds) {
+		t.Errorf("tokens by kind %v, want %v", kinds, wantKinds)
+	}
+	if math.Abs(estimate-0.04) > 1e-12 {
+		t.Errorf("the metered estimate adds up to %v, the charge cost 0.04", estimate)
+	}
+	if unknownRows != 1 {
+		t.Errorf("a model without a rate is one row, got %d", unknownRows)
 	}
 }

@@ -1,11 +1,12 @@
 // Package focus renders spend and usage as a FOCUS dataset: the FinOps
 // Open Cost and Usage Specification that FinOps tools (Vantage, CloudZero,
-// Cloudability and others) ingest. It targets FOCUS 1.2, whose column
-// definitions and allowed values the conformance test transcribes from
+// Cloudability and others) ingest. It writes FOCUS 1.4, the default, and
+// FOCUS 1.2 for tools that do not read 1.4 yet. The conformance tests
+// transcribe each version's column definitions and allowed values from
 // the specification (github.com/FinOps-Open-Cost-and-Usage-Spec/FOCUS_Spec,
-// tag v1.2).
+// tags v1.2 and v1.4).
 //
-// The mapping:
+// The FOCUS 1.2 mapping:
 //
 //   - A plan's fee is a Purchase, Recurring, prorated over the days it was
 //     in force and split at calendar months, which stand in for billing
@@ -22,6 +23,29 @@
 //
 //   - Usage an allocation rule tagged is its own row, its tags in Tags.
 //
+// FOCUS 1.4 requires BilledCost to be what the invoice issuer invoiced,
+// never an estimate, and 0 on rows from anyone who does not invoice, so
+// that a dataset merged with the vendor's own does not count a charge
+// twice. TokenOps invoices nothing, so its 1.4 rows carry:
+//
+//   - BilledCost and EffectiveCost 0.
+//
+//   - A row per kind of token (input, cache read, cache write, output),
+//     each at its published rate: SkuPriceId names the model and the kind,
+//     ListUnitPrice is the rate per million tokens and ListCost the rate
+//     times PricingQuantity.
+//
+//   - ContractedUnitPrice at the list rate for usage billed per token, 0
+//     for usage a plan covered: ListCost against ContractedCost is the
+//     value the plan gave.
+//
+//   - x_EstimatedCost, what TokenOps estimates the charge cost: the
+//     client-reported or rate-card cost of usage billed per token, 0 for
+//     usage a plan covered, a plan's prorated fee for its purchase.
+//
+//   - ServiceProviderName and HostProviderName, which replace 1.2's
+//     ProviderName and PublisherName, both the vendor.
+//
 // Only derived fields leave: providers, models, plans, counts, money and
 // the operator's own allocation tags. No session title, path or prompt has
 // a column to go in.
@@ -31,6 +55,7 @@ import (
 	"cmp"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -42,13 +67,46 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
-// Version is the FOCUS version the dataset conforms to.
-const Version = "1.2"
+// Spec is a FOCUS version a dataset can be written in.
+type Spec struct {
+	// Version is the FOCUS version ("1.4").
+	Version string
+	// Columns are the dataset's columns, in the alphabetical order the
+	// FOCUS examples use: every Mandatory column of the version, plus the
+	// Recommended and Conditional ones TokenOps can fill truthfully.
+	Columns  []string
+	usage    func(Usage) []Row
+	purchase func(Purchase) []Row
+	record   func(Row) []string
+}
 
-// Columns are the dataset's columns, in the alphabetical order the FOCUS
-// examples use: every Mandatory column of FOCUS 1.2, plus the Recommended
-// and Conditional ones TokenOps can fill truthfully.
-var Columns = []string{
+// V1_2 and V1_4 are the versions the export writes.
+var (
+	V1_2 = Spec{Version: "1.2", Columns: columns12, usage: usageRows12, purchase: purchaseRows, record: Row.record12}
+	V1_4 = Spec{Version: "1.4", Columns: columns14, usage: usageRows14, purchase: purchaseRows14, record: Row.record14}
+)
+
+// Latest is the version written when none is asked for.
+var Latest = V1_4
+
+// SpecFor returns the spec of version; empty is Latest.
+func SpecFor(version string) (Spec, error) {
+	switch strings.TrimSpace(version) {
+	case "":
+		return Latest, nil
+	case V1_2.Version:
+		return V1_2, nil
+	case V1_4.Version:
+		return V1_4, nil
+	}
+	return Spec{}, fmt.Errorf("%w: %q; use %s or %s", ErrUnsupportedVersion, version, V1_4.Version, V1_2.Version)
+}
+
+// ErrUnsupportedVersion refuses a FOCUS version the export cannot write.
+var ErrUnsupportedVersion = errors.New("FOCUS version is not supported")
+
+// columns12 are FOCUS 1.2's columns the export carries.
+var columns12 = []string{
 	"BilledCost",
 	"BillingAccountId",
 	"BillingAccountName",
@@ -78,7 +136,65 @@ var Columns = []string{
 	"Tags",
 }
 
-// Allowed values used here, as FOCUS 1.2 spells them.
+// columns14 are FOCUS 1.4's columns the export carries, then its one
+// custom column.
+var columns14 = []string{
+	"BilledCost",
+	"BillingAccountId",
+	"BillingAccountName",
+	"BillingCurrency",
+	"BillingPeriodEnd",
+	"BillingPeriodStart",
+	"ChargeCategory",
+	"ChargeClass",
+	"ChargeDescription",
+	"ChargeFrequency",
+	"ChargePeriodEnd",
+	"ChargePeriodStart",
+	"ConsumedQuantity",
+	"ConsumedUnit",
+	"ContractedCost",
+	"ContractedUnitPrice",
+	"EffectiveCost",
+	"HostProviderName",
+	"InvoiceIssuerName",
+	"ListCost",
+	"ListUnitPrice",
+	"PricingQuantity",
+	"PricingUnit",
+	"ServiceCategory",
+	"ServiceName",
+	"ServiceProviderName",
+	"ServiceSubcategory",
+	"SkuId",
+	"SkuPriceId",
+	"Tags",
+	ColumnEstimatedCost,
+}
+
+// ColumnEstimatedCost is the custom column holding what TokenOps
+// estimates a charge cost, which FOCUS 1.4 keeps out of BilledCost.
+const ColumnEstimatedCost = "x_EstimatedCost"
+
+// Kinds of token, each priced at its own rate and written as its own
+// FOCUS 1.4 row. The kind is the suffix of the row's SkuPriceId.
+const (
+	TokensInput        = "input"
+	TokensCacheRead    = "cache-read"
+	TokensCacheWrite   = "cache-write-5m"
+	TokensCacheWrite1h = "cache-write-1h"
+	TokensOutput       = "output"
+)
+
+// TokenPrice is one kind of token's share of a charge and its list rate.
+type TokenPrice struct {
+	Kind   string
+	Tokens int64
+	// PerMillion is the list price of a million tokens of the kind.
+	PerMillion float64
+}
+
+// Allowed values used here, as FOCUS spells them.
 const (
 	CategoryUsage    = "Usage"
 	CategoryPurchase = "Purchase"
@@ -123,6 +239,9 @@ type Usage struct {
 	// Tags are the allocation tags the usage carries (project, client,
 	// cost_center), nil when it carries none.
 	Tags map[string]string
+	// Priced splits Tokens by kind with each kind's list rate; nil when no
+	// rate card prices the model. FOCUS 1.4 writes a row per kind.
+	Priced []TokenPrice
 }
 
 // Purchase is a plan's fee for the time it was in force.
@@ -174,14 +293,26 @@ type Row struct {
 	// Tags is a JSON object, or empty for null: the operator's allocation
 	// tags, the one user-defined tag scheme, so its keys are unprefixed.
 	Tags string
+
+	// The FOCUS 1.4 columns. A nil unit price is null.
+	ContractedUnitPrice *float64
+	ListUnitPrice       *float64
+	SkuPriceID          string
+	HostProviderName    string
+	EstimatedCost       float64
 }
 
-// Record is the row's cells, in Columns order.
-func (r Row) Record() []string {
-	consumed := ""
-	if r.ConsumedQuantity != nil {
-		consumed = strconv.FormatInt(*r.ConsumedQuantity, 10)
+// Record is the row's cells in s's Columns order.
+func (s Spec) Record(r Row) []string { return s.record(r) }
+
+func (r Row) consumed() string {
+	if r.ConsumedQuantity == nil {
+		return ""
 	}
+	return strconv.FormatInt(*r.ConsumedQuantity, 10)
+}
+
+func (r Row) record12() []string {
 	return []string{
 		decimal(r.BilledCost),
 		r.BillingAccountID,
@@ -195,7 +326,7 @@ func (r Row) Record() []string {
 		r.ChargeFrequency,
 		dateTime(r.ChargePeriodEnd),
 		dateTime(r.ChargePeriodStart),
-		consumed,
+		r.consumed(),
 		r.ConsumedUnit,
 		decimal(r.ContractedCost),
 		decimal(r.EffectiveCost),
@@ -213,15 +344,51 @@ func (r Row) Record() []string {
 	}
 }
 
+func (r Row) record14() []string {
+	return []string{
+		decimal(r.BilledCost),
+		r.BillingAccountID,
+		r.BillingAccountName,
+		r.BillingCurrency,
+		dateTime(r.BillingPeriodEnd),
+		dateTime(r.BillingPeriodStart),
+		r.ChargeCategory,
+		r.ChargeClass,
+		r.ChargeDescription,
+		r.ChargeFrequency,
+		dateTime(r.ChargePeriodEnd),
+		dateTime(r.ChargePeriodStart),
+		r.consumed(),
+		r.ConsumedUnit,
+		decimal(r.ContractedCost),
+		optionalDecimal(r.ContractedUnitPrice),
+		decimal(r.EffectiveCost),
+		r.HostProviderName,
+		r.InvoiceIssuer,
+		decimal(r.ListCost),
+		optionalDecimal(r.ListUnitPrice),
+		r.pricingQuantity,
+		r.PricingUnit,
+		r.ServiceCategory,
+		r.ServiceName,
+		r.ProviderName,
+		r.ServiceSubcategory,
+		r.SkuID,
+		r.SkuPriceID,
+		r.Tags,
+		decimal(r.EstimatedCost),
+	}
+}
+
 // Build maps usage and plan fees to FOCUS rows, ordered by charge period,
-// then category, provider and SKU.
-func Build(usage []Usage, purchases []Purchase) []Row {
+// then category, provider, SKU and SKU price.
+func (s Spec) Build(usage []Usage, purchases []Purchase) []Row {
 	out := make([]Row, 0, len(usage)+len(purchases))
 	for _, u := range usage {
-		out = append(out, usageRow(u))
+		out = append(out, s.usage(u)...)
 	}
 	for _, p := range purchases {
-		out = append(out, purchaseRows(p)...)
+		out = append(out, s.purchase(p)...)
 	}
 	slices.SortStableFunc(out, func(a, b Row) int {
 		return cmp.Or(a.ChargePeriodStart.Compare(b.ChargePeriodStart),
@@ -229,25 +396,28 @@ func Build(usage []Usage, purchases []Purchase) []Row {
 			cmp.Compare(a.ProviderName, b.ProviderName),
 			cmp.Compare(a.SkuID, b.SkuID),
 			cmp.Compare(a.BillingAccountID, b.BillingAccountID),
-			cmp.Compare(a.Tags, b.Tags))
+			cmp.Compare(a.Tags, b.Tags),
+			cmp.Compare(kindOrder(a.SkuPriceID), kindOrder(b.SkuPriceID)))
 	})
 	return out
 }
 
 // WriteCSV writes the header and rows as CSV.
-func WriteCSV(w io.Writer, rows []Row) error {
+func (s Spec) WriteCSV(w io.Writer, rows []Row) error {
 	cw := csv.NewWriter(w)
-	if err := cw.Write(Columns); err != nil {
+	if err := cw.Write(s.Columns); err != nil {
 		return err
 	}
 	for _, r := range rows {
-		if err := cw.Write(r.Record()); err != nil {
+		if err := cw.Write(s.record(r)); err != nil {
 			return err
 		}
 	}
 	cw.Flush()
 	return cw.Error()
 }
+
+func usageRows12(u Usage) []Row { return []Row{usageRow(u)} }
 
 func usageRow(u Usage) Row {
 	day := u.Day.UTC()
@@ -286,6 +456,152 @@ func usageRow(u Usage) Row {
 	}
 	r.Tags = tagsJSON(u.Tags)
 	return r
+}
+
+// usageRows14 writes u as FOCUS 1.4 usage: a row per kind of token at its
+// list rate, BilledCost and EffectiveCost 0, the estimate in
+// x_EstimatedCost.
+func usageRows14(u Usage) []Row {
+	r := usageRow(u)
+	r.HostProviderName = r.ProviderName
+	r.BilledCost, r.EffectiveCost = 0, 0
+	of := requests(u.Requests) + " to " + modelName(u.Model)
+	how := "billed per token; x_EstimatedCost is TokenOps' estimate, BilledCost is left to the vendor's invoice"
+	if u.PlanCovered {
+		how = "included in " + r.ServiceName + "; ContractedCost is 0, ListCost is the API price"
+	}
+	understates := ""
+	if u.Unpriced && !u.PlanCovered {
+		understates = "; some of it has no recorded cost, so x_EstimatedCost understates it"
+	}
+	var priced []TokenPrice
+	var list float64
+	for _, p := range u.Priced {
+		if p.Tokens > 0 {
+			priced = append(priced, p)
+			list += perMillion(p.Tokens, p.PerMillion)
+		}
+	}
+	if len(priced) == 0 {
+		tokens := u.Tokens
+		r.ConsumedQuantity = &tokens
+		r.SkuPriceID = r.SkuID + "/tokens"
+		r.ListUnitPrice, r.ContractedUnitPrice = ptr(0.0), ptr(0.0)
+		r.ListCost, r.ContractedCost = 0, 0
+		r.EstimatedCost = estimate(u)
+		r.ChargeDescription = fmt.Sprintf("Tokens of %s, %s; no API rate is known, so its unit prices are written as 0%s",
+			of, how, understates)
+		return []Row{r}
+	}
+	out := make([]Row, 0, len(priced))
+	left := estimate(u)
+	for i, p := range priced {
+		k := r
+		tokens := p.Tokens
+		k.ConsumedQuantity = &tokens
+		k.pricingQuantity = millions(tokens)
+		k.SkuPriceID = r.SkuID + "/" + p.Kind
+		contracted := p.PerMillion
+		if u.PlanCovered {
+			contracted = 0
+		}
+		k.ListUnitPrice, k.ContractedUnitPrice = ptr(p.PerMillion), ptr(contracted)
+		k.ListCost = perMillion(tokens, p.PerMillion)
+		k.ContractedCost = perMillion(tokens, contracted)
+		// The estimate is split by each kind's share of the list price;
+		// the last kind takes what rounding left.
+		k.EstimatedCost = left
+		if i < len(priced)-1 && list > 0 {
+			k.EstimatedCost = estimate(u) * k.ListCost / list
+			left -= k.EstimatedCost
+		}
+		k.ChargeDescription = fmt.Sprintf("%s tokens of %s, %s%s", kindName(p.Kind), of, how, understates)
+		out = append(out, k)
+	}
+	return out
+}
+
+// estimate is what TokenOps estimates u cost: nothing for usage a plan
+// covered.
+func estimate(u Usage) float64 {
+	if u.PlanCovered {
+		return 0
+	}
+	return u.BilledUSD
+}
+
+// purchaseRows14 writes a plan's fee as FOCUS 1.4 purchases: BilledCost
+// and EffectiveCost 0, the monthly fee as the unit price, the prorated fee
+// in x_EstimatedCost.
+func purchaseRows14(p Purchase) []Row {
+	rows := purchaseRows(p)
+	unit := 0.0
+	if p.Months > 0 {
+		unit = p.Amount / p.Months
+	}
+	for i := range rows {
+		r := &rows[i]
+		r.HostProviderName = r.ProviderName
+		r.EstimatedCost = r.BilledCost
+		r.BilledCost, r.EffectiveCost = 0, 0
+		r.SkuPriceID = r.SkuID + "/monthly"
+		r.ListUnitPrice, r.ContractedUnitPrice = ptr(unit), ptr(unit)
+		months, _ := strconv.ParseFloat(r.pricingQuantity, 64)
+		r.ListCost, r.ContractedCost = unit*months, unit*months
+		r.ChargeDescription = strings.Replace(r.ChargeDescription, "prorated to the charge period",
+			"prorated to the charge period in x_EstimatedCost; BilledCost is left to the vendor's invoice", 1)
+	}
+	return rows
+}
+
+// kinds orders a charge's rows by kind of token.
+var kinds = []string{TokensInput, TokensCacheRead, TokensCacheWrite, TokensCacheWrite1h, TokensOutput}
+
+func kindOrder(skuPriceID string) int {
+	for i, k := range kinds {
+		if strings.HasSuffix(skuPriceID, "/"+k) {
+			return i
+		}
+	}
+	return len(kinds)
+}
+
+func kindName(kind string) string {
+	switch kind {
+	case TokensInput:
+		return "Input"
+	case TokensCacheRead:
+		return "Cache-read"
+	case TokensCacheWrite:
+		return "Cache-write (5-minute)"
+	case TokensCacheWrite1h:
+		return "Cache-write (1-hour)"
+	case TokensOutput:
+		return "Output"
+	}
+	return kind
+}
+
+func modelName(model string) string {
+	if model == "" {
+		return "a model the client did not name"
+	}
+	return model
+}
+
+func ptr(v float64) *float64 { return &v }
+
+// perMillion is tokens at a rate per million tokens.
+func perMillion(tokens int64, rate float64) float64 {
+	return float64(tokens) * rate / 1_000_000
+}
+
+// optionalDecimal writes v as decimal, or empty for null.
+func optionalDecimal(v *float64) string {
+	if v == nil {
+		return ""
+	}
+	return decimal(*v)
 }
 
 // tagsJSON writes tags as a JSON object, keys sorted; empty for none.
