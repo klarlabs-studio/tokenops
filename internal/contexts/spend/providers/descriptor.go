@@ -62,6 +62,11 @@ type Descriptor struct {
 	// listed at $0, is not one: plan turns are valued at the vendor's
 	// pay-as-you-go rate.
 	ModelsDev []string
+	// LiteLLMGateway are the LiteLLM provider IDs that list this gateway's
+	// models under its account namespace ("fireworks_ai/accounts/fireworks/
+	// models/kimi-k3"). Their rates fill in the models models.dev does not
+	// list, keyed by the bare model name as a harness records it.
+	LiteLLMGateway []string
 	// Plans are the provider's catalog plans. Provider is filled in from
 	// ID when empty.
 	Plans []Plan

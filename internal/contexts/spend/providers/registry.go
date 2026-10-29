@@ -256,6 +256,18 @@ func ModelsDevPricing() map[string][]string {
 	return out
 }
 
+// LiteLLMGateways maps a LiteLLM provider ID that is a gateway to the
+// provider whose turns its rates price.
+func LiteLLMGateways() map[string]string {
+	out := map[string]string{}
+	for _, d := range all {
+		for _, id := range d.LiteLLMGateway {
+			out[id] = string(d.ID)
+		}
+	}
+	return out
+}
+
 // Plans returns every catalog plan of every provider.
 func Plans() []Plan {
 	var out []Plan

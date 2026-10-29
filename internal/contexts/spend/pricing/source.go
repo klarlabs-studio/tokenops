@@ -21,10 +21,12 @@ type Source interface {
 }
 
 // Combined fetches several sources into one snapshot: LiteLLM for the
-// model vendors, models.dev for the gateways (ADR 0009 §6). Their keys do
-// not overlap, since each prices different providers. Any one failing
-// fails the whole fetch, so the card in force keeps pricing rather than
-// a snapshot that silently lost one source's rows.
+// model vendors, models.dev for the gateways (ADR 0009 §6). Their keys
+// overlap only where LiteLLM also lists a gateway's models; there a later
+// source's rate replaces an earlier one's, so models.dev, listed after
+// LiteLLM, prices the gateways it lists and LiteLLM fills in the rest. Any
+// one failing fails the whole fetch, so the card in force keeps pricing
+// rather than a snapshot that silently lost one source's rows.
 type Combined []Source
 
 // Name implements Source.
@@ -48,9 +50,7 @@ func (c Combined) Fetch(ctx context.Context) (Snapshot, error) {
 			out.FetchedAt = snap.FetchedAt
 		}
 		for k, r := range snap.Rates {
-			if _, taken := out.Rates[k]; !taken {
-				out.Rates[k] = r
-			}
+			out.Rates[k] = r
 		}
 	}
 	return out, nil

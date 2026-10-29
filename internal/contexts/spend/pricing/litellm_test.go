@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // fixtureURL is the provenance the fixture snapshot records.
@@ -199,5 +202,49 @@ func TestParseLiteLLM_DiffVsBaselineIsClean(t *testing.T) {
 func TestParseLiteLLM_BadJSONWrapped(t *testing.T) {
 	if _, err := ParseLiteLLM([]byte("not json"), fixtureURL, time.Now()); !errors.Is(err, ErrFetch) {
 		t.Errorf("bad JSON should wrap ErrFetch, got %v", err)
+	}
+}
+
+// LiteLLM lists Fireworks' serverless catalog under its account namespace.
+// Each model is priced under its bare name, as a harness records it once
+// the namespace is dropped; a spot or regional variant keeps its own price;
+// size-tier placeholders and image models are not models a turn names.
+func TestParseLiteLLM_PricesGatewayModelsByBareName(t *testing.T) {
+	body := []byte(`{
+		"fireworks_ai/accounts/fireworks/models/kimi-k3": {"litellm_provider": "fireworks_ai", "mode": "chat",
+			"input_cost_per_token": 3e-06, "output_cost_per_token": 1.5e-05, "cache_read_input_token_cost": 3e-07},
+		"fireworks_ai/accounts/fireworks/models/kimi-k3-spot": {"litellm_provider": "fireworks_ai", "mode": "chat",
+			"input_cost_per_token": 2.1e-06, "output_cost_per_token": 1.05e-05},
+		"fireworks_ai/accounts/fireworks/models/qwen3-embedding-8b": {"litellm_provider": "fireworks_ai-embedding-models", "mode": "embedding",
+			"input_cost_per_token": 1e-07},
+		"fireworks-ai-up-to-4b": {"litellm_provider": "fireworks_ai", "input_cost_per_token": 1e-07, "output_cost_per_token": 1e-07},
+		"fireworks_ai/accounts/fireworks/models/SSD-1B": {"litellm_provider": "fireworks_ai", "mode": "image_generation",
+			"input_cost_per_token": 1.3e-10, "output_cost_per_token": 1.3e-10}
+	}`)
+	snap, err := ParseLiteLLM(body, "https://fixture.invalid/litellm.json", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	k3 := snap.Rates["fireworks/kimi-k3"]
+	if k3.InputPerMillion != 3 || k3.OutputPerMillion != 15 || k3.CachedInputPerMillion != 0.3 {
+		t.Errorf("kimi-k3 = %+v", k3)
+	}
+	if spot := snap.Rates["fireworks/kimi-k3-spot"]; spot.InputPerMillion != 2.1 {
+		t.Errorf("the spot variant keeps its own price: %+v", spot)
+	}
+	for _, key := range []string{"fireworks/fireworks-ai-up-to-4b", "fireworks/SSD-1B", "fireworks/qwen3-embedding-8b"} {
+		if _, ok := snap.Rates[key]; ok {
+			t.Errorf("%s is priced; it names no gateway chat model", key)
+		}
+	}
+	// The rate card's lookup finds it under the name a client records.
+	tbl := spend.Table{Rates: map[spend.Key]spend.Rate{}}
+	for key, r := range snap.Rates {
+		provider, model := splitSnapKey(key)
+		tbl.Rates[spend.Key{Provider: eventschema.Provider(provider), Model: model}] = spend.Rate{
+			InputPerMillion: r.InputPerMillion, OutputPerMillion: r.OutputPerMillion}
+	}
+	if r, err := tbl.Lookup(eventschema.ProviderFireworks, "accounts/fireworks/models/kimi-k3"); err != nil || r.InputPerMillion != 3 {
+		t.Errorf("lookup of the namespaced ID: %+v, %v", r, err)
 	}
 }
