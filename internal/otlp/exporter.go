@@ -239,9 +239,19 @@ func ruleSourceAttributes(p *eventschema.RuleSourceEvent) []kv {
 		out = append(out, stringKV(eventschema.AttrTokenOpsRuleTokenizer, p.Tokenizer))
 	}
 	if p.Provider != "" {
-		out = append(out, stringKV(eventschema.AttrGenAISystem, eventschema.GenAISystem(p.Provider)))
+		out = append(out, providerAttributes(p.Provider)...)
 	}
 	return out
+}
+
+// providerAttributes names the provider under gen_ai.provider.name and
+// under the older gen_ai.system, for queries written against it.
+func providerAttributes(p eventschema.Provider) []kv {
+	name := eventschema.GenAIProviderName(p)
+	return []kv{
+		stringKV(eventschema.AttrGenAIProviderName, name),
+		stringKV(eventschema.AttrGenAISystem, name),
+	}
 }
 
 func ruleAnalysisAttributes(p *eventschema.RuleAnalysisEvent) []kv {
@@ -284,8 +294,7 @@ func ruleAnalysisAttributes(p *eventschema.RuleAnalysisEvent) []kv {
 }
 
 func promptAttributes(p *eventschema.PromptEvent) []kv {
-	out := []kv{
-		stringKV(eventschema.AttrGenAISystem, eventschema.GenAISystem(p.Provider)),
+	out := append(providerAttributes(p.Provider),
 		stringKV(eventschema.AttrGenAIRequestModel, p.RequestModel),
 		intKV(eventschema.AttrGenAIUsageInputTokens, p.InputTokens),
 		intKV(eventschema.AttrGenAIUsageOutputTokens, p.OutputTokens),
@@ -295,7 +304,7 @@ func promptAttributes(p *eventschema.PromptEvent) []kv {
 		boolKV(eventschema.AttrTokenOpsStreaming, p.Streaming),
 		boolKV(eventschema.AttrTokenOpsCacheHit, p.CacheHit),
 		stringKV(eventschema.AttrTokenOpsPromptHash, p.PromptHash),
-	}
+	)
 	if p.ResponseModel != "" {
 		out = append(out, stringKV(eventschema.AttrGenAIResponseModel, p.ResponseModel))
 	}
@@ -306,7 +315,12 @@ func promptAttributes(p *eventschema.PromptEvent) []kv {
 		out = append(out, intKV(eventschema.AttrTokenOpsTimeToFirstTokenNS, int64(p.TimeToFirstToken)))
 	}
 	if p.CachedInputTokens != 0 {
-		out = append(out, intKV(eventschema.AttrTokenOpsCachedInputTokens, p.CachedInputTokens))
+		out = append(out,
+			intKV(eventschema.AttrGenAIUsageCacheReadInputTokens, p.CachedInputTokens),
+			intKV(eventschema.AttrTokenOpsCachedInputTokens, p.CachedInputTokens))
+	}
+	if p.CacheWriteInputTokens != 0 {
+		out = append(out, intKV(eventschema.AttrGenAIUsageCacheWriteInputTokens, p.CacheWriteInputTokens))
 	}
 	if p.CostUSD != 0 {
 		out = append(out, doubleKV(eventschema.AttrTokenOpsCostUSD, p.CostUSD))
@@ -327,7 +341,7 @@ func promptAttributes(p *eventschema.PromptEvent) []kv {
 		out = append(out, intKV("http.response.status_code", int64(p.Status)))
 	}
 	if p.FinishReason != "" {
-		out = append(out, stringKV(eventschema.AttrGenAIResponseFinish, p.FinishReason))
+		out = append(out, stringsKV(eventschema.AttrGenAIResponseFinish, p.FinishReason))
 	}
 	if p.ErrorCode != "" {
 		out = append(out, stringKV("error.type", p.ErrorCode))
@@ -447,16 +461,30 @@ type kv struct {
 }
 
 type anyValue struct {
-	StringValue *string  `json:"stringValue,omitempty"`
-	BoolValue   *bool    `json:"boolValue,omitempty"`
-	IntValue    *string  `json:"intValue,omitempty"`
-	DoubleValue *float64 `json:"doubleValue,omitempty"`
+	StringValue *string     `json:"stringValue,omitempty"`
+	BoolValue   *bool       `json:"boolValue,omitempty"`
+	IntValue    *string     `json:"intValue,omitempty"`
+	DoubleValue *float64    `json:"doubleValue,omitempty"`
+	ArrayValue  *arrayValue `json:"arrayValue,omitempty"`
+}
+
+type arrayValue struct {
+	Values []anyValue `json:"values"`
 }
 
 func ptr[T any](v T) *T { return &v }
 
 func stringKV(key, value string) kv {
 	return kv{Key: key, Value: anyValue{StringValue: ptr(value)}}
+}
+
+// stringsKV is a string[] attribute.
+func stringsKV(key string, values ...string) kv {
+	arr := &arrayValue{Values: make([]anyValue, len(values))}
+	for i, v := range values {
+		arr.Values[i] = anyValue{StringValue: ptr(v)}
+	}
+	return kv{Key: key, Value: anyValue{ArrayValue: arr}}
 }
 
 func intKV(key string, value int64) kv {

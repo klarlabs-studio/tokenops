@@ -6,16 +6,32 @@ package eventschema
 // keys; storage backends (SQLite, ClickHouse) use the same keys for indexed
 // columns so traces, metrics, and analytics share a vocabulary.
 const (
-	// GenAI semantic conventions (https://opentelemetry.io/docs/specs/semconv/gen-ai/).
-	AttrGenAISystem            = "gen_ai.system"
+	// GenAI semantic conventions (github.com/open-telemetry/semantic-conventions-genai,
+	// docs/registry/attributes/gen-ai.md). Every gen_ai attribute is still
+	// at Development stability there.
+	AttrGenAIProviderName      = "gen_ai.provider.name"
 	AttrGenAIRequestModel      = "gen_ai.request.model"
 	AttrGenAIResponseModel     = "gen_ai.response.model"
 	AttrGenAIUsageInputTokens  = "gen_ai.usage.input_tokens"
 	AttrGenAIUsageOutputTokens = "gen_ai.usage.output_tokens"
-	AttrGenAIUsageTotalTokens  = "gen_ai.usage.total_tokens"
 	AttrGenAIRequestMaxTokens  = "gen_ai.request.max_tokens"
 	AttrGenAIResponseFinish    = "gen_ai.response.finish_reasons"
 	AttrGenAIOperationName     = "gen_ai.operation.name"
+	// AttrGenAIUsageCacheReadInputTokens and
+	// AttrGenAIUsageCacheWriteInputTokens are the portions of
+	// gen_ai.usage.input_tokens read from and written to the provider's
+	// prompt cache.
+	AttrGenAIUsageCacheReadInputTokens  = "gen_ai.usage.cache_read.input_tokens"
+	AttrGenAIUsageCacheWriteInputTokens = "gen_ai.usage.cache_write.input_tokens"
+
+	// AttrGenAISystem is the provider's key before the conventions renamed
+	// it gen_ai.provider.name. The exporter still writes it beside the new
+	// key, so collector queries written against it keep working; it goes
+	// in a later release.
+	AttrGenAISystem = "gen_ai.system"
+	// AttrGenAIUsageTotalTokens is not a key the conventions define. The
+	// exporter still writes it for the queries that read it.
+	AttrGenAIUsageTotalTokens = "gen_ai.usage.total_tokens"
 
 	// TokenOps-specific attributes.
 	AttrTokenOpsSchemaVersion        = "tokenops.schema_version"
@@ -64,18 +80,24 @@ const (
 	AttrTokenOpsRuleCompressedTokens = "tokenops.rule.compressed_tokens"
 )
 
-// providerToGenAISystem maps TokenOps Provider values to the canonical GenAI
-// system attribute values.
-var providerToGenAISystem = map[Provider]string{
+// providerToGenAIProvider maps TokenOps Provider values whose name differs
+// from the convention's well-known gen_ai.provider.name value. Any other
+// provider is written as it is named, as the convention allows.
+var providerToGenAIProvider = map[Provider]string{
 	ProviderOpenAI:    "openai",
 	ProviderAnthropic: "anthropic",
 	ProviderGemini:    "gcp.gemini",
+	ProviderXAI:       "x_ai",
 	ProviderUnknown:   "unknown",
 }
 
-// GenAISystem returns the OpenTelemetry GenAI system identifier for p.
+// GenAIProviderName returns the gen_ai.provider.name value for p.
+func GenAIProviderName(p Provider) string { return GenAISystem(p) }
+
+// GenAISystem returns the OpenTelemetry GenAI provider identifier for p,
+// the value of both gen_ai.provider.name and the older gen_ai.system.
 func GenAISystem(p Provider) string {
-	if v, ok := providerToGenAISystem[p]; ok {
+	if v, ok := providerToGenAIProvider[p]; ok {
 		return v
 	}
 	return string(p)

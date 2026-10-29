@@ -278,3 +278,49 @@ func TestExporterAppliesCustomHeaders(t *testing.T) {
 		t.Errorf("custom header lost: %v", got)
 	}
 }
+
+// A prompt is written under the GenAI conventions' current keys
+// (semantic-conventions-genai, docs/registry/attributes/gen-ai.md): the
+// provider as gen_ai.provider.name, with gen_ai.system kept beside it for
+// older queries; cache reads and writes as their own usage keys; the
+// finish reason as the string[] the key is defined as.
+func TestPromptAttributesFollowTheGenAIConventions(t *testing.T) {
+	e := &Exporter{}
+	rec := e.envelopeToLogRecord(&eventschema.Envelope{
+		ID: "p", SchemaVersion: eventschema.SchemaVersion, Type: eventschema.EventTypePrompt,
+		Timestamp: time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC),
+		Payload: &eventschema.PromptEvent{
+			Provider: eventschema.ProviderXAI, RequestModel: "grok-5", InputTokens: 300, OutputTokens: 20,
+			CachedInputTokens: 200, CacheWriteInputTokens: 50, FinishReason: "stop",
+		},
+	})
+	attrs := map[string]anyValue{}
+	for _, a := range rec.Attributes {
+		attrs[a.Key] = a.Value
+	}
+	str := func(key string) string {
+		if v := attrs[key].StringValue; v != nil {
+			return *v
+		}
+		return ""
+	}
+	integer := func(key string) string {
+		if v := attrs[key].IntValue; v != nil {
+			return *v
+		}
+		return ""
+	}
+	if str("gen_ai.provider.name") != "x_ai" || str("gen_ai.system") != "x_ai" {
+		t.Errorf("provider.name %q, system %q; want the well-known x_ai under both", str("gen_ai.provider.name"), str("gen_ai.system"))
+	}
+	if integer("gen_ai.usage.cache_read.input_tokens") != "200" || integer("gen_ai.usage.cache_write.input_tokens") != "50" {
+		t.Errorf("cache read %q, write %q", integer("gen_ai.usage.cache_read.input_tokens"), integer("gen_ai.usage.cache_write.input_tokens"))
+	}
+	if integer("tokenops.usage.cached_input_tokens") != "200" {
+		t.Errorf("the TokenOps cache key stays for its queries: %q", integer("tokenops.usage.cached_input_tokens"))
+	}
+	finish := attrs["gen_ai.response.finish_reasons"].ArrayValue
+	if finish == nil || len(finish.Values) != 1 || finish.Values[0].StringValue == nil || *finish.Values[0].StringValue != "stop" {
+		t.Errorf("finish_reasons is a string[]: %+v", attrs["gen_ai.response.finish_reasons"])
+	}
+}
