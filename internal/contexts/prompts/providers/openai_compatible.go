@@ -33,7 +33,7 @@ var (
 	perplexityProvider = NewOpenAICompatible(eventschema.ProviderPerplexity, "/perplexity/", "https://api.perplexity.ai")
 	fireworksProvider  = NewOpenAICompatible(eventschema.ProviderFireworks, "/fireworks/", "https://api.fireworks.ai/inference")
 	cerebrasProvider   = NewOpenAICompatible(eventschema.ProviderCerebras, "/cerebras/", "https://api.cerebras.ai")
-	togetherProvider   = NewOpenAICompatible(eventschema.ProviderTogether, "/together/", "https://api.together.xyz")
+	togetherProvider   = NewOpenAICompatible(eventschema.ProviderTogether, "/together/", "https://api.together.ai")
 	openRouterProvider = NewOpenAICompatible(eventschema.ProviderOpenRouter, "/openrouter/", "https://openrouter.ai/api")
 
 	// Local runtimes + self-hosted gateways. Presets are each tool's
