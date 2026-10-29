@@ -100,9 +100,11 @@ plugins:
     # npm; for Go it reports REACH-003, its bundled govulncheck predating
     # Go 1.26, until the plugin is rebuilt.
     - nox/reachability@^0.9.0
-    # Untrusted input reaching a sink (command, path, SQL, URL) in our own
-    # code: the daemon takes requests and reads files operators name.
-    - nox/taint-analysis@^0.7.0
+    # Untrusted input reaching a sink (command, path, SQL, URL) needs no
+    # plugin: nox core's taint engine covers it. nox/taint-analysis was
+    # retired by the registry (core supersedes it since nox 1.33.0) and its
+    # findings changed between identical scans (nox-hq/nox#936).
+
     # Dependency confusion: an internal-looking module name a public
     # registry could also serve.
     - nox/depconfusion@^0.2.0
