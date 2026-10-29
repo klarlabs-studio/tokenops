@@ -552,6 +552,32 @@
         "last_reviewed": "2026-10-22",
         "reviewed_by": "tokenops-maintainers"
       }
+    },
+    {
+      "vulnerability": "IAC-306",
+      "status": "not_affected",
+      "justification": "inline_mitigations_already_exist",
+      "impact_statement": "pages-redirect.yml — id-token: write is mandatory for actions/deploy-pages: it is how the deployment authenticates to GitHub Pages over OIDC instead of a long-lived token. The block is otherwise least-privilege (contents stays read, pages: write is the only other grant), and the workflow only publishes a static page that forwards the old docs addresses to team.klarlabs.de.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "8b2dcd250acb111801645bd853cff86569ce32cf9d24e6cfb018ec99db7d0261",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-10-28",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "VULN-001",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "GO-2026-5932 concerns golang.org/x/crypto/openpgp, which is unmaintained by design and has no fixed version. TokenOps imports no openpgp package, and the scan reports the affected package is not linked into this build; x/crypto is present for other packages only.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "a578073a5bb0e04041fb6c4aed7e7a9e5dceecf23ee150b1a53ee89d7dee4c29",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-28",
+        "reviewed_by": "tokenops-maintainers"
+      }
     }
   ]
 }

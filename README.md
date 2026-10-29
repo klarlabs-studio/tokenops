@@ -306,7 +306,7 @@ the whole integration story. Full matrix + provider list:
 | Client | Passive read | MCP | Proxy |
 |---|:--:|:--:|:--:|
 | Claude Code | ✅ `~/.claude/projects` | ✅ | ✅ `ANTHROPIC_BASE_URL` |
-| Codex CLI | ✅ `~/.codex/sessions` | ✅ | ✅ `OPENAI_BASE_URL` |
+| Codex CLI | ✅ `$CODEX_HOME/sessions` (default `~/.codex`) | ✅ | ✅ `OPENAI_BASE_URL` |
 | opencode | ✅ SQLite store | ✅ | ✅ per-provider baseURL |
 | Gemini CLI | ❌ *(no token log)* | ✅ | ✅ base-URL override |
 | Desktop apps | ❌ | ✅ *(if MCP host)* | ❌ |

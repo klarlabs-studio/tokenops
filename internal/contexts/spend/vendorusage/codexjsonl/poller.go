@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
-
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/jsonltail"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
@@ -43,6 +44,9 @@ type PollerOptions struct {
 	// model_provider ID, "" when it has none. nil treats every custom
 	// provider as unknown.
 	ProviderBaseURL func(id string) string
+	// Health records each scan: a failed read or an unrecognised record
+	// shape is an error, never an empty success. nil records nothing.
+	Health *freshness.Recorder
 }
 
 // Poller scans Codex session JSONLs, dedupes turns by (sessionID, sequence)
@@ -56,8 +60,32 @@ type Poller struct {
 	seen      map[string]struct{}
 	publishes int64
 
-	// tail belongs to the scan goroutine alone.
-	tail jsonltail.Tail[readState]
+	// tail and packed belong to the scan goroutine alone. packed holds the
+	// identity of each compressed rollout already read: a compressed copy
+	// is whole, so it is read again only when it changes.
+	tail   jsonltail.Tail[readState]
+	packed map[string]fileIdentity
+}
+
+// fileIdentity is what tells a compressed rollout has changed.
+type fileIdentity struct {
+	size    int64
+	modTime time.Time
+}
+
+// scanReport collects what one scan saw go wrong.
+type scanReport struct {
+	failures []error
+}
+
+func (r *scanReport) err() error {
+	switch len(r.failures) {
+	case 0:
+		return nil
+	case 1:
+		return r.failures[0]
+	}
+	return fmt.Errorf("%w (and %d more)", r.failures[0], len(r.failures)-1)
 }
 
 func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
@@ -101,7 +129,9 @@ func (p *Poller) resolveRoot() (string, error) {
 	return DefaultRoot()
 }
 
-// scan reads only what each rollout file gained since the last scan.
+// scan reads only what each rollout file gained since the last scan, and
+// reads each compressed rollout once per change. It reports the outcome
+// to health.
 func (p *Poller) scan(ctx context.Context, root string) {
 	files, err := FindSessionFiles(root)
 	if err != nil {
@@ -109,11 +139,81 @@ func (p *Poller) scan(ctx context.Context, root string) {
 		return
 	}
 	visit := p.visitor(ctx)
-	p.tail.Scan(ctx, files, func(_ string, r io.Reader, st *readState) (int64, error) {
-		return readLines(r, st, false, visit)
+	var plain, packed []string
+	for _, f := range files {
+		if IsCompressed(f) {
+			packed = append(packed, f)
+		} else {
+			plain = append(plain, f)
+		}
+	}
+	rep := &scanReport{}
+	p.tail.Scan(ctx, plain, func(path string, r io.Reader, st *readState) (int64, error) {
+		before := st.unrecognised
+		st.shapeErr = nil // the first unrecognised record of this read, not of the file
+		n, err := readLines(r, st, false, visit)
+		if st.unrecognised > before {
+			rep.failures = append(rep.failures, st.shapeErr)
+			p.opts.Logger.Warn("codex jsonl: unrecognised token_count record", "path", path, "err", st.shapeErr)
+		}
+		return n, err
 	}, func(path string, err error) {
+		rep.failures = append(rep.failures, err)
 		p.opts.Logger.Warn("codex jsonl read failed", "path", path, "err", err)
 	})
+	p.scanCompressed(ctx, packed, visit, rep)
+	now := time.Now()
+	if err := rep.err(); err != nil {
+		p.opts.Health.Failed(err, now)
+		return
+	}
+	p.opts.Health.Succeeded(now)
+}
+
+// scanCompressed reads each compressed rollout whose file identity has
+// changed since it was last read. A rollout that fails is left unrecorded,
+// so the next scan reads it again.
+func (p *Poller) scanCompressed(ctx context.Context, paths []string, visit func(Turn) error, rep *scanReport) {
+	live := make(map[string]fileIdentity, len(paths))
+	for _, path := range paths {
+		if ctx.Err() != nil {
+			return
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			continue // gone between the listing and the stat
+		}
+		id := fileIdentity{size: info.Size(), modTime: info.ModTime()}
+		if prev, ok := p.packed[path]; ok && prev == id {
+			live[path] = prev
+			continue
+		}
+		if err := p.readCompressed(path, visit, rep); err != nil {
+			continue
+		}
+		live[path] = id
+	}
+	p.packed = live
+}
+
+// readCompressed reads a whole compressed rollout. Its turns go through
+// visit, which dedupes, so a re-read publishes nothing twice.
+func (p *Poller) readCompressed(path string, visit func(Turn) error, rep *scanReport) error {
+	f, err := OpenRollout(path)
+	if err == nil {
+		defer func() { _ = f.Close() }()
+		st := &readState{}
+		_, err = readLines(f, st, true, visit)
+		if err == nil && st.unrecognised > 0 {
+			rep.failures = append(rep.failures, st.shapeErr)
+			p.opts.Logger.Warn("codex jsonl: unrecognised token_count record", "path", path, "err", st.shapeErr)
+		}
+	}
+	if err != nil {
+		rep.failures = append(rep.failures, err)
+		p.opts.Logger.Warn("codex jsonl read failed", "path", path, "err", err)
+	}
+	return err
 }
 
 // visitor publishes each turn not already seen, keyed by session and
@@ -174,6 +274,14 @@ func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eve
 		"secondary_window_min": fmt.Sprintf("%d", t.RateLimits.SecondaryWindowMinutes),
 		"secondary_resets_at":  fmt.Sprintf("%d", t.RateLimits.SecondaryResetsAtUnix),
 	}
+	if id := t.RateLimits.LimitID; !isDefaultLimit(id) {
+		// Only a non-default limit is named: the default bucket's envelope
+		// stays as it was, and so do the windows read from it.
+		attrs["limit_id"] = id
+		if name := t.RateLimits.LimitName; name != "" {
+			attrs["limit_name"] = name
+		}
+	}
 	return &eventschema.Envelope{
 		ID:            "cdx-" + hex.EncodeToString(h[:8]),
 		SchemaVersion: eventschema.SchemaVersion,
@@ -217,6 +325,13 @@ func (p *Poller) publishWait(ctx context.Context, env *eventschema.Envelope) {
 	p.mu.Lock()
 	p.publishes++
 	p.mu.Unlock()
+}
+
+// isDefaultLimit reports whether a rate-limit snapshot is the default
+// bucket. Codex leaves limit_id null on it, and its own state fills in
+// "codex" (codex-rs/core/src/state/session.rs).
+func isDefaultLimit(id string) bool {
+	return id == "" || id == "codex"
 }
 
 // codexEndpoint names the endpoint a Codex turn went through: OpenAI's

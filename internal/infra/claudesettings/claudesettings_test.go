@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"go.klarlabs.de/tokenops/internal/claudehome"
 )
 
 func TestBaseURLReadsTheUsersSettings(t *testing.T) {
@@ -19,12 +21,37 @@ func TestBaseURLReadsTheUsersSettings(t *testing.T) {
 	if got := BaseURL(); got != "https://api.fireworks.ai/inference" {
 		t.Errorf("BaseURL() = %q", got)
 	}
-	// settings.local.json is read first.
-	if err := os.WriteFile(filepath.Join(dir, "settings.local.json"), []byte(`{"env":{"ANTHROPIC_BASE_URL":"https://openrouter.ai/api"}}`), 0o600); err != nil {
-		t.Fatal(err)
+}
+
+// Managed settings rank above the user's settings.json, and a drop-in
+// above managed-settings.json, as Claude Code merges them.
+func TestBaseURLManagedSettingsWin(t *testing.T) {
+	dir := t.TempDir()
+	managed := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	prev := claudehome.ManagedDir
+	claudehome.ManagedDir = managed
+	t.Cleanup(func() { claudehome.ManagedDir = prev })
+	writeJSON := func(path, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if got := BaseURL(); got != "https://openrouter.ai/api" {
-		t.Errorf("local override: %q", got)
+	writeJSON(filepath.Join(dir, "settings.json"), `{"env":{"ANTHROPIC_BASE_URL":"https://user.example"}}`)
+	if got := BaseURL(); got != "https://user.example" {
+		t.Fatalf("user only: %q", got)
+	}
+	writeJSON(filepath.Join(managed, "managed-settings.json"), `{"env":{"ANTHROPIC_BASE_URL":"https://managed.example"}}`)
+	if got := BaseURL(); got != "https://managed.example" {
+		t.Errorf("managed file over user: %q", got)
+	}
+	writeJSON(filepath.Join(managed, "managed-settings.d", "20-gateway.json"), `{"env":{"ANTHROPIC_BASE_URL":"https://dropin.example"}}`)
+	if got := BaseURL(); got != "https://dropin.example" {
+		t.Errorf("drop-in over managed file: %q", got)
 	}
 }
 
@@ -53,4 +80,17 @@ func TestCredentialReadsNexusHeader(t *testing.T) {
 	if _, key := Credential(); key != "" {
 		t.Errorf("other headers: %q", key)
 	}
+}
+
+// TestMain points the managed-settings directory at an empty fixture, so
+// a machine with managed settings installed cannot change the results.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "claudesettings-managed")
+	if err != nil {
+		panic(err)
+	}
+	claudehome.ManagedDir = dir
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
 }
