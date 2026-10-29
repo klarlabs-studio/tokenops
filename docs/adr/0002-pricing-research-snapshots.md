@@ -1,6 +1,6 @@
 # ADR 0002 — Researched, effective-dated pricing snapshots
 
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-10-29: a model the card in force does not list takes the nearest card that does, see *Amendment: the nearest card that lists the model*
 - **Date:** 2026-07-07
 - **Deciders:** TokenOps maintainers
 - **Related:** `internal/contexts/spend/spend` (pricing catalog + engine), ADR 0001, the "800:1 / The tool was guessing" honesty ethos
@@ -45,6 +45,21 @@ snapshots**, each carrying `source`, `source_url`, and `fetched_at`. The cost
 engine selects the snapshot **in effect at the event's timestamp** — so a June
 event is priced at June's rate. The embedded `pricing.yaml` remains the offline
 **baseline snapshot** (dated at its commit) and the guaranteed fallback.
+
+#### Amendment: the nearest card that lists the model (2026-10-29)
+
+The card in force at an event's timestamp is authoritative for every
+model it lists. A model it does not list was first priced as unknown,
+even when an earlier or later card listed it: a source can add a model
+after its launch, or drop it while it is still used. On one machine that
+left about 20,000 recorded requests unpriced (older Codex models, opencode
+models) that the cards did price.
+
+Such a model now takes the nearest card that lists it: the latest earlier
+card, whose rate was in force when the model was last listed, else the
+earliest later card, which first listed it. A recorded turn used a model
+that existed, so the card nearest in time is better evidence of its price
+than none. A model no card lists stays unknown.
 
 ### 3. A `pricing refresh` flow that DIFFS
 `tokenops pricing refresh` fetches the source → normalizes to the internal model →

@@ -119,27 +119,61 @@ func TestSingleTableEngineIsTimestampIndependent(t *testing.T) {
 }
 
 func TestNewDatedEngineAuthoritativePerInstant(t *testing.T) {
-	// A model present in the earlier table but absent from the later table
-	// must NOT fall through to the earlier table once the later one is in
-	// effect — the selected table is authoritative for that instant.
+	// The table in effect prices every model it lists, even where an
+	// earlier table priced it differently.
 	early := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	late := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 	e := NewDatedEngine([]DatedTable{
-		{EffectiveFrom: early, Table: tableWithInput(eventschema.ProviderAnthropic, "claude-retired", 10)},
+		{EffectiveFrom: early, Table: tableWithInput(eventschema.ProviderAnthropic, "claude-opus-4-8", 10)},
 		{EffectiveFrom: late, Table: tableWithInput(eventschema.ProviderAnthropic, "claude-opus-4-8", 30)},
 	})
 	p := &eventschema.PromptEvent{
-		Provider: eventschema.ProviderAnthropic, RequestModel: "claude-retired", InputTokens: 1_000_000,
+		Provider: eventschema.ProviderAnthropic, RequestModel: "claude-opus-4-8", InputTokens: 1_000_000,
 	}
-	// Before late: the model exists in the earliest table → priced.
-	if _, err := e.ComputeAt(p, early); err != nil {
-		t.Errorf("early lookup should succeed: %v", err)
+	if got := mustCompute(t, e, p, early); !approxEqual(got, 10) {
+		t.Errorf("early = %v, want 10", got)
 	}
-	// After late: the effective table lacks the model → ErrUnknownModel,
-	// not a fall-through to the earlier table.
-	if _, err := e.ComputeAt(p, late); !errors.Is(err, ErrUnknownModel) {
-		t.Errorf("late lookup = %v, want ErrUnknownModel (no fall-through)", err)
+	if got := mustCompute(t, e, p, late); !approxEqual(got, 30) {
+		t.Errorf("late = %v, want 30", got)
 	}
+}
+
+// A model the table in effect does not list is priced by the nearest table
+// that does: the latest earlier one, else the earliest later one. A model
+// no table lists stays unknown.
+func TestNewDatedEngineFallsBackToTheNearestTableListingTheModel(t *testing.T) {
+	jan := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	mar := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	jun := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	e := NewDatedEngine([]DatedTable{
+		{EffectiveFrom: jan, Table: tableWithInput(eventschema.ProviderAnthropic, "claude-retired", 10)},
+		{EffectiveFrom: mar, Table: tableWithInput(eventschema.ProviderAnthropic, "claude-other", 1)},
+		{EffectiveFrom: jun, Table: tableWithInput(eventschema.ProviderAnthropic, "claude-new", 30)},
+	})
+	price := func(model string, at time.Time) (float64, error) {
+		return e.ComputeAt(&eventschema.PromptEvent{
+			Provider: eventschema.ProviderAnthropic, RequestModel: model, InputTokens: 1_000_000}, at)
+	}
+	// Retired after January: still priced at the rate it was last listed at.
+	if got, err := price("claude-retired", jun.Add(time.Hour)); err != nil || !approxEqual(got, 10) {
+		t.Errorf("retired model in June = %v, %v; want 10 from January", got, err)
+	}
+	// Used before its first listing: priced at the rate it was first listed at.
+	if got, err := price("claude-new", mar.Add(time.Hour)); err != nil || !approxEqual(got, 30) {
+		t.Errorf("new model in March = %v, %v; want 30 from June", got, err)
+	}
+	if _, err := price("claude-unlisted", mar); !errors.Is(err, ErrUnknownModel) {
+		t.Errorf("a model no table lists = %v, want ErrUnknownModel", err)
+	}
+}
+
+func mustCompute(t *testing.T, e *Engine, p *eventschema.PromptEvent, at time.Time) float64 {
+	t.Helper()
+	got, err := e.ComputeAt(p, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
 }
 
 func TestEffectiveDatingScenario(t *testing.T) {

@@ -3,6 +3,7 @@ package pricing
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -23,6 +24,22 @@ const ModelsDevSourceName = "models.dev"
 // not mapped: plan turns are valued at the vendor's pay-as-you-go rate,
 // which is why moonshotai also prices Kimi Code ("kimi").
 var modelsDevProviders = providers.ModelsDevPricing()
+
+// modelsDevZeroIsFree are the models.dev providers whose $0 listings are
+// free models rather than missing prices.
+var modelsDevZeroIsFree = providers.ModelsDevZeroIsFree()
+
+// freeModel matches a model ID that names itself free: "-free", ":free"
+// or "/free" at its end.
+var freeModel = regexp.MustCompile(`(^|[-:/])free$`)
+
+// listedFree reports whether a $0 listing of modelID under provider id is
+// a free model. A router's or aggregator's $0 ("auto", "custom") means its
+// price depends on the model it routes to, so a zero is free only where
+// the model says so or the provider lists its free models that way.
+func listedFree(id, modelID string) bool {
+	return modelsDevZeroIsFree[id] || freeModel.MatchString(strings.ToLower(modelID))
+}
 
 // ParseModelsDev normalizes a models.dev catalog body into a Snapshot of the
 // gateway rates modelsDevProviders maps. sourceURL and fetchedAt are the
@@ -49,7 +66,7 @@ func ParseModelsDev(body []byte, sourceURL string, fetchedAt time.Time) (Snapsho
 			continue
 		}
 		for modelID, m := range p.Models {
-			if m.Cost == nil || (m.Cost.Input <= 0 && m.Cost.Output <= 0) {
+			if m.Cost == nil || (m.Cost.Input <= 0 && m.Cost.Output <= 0 && !listedFree(id, modelID)) {
 				continue
 			}
 			for _, provider := range providers {

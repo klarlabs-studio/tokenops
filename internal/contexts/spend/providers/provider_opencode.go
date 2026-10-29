@@ -18,6 +18,9 @@ func providerOpencode() Descriptor {
 		Endpoints: []Endpoint{{Host: "opencode.ai", Billing: Reseller, Source: "https://opencode.ai/docs/zen"}},
 		Opencode:  []OpencodeID{{ID: "opencode", Endpoint: "opencode"}},
 		ModelsDev: []string{"opencode"},
-		Docs:      Docs{Setup: "`vendor_usage.opencode.enabled: true`"},
+		// Zen's pricing table lists its free models as Free
+		// (https://opencode.ai/docs/zen); models.dev lists them at $0.
+		ModelsDevZeroIsFree: true,
+		Docs:                Docs{Setup: "`vendor_usage.opencode.enabled: true`"},
 	}
 }
