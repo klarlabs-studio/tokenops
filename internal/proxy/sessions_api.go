@@ -77,7 +77,11 @@ func (s *Server) registerSessionRoutes(mux RouteMux) {
 			writeAPIError(w, http.StatusBadRequest, err)
 			return
 		}
-		writeAPIJSON(w, http.StatusOK, sessions.ComputeRuntime(win, sessions.RuntimeOptions{Limit: limit}, time.Now()))
+		opts := sessions.RuntimeOptions{Limit: limit}
+		if s.analytics != nil && s.analytics.aggregator != nil {
+			opts.Turns = s.analytics.aggregator
+		}
+		writeAPIJSON(w, http.StatusOK, sessions.ComputeRuntime(r.Context(), win, opts, time.Now()))
 	})
 	mux.HandleFunc("GET /api/coach/prompts", func(w http.ResponseWriter, r *http.Request) {
 		limit, err := intParam(r, "limit")

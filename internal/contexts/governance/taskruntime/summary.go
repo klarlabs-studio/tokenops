@@ -96,6 +96,17 @@ type Group struct {
 	// VerifiedSuccess counts tasks something independently verified.
 	// Transcripts record no verification, so it is always null.
 	VerifiedSuccess *int `json:"verified_success"`
+
+	// UsageSamples are the runtime samples with recorded usage: the
+	// denominator of the cost and token figures. UsageUnpriced counts the
+	// ones with a turn no list price covers, which understate.
+	UsageSamples  int `json:"usage_samples"`
+	UsageUnpriced int `json:"usage_unpriced"`
+	// APIEquivalentUSD is each task's usage at list prices; BilledUSD what
+	// it was billed; Tokens its input and output tokens.
+	APIEquivalentUSD Distribution `json:"api_equivalent_usd"`
+	BilledUSD        Distribution `json:"billed_usd"`
+	Tokens           Distribution `json:"tokens"`
 }
 
 // Summarise rolls tasks up into one group.
@@ -103,7 +114,7 @@ func Summarise(tasks []Task) Group {
 	g := Group{Tasks: len(tasks),
 		HeuristicLabel: "heuristic: no friction signal in the transcript; not verified success"}
 	observed := make([]float64, 0, len(tasks))
-	var completed, ttft, critical, resource []float64
+	var completed, ttft, critical, resource, value, billed, tokens []float64
 	perCat := map[Category]*struct {
 		known, unknown int
 		secs, shares   []float64
@@ -146,6 +157,15 @@ func Summarise(tasks []Task) Group {
 		if t.Heuristic.Clean {
 			g.HeuristicClean++
 		}
+		if u := t.Usage; u != nil {
+			g.UsageSamples++
+			if u.UnpricedTurns > 0 {
+				g.UsageUnpriced++
+			}
+			value = append(value, u.APIEquivalentUSD)
+			billed = append(billed, u.BilledUSD)
+			tokens = append(tokens, float64(u.InputTokens+u.OutputTokens))
+		}
 		for _, ct := range t.Categories {
 			pc := perCat[ct.Category]
 			if pc == nil {
@@ -162,6 +182,7 @@ func Summarise(tasks []Task) Group {
 	}
 	g.Observed, g.Completed, g.HarnessTTFT = distribution(observed), distribution(completed), distribution(ttft)
 	g.ToolCriticalPath, g.ToolResource = distribution(critical), distribution(resource)
+	g.APIEquivalentUSD, g.BilledUSD, g.Tokens = distribution(value), distribution(billed), distribution(tokens)
 	for _, c := range Categories {
 		pc := perCat[c]
 		g.Categories = append(g.Categories, CategorySummary{

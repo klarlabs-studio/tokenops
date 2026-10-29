@@ -2058,12 +2058,22 @@ time is nobody's work. The friction count is a heuristic read from the
 transcript, labelled as one, and `verified_success` is always unknown:
 transcripts record what was attempted, not whether it was right.
 
+**Cost per task.** Each task also carries what its recorded turns used
+and cost, from the event store: turns, input, output and cache tokens,
+what was billed, and the API-equivalent value at list prices. A recorded
+turn goes to the task of its session that started last at or before it,
+so a subagent's turns count toward the task that started it. A task whose
+session the event store recorded no turns for has a null `usage`, never
+zero, and the summaries give the median and p90 of value, billed cost and
+tokens over the samples that have one (`usage_samples`), counting the ones
+with an unpriced turn (`usage_unpriced`), whose value understates.
+
 `--runtime --json` is the derived-only export, the same document as the
 `tokenops_sessions` tool's `runtime` view and `GET /api/story/runtime`:
 per task a stable hashed `task_key` and `attempt_keys`, harness, model,
 role, status with its evidence, the categories with `quality`, `origin`,
-`complete` and their coverage (`timed` of `seen`), the tool figures, and
-the summaries. It carries no instruction text, file paths or session ids.
+`complete` and their coverage (`timed` of `seen`), the tool figures, the
+usage, and the summaries. It carries no instruction text, file paths or session ids.
 
 #### `--for` — one account, four readings
 
