@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **spend:** `tokenops spend export` writes FOCUS 1.4, the current FinOps billing format, by default; `--focus-version 1.2` (or `GET /api/spend/export?version=1.2`) still writes the old file. FOCUS 1.4 requires `BilledCost` to be what the vendor invoiced and 0 on rows from anyone who issues no invoice, so a dataset merged with the vendor's own counts nothing twice. TokenOps issues no invoice, so its 1.4 rows bill 0 and carry its estimate in `x_EstimatedCost`. Each day's usage of a model is a row per kind of token (input, cache read, cache write, output) at its API list rate, which FOCUS 1.4's `SkuPriceId`, `ListUnitPrice` and `ContractedUnitPrice` need. Usage a plan covered has a contracted price of 0, so ListCost against ContractedCost is what the plan was worth. `ServiceProviderName` and `HostProviderName` replace 1.2's `ProviderName` and `PublisherName`. A FinOps tool that reads only 1.2 needs `--focus-version 1.2`.
+
 ## 0.114.5 - 2026-10-29
 
 ### Fixed
