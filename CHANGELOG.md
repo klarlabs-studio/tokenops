@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- **budgets:** a monthly budget on one provider's bill counts that provider's own figure for your spend this month when it reports one (Fireworks' usage limits), instead of an estimate from the price list. The estimate leaves out every model without a list price, so a Fireworks budget could read a few dollars while the limit was already spent, and its alert never fired. Budgets narrowed by workflow, agent or tag, on tokens, or over a day or a week keep the estimate; an account-wide figure or a trailing 30 days is not taken as your month.
+- **menu bar:** on pay as you go, the spend limit is titled "Monthly spend limit", not "Extra usage": it is the whole plan, not usage on top of one. A budget that is that same limit is not drawn as a second bar; its mode sits under the limit's. "On the plan" is not shown, since no plan carries the tokens.
+
 ## 0.114.4 - 2026-10-29
 
 ### Fixed

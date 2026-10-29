@@ -3675,6 +3675,9 @@
                               "spend_source": {
                                 "type": "string"
                               },
+                              "spend_trailing_days": {
+                                "type": "integer"
+                              },
                               "spend_usd": {
                                 "type": "number"
                               },
@@ -4103,6 +4106,9 @@
                             "type": "string"
                           },
                           "rule": {
+                            "type": "string"
+                          },
+                          "source": {
                             "type": "string"
                           },
                           "used": {
@@ -4761,6 +4767,9 @@
                           },
                           "spend_source": {
                             "type": "string"
+                          },
+                          "spend_trailing_days": {
+                            "type": "integer"
                           },
                           "spend_usd": {
                             "type": "number"

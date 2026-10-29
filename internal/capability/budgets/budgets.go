@@ -56,6 +56,9 @@ type Watcher struct {
 	// without this each restart recorded the same exceedance again. Nil
 	// means nothing is recorded.
 	Recorded func(ctx context.Context, name string, since time.Time) bool
+	// Bill, when set, is the providers' own figures, which a budget that
+	// counts a provider's bill measures by (see Billed).
+	Bill Bill
 
 	seen map[string]bool
 }
@@ -80,13 +83,20 @@ func (w *Watcher) Tick(ctx context.Context, now time.Time) Report {
 	var r Report
 	alerts := budget.EvaluateAll(w.Limits,
 		func(l Limit) float64 {
-			v, err := Measure(ctx, w.Source, l, now)
+			v, _, err := measure(ctx, w.Source, w.Bill, l, now)
 			if err != nil {
 				r.Errors = append(r.Errors, err)
 			}
 			return v
 		},
-		func(l Limit) []forecast.Prediction { return w.forecast(ctx, l, now) },
+		func(l Limit) []forecast.Prediction {
+			// The daily history is the estimate's; it would project the
+			// bill from a fraction of it.
+			if _, billed := w.billFor(ctx, l, now); billed {
+				return nil
+			}
+			return w.forecast(ctx, l, now)
+		},
 	)
 	for _, a := range alerts {
 		start := budget.WindowStart(a.Limit.Window, now)
@@ -156,6 +166,44 @@ func Measure(ctx context.Context, src Source, l Limit, now time.Time) (float64, 
 	}
 }
 
+// Bill is a provider's own figure for the operator's spend this calendar
+// month (Fireworks' usage limits), when it reports one: the amount it
+// bills, where the price list only estimates it and cannot cost the models
+// it has no price for. ok is false when the provider reports none.
+type Bill func(ctx context.Context, provider string, now time.Time) (usd float64, ok bool)
+
+// SourceVendor marks a reading measured by the provider's own bill.
+const SourceVendor = "vendor"
+
+// Billed reports whether l counts what a provider's bill does: money
+// spent with one provider this calendar month, unnarrowed by workflow,
+// agent or tag.
+func Billed(l Limit) bool {
+	return l.Provider != "" && l.Window == budget.WindowMonthly &&
+		(l.Basis == "" || l.Basis == budget.BasisSpend) &&
+		l.WorkflowID == "" && l.AgentID == "" && l.Tag == ""
+}
+
+// measure is Measure with the provider's bill in place of the estimate
+// when l counts the bill and the provider reports one; source is then
+// SourceVendor.
+func measure(ctx context.Context, src Source, bill Bill, l Limit, now time.Time) (v float64, source string, err error) {
+	if bill != nil && Billed(l) {
+		if usd, ok := bill(ctx, l.Provider, now); ok {
+			return usd, SourceVendor, nil
+		}
+	}
+	v, err = Measure(ctx, src, l, now)
+	return v, "", err
+}
+
+func (w *Watcher) billFor(ctx context.Context, l Limit, now time.Time) (float64, bool) {
+	if w.Bill == nil || !Billed(l) {
+		return 0, false
+	}
+	return w.Bill(ctx, l.Provider, now)
+}
+
 // ProviderName names the provider a budget counts the bill of, as the
 // docs do; an id the registry does not know is shown as it is.
 func ProviderName(id string) string {
@@ -172,13 +220,19 @@ type Reading = boundaryledger.BudgetReading
 // measured, or has no limit, is left out: a missing figure never
 // satisfies a boundary, and a surface shows nothing rather than zero.
 func Read(ctx context.Context, src Source, limits []Limit, now time.Time) []Reading {
+	return ReadBilled(ctx, src, nil, limits, now)
+}
+
+// ReadBilled is Read, measuring a budget that counts a provider's bill by
+// that bill when bill reports one (see Billed).
+func ReadBilled(ctx context.Context, src Source, bill Bill, limits []Limit, now time.Time) []Reading {
 	var out []Reading
 	for _, l := range limits {
 		limit := l.Threshold()
 		if limit <= 0 {
 			continue
 		}
-		v, err := Measure(ctx, src, l, now)
+		v, source, err := measure(ctx, src, bill, l, now)
 		if err != nil {
 			continue
 		}
@@ -194,7 +248,7 @@ func Read(ctx context.Context, src Source, limits []Limit, now time.Time) []Read
 		}
 		out = append(out, Reading{
 			Key: l.Key(), Budget: l.Name, Window: string(l.Window), Mode: mode, Basis: basis, Provider: l.Provider,
-			Used: v, Limit: limit, UsedPct: v / limit * 100,
+			Used: v, Limit: limit, UsedPct: v / limit * 100, Source: source,
 			WarnPct: warn * 100, CritPct: crit * 100,
 			WindowStart: start, ResetsAt: budget.WindowEnd(l.Window, start),
 		})

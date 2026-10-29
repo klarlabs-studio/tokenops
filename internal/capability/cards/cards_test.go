@@ -281,3 +281,21 @@ func TestCardShowsPlanUse(t *testing.T) {
 		t.Errorf("plan use shown on a plan it is not about:\n%s", out)
 	}
 }
+
+// On pay as you go the spend limit is the whole plan, not extra usage on
+// top of one, and no plan carries tokens, so "on the plan" is not shown.
+func TestPayAsYouGoShowsItsLimitAsThePlan(t *testing.T) {
+	g := sample()
+	g.Headroom.Reports = []plans.HeadroomReport{{Provider: "fireworks", PlanName: plans.PayAsYouGo,
+		Display: "Pay as you go (spend limit)", SpendUSD: 130, SpendLimitUSD: 100, SpendPct: 130,
+		SpendSource: "vendor", SpendScope: "user"}}
+	none := 0.0
+	g.PlanUse = &plans.PlanUseReport{Providers: []plans.PlanUse{{Provider: "fireworks", CoveragePct: &none}}}
+	out := Render(g, Options{Width: 80})
+	if !strings.Contains(out, "Monthly spend limit") || strings.Contains(out, "Extra usage") {
+		t.Errorf("the limit is not titled as the plan's:\n%s", out)
+	}
+	if strings.Contains(out, "On the plan") {
+		t.Errorf("pay as you go shows a share on a plan it does not have:\n%s", out)
+	}
+}
