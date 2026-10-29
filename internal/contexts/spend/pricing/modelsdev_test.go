@@ -85,8 +85,8 @@ func TestCombinedMergesSources(t *testing.T) {
 	if snap.Source != "a+b" || !snap.FetchedAt.Equal(at.Add(time.Hour)) {
 		t.Errorf("provenance = %q @ %v", snap.Source, snap.FetchedAt)
 	}
-	if snap.Rates["x/m"].InputPerMillion != 1 || snap.Rates["y/n"].InputPerMillion != 2 {
-		t.Errorf("rates = %v; the first source keeps a shared key", snap.Rates)
+	if snap.Rates["x/m"].InputPerMillion != 9 || snap.Rates["y/n"].InputPerMillion != 2 {
+		t.Errorf("rates = %v; the later source prices a shared key", snap.Rates)
 	}
 }
 
