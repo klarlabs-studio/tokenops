@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.114.4 - 2026-10-29
+
 ### Fixed
 
 - **codex:** Codex usage that Codex had moved out of its plain files, and a second Codex limit, no longer disappear or overwrite the first. Three things in how TokenOps reads Codex's own files were out of date:
