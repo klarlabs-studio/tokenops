@@ -15,15 +15,11 @@
   - `tokenops hooks status` counts a TokenOps hook wired in managed settings. It reported "no hooks wired" for an organisation that had deployed them, and that hook runs for every session.
 - **transcripts:** a Claude Code transcript that is rewritten is read again from its start. TokenOps resumed each transcript from the byte offset it had reached, and a file that was replaced by one of the same or a larger size (a transcript that was restored, moved in or rewritten under the same name) was read from that offset into the new content. Claude Code's `cleanupPeriodDays` deletes old transcripts whole; it does not rewrite them. Its first lines were skipped, or a line was cut in half. A transcript is now read from its start when its inode changes, when it is shorter than the offset, or when its first bytes change. The turns it still holds are not counted again: the event store keeps one row per turn ID.
 - **synthetic:** the request quota's reset time is read whether Synthetic sends it as `renewsAt`, the spelling its docs give, or as `renewAt`, which its quota API has been seen to send. Before, a quota sent as `renewAt` showed its usage with no reset time. A quota with neither field still shows its usage, with the reset unknown.
+- **attribution:** requests to Together AI's current API host, `api.together.ai`, and to the Azure AI Foundry and AI Services hosts of an Azure OpenAI resource (`*.services.ai.azure.com`, `*.cognitiveservices.azure.com`) are billed to Together AI and Azure OpenAI. The classic hosts, `api.together.xyz` and `*.openai.azure.com`, still are. The `together` proxy route now forwards to `api.together.ai`, Together's documented host, instead of `api.together.xyz`. Before, requests to the new hosts were not attributed to any provider, so their spend was not counted for it.
 
 ### Security
 
 - **dependencies:** golang.org/x/net v0.62.0, which fixes GO-2026-6860 and GO-2026-6866 (code scanning VULN-001). The affected HTML packages are not linked into the shipped binaries, so no user-visible behaviour changes.
-
-### Fixed
-
-- **attribution:** requests to Together AI's current API host, `api.together.ai`, and to the Azure AI Foundry and AI Services hosts of an Azure OpenAI resource (`*.services.ai.azure.com`, `*.cognitiveservices.azure.com`) are billed to Together AI and Azure OpenAI. The classic hosts, `api.together.xyz` and `*.openai.azure.com`, still are. The `together` proxy route now forwards to `api.together.ai`, Together's documented host, instead of `api.together.xyz`. Before, requests to the new hosts were not attributed to any provider, so their spend was not counted for it.
-
 
 ## 0.114.3 - 2026-10-28
 
