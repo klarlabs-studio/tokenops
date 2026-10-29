@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **otel:** the OTLP exporter follows the current OpenTelemetry GenAI conventions (`semantic-conventions-genai`). The provider is `gen_ai.provider.name`, with the convention's well-known values (`gcp.gemini`, `x_ai`); `gen_ai.system`, the key it replaced, is still written beside it so collector queries written against it keep working, and goes in a later release. Prompt-cache reads and writes are `gen_ai.usage.cache_read.input_tokens` and `gen_ai.usage.cache_write.input_tokens` (`tokenops.usage.cached_input_tokens` stays). `gen_ai.response.finish_reasons` is sent as the string array the convention defines, not a single string.
+
 ## 0.114.5 - 2026-10-29
 
 ### Fixed
