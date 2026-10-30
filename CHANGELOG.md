@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.116.0 - 2026-10-30
+
 ### Added
 
 - **team:** upload schema 3, for the team plane's organisation FOCUS dataset, unit economics across members and reconciliation with the vendor's bill (ADR 0016; ADR 0012, amended). Sent only to a team server that accepts it, it adds spend per day, repository and provider (no model names), the tasks, commits and merged pull requests finished per day and repository with the value placed on them, and, from an owner's or admin's machine with an admin key configured, what Anthropic's and OpenAI's cost APIs report the organisation was billed per day. The admin key never leaves that machine. `tokenops team preview` shows the new sections; `--json` prints them as sent.
