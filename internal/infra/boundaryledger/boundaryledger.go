@@ -590,6 +590,30 @@ type BudgetReading struct {
 	Require  string `json:"require,omitempty"`
 }
 
+// CountsFor reports whether the window counts the turns provider bills: a
+// window on every provider's bill counts all of them, one on a single
+// provider's bill only that provider's. An unknown provider ("") may be
+// any of them, so every window counts.
+func (r BudgetReading) CountsFor(provider string) bool {
+	return r.Provider == "" || provider == "" || r.Provider == provider
+}
+
+// BudgetsUsedPct is the share of each window used, by key. A budget with
+// several windows also gets an entry under its own name: its fullest
+// window, so a rule naming the budget holds on any of them.
+func BudgetsUsedPct(readings []BudgetReading) map[string]float64 {
+	out := map[string]float64{}
+	for _, r := range readings {
+		out[r.Key] = r.UsedPct
+		if r.Key != r.Budget {
+			if cur, ok := out[r.Budget]; !ok || r.UsedPct > cur {
+				out[r.Budget] = r.UsedPct
+			}
+		}
+	}
+	return out
+}
+
 const figuresFile = "figures.json"
 
 // PutFigures replaces the readings.

@@ -131,6 +131,35 @@ func TestProviderBudgetTipNamesTheProvider(t *testing.T) {
 	}
 }
 
+// A budget on one provider's bill is said only in a session that provider
+// bills: a spent Fireworks budget says nothing in a Claude Code session
+// on Anthropic, and waits, unsaid, for a Fireworks session.
+func TestProviderBudgetSpeaksOnlyInThatProvidersSessions(t *testing.T) {
+	dir := t.TempDir()
+	r := teamDaily(104)
+	r.Provider = "fireworks"
+	cfg := spendCfg(r)
+	var asked string
+	cfg.SessionBiller = func(model string) string { asked = model; return "anthropic" }
+	if dec := Evaluate(dir, "s1", cheapTurn(t, dir), cfg, fixedNow); dec.Nudge {
+		t.Fatalf("another provider's budget spoke in an Anthropic session: %q", dec.Message)
+	}
+	if asked != opus {
+		t.Errorf("the biller was asked about %q, want the session's model %q", asked, opus)
+	}
+	cfg.SessionBiller = func(string) string { return "fireworks" }
+	if dec := Evaluate(dir, "s2", cheapTurn(t, t.TempDir()), cfg, fixedNow.Add(time.Minute)); !dec.Nudge || tipKind(dec) != "spend_over" {
+		t.Fatalf("the budget did not speak in a Fireworks session: %+v", dec)
+	}
+	// A session whose biller is unknown hears every budget.
+	all := spendCfg(teamDaily(104))
+	all.Budgets[0].Provider = "fireworks"
+	all.SessionBiller = func(string) string { return "" }
+	if dec := Evaluate(t.TempDir(), "s3", cheapTurn(t, t.TempDir()), all, fixedNow); !dec.Nudge {
+		t.Fatal("an unknown biller silenced a provider budget")
+	}
+}
+
 func TestQuietVerbositySpeaksOnlyAtTheLimit(t *testing.T) {
 	dir := t.TempDir()
 	cfg := spendCfg(teamDaily(96))

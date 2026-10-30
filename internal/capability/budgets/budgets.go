@@ -276,16 +276,7 @@ func Current(dir boundaryledger.Dir, now time.Time) []Reading {
 // A budget with several windows also gets an entry under its own name:
 // its fullest window, so a rule naming the budget holds on any of them.
 func UsedPctOf(readings []Reading) map[string]float64 {
-	out := map[string]float64{}
-	for _, r := range readings {
-		out[r.Key] = r.UsedPct
-		if r.Key != r.Budget {
-			if cur, ok := out[r.Budget]; !ok || r.UsedPct > cur {
-				out[r.Budget] = r.UsedPct
-			}
-		}
-	}
-	return out
+	return boundaryledger.BudgetsUsedPct(readings)
 }
 
 // UsedPct is the share of each budget window used in its current window,

@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- **budgets:** a budget on one provider's bill (`tokenops budget set … --provider`) spoke and bound in sessions that provider does not bill. With that budget spent, a Claude Code session on Anthropic was told the budget was used up and, for a hard budget, asked to continue at every tool call, though none of its turns counted toward it. The coach's budget tips and a hard budget's boundary now count only the budgets the session's turns go to. TokenOps tells who bills a Claude Code session from where Claude Code is pointed (`ANTHROPIC_BASE_URL`, or its settings) and, for an endpoint that bills by model such as Fireworks', from the session's latest model, so Claude through Fireworks counts toward Anthropic and Fireworks' own models toward Fireworks. When it cannot tell (Bedrock, Vertex, a local relay, Codex, opencode, Cursor), every budget still applies, as before.
 - **team:** `tokenops team status` said the server accepts upload schema 2 when it accepts schema 3. It now names schema 3 and what it adds, and tells an owner or admin that their machine sends the vendor's daily bill when an admin key is configured. What was uploaded was right; only the message was out of date.
 
 ## 0.116.0 - 2026-10-30

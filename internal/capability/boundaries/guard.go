@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -125,6 +126,11 @@ type Call struct {
 	// Provider is the provider whose plan headroom applies; empty takes
 	// the tightest plan known. Claude Code's is always anthropic.
 	Provider string
+	// Biller is the provider that bills the session's turns, which may
+	// differ from Provider (Claude Code pointed at another vendor). A
+	// budget on one provider's bill binds only that provider's sessions;
+	// empty, it cannot tell, and every budget binds.
+	Biller string
 	// Destination is where shared figures go, for share.
 	Destination string
 	// ToolName is the tool about to run, and ArgsHash a hash of its input
@@ -324,9 +330,17 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 	if needs(rules, domain.FieldBudgetUsed) {
 		if fig, ok := figs.get(); ok && len(fig.BudgetUsedPct) > 0 {
 			f.BudgetUsedPct = fig.BudgetUsedPct
+			scope, caveat := "budgets", ""
+			if call.Biller != "" && len(fig.Budgets) > 0 {
+				// A budget on another provider's bill is not this
+				// session's to spend: its turns never count toward it.
+				f.BudgetUsedPct = boundaryledger.BudgetsUsedPct(slices.DeleteFunc(slices.Clone(fig.Budgets),
+					func(r boundaryledger.BudgetReading) bool { return !r.CountsFor(call.Biller) }))
+				scope, caveat = "budgets counting "+call.Biller, "budgets on another provider's bill left out"
+			}
 			ev = append(ev, eventschema.EvidenceRef{
 				Kind: "budget_used", Source: "daemon_budgets", ObservedAt: fig.ObservedAt,
-				FreshUntil: fig.ObservedAt.Add(figuresFreshFor), Confidence: 1, Scope: "budgets",
+				FreshUntil: fig.ObservedAt.Add(figuresFreshFor), Confidence: 1, Scope: scope, Caveat: caveat,
 			})
 		}
 	}

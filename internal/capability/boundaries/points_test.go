@@ -269,6 +269,51 @@ func TestHardBudgetWindowAsksAtThePausePoint(t *testing.T) {
 	}
 }
 
+// A hard budget on one provider's bill binds only the sessions that
+// provider bills: a spent Fireworks budget does not stop a Claude Code
+// session on Anthropic, and still stops one on Fireworks or one whose
+// biller is unknown.
+func TestProviderHardBudgetBindsOnlyThatProvidersSessions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	body := `budgets:
+  - name: fw
+    provider: fireworks
+    windows:
+      - window: monthly
+        limit_usd: 50
+        mode: hard
+`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Promote(path, "budget-fw-monthly"); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+	cfg, err := config.ReadMutable(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := cfg.BoundaryRules()
+	env := testEnv(t, true)
+	putFigures(t, env, boundaryledger.Figures{
+		BudgetUsedPct: map[string]float64{"fw": 100},
+		Budgets:       []boundaryledger.BudgetReading{{Key: "fw", Budget: "fw", Window: "monthly", Mode: "hard", Provider: "fireworks", UsedPct: 100}},
+	})
+	for _, c := range []struct {
+		biller, want string
+	}{{"anthropic", VerdictNone}, {"fireworks", VerdictAsk}, {"", VerdictAsk}} {
+		cl := call("s-" + c.biller)
+		cl.Biller = c.biller
+		res, err := GuardActions(rules, cl, env, domain.ActionSpend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Verdict != c.want {
+			t.Errorf("biller %q: verdict %q (%s), want %q", c.biller, res.Verdict, res.Reason, c.want)
+		}
+	}
+}
+
 func TestWithBudgetsNamesTheRuleOfAHardWindow(t *testing.T) {
 	cfg := config.Default()
 	cfg.Budgets = []config.BudgetConfig{{Name: "team", Windows: []config.BudgetWindowConfig{

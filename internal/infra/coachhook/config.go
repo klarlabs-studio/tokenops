@@ -97,6 +97,11 @@ type Config struct {
 	// said once per window as tips of the "spend" family. Nil says
 	// nothing about budgets.
 	Budgets []boundaryledger.BudgetReading
+	// SessionBiller names the provider that bills the session's turns,
+	// given its latest model. A budget on another provider's bill is not
+	// said in this session. Nil, or "", it cannot tell, and every budget
+	// is said.
+	SessionBiller func(model string) string
 	// Alternatives reads the state of the operator's other plans. It is
 	// called only when a used-up window is about to be stood down for, so
 	// a hook that never gets there reads nothing. Nil knows of none.

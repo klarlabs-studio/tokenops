@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/attribution"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
@@ -85,6 +87,10 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 	}
 	if in.ToolInput != nil {
 		call.ArgsHash = bcap.HashToolInput(in.ToolInput)
+	}
+	if harness == bcap.HarnessClaudeCode {
+		// A budget on another provider's bill is not this session's.
+		call.Biller = attribution.ClaudeCodeSessionBiller(os.Getenv, in.TranscriptPath, "")
 	}
 	project := bcap.TranscriptProject(in.TranscriptPath)
 	if in.Directory != "" {
