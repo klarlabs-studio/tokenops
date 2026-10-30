@@ -49,26 +49,44 @@ func (o OpenAIAdmin) Read(ctx context.Context, key string) (usage.Reading, error
 	t := now().UTC()
 	start := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, time.UTC)
+	days, err := o.DailyCost(ctx, key, start, end)
+	if err != nil {
+		return usage.Reading{}, err
+	}
+	var total float64
+	for _, v := range days {
+		total += v
+	}
+	// Spend this month with no cap: the Administration API reports none.
+	return usage.Reading{Scope: "organization", UsedUSD: total, HasUsed: true}, nil
+}
+
+// DailyCost reads what the organisation was billed on each UTC day from
+// start to end, in USD, keyed "2006-01-02": the costs endpoint's daily
+// buckets, which OpenAI says reconcile to the invoice. A day with no
+// costs is 0.
+func (o OpenAIAdmin) DailyCost(ctx context.Context, key string, start, end time.Time) (map[string]float64, error) {
 	q := url.Values{}
-	q.Set("start_time", strconv.FormatInt(start.Unix(), 10))
-	q.Set("end_time", strconv.FormatInt(end.Unix(), 10))
+	q.Set("start_time", strconv.FormatInt(start.UTC().Unix(), 10))
+	q.Set("end_time", strconv.FormatInt(end.UTC().Unix(), 10))
 	q.Set("bucket_width", "1d")
 	q.Set("limit", "31")
 	root := base(o.BaseURL, "https://api.openai.com") + "/v1/organization/costs?"
 
-	var total float64
+	out := map[string]float64{}
 	seen := map[string]bool{}
 	page := ""
 	for i := 0; ; i++ {
 		if i == openAICostPages {
-			return usage.Reading{}, errors.New("accounts: OpenAI costs: too many pages")
+			return nil, errors.New("accounts: OpenAI costs: too many pages")
 		}
 		if page != "" {
 			q.Set("page", page)
 		}
 		var resp struct {
 			Data []struct {
-				Results []struct {
+				StartTime int64 `json:"start_time"`
+				Results   []struct {
 					Amount *struct {
 						Value    number `json:"value"`
 						Currency string `json:"currency"`
@@ -79,28 +97,30 @@ func (o OpenAIAdmin) Read(ctx context.Context, key string) (usage.Reading, error
 			NextPage string `json:"next_page"`
 		}
 		if err := getJSON(ctx, o.HTTP, root+q.Encode(), key, &resp); err != nil {
-			return usage.Reading{}, err
+			return nil, err
 		}
 		for _, b := range resp.Data {
+			day := time.Unix(b.StartTime, 0).UTC().Format("2006-01-02")
+			if _, ok := out[day]; !ok {
+				out[day] = 0
+			}
 			for _, r := range b.Results {
 				if r.Amount == nil || !r.Amount.Value.ok {
 					continue
 				}
 				if c := strings.ToLower(r.Amount.Currency); c != "" && c != "usd" {
-					return usage.Reading{}, fmt.Errorf("accounts: OpenAI costs in %q, not USD", r.Amount.Currency)
+					return nil, fmt.Errorf("accounts: OpenAI costs in %q, not USD", r.Amount.Currency)
 				}
-				total += r.Amount.Value.v
+				out[day] += r.Amount.Value.v
 			}
 		}
 		if !resp.HasMore {
-			break
+			return out, nil
 		}
 		page = strings.TrimSpace(resp.NextPage)
 		if page == "" || seen[page] {
-			return usage.Reading{}, errors.New("accounts: OpenAI costs: pagination cursor missing or repeated")
+			return nil, errors.New("accounts: OpenAI costs: pagination cursor missing or repeated")
 		}
 		seen[page] = true
 	}
-	// Spend this month with no cap: the Administration API reports none.
-	return usage.Reading{Scope: "organization", UsedUSD: total, HasUsed: true}, nil
 }
