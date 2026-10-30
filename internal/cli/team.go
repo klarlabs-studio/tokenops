@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/user"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -250,9 +251,15 @@ func writeMe(out io.Writer, me teamwire.Me) {
 	fmt.Fprintf(out, "\nThe server holds %d rows over %d days about you (%s, %s), kept %d days.\n",
 		me.Buckets, me.Days, me.DisplayName, me.Role, me.RetentionDays)
 	fmt.Fprintf(out, "Team, repository and kind-of-work totals withhold groups under %d people.\n", me.MinGroupSize)
-	if me.MaxSchema >= teamwire.SchemaFinOps {
+	switch {
+	case me.MaxSchema >= teamwire.SchemaSpend:
+		fmt.Fprintln(out, "The server accepts upload schema 3: plan use, waste, realized savings, plan advice, spend by provider and units of work are sent with the work figures.")
+		if slices.Contains(teamwire.VendorCostRoles, me.Role) {
+			fmt.Fprintln(out, "As an owner or admin, this machine also sends the vendor's daily bill when an admin key is configured; the key stays here.")
+		}
+	case me.MaxSchema >= teamwire.SchemaFinOps:
 		fmt.Fprintln(out, "The server accepts upload schema 2: plan use, waste, realized savings and plan advice are sent with the work figures.")
-	} else {
+	default:
 		fmt.Fprintln(out, "The server reads upload schema 1 only: plan use, waste, realized savings and plan advice stay on this machine.")
 	}
 	if me.SSOEmail != "" {

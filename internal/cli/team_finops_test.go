@@ -8,6 +8,32 @@ import (
 	"go.klarlabs.de/tokenops/pkg/teamwire"
 )
 
+// `team status` names the newest schema the server accepts, and tells an
+// owner or admin that their machine may send the vendor's bill.
+func TestWriteMeNamesTheServersSchema(t *testing.T) {
+	cases := map[string]struct {
+		schema int
+		role   string
+		want   string
+		absent string
+	}{
+		"schema 1":        {1, teamwire.RoleMember, "reads upload schema 1 only", "schema 2"},
+		"schema 2":        {2, teamwire.RoleMember, "accepts upload schema 2", "schema 3"},
+		"schema 3 member": {3, teamwire.RoleMember, "accepts upload schema 3", "vendor's daily bill"},
+		"schema 3 owner":  {3, teamwire.RoleOwner, "vendor's daily bill", "schema 2"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			var out bytes.Buffer
+			writeMe(&out, teamwire.Me{MaxSchema: c.schema, Role: c.role})
+			got := out.String()
+			if !strings.Contains(got, c.want) || strings.Contains(got, c.absent) {
+				t.Errorf("status wants %q, not %q:\n%s", c.want, c.absent, got)
+			}
+		})
+	}
+}
+
 func TestWriteFinOps(t *testing.T) {
 	util := 64.0
 	u := teamwire.Upload{
