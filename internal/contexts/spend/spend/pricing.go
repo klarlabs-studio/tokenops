@@ -227,6 +227,10 @@ func (t Table) Lookup(provider eventschema.Provider, model string) (Rate, error)
 		if strings.HasSuffix(model, FreeVariantSuffix) {
 			return Rate{}, nil
 		}
+		// A model run on the operator's own machine has no vendor bill.
+		if LocalModel(provider, model) {
+			return Rate{}, nil
+		}
 		// A reseller's model its own list does not price is valued at
 		// its vendor's list price, as the lists that do price it are.
 		if vendor, vendorModel, ok := resoldModel(provider, model); ok {
@@ -275,6 +279,22 @@ func resoldModel(provider eventschema.Provider, model string) (eventschema.Provi
 
 // FreeVariantSuffix marks a router's free tier of a model.
 const FreeVariantSuffix = ":free"
+
+// localRuntimes run models on the operator's own machine.
+var localRuntimes = map[eventschema.Provider]bool{
+	eventschema.ProviderOllama: true, "llamacpp": true, eventschema.ProviderLMStudio: true,
+}
+
+// LocalModel reports a model run on the operator's own machine, which no
+// vendor bills. Ollama also serves Ollama Cloud models, tagged "-cloud"
+// ("gpt-oss:120b-cloud") or "cloud" ("glm-4.6:cloud"), which are billed.
+func LocalModel(provider eventschema.Provider, model string) bool {
+	if !localRuntimes[eventschema.Provider(strings.ToLower(string(provider)))] {
+		return false
+	}
+	_, tag, ok := strings.Cut(model, ":")
+	return !ok || (tag != "cloud" && !strings.HasSuffix(tag, "-cloud"))
+}
 
 // gatewayModel drops a gateway account namespace from a model ID,
 // "accounts/<account>/models/<name>" or ".../routers/<name>".
