@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **team:** upload schema 3, for the team plane's organisation FOCUS dataset, unit economics across members and reconciliation with the vendor's bill (ADR 0016; ADR 0012, amended). Sent only to a team server that accepts it, it adds spend per day, repository and provider (no model names), the tasks, commits and merged pull requests finished per day and repository with the value placed on them, and, from an owner's or admin's machine with an admin key configured, what Anthropic's and OpenAI's cost APIs report the organisation was billed per day. The admin key never leaves that machine. `tokenops team preview` shows the new sections; `--json` prints them as sent.
+- **focus:** `pkg/focus`, the client's FOCUS 1.4 writer, for programs outside this module. It adds blended rows: one provider's tokens on a day, priced at the blend of the models used, as the team plane's organisation dataset writes them.
+
 ## 0.115.0 - 2026-10-29
 
 ### Added
