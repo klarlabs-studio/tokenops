@@ -51,6 +51,10 @@ type Options struct {
 	// Role is this member's role on the server (Me's role). Vendor cost
 	// is read and sent only for an owner or admin.
 	Role string
+	// Took, when set, is told how long each part of the upload took to
+	// read, so an upload that runs out of time names the part that used
+	// it.
+	Took func(part string, took time.Duration)
 	// Allow, when set, is asked before anything is built or sent, once
 	// this machine is known to have joined; an error holds the upload
 	// (ADR 0014's share boundary) and is returned as is.
@@ -121,7 +125,9 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 	var units []sessions.Unit
 	if d.Units != nil {
 		var err error
+		done := lap(opts.Took, "transcripts")
 		units, err = d.Units(since, now)
+		done()
 		if err != nil {
 			warnings = append(warnings, "transcripts: "+err.Error())
 		}
@@ -130,7 +136,9 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 	var shared TurnReader
 	if d.Turns != nil {
 		s := &sharedTurns{read: d.Turns}
+		done := lap(opts.Took, "turns")
 		all, err := s.prime(ctx, turnSpan(d, opts, since))
+		done()
 		if err != nil {
 			warnings = append(warnings, "event store: "+err.Error())
 		}
@@ -138,6 +146,7 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 	}
 	repoOf := map[string]string{}
 	if d.Dirs != nil && d.Repos != nil {
+		done := lap(opts.Took, "repositories")
 		names := map[string]string{}
 		for id, dir := range d.Dirs(since) {
 			label, ok := names[dir.CWD]
@@ -147,15 +156,26 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 			}
 			repoOf[id] = label
 		}
+		done()
 	}
 	u, kindOf := aggregate(units, turns, repoOf, days, opts.ClientVersion, now)
 	if opts.Schema >= teamwire.SchemaFinOps {
-		warnings = append(warnings, addFinOps(ctx, d.FinOps, shared, &u, repoOf, kindOf, now)...)
+		warnings = append(warnings, addFinOps(ctx, d.FinOps, shared, opts.Took, &u, repoOf, kindOf, now)...)
 	}
 	if opts.Schema >= teamwire.SchemaSpend {
 		warnings = append(warnings, addSpend(ctx, d, opts, shared, &u, units, turns, repoOf, now)...)
 	}
 	return u, warnings
+}
+
+// lap starts timing part of an upload; what it returns reports the time
+// to took, which may be nil.
+func lap(took func(part string, took time.Duration), part string) func() {
+	if took == nil {
+		return func() {}
+	}
+	start := time.Now()
+	return func() { took(part, time.Since(start)) }
 }
 
 var unsafeLabel = regexp.MustCompile(`[^A-Za-z0-9._-]+`)

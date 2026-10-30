@@ -72,7 +72,7 @@ const windowLookback = 7 * 24 * time.Hour
 // addFinOps fills u's schema 2 sections and marks it schema 2. A reader
 // that fails leaves its sections empty with a warning; a row that would
 // fail validation is dropped with one, so the buckets are still sent.
-func addFinOps(ctx context.Context, f FinOps, turns TurnReader, u *teamwire.Upload, repoOf map[string]string, kindOf kinds, now time.Time) []string {
+func addFinOps(ctx context.Context, f FinOps, turns TurnReader, took func(string, time.Duration), u *teamwire.Upload, repoOf map[string]string, kindOf kinds, now time.Time) []string {
 	u.Schema = teamwire.SchemaFinOps
 	first, err := time.Parse(teamwire.DayLayout, u.Days[0])
 	if err != nil {
@@ -92,13 +92,17 @@ func addFinOps(ctx context.Context, f FinOps, turns TurnReader, u *teamwire.Uplo
 					history = h
 				}
 			}
+			done := lap(took, "plan days")
 			envs, err := d.Reader.ReadEvents(ctx, eventschema.EventTypePrompt, first.Add(-windowLookback))
+			done()
 			if err != nil {
 				warnings = append(warnings, "plan days: "+err.Error())
 			} else {
 				u.PlanDays = PlanDays(envs, d.Config.Plans, history, u.Days, now)
 			}
+			done = lap(took, "plan advice")
 			res, err := headroom.Advise(ctx, d, headroom.AdviceQuery{}, now)
+			done()
 			if err != nil {
 				warnings = append(warnings, "plan advice: "+err.Error())
 			} else {
@@ -107,7 +111,9 @@ func addFinOps(ctx context.Context, f FinOps, turns TurnReader, u *teamwire.Uplo
 		}
 	}
 	if f.Waste != nil {
+		done := lap(took, "waste")
 		ds, err := f.Waste(ctx, turns, first, now)
+		done()
 		if err != nil {
 			warnings = append(warnings, "waste: "+err.Error())
 		} else {
