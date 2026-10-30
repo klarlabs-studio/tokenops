@@ -24,7 +24,7 @@ func spendDeps() Deps {
 	d.Turns = func(context.Context, time.Time) ([]analytics.SessionTurn, error) { return turns, nil }
 	t0 := now.Add(-2 * time.Hour)
 	d.Schema3 = Schema3{
-		Placed: func(context.Context, time.Time, time.Time) ([]uniteconomics.Placed, error) {
+		Placed: func(context.Context, TurnReader, time.Time, time.Time) ([]uniteconomics.Placed, error) {
 			p := []uniteconomics.Placed{
 				{Unit: uniteconomics.UnitCommit, Root: "/Users/alice/secret-project", At: t0.Add(5 * time.Minute)},
 				{Unit: uniteconomics.UnitMergedPR, Root: "/Users/alice/secret-project", At: t0.Add(time.Hour)},
