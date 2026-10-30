@@ -24,7 +24,9 @@ type Deps struct {
 	Turns func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error)
 	// Dirs maps sessions to where they ran; nil reads the clients'
 	// defaults.
-	Dirs  func(since time.Time) map[string]sessiondirs.Dir
+	Dirs func(since time.Time) map[string]sessiondirs.Dir
+	// Repos resolves directories to repositories and caches what it
+	// resolved; nil resolves afresh on each report.
 	Repos *gitlog.Repos
 	// Events reads outcomes and plan window readings.
 	Events uniteconomics.EventReader
