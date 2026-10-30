@@ -1,6 +1,6 @@
 # ADR 0012 — The team plane: hosted, derived figures only, aggregate by default
 
-- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*.
+- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*.
 - **Date:** 2026-10-08
 - **Deciders:** TokenOps maintainers
 - **Related:** issue #250, ADR 0004 (local-first; no BI product), ADR 0010 §5 (the API's privacy line)
@@ -207,7 +207,41 @@ does not compute the new sections at all. A server on this package's
 `Validate` accepts both schemas and refuses a schema 1 upload that
 carries any of the new sections.
 
-## What the service promises about what crosses
+## Upload schema 3 (amended 2026-10-30)
+
+ADR 0016 puts three things on the team plane that schema 2 cannot carry:
+the organisation's FOCUS dataset, unit economics across members, and
+reconciling the estimate with what the vendor billed (ADR 0003). Schema
+3 adds three sections, sent only to a server whose `max_schema` is at
+least 3 and computed only then:
+
+- **`spend`** — per UTC day × repository label × provider: turns, tokens,
+  unpriced turns, the estimated bill (usage a plan covered bills nothing)
+  and the API-equivalent value. The same turns as the day's buckets,
+  split by provider rather than by kind of work. **No model name**: the
+  organisation's dataset is by provider.
+- **`units`** — per UTC day × repository label: the inferred tasks that
+  started that day with recorded usage and their value (`tokenops story
+  --runtime`), and the commits and merged pull requests the member's work
+  was placed on, with the value placed on them (`tokenops spend units`).
+  A commit's subject is read only to join it; it never leaves.
+- **`vendor_cost`** — per UTC day × provider: what the vendor's cost API
+  reports the organisation was billed (Anthropic `cost_report`, OpenAI
+  `organization/costs`). It is read and sent only on the machine of an
+  owner or admin (`Me.role`) that has an admin key configured, and only
+  when the upload is built. **The admin key never leaves that machine**:
+  the hosted server holds no organisation-wide credential. A server drops
+  the section from anyone else's upload and says so
+  (`vendor_cost_ignored`). The client then asks `Me` again before the
+  next upload.
+
+Every new string is a date, a repository label or a provider in the
+registry. Every figure is a non-negative sum or a bounded amount, and a
+unit's value is never placed on no unit. `TestUploadHasNoFreeText`
+covers the new types. Day replacement and negotiation are as for schema
+2: below 3 the client sends schema 2 (or 1) exactly as before.
+
+
 
 These are commitments of the hosted service, recorded here so members and
 works councils can hold it to them; the server enforces them and the
@@ -232,6 +266,9 @@ private ADR has the construction.
   loopback) and keeps its enrolment in `~/.tokenops/team.json`, mode 0600.
 - **Hosting.** In the EU (Germany), under a GDPR Art. 28 data-processing
   agreement.
+- **Admin keys stay home.** Vendor cost is read on an owner's or admin's
+  own machine and only the daily totals are uploaded; the service never
+  asks for, receives or stores an organisation's admin key.
 
 Widening what crosses — a new field in `pkg/teamwire` — needs a failing
 `TestUploadHasNoFreeText`, an allow-list entry and an amendment to this

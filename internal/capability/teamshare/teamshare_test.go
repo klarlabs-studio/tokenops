@@ -17,7 +17,18 @@ var now = time.Date(2026, 10, 8, 15, 0, 0, 0, time.UTC)
 
 type fakeRepos map[string][2]string // dir -> {root, origin}
 
-func (f fakeRepos) Root(_ context.Context, dir string) string { return f[dir][0] }
+// Root is a directory's repository root; a root is its own, as git says.
+func (f fakeRepos) Root(_ context.Context, dir string) string {
+	if v, ok := f[dir]; ok {
+		return v[0]
+	}
+	for _, v := range f {
+		if v[0] == dir && dir != "" {
+			return dir
+		}
+	}
+	return ""
+}
 func (f fakeRepos) OriginName(_ context.Context, root string) string {
 	for _, v := range f {
 		if v[0] == root {

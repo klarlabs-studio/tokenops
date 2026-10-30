@@ -45,8 +45,12 @@ type Options struct {
 	ClientVersion string
 	// Schema is the newest upload format the server accepts (Me's
 	// max_schema). Below teamwire.SchemaFinOps the upload is schema 1 and
-	// the FinOps sections are not even computed.
+	// the FinOps sections are not even computed; below
+	// teamwire.SchemaSpend, nor are schema 3's.
 	Schema int
+	// Role is this member's role on the server (Me's role). Vendor cost
+	// is read and sent only for an owner or admin.
+	Role string
 	// Allow, when set, is asked before anything is built or sent, once
 	// this machine is known to have joined; an error holds the upload
 	// (ADR 0014's share boundary) and is returned as is.
@@ -70,6 +74,8 @@ type Deps struct {
 	Repos Repos
 	// FinOps are the readers of a schema 2 upload's sections.
 	FinOps FinOps
+	// Schema3 are the readers of a schema 3 upload's sections.
+	Schema3 Schema3
 }
 
 // DepsFor reads this machine's transcripts, its event store through agg,
@@ -142,6 +148,9 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 	u, kindOf := aggregate(units, turns, repoOf, days, opts.ClientVersion, now)
 	if opts.Schema >= teamwire.SchemaFinOps {
 		warnings = append(warnings, addFinOps(ctx, d.FinOps, &u, repoOf, kindOf, now)...)
+	}
+	if opts.Schema >= teamwire.SchemaSpend {
+		warnings = append(warnings, addSpend(ctx, d, opts, &u, units, turns, repoOf, now)...)
 	}
 	return u, warnings
 }

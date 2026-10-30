@@ -80,3 +80,17 @@ func TestOpenAIAdminRefusalsAndShapes(t *testing.T) {
 		t.Errorf("empty month: %+v, %v", got, err)
 	}
 }
+
+// The team plane reconciles per day: each bucket's costs go to the UTC
+// day it starts on, and a day with none is 0.
+func TestOpenAIAdminDailyCost(t *testing.T) {
+	srv := serve(t, "/v1/organization/costs", "sk-admin-x", `{"data":[
+		{"start_time":1791331200,"results":[{"amount":{"value":1.25,"currency":"usd"}},{"amount":{"value":"0.75","currency":"usd"}}]},
+		{"start_time":1791417600,"results":[]}],"has_more":false}`)
+	defer srv.Close()
+	got, err := OpenAIAdmin{BaseURL: srv.URL}.DailyCost(context.Background(), "sk-admin-x",
+		time.Date(2026, 10, 7, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC))
+	if err != nil || len(got) != 2 || !approx(got["2026-10-07"], 2) || got["2026-10-08"] != 0 {
+		t.Fatalf("got %v, %v", got, err)
+	}
+}

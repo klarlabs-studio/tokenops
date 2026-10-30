@@ -63,10 +63,22 @@ func (u *Usage) add(t Turn) {
 // covers, or from before its first task, is placed on none; the count is
 // returned.
 func AttachUsage(tasks []story.Task, analysed []Task, turns []Turn) (unplaced int) {
+	usage, unplaced := PlaceTurns(tasks, turns)
+	for i, u := range usage {
+		analysed[i].Usage = u
+	}
+	return unplaced
+}
+
+// PlaceTurns is AttachUsage's join on its own: each task's usage, index
+// for index, nil for a task no turn was placed on, and how many turns went
+// on none.
+func PlaceTurns(tasks []story.Task, turns []Turn) (usage []*Usage, unplaced int) {
 	type start struct {
 		at  time.Time
 		idx int
 	}
+	usage = make([]*Usage, len(tasks))
 	bySession := map[string][]start{}
 	for i, t := range tasks {
 		id := sessionMatchKey(t.SessionID)
@@ -84,13 +96,13 @@ func AttachUsage(tasks []story.Task, analysed []Task, turns []Turn) (unplaced in
 			unplaced++
 			continue
 		}
-		t := &analysed[starts[n-1].idx]
-		if t.Usage == nil {
-			t.Usage = &Usage{}
+		i := starts[n-1].idx
+		if usage[i] == nil {
+			usage[i] = &Usage{}
 		}
-		t.Usage.add(turn)
+		usage[i].add(turn)
 	}
-	return unplaced
+	return usage, unplaced
 }
 
 // trailingUUID is a session UUID at the end of an ID.
