@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **team:** `tokenops team status` said the server accepts upload schema 2 when it accepts schema 3. It now names schema 3 and what it adds, and tells an owner or admin that their machine sends the vendor's daily bill when an admin key is configured. What was uploaded was right; only the message was out of date.
+
 ## 0.116.0 - 2026-10-30
 
 ### Added
