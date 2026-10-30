@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
+	"go.klarlabs.de/tokenops/internal/capability/attribution"
 	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
@@ -165,6 +166,13 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 	// The spend budgets' windows, as the daemon last measured them.
 	cfg.Budgets = budgets.Current("", now)
 	provider, known := hookProvider(in, in.isCursorPayload(), in.HookEventName == "session.idle")
+	if known && provider == eventschema.ProviderAnthropic {
+		// Claude Code: a budget on another provider's bill is not said
+		// in a session that provider does not bill.
+		cfg.SessionBiller = func(model string) string {
+			return attribution.ClaudeCodeSessionBiller(os.Getenv, in.TranscriptPath, model)
+		}
+	}
 	if known && plan != nil {
 		r := plan(cmd.Context(), provider, now)
 		cfg.Quota, cfg.FlatPlan, cfg.ReadingLost = r.Quota, r.Flat, r.Lost
