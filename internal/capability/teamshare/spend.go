@@ -30,8 +30,9 @@ import (
 // turns. A nil field leaves its section out.
 type Schema3 struct {
 	// Placed are the commits and merged pull requests landed in
-	// [since, until) with the work placed on them.
-	Placed func(ctx context.Context, since, until time.Time) ([]uniteconomics.Placed, error)
+	// [since, until) with the work placed on them, read from turns when
+	// it is set.
+	Placed func(ctx context.Context, turns TurnReader, since, until time.Time) ([]uniteconomics.Placed, error)
 	// VendorCosts are, asked only on an owner's or admin's machine, the
 	// readers of what each provider's cost API reports the organisation
 	// was billed per UTC day ("2006-01-02") from start to end, with the
@@ -45,8 +46,12 @@ type VendorCostReader func(ctx context.Context, start, end time.Time) (map[strin
 
 // PlacedFor joins this machine's work to its commits and pull requests
 // as `tokenops spend units` does.
-func PlacedFor(d uniteconomics.Deps) func(ctx context.Context, since, until time.Time) ([]uniteconomics.Placed, error) {
-	return func(ctx context.Context, since, until time.Time) ([]uniteconomics.Placed, error) {
+func PlacedFor(d uniteconomics.Deps) func(ctx context.Context, turns TurnReader, since, until time.Time) ([]uniteconomics.Placed, error) {
+	return func(ctx context.Context, turns TurnReader, since, until time.Time) ([]uniteconomics.Placed, error) {
+		d := d
+		if turns != nil {
+			d.Turns = turns
+		}
 		in, err := uniteconomics.Gather(ctx, d, since.Add(-uniteconomics.PRMaxGap), since, until)
 		if err != nil {
 			return nil, err
@@ -57,7 +62,7 @@ func PlacedFor(d uniteconomics.Deps) func(ctx context.Context, since, until time
 
 // addSpend fills u's schema 3 sections and marks it schema 3. A reader
 // that fails leaves its section empty with a warning.
-func addSpend(ctx context.Context, d Deps, opts Options, u *teamwire.Upload, units []sessions.Unit,
+func addSpend(ctx context.Context, d Deps, opts Options, shared TurnReader, u *teamwire.Upload, units []sessions.Unit,
 	turns []analytics.SessionTurn, repoOf map[string]string, now time.Time) []string {
 	u.Schema = teamwire.SchemaSpend
 	first, err := time.Parse(teamwire.DayLayout, u.Days[0])
@@ -72,7 +77,7 @@ func addSpend(ctx context.Context, d Deps, opts Options, u *teamwire.Upload, uni
 	u.Spend = SpendRows(turns, repoOf, covered)
 	var placed []uniteconomics.Placed
 	if d.Schema3.Placed != nil {
-		if placed, err = d.Schema3.Placed(ctx, first, now); err != nil {
+		if placed, err = d.Schema3.Placed(ctx, shared, first, now); err != nil {
 			warnings = append(warnings, "units: "+err.Error())
 		}
 	}

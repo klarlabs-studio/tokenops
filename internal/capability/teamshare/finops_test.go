@@ -216,7 +216,9 @@ func finopsDeps() Deps {
 	cfg := &config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}}
 	d.FinOps = FinOps{
 		Plans: func() headroom.Deps { return headroom.Deps{Config: cfg, Reader: eventsReader{planEvents()}} },
-		Waste: func(context.Context, time.Time, time.Time) ([]avoidable.Day, error) { return wasteDays(), nil },
+		Waste: func(context.Context, TurnReader, time.Time, time.Time) ([]avoidable.Day, error) {
+			return wasteDays(), nil
+		},
 	}
 	return d
 }

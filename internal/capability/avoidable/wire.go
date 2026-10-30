@@ -14,6 +14,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	ftstore "go.klarlabs.de/tokenops/internal/infra/followthrough"
+	"go.klarlabs.de/tokenops/internal/infra/gitlog"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -25,9 +26,15 @@ import (
 // ledgers under the home directory, and the coach's configuration in cfg
 // for each guardrail's stage. A nil store or engine leaves out what needs
 // it.
+//
+// The git lookups live as long as the Deps: a month of sessions runs in a
+// few repositories from thousands of directories, and resolving each one
+// afresh on every report ran git thousands of times (34s of a team
+// upload's 5-minute budget on a machine with 2,300 sessions).
 func DepsFor(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, eng *spend.Engine) Deps {
 	d := Deps{
 		Turns:   commits.TurnsIn(agg, analytics.Filter{}),
+		Repos:   gitlog.NewRepos(),
 		Waste:   cfg.Coaching.WasteConfig(),
 		Rereads: readGuardLedger,
 		Routes:  modelAdvice,
