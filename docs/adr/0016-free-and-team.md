@@ -1,6 +1,6 @@
 # ADR 0016 — Free and Team: your own work is free, seeing across people is the paid plane
 
-- **Status:** Proposed 2026-10-29
+- **Status:** Accepted 2026-10-29
 - **Date:** 2026-10-29
 - **Deciders:** TokenOps maintainers
 - **Related:** ADR 0012 (the team plane: hosted, derived figures only),
