@@ -306,16 +306,55 @@ func nonEmpty(bs []Bucket) []Bucket {
 // merged in its repository within PRMaxGap.
 func (in Inputs) prUnit(total float64) Unit {
 	u := Unit{Name: "merged_pr", Method: PRMethod}
-	type key struct {
-		root string
-		n    int
+	byPR, noPR, tooLate, outside, unknown := in.placePRs()
+	// A unit is an agent-assisted pull request; one merged in the period
+	// with no agent work on it is counted apart.
+	withoutWork := 0
+	for root, prs := range in.PRsOf {
+		for _, pr := range prs {
+			if _, ok := byPR[prKey{root, pr.Number}]; !ok && in.period(pr.MergedAt) == 1 {
+				withoutWork++
+			}
+		}
 	}
-	type placed struct {
-		at   time.Time
-		rate Rate
+	for _, p := range byPR {
+		switch in.period(p.at) {
+		case 1:
+			u.Current.Units++
+			u.Current.merge(p.rate)
+		case 0:
+			u.Baseline.Units++
+			u.Baseline.merge(p.rate)
+		}
 	}
-	byPR := map[key]*placed{}
-	var noPR, tooLate, outside, unknown commits.Cost
+	u.Unplaced = nonEmpty([]Bucket{
+		{Label: "no pull request merged yet", Cost: noPR},
+		{Label: "no pull request within 7 days", Cost: tooLate},
+		{Label: "outside a repository", Cost: outside},
+		{Label: "session directory unknown", Cost: unknown},
+		{Label: "merged with no agent work", Units: withoutWork},
+	})
+	u.finish(total-sum(u.Unplaced), total)
+	return u
+}
+
+// prKey is a pull request: its repository root and number.
+type prKey struct {
+	root string
+	n    int
+}
+
+// prPlaced is the work placed on one pull request, merged at at.
+type prPlaced struct {
+	at   time.Time
+	rate Rate
+}
+
+// placePRs places each turn on the next pull request of the operator's
+// merged in its repository within PRMaxGap, and sums the period's turns
+// it could not place, by why.
+func (in Inputs) placePRs() (byPR map[prKey]*prPlaced, noPR, tooLate, outside, unknown commits.Cost) {
+	byPR = map[prKey]*prPlaced{}
 	for _, t := range in.Turns {
 		inPeriod := in.period(t.At) == 1
 		dir, ok := in.Dirs[t.SessionID]
@@ -347,41 +386,13 @@ func (in Inputs) prUnit(total float64) Unit {
 			}
 			continue
 		}
-		k := key{root, prs[i].Number}
+		k := prKey{root, prs[i].Number}
 		p := byPR[k]
 		if p == nil {
-			p = &placed{at: prs[i].MergedAt}
+			p = &prPlaced{at: prs[i].MergedAt}
 			byPR[k] = p
 		}
 		p.rate.add(t)
 	}
-	// A unit is an agent-assisted pull request; one merged in the period
-	// with no agent work on it is counted apart.
-	withoutWork := 0
-	for root, prs := range in.PRsOf {
-		for _, pr := range prs {
-			if _, ok := byPR[key{root, pr.Number}]; !ok && in.period(pr.MergedAt) == 1 {
-				withoutWork++
-			}
-		}
-	}
-	for _, p := range byPR {
-		switch in.period(p.at) {
-		case 1:
-			u.Current.Units++
-			u.Current.merge(p.rate)
-		case 0:
-			u.Baseline.Units++
-			u.Baseline.merge(p.rate)
-		}
-	}
-	u.Unplaced = nonEmpty([]Bucket{
-		{Label: "no pull request merged yet", Cost: noPR},
-		{Label: "no pull request within 7 days", Cost: tooLate},
-		{Label: "outside a repository", Cost: outside},
-		{Label: "session directory unknown", Cost: unknown},
-		{Label: "merged with no agent work", Units: withoutWork},
-	})
-	u.finish(total-sum(u.Unplaced), total)
-	return u
+	return byPR, noPR, tooLate, outside, unknown
 }

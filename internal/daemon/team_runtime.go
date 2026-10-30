@@ -9,7 +9,9 @@ import (
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/teamshare"
+	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/gitlog"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/infra/teamclient"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -41,6 +43,12 @@ func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components,
 	deps := teamshare.DepsFor(components.Aggregator)
 	// Read only when the server accepts schema 2 (teamshare.ServerSchema).
 	deps.FinOps = teamshare.FinOpsFor(cfg, components.Aggregator, components.Store, components.Spend)
+	// Read only when the server accepts schema 3; vendor cost only on an
+	// owner's or admin's machine, with the admin keys configured here.
+	deps.Schema3 = teamshare.Schema3{
+		Placed:      teamshare.PlacedFor(uniteconomics.Deps{Turns: deps.Turns, Repos: gitlog.NewRepos()}),
+		VendorCosts: teamshare.VendorCostsFor(func(ctx context.Context) map[string]string { return bootstrap.AdminKeys(ctx, cfg) }),
+	}
 	sup.Go("team-upload", func(ctx context.Context) error {
 		wait := time.NewTimer(teamFirstUpload)
 		defer wait.Stop()

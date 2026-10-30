@@ -50,7 +50,10 @@ func (c *Cost) Add(t analytics.SessionTurn) {
 
 // CommitCost is one commit and the work that led to it.
 type CommitCost struct {
-	Repo    string    `json:"repo"`
+	Repo string `json:"repo"`
+	// Root is the repository's directory, for a caller that names it its
+	// own way (the team upload's label); never shown.
+	Root    string    `json:"-"`
 	SHA     string    `json:"sha"`
 	At      time.Time `json:"at"`
 	Subject string    `json:"subject,omitempty"`
@@ -237,7 +240,7 @@ func Attribute(since time.Time, turns []analytics.SessionTurn, dirs map[string]s
 		k := key{root, c.SHA}
 		cc := byCommit[k]
 		if cc == nil {
-			cc = &CommitCost{Repo: filepath.Base(root), SHA: c.SHA[:min(12, len(c.SHA))], At: c.At, Subject: c.Subject, Branch: c.Branch}
+			cc = &CommitCost{Repo: filepath.Base(root), Root: root, SHA: c.SHA[:min(12, len(c.SHA))], At: c.At, Subject: c.Subject, Branch: c.Branch}
 			byCommit[k] = cc
 			sessions[k] = map[string]bool{}
 			first[k] = t.At

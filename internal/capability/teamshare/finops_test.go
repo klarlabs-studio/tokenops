@@ -250,8 +250,12 @@ func TestSchema2UploadCarriesNoContent(t *testing.T) {
 // zero) and keeps each upload's body.
 type fakeServer struct {
 	maxSchema int
-	meCalls   int
-	bodies    [][]byte
+	role      string
+	// ignoreVendorCost answers an upload as a server that dropped its
+	// vendor cost.
+	ignoreVendorCost bool
+	meCalls          int
+	bodies           [][]byte
 }
 
 func (f *fakeServer) start(t *testing.T) string {
@@ -259,11 +263,11 @@ func (f *fakeServer) start(t *testing.T) string {
 		switch r.URL.Path {
 		case "/api/v1/me":
 			f.meCalls++
-			_ = json.NewEncoder(w).Encode(teamwire.Me{OrgName: "Example Org", MaxSchema: f.maxSchema})
+			_ = json.NewEncoder(w).Encode(teamwire.Me{OrgName: "Example Org", MaxSchema: f.maxSchema, Role: f.role})
 		case "/api/v1/ingest":
 			raw, _ := io.ReadAll(r.Body)
 			f.bodies = append(f.bodies, raw)
-			_ = json.NewEncoder(w).Encode(teamwire.IngestResponse{Accepted: 1})
+			_ = json.NewEncoder(w).Encode(teamwire.IngestResponse{Accepted: 1, VendorCostIgnored: f.ignoreVendorCost})
 		default:
 			http.NotFound(w, r)
 		}
@@ -281,7 +285,8 @@ func TestSyncNegotiatesTheSchema(t *testing.T) {
 		"server without max_schema": {0, 1, false},
 		"schema 1 server":           {1, 1, false},
 		"schema 2 server":           {2, 2, true},
-		"newer server":              {3, 2, true},
+		"schema 3 server":           {3, 3, true},
+		"newer server":              {4, 3, true},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -306,7 +311,7 @@ func TestSyncNegotiatesTheSchema(t *testing.T) {
 					t.Errorf("%s sent: %v, want %v", k, has, c.newKeys)
 				}
 			}
-			if string(m["schema"]) != map[int]string{1: "1", 2: "2"}[c.wantSchema] {
+			if string(m["schema"]) != map[int]string{1: "1", 2: "2", 3: "3"}[c.wantSchema] {
 				t.Errorf("schema on the wire = %s", m["schema"])
 			}
 		})

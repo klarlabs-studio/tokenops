@@ -33,6 +33,7 @@ func Sync(ctx context.Context, d Deps, opts Options, statePath string, now time.
 	}
 	client := teamclient.New(st.URL, st.DeviceToken)
 	opts.Schema = ServerSchema(ctx, client, &st, now)
+	opts.Role = st.Role
 	u, warnings := Build(ctx, d, opts, now)
 	res := Result{Upload: u, Warnings: warnings}
 	if err := u.Validate(); err != nil {
@@ -62,6 +63,12 @@ func Sync(ctx context.Context, d Deps, opts Options, statePath string, now time.
 		if resp.Stale {
 			st.LastResult += " (some days already held a newer computation)"
 		}
+		if resp.VendorCostIgnored {
+			// The member is no longer an owner or admin: ask again
+			// before the next upload.
+			st.LastResult += " (vendor cost dropped: only an owner's or admin's machine may send it)"
+			st.SchemaCheckedAt = nil
+		}
 	}
 	// The state may have been removed by `tokenops team leave` while the
 	// upload ran; do not resurrect it.
@@ -89,6 +96,7 @@ func ServerSchema(ctx context.Context, c MeReader, st *teamclient.State, now tim
 	if !fresh && c != nil {
 		if me, err := c.Me(ctx); err == nil {
 			st.NoteSchema(me.MaxSchema, now)
+			st.Role = me.Role
 		}
 	}
 	if st.MaxSchema < teamwire.SchemaBuckets {

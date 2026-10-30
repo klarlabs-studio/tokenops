@@ -40,7 +40,9 @@ type State struct {
 	BoundaryKey []byte `json:"boundary_key,omitempty"`
 	// MaxSchema is the newest upload format the server said it accepts
 	// (Me's max_schema), as of SchemaCheckedAt; zero is schema 1.
-	MaxSchema       int        `json:"max_schema,omitempty"`
+	MaxSchema int `json:"max_schema,omitempty"`
+	// Role is this member's role, read with MaxSchema.
+	Role            string     `json:"role,omitempty"`
 	SchemaCheckedAt *time.Time `json:"schema_checked_at,omitempty"`
 }
 

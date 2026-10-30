@@ -13,11 +13,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/bootstrap"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/teamshare"
+	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
+	"go.klarlabs.de/tokenops/internal/infra/gitlog"
 	"go.klarlabs.de/tokenops/internal/infra/teamclient"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -78,6 +81,10 @@ func withTeamDeps(ctx context.Context, cfg config.Config, fn func(teamshare.Deps
 	}
 	d := teamshare.DepsFor(agg)
 	d.FinOps = finops
+	d.Schema3 = teamshare.Schema3{
+		Placed:      teamshare.PlacedFor(uniteconomics.Deps{Turns: d.Turns, Repos: gitlog.NewRepos()}),
+		VendorCosts: teamshare.VendorCostsFor(func(ctx context.Context) map[string]string { return bootstrap.AdminKeys(ctx, cfg) }),
+	}
 	return fn(d)
 }
 
@@ -298,7 +305,7 @@ func newTeamPreviewCmd(rf *rootFlags) *cobra.Command {
 					}
 				}
 				opts := teamOptions(cfg)
-				opts.Schema = teamwire.SchemaVersion
+				opts.Schema, opts.Role = teamwire.SchemaVersion, st.Role
 				full, warnings := teamshare.Build(ctx, d, opts, now)
 				sent := full.ForServer(schema)
 				if jsonOut {
@@ -313,6 +320,7 @@ func newTeamPreviewCmd(rf *rootFlags) *cobra.Command {
 				}
 				writeUpload(out, sent)
 				writeFinOps(out, full, finOpsNote(joined, sent.Schema))
+				writeSpend(out, full, spendNote(joined, sent.Schema))
 				for _, w := range warnings {
 					fmt.Fprintln(out, "warning:", w)
 				}
