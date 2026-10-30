@@ -40,13 +40,23 @@ const DefaultDays = 7
 // Compute builds the report for [since, until) against the BaselineDays
 // before since. A zero until is now.
 func Compute(ctx context.Context, d Deps, since, until time.Time) (Report, error) {
+	in, err := Gather(ctx, d, BaselineSince(since), since, until)
+	if err != nil {
+		return Report{}, err
+	}
+	return Build(in), nil
+}
+
+// Gather reads what the joins need for [since, until), with turns,
+// commits and pull requests from start: the baseline's start for the
+// report, a week before since for PlacedUnits. A zero until is now.
+func Gather(ctx context.Context, d Deps, start, since, until time.Time) (Inputs, error) {
 	if until.IsZero() {
 		until = time.Now()
 	}
-	start := BaselineSince(since)
 	w, err := commits.Gather(ctx, commits.Deps{Turns: d.Turns, Dirs: d.Dirs, Repos: d.Repos}, start)
 	if err != nil {
-		return Report{}, err
+		return Inputs{}, err
 	}
 	in := Inputs{Since: since, Until: until, Dirs: w.Dirs, RootOf: w.RootOf, CommitsOf: w.CommitsOf,
 		PRsOf: map[string][]gitlog.PR{}, Windows: map[string][]plans.QuotaWindow{}}
@@ -61,17 +71,17 @@ func Compute(ctx context.Context, d Deps, since, until time.Time) (Report, error
 	if d.Events != nil {
 		in.Outcomes, err = d.Events.Query(ctx, sqlite.Filter{Type: eventschema.EventTypeOutcome, Since: start, Until: until, Limit: maxEvents})
 		if err != nil {
-			return Report{}, err
+			return Inputs{}, err
 		}
 		var readings []*eventschema.Envelope
 		for _, src := range plans.WindowSources() {
 			envs, err := d.Events.Query(ctx, sqlite.Filter{Source: src, Since: start, Until: until, Limit: maxEvents})
 			if err != nil {
-				return Report{}, err
+				return Inputs{}, err
 			}
 			readings = append(readings, envs...)
 		}
 		in.Windows = plans.WindowReadings(readings)
 	}
-	return Build(in), nil
+	return in, nil
 }
