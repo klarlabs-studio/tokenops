@@ -21,6 +21,10 @@ import (
 // does not compete with startup.
 const teamFirstUpload = 2 * time.Minute
 
+// teamUploadTimeout bounds one upload, reading and sending. The log line
+// says how long each part took, so one that runs out names the part.
+const teamUploadTimeout = 5 * time.Minute
+
 // startTeamUploadRuntime uploads derived figures to the team plane this
 // machine joined (ADR 0012), every team.interval. It reads the enrolment
 // on every tick, so `tokenops team join` and `leave` take effect without a
@@ -78,9 +82,15 @@ func shareAllowed(cfg config.Config, destination string) func() error {
 }
 
 func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Options, path string, logger *slog.Logger) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, teamUploadTimeout)
 	defer cancel()
-	res, err := teamshare.Sync(ctx, deps, opts, path, time.Now())
+	start := time.Now()
+	parts := []any{}
+	opts.Took = func(part string, took time.Duration) {
+		parts = append(parts, slog.Duration(part, took.Round(time.Millisecond)))
+	}
+	res, err := teamshare.Sync(ctx, deps, opts, path, start)
+	took := slog.Group("took", append([]any{slog.Duration("total", time.Since(start).Round(time.Millisecond))}, parts...)...)
 	switch {
 	case errors.Is(err, teamclient.ErrNotJoined):
 		return
@@ -93,10 +103,10 @@ func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Opt
 	case err != nil:
 		// The error names the server's refusal; it never carries the
 		// device token or any figure.
-		logger.Warn("team upload failed; the next one resends these days", "err", err)
+		logger.Warn("team upload failed; the next one resends these days", "err", err, took)
 	default:
 		logger.Info("team upload", "rows", res.Response.Accepted, "days", len(res.Upload.Days),
-			"duplicate", res.Response.Duplicate, "stale", res.Response.Stale,
+			"duplicate", res.Response.Duplicate, "stale", res.Response.Stale, took,
 			"note", "derived figures only; see tokenops team preview")
 	}
 	for _, w := range res.Warnings {
