@@ -165,6 +165,42 @@ func TestReadNarrows(t *testing.T) {
 	}
 }
 
+// A windowed read narrows the 1.x rows in SQL and keeps the parts of the
+// messages it reads.
+func TestSinceKeepsThePartsOfWhatItReads(t *testing.T) {
+	path := mixedStore(t)
+	got := readAll(t, path, Options{Since: t0, Parts: true})
+	if text := got["u1"].Text; len(text) != 1 || text[0] != "fix the bug" {
+		t.Errorf("u1 at the window's start: text %q", text)
+	}
+	if _, ok := readAll(t, path, Options{Since: t0.Add(time.Millisecond), Parts: true})["u1"]; ok {
+		t.Error("a 1.x message before the window was read")
+	}
+}
+
+// A 1.x store whose message table has no creation column is narrowed by
+// each message's own time, as before.
+func TestSinceWithoutTheCreationColumn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "opencode.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, data TEXT)`,
+		`INSERT INTO message VALUES ('old','s',` + "'" + js(map[string]any{"role": "user", "time": map[string]any{"created": ms(0)}}) + "'" + `)`,
+		`INSERT INTO message VALUES ('new','s',` + "'" + js(map[string]any{"role": "user", "time": map[string]any{"created": ms(time.Hour)}}) + "'" + `)`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	_ = db.Close()
+	if got := readAll(t, path, Options{Since: t0.Add(time.Minute)}); len(got) != 1 || got["new"].ID == "" {
+		t.Errorf("read %v, want only the newer message", keys(got))
+	}
+}
+
 func TestNewestAcrossShapes(t *testing.T) {
 	got, ok := Newest(mixedStore(t))
 	if !ok || !got.Equal(t0.Add(2*time.Hour)) {
