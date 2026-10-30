@@ -262,17 +262,30 @@ type v1Parts struct {
 }
 
 func readV1(db *sql.DB, opts opencodedb.Options, seen map[string]bool, visit func(opencodedb.Message) error) error {
-	var parts map[string]*v1Parts
-	if opts.Parts && hasTable(db, "part") {
-		parts = readV1Parts(db, opts.SessionID)
-	}
-	query := `SELECT id, session_id, data FROM message`
+	// The row's creation time narrows the read to the window in SQL: a
+	// store holds a 1.x history of hundreds of thousands of parts, and
+	// parsing all of it to keep a fortnight cost seconds a read. The
+	// message's own time below stays the judge; the two are the same
+	// instant as opencode writes them.
+	var conds []string
 	var args []any
 	if opts.SessionID != "" {
-		query += ` WHERE session_id = ?`
+		conds = append(conds, `m.session_id = ?`)
 		args = append(args, opts.SessionID)
 	}
-	rows, err := db.Query(query, args...)
+	if !opts.Since.IsZero() && hasColumn(db, "message", "time_created") {
+		conds = append(conds, `m.time_created >= ?`)
+		args = append(args, opts.Since.UnixMilli())
+	}
+	where := ""
+	if len(conds) > 0 {
+		where = ` WHERE ` + strings.Join(conds, ` AND `)
+	}
+	var parts map[string]*v1Parts
+	if opts.Parts && hasTable(db, "part") {
+		parts = readV1Parts(db, where, args)
+	}
+	rows, err := db.Query(`SELECT m.id, m.session_id, m.data FROM message m`+where, args...)
 	if err != nil {
 		return fmt.Errorf("%w: %v", opencodedb.ErrSchema, err)
 	}
@@ -335,13 +348,13 @@ func readV1(db *sql.DB, opts opencodedb.Options, seen map[string]bool, visit fun
 // readV1Parts gathers each 1.x message's text, tool calls and
 // compaction marker. A failure yields what was read: a missing part
 // degrades one signal, where failing would lose every metric.
-func readV1Parts(db *sql.DB, session string) map[string]*v1Parts {
+// readV1Parts reads the parts of the messages where (over message m)
+// selects, all of them when it is empty.
+func readV1Parts(db *sql.DB, where string, args []any) map[string]*v1Parts {
 	out := map[string]*v1Parts{}
 	query := `SELECT message_id, data FROM part`
-	var args []any
-	if session != "" {
-		query = `SELECT p.message_id, p.data FROM part p JOIN message m ON m.id = p.message_id WHERE m.session_id = ?`
-		args = append(args, session)
+	if where != "" {
+		query = `SELECT p.message_id, p.data FROM part p JOIN message m ON m.id = p.message_id` + where
 	}
 	rows, err := db.Query(query, args...)
 	if err != nil {

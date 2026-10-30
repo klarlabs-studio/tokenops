@@ -98,3 +98,11 @@ func TestComputeReadsThroughDeps(t *testing.T) {
 		t.Errorf("realized = %+v", r.Realized)
 	}
 }
+
+// The wired report keeps its git lookups between reports, so a daemon
+// does not resolve thousands of session directories afresh on each.
+func TestDepsForKeepsItsGitLookups(t *testing.T) {
+	if DepsFor(config.Config{}, nil, nil, nil).Repos == nil {
+		t.Fatal("DepsFor resolves repositories afresh on every report")
+	}
+}

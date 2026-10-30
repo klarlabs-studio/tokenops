@@ -67,8 +67,9 @@ type Repos interface {
 type Deps struct {
 	// Units are the instructions since a time, with their text.
 	Units func(since, now time.Time) ([]sessions.Unit, error)
-	// Turns are the priced turns since a time.
-	Turns func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error)
+	// Turns are the priced turns since a time. Build reads them once and
+	// hands the sections that need them that one read.
+	Turns TurnReader
 	// Dirs maps sessions to where they ran.
 	Dirs  func(since time.Time) map[string]sessiondirs.Dir
 	Repos Repos
@@ -126,12 +127,14 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 		}
 	}
 	var turns []analytics.SessionTurn
+	var shared TurnReader
 	if d.Turns != nil {
-		var err error
-		turns, err = d.Turns(ctx, since)
+		s := &sharedTurns{read: d.Turns}
+		all, err := s.prime(ctx, turnSpan(d, opts, since))
 		if err != nil {
 			warnings = append(warnings, "event store: "+err.Error())
 		}
+		turns, shared = turnsSince(all, since), s.Read
 	}
 	repoOf := map[string]string{}
 	if d.Dirs != nil && d.Repos != nil {
@@ -147,10 +150,10 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 	}
 	u, kindOf := aggregate(units, turns, repoOf, days, opts.ClientVersion, now)
 	if opts.Schema >= teamwire.SchemaFinOps {
-		warnings = append(warnings, addFinOps(ctx, d.FinOps, &u, repoOf, kindOf, now)...)
+		warnings = append(warnings, addFinOps(ctx, d.FinOps, shared, &u, repoOf, kindOf, now)...)
 	}
 	if opts.Schema >= teamwire.SchemaSpend {
-		warnings = append(warnings, addSpend(ctx, d, opts, &u, units, turns, repoOf, now)...)
+		warnings = append(warnings, addSpend(ctx, d, opts, shared, &u, units, turns, repoOf, now)...)
 	}
 	return u, warnings
 }

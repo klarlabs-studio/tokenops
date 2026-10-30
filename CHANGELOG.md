@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **team:** about half of the daemon's hourly team uploads gave up at their 5-minute deadline ("context deadline exceeded"), so the team saw figures up to hours old. Each upload repeated work: it read the same weeks of turns from the event store three times, resolved every session directory with git afresh (thousands of `git` runs) for the waste report, and parsed opencode's whole 1.x history to keep two weeks of it. An upload now reads the turns once, keeps the git lookups between uploads, and asks opencode's database only for the window. On a machine with 2,300 sessions an upload's build went from about 90 seconds to about 45 when nothing else is running, with the same figures. `tokenops team preview` and the daemon's own waste report are faster too.
+
 ## 0.116.1 - 2026-10-30
 
 ### Fixed

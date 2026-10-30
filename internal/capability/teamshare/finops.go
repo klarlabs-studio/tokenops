@@ -34,8 +34,8 @@ type FinOps struct {
 	// readings and turns) and the plan history: plan days and plan advice.
 	Plans func() headroom.Deps
 	// Waste is the waste report and realized savings for each UTC day from
-	// since's to until.
-	Waste func(ctx context.Context, since, until time.Time) ([]avoidable.Day, error)
+	// since's to until, read from turns when it is set.
+	Waste func(ctx context.Context, turns TurnReader, since, until time.Time) ([]avoidable.Day, error)
 }
 
 // FinOpsFor reads this machine's plans, event store, rate card and
@@ -54,8 +54,12 @@ func FinOpsFor(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store
 			}
 			return d
 		},
-		Waste: func(ctx context.Context, since, until time.Time) ([]avoidable.Day, error) {
-			return avoidable.Days(ctx, waste, since, until)
+		Waste: func(ctx context.Context, turns TurnReader, since, until time.Time) ([]avoidable.Day, error) {
+			d := waste
+			if turns != nil {
+				d.Turns = turns
+			}
+			return avoidable.Days(ctx, d, since, until)
 		},
 	}
 }
@@ -68,7 +72,7 @@ const windowLookback = 7 * 24 * time.Hour
 // addFinOps fills u's schema 2 sections and marks it schema 2. A reader
 // that fails leaves its sections empty with a warning; a row that would
 // fail validation is dropped with one, so the buckets are still sent.
-func addFinOps(ctx context.Context, f FinOps, u *teamwire.Upload, repoOf map[string]string, kindOf kinds, now time.Time) []string {
+func addFinOps(ctx context.Context, f FinOps, turns TurnReader, u *teamwire.Upload, repoOf map[string]string, kindOf kinds, now time.Time) []string {
 	u.Schema = teamwire.SchemaFinOps
 	first, err := time.Parse(teamwire.DayLayout, u.Days[0])
 	if err != nil {
@@ -103,7 +107,7 @@ func addFinOps(ctx context.Context, f FinOps, u *teamwire.Upload, repoOf map[str
 		}
 	}
 	if f.Waste != nil {
-		ds, err := f.Waste(ctx, first, now)
+		ds, err := f.Waste(ctx, turns, first, now)
 		if err != nil {
 			warnings = append(warnings, "waste: "+err.Error())
 		} else {
