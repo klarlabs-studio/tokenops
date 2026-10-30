@@ -2,6 +2,7 @@ package teamshare
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -79,5 +80,20 @@ func TestSharedTurnsReadsWhatItDoesNotHold(t *testing.T) {
 	}
 	if got, _ := s.Read(ctx, now.Add(-time.Hour)); len(got) != 1 || reads != 2 {
 		t.Fatalf("an earlier start: %d turns, %d reads", len(got), reads)
+	}
+}
+
+// An upload tells Took how long each part took to read, so one that runs
+// out of time names the part that used it.
+func TestUploadTimesEachPart(t *testing.T) {
+	var parts []string
+	opts := Options{Days: 14, RepoNames: RepoRemote, Schema: teamwire.SchemaSpend, Role: "owner",
+		Took: func(part string, _ time.Duration) { parts = append(parts, part) }}
+	if _, warnings := Build(context.Background(), spendDeps(), opts, now); len(warnings) > 0 {
+		t.Fatalf("warnings: %v", warnings)
+	}
+	want := []string{"transcripts", "turns", "repositories", "plan days", "plan advice", "waste", "units of work", "vendor cost"}
+	if !slices.Equal(parts, want) {
+		t.Errorf("parts timed = %q, want %q", parts, want)
 	}
 }

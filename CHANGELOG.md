@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **team:** the daemon's log line for each team upload now says how long the upload took and how long each part of it took to read (`took.total`, `took.transcripts`, `took.waste`, …), on success and on failure. An upload that runs out of its 5-minute deadline names the part that used the time.
+
 ## 0.116.2 - 2026-10-30
 
 ### Fixed

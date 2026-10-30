@@ -77,7 +77,10 @@ func addSpend(ctx context.Context, d Deps, opts Options, shared TurnReader, u *t
 	u.Spend = SpendRows(turns, repoOf, covered)
 	var placed []uniteconomics.Placed
 	if d.Schema3.Placed != nil {
-		if placed, err = d.Schema3.Placed(ctx, shared, first, now); err != nil {
+		done := lap(opts.Took, "units of work")
+		placed, err = d.Schema3.Placed(ctx, shared, first, now)
+		done()
+		if err != nil {
 			warnings = append(warnings, "units: "+err.Error())
 		}
 	}
@@ -96,7 +99,9 @@ func addSpend(ctx context.Context, d Deps, opts Options, shared TurnReader, u *t
 	u.Units = UnitRows(story.Group(units, story.Options{}), turns, placed, repoOf, labelOf, covered)
 	if slices.Contains(teamwire.VendorCostRoles, opts.Role) && d.Schema3.VendorCosts != nil {
 		var w []string
+		done := lap(opts.Took, "vendor cost")
 		u.VendorCosts, w = vendorCostRows(ctx, d.Schema3.VendorCosts(ctx), u.Days, first, now)
+		done()
 		warnings = append(warnings, w...)
 	}
 	return append(warnings, dropInvalidSpend(u)...)
