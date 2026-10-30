@@ -66,3 +66,26 @@ func TestLookupPricesAResellersModelAtItsVendorsRate(t *testing.T) {
 		}
 	}
 }
+
+// A model run on the operator's own machine (Ollama, llama.cpp, LM
+// Studio) has no vendor bill, so it costs nothing; an Ollama Cloud model
+// ("-cloud", ":cloud") is billed, and stays unknown until a card prices it.
+func TestLookupPricesALocalModelAtZero(t *testing.T) {
+	tbl := Table{Rates: map[Key]Rate{}}
+	for _, model := range []string{"mistral", "qwen2.5-coder:14b", "llama3.1:8b-instruct-q4_K_M"} {
+		if r, err := tbl.Lookup(eventschema.ProviderOllama, model); err != nil || r != (Rate{}) {
+			t.Errorf("local %s = %+v, %v; want a zero rate", model, r, err)
+		}
+	}
+	if r, err := tbl.Lookup(eventschema.ProviderLMStudio, "qwen3-coder-30b"); err != nil || r != (Rate{}) {
+		t.Errorf("LM Studio = %+v, %v; want a zero rate", r, err)
+	}
+	for _, model := range []string{"gpt-oss:120b-cloud", "glm-4.6:cloud"} {
+		if _, err := tbl.Lookup(eventschema.ProviderOllama, model); !errors.Is(err, ErrUnknownModel) {
+			t.Errorf("cloud %s = %v, want ErrUnknownModel", model, err)
+		}
+	}
+	if _, err := tbl.Lookup(eventschema.ProviderOpenAI, "mistral"); !errors.Is(err, ErrUnknownModel) {
+		t.Errorf("only Ollama's local models are free: %v", err)
+	}
+}
