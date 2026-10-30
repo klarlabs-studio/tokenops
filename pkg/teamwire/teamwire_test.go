@@ -34,6 +34,14 @@ var constrainedStrings = map[string]string{
 	"PlanAdvice.Kind":            "AdviceKinds: enumeration",
 	"PlanAdvice.RecommendedPlan": "ValidPlan: the plan catalog, or empty for the API",
 	"PlanAdvice.Confidence":      "AdviceConfidences: enumeration",
+	// Schema 3 (ADR 0012 §11).
+	"SpendBucket.Day":      "DayLayout date",
+	"SpendBucket.Repo":     "ValidRepo",
+	"SpendBucket.Provider": "ValidProvider: the provider registry",
+	"UnitBucket.Day":       "DayLayout date",
+	"UnitBucket.Repo":      "ValidRepo",
+	"VendorCost.Day":       "DayLayout date",
+	"VendorCost.Provider":  "ValidProvider: the provider registry",
 }
 
 // numericKinds are the field kinds that hold figures, not text.
@@ -98,7 +106,7 @@ func TestValidate(t *testing.T) {
 		t.Fatalf("valid upload rejected: %v", err)
 	}
 	cases := map[string]func(u *Upload){
-		"schema":           func(u *Upload) { u.Schema = 3 },
+		"schema":           func(u *Upload) { u.Schema = SchemaVersion + 1 },
 		"batch id":         func(u *Upload) { u.BatchID = "batch 1" },
 		"no days":          func(u *Upload) { u.Days = nil },
 		"bad day":          func(u *Upload) { u.Days[0] = "yesterday" },
