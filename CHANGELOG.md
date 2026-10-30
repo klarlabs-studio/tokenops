@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.116.1 - 2026-10-30
+
 ### Fixed
 
 - **budgets:** a budget on one provider's bill (`tokenops budget set … --provider`) spoke and bound in sessions that provider does not bill. With that budget spent, a Claude Code session on Anthropic was told the budget was used up and, for a hard budget, asked to continue at every tool call, though none of its turns counted toward it. The coach's budget tips and a hard budget's boundary now count only the budgets the session's turns go to. TokenOps tells who bills a Claude Code session from where Claude Code is pointed (`ANTHROPIC_BASE_URL`, or its settings) and, for an endpoint that bills by model such as Fireworks', from the session's latest model, so Claude through Fireworks counts toward Anthropic and Fireworks' own models toward Fireworks. When it cannot tell (Bedrock, Vertex, a local relay, Codex, opencode, Cursor), every budget still applies, as before.
