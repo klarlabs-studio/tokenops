@@ -138,9 +138,6 @@ var (
 	deepTokens   = []string{"opus", "fable", "mythos", "ultra", "thinking"}
 )
 
-// localProviders run on the operator's own machine.
-var localProviders = map[string]bool{"ollama": true, "llamacpp": true, "lmstudio": true}
-
 // Resolve places one model.
 func (c *Catalog) Resolve(provider eventschema.Provider, model string) Resolution {
 	if c == nil || model == "" {
@@ -149,7 +146,7 @@ func (c *Catalog) Resolve(provider eventschema.Provider, model string) Resolutio
 	if t, ok := c.overrides[string(provider)+"/"+model]; ok {
 		return Resolution{Tier: t, Basis: BasisOverride}
 	}
-	if localProviders[strings.ToLower(string(provider))] {
+	if spend.LocalModel(provider, model) {
 		return Resolution{Tier: TierLookup, Basis: BasisLocal, Free: true}
 	}
 	if isFree(model) {
@@ -306,7 +303,7 @@ func (c *Catalog) providerCosts(provider eventschema.Provider) []float64 {
 	}
 	if len(c.candidates) > 0 {
 		for _, orig := range c.candidates {
-			if isFree(orig) || localProviders[strings.ToLower(string(provider))] {
+			if isFree(orig) || spend.LocalModel(provider, orig) {
 				continue
 			}
 			if cost, _, ok := c.priceOf(provider, orig); ok {

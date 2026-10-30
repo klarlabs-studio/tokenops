@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- **pricing:** a model run on your own machine (Ollama, llama.cpp, LM Studio) is priced at $0 instead of unpriced, since no vendor bills it. An Ollama Cloud model (`gpt-oss:120b-cloud`, `glm-4.6:cloud`) is billed, and stays unpriced until a catalog prices it; model tiers no longer count it as a free local model.
+- **cursor:** the Cursor hook's tests wrote their fixture turns to `~/.tokenops/cursor-turns`, the ledger the daemon reads as real Cursor usage, so every test run on a developer's machine added phantom `grok-4.6` turns. The tests now run in a throwaway home.
+
 ## 0.115.0 - 2026-10-29
 
 ### Added
