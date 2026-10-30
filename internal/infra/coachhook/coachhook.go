@@ -116,7 +116,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	}
 
 	evaluateCompactTip(&dec, &st, cfg, contextTokens, now)
-	evaluateSpendBudgets(dir, &dec, &st, cfg, now)
+	evaluateSpendBudgets(dir, &dec, &st, cfg, model, now)
 
 	// The budget tier is about the session in flight; the read-guard case
 	// is a standing recommendation that will be just as true next turn.

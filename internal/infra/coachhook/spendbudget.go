@@ -80,18 +80,27 @@ func spendTier(r boundaryledger.BudgetReading, said float64, verbosity string) f
 
 // evaluateSpendBudgets says at most one thing about the budget windows
 // when nothing else was said this Stop: the window that reached the
-// highest new tier.
-func evaluateSpendBudgets(dir string, dec *Decision, st *sessionState, cfg Config, now time.Time) {
+// highest new tier, among those the session's turns count toward. A
+// window on another provider's bill waits, latch untouched, for a
+// session that provider bills.
+func evaluateSpendBudgets(dir string, dec *Decision, st *sessionState, cfg Config, model string, now time.Time) {
 	if !cfg.Enabled || dec.Nudge || len(cfg.Budgets) == 0 {
 		return
 	}
 	latches := loadSpendLatches(dir)
 	defer saveSpendLatches(dir, latches, cfg.Budgets)
+	biller := ""
+	if cfg.SessionBiller != nil {
+		biller = cfg.SessionBiller(model)
+	}
 	var (
 		pick boundaryledger.BudgetReading
 		tier float64
 	)
 	for _, r := range cfg.Budgets {
+		if !r.CountsFor(biller) {
+			continue
+		}
 		if t := spendTier(r, latches[spendLatchKey(r)], cfg.Verbosity); t > tier {
 			pick, tier = r, t
 		}

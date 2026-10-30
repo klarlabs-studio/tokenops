@@ -169,7 +169,7 @@ func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decisio
 		}
 	}
 
-	evaluateSpendBudgets(dir, &dec, &st, cfg, now)
+	evaluateSpendBudgets(dir, &dec, &st, cfg, c.modelName(), now)
 	cfg.applyHoldout(&dec, &st, before, c.modelName(), cursorContextTokens(c), now)
 	cfg.deliver(dir, &dec, &st, before, prevMax, now)
 	offerTip(&st, &dec, cfg, tipKind(dec), c.modelName(), cursorContextTokens(c))
