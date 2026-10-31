@@ -364,7 +364,7 @@ func waste(s *readguard.Stats, c *coach.Report) []Finding {
 			Key:      key(KindWaste, "rereads"),
 			Kind:     KindWaste,
 			Level:    LevelNotice,
-			Title:    fmt.Sprintf("Agents re-read %d unchanged files in full", s.WouldBlock),
+			Title:    fmt.Sprintf("Agents re-read %d unchanged files in full in the last %d days", s.WouldBlock, WindowDays),
 			Evidence: fmt.Sprintf("about %s tokens of context spent on files already read, across %d sessions", tokens(s.ReclaimableTok), s.DistinctSessions),
 			Action:   "`tokenops coach set waste autonomous` lets the read guard refuse them.",
 		})
@@ -374,7 +374,7 @@ func waste(s *readguard.Stats, c *coach.Report) []Finding {
 			Key:      key(KindWaste, "refused"),
 			Kind:     KindWaste,
 			Level:    LevelInfo,
-			Title:    fmt.Sprintf("The read guard refused %d re-reads", s.Blocked),
+			Title:    fmt.Sprintf("The read guard refused %d re-reads in the last %d days", s.Blocked, WindowDays),
 			Evidence: fmt.Sprintf("about %s tokens kept out of context", tokens(s.ReclaimedTok)),
 		})
 	}
@@ -394,7 +394,7 @@ func budget(s *coachhook.Stats) []Finding {
 		Key:      key(KindBudget, "over"),
 		Kind:     KindBudget,
 		Level:    LevelNotice,
-		Title:    fmt.Sprintf("%d of %d sessions ran past their budget", over, s.DistinctSessions),
+		Title:    fmt.Sprintf("%d of %d sessions ran past their budget in the last %d days", over, s.DistinctSessions, WindowDays),
 		Evidence: fmt.Sprintf("the largest came to about %s at API prices", money(s.MaxCumulativeUSD)),
 		Action:   "`tokenops coach stats` shows how far past each one went.",
 	}}
