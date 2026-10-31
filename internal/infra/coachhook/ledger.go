@@ -106,7 +106,12 @@ type Stats struct {
 // ReadStats reads the ledger and aggregates it. Cumulative spend is a
 // per-event snapshot, so per-session peak (the last/highest cumulative) is the
 // session's spend; total est spend sums those peaks across sessions.
-func ReadStats(dir string) (Stats, error) {
+func ReadStats(dir string) (Stats, error) { return ReadStatsSince(dir, time.Time{}) }
+
+// ReadStatsSince is ReadStats over the events from since on. The run-out
+// score and the session budget belief are the ledger's whole history either
+// way: they are learned, not counted.
+func ReadStatsSince(dir string, since time.Time) (Stats, error) {
 	dir = resolveDir(dir)
 	f, err := os.Open(filepath.Join(dir, "events.jsonl"))
 	if err != nil {
@@ -124,6 +129,9 @@ func ReadStats(dir string) (Stats, error) {
 		var e ledgerEvent
 		if err := dec.Decode(&e); err != nil {
 			break
+		}
+		if e.TS.Before(since) {
+			continue
 		}
 		s.Events++
 		if e.CumulativeUSD > peak[e.Session] {

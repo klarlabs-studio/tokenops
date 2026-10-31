@@ -114,6 +114,27 @@ func AnalyzeSessions(ctx context.Context, dir string, now time.Time, cache *sess
 	return s, dropped, err
 }
 
+// WindowDays is how far back the findings read the coach's ledgers, the
+// same week the session analysis covers. The ledgers hold every event since
+// install: read whole, a count from July sat beside this week's figures and
+// read as this week's.
+const WindowDays = 7
+
+// ledgerStats reads the coach hook's and the read guard's ledgers from
+// since on; an empty dir is the default location. A ledger that cannot be
+// read, or holds nothing in the window, is nil.
+func ledgerStats(hookDir, guardDir string, since time.Time) (*coachhook.Stats, *readguard.Stats) {
+	var hook *coachhook.Stats
+	var guard *readguard.Stats
+	if s, err := coachhook.ReadStatsSince(hookDir, since); err == nil && s.Events > 0 {
+		hook = &s
+	}
+	if s, err := readguard.ReadStatsSince(guardDir, since); err == nil && s.Events > 0 {
+		guard = &s
+	}
+	return hook, guard
+}
+
 // Gather reads the coach's ledgers, the last session analysis, the
 // volatile-prefix lint of the user's context files and the headroom pause
 // around a glance, the coach's report and the config, any
@@ -121,12 +142,7 @@ func AnalyzeSessions(ctx context.Context, dir string, now time.Time, cache *sess
 // out.
 func Gather(g *headroom.Glance, c *coach.Report, cfg *config.Config, cacheDir string) Inputs {
 	in := Inputs{Glance: g, Coach: c, Pause: pauseSummary(cfg), Loop: loopSummary(cfg), Presence: presenceStatus(cfg)}
-	if s, err := coachhook.ReadStats(""); err == nil && s.Events > 0 {
-		in.CoachHook = &s
-	}
-	if s, err := readguard.ReadStats(""); err == nil && s.Events > 0 {
-		in.ReadGuard = &s
-	}
+	in.CoachHook, in.ReadGuard = ledgerStats("", "", time.Now().AddDate(0, 0, -WindowDays))
 	if s, err := ReadSnapshot(cacheDir); err == nil {
 		in.Sessions = s
 	}

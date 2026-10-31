@@ -56,9 +56,9 @@ func TestComputeRanksEveryFinding(t *testing.T) {
 		"warn Codex's weekly window runs out in 1d 0h at this pace",
 		"warn opencode sessions cannot be read",
 		"notice Instructions take a lot of turns",
-		"notice Agents re-read 14 unchanged files in full",
-		"notice 44 of 97 sessions ran past their budget",
-		"info The read guard refused 255 re-reads",
+		"notice Agents re-read 14 unchanged files in full in the last 7 days",
+		"notice 44 of 97 sessions ran past their budget in the last 7 days",
+		"info The read guard refused 255 re-reads in the last 7 days",
 		"info The coach is observing and says nothing",
 		"info The coach went quiet on compact tips",
 	}
