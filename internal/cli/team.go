@@ -18,10 +18,8 @@ import (
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/teamshare"
-	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
-	"go.klarlabs.de/tokenops/internal/infra/gitlog"
 	"go.klarlabs.de/tokenops/internal/infra/teamclient"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -69,22 +67,15 @@ func teamOptions(cfg config.Config) teamshare.Options {
 // upload is computed from. Without a store the upload still carries the
 // transcripts' figures.
 func withTeamDeps(ctx context.Context, cfg config.Config, fn func(teamshare.Deps) error) error {
-	var agg *spending.EventAggregator
-	var finops teamshare.FinOps
+	keys := func(ctx context.Context) map[string]string { return bootstrap.AdminKeys(ctx, cfg) }
+	d := teamshare.MachineDeps(cfg, nil, nil, nil, keys)
 	if resolved, err := resolvePlanDBIn("", cfg.Storage.Path); err == nil {
 		if store, err := sqlite.OpenReadOnly(ctx, resolved); err == nil {
 			defer func() { _ = store.Close() }()
 			if eng, err := buildSpendEngine(cfg); err == nil {
-				agg = spending.NewAggregator(store, eng)
-				finops = teamshare.FinOpsFor(cfg, agg, store, eng)
+				d = teamshare.MachineDeps(cfg, spending.NewAggregator(store, eng), store, eng, keys)
 			}
 		}
-	}
-	d := teamshare.DepsFor(agg)
-	d.FinOps = finops
-	d.Schema3 = teamshare.Schema3{
-		Placed:      teamshare.PlacedFor(uniteconomics.Deps{Turns: d.Turns, Repos: gitlog.NewRepos()}),
-		VendorCosts: teamshare.VendorCostsFor(func(ctx context.Context) map[string]string { return bootstrap.AdminKeys(ctx, cfg) }),
 	}
 	return fn(d)
 }

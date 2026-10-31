@@ -9,9 +9,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/teamshare"
-	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/infra/gitlog"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/infra/teamclient"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -21,9 +19,13 @@ import (
 // does not compete with startup.
 const teamFirstUpload = 2 * time.Minute
 
-// teamUploadTimeout bounds one upload, reading and sending. The log line
-// says how long each part took, so one that runs out names the part.
-const teamUploadTimeout = 5 * time.Minute
+// teamUploadTimeout bounds one upload, reading and sending, so a hung one
+// does not hold the next. macOS runs the daemon at background priority
+// (ProcessType Background), where an upload's reads take about four times
+// as long as in a terminal: two minutes an hour on a machine with 2,300
+// sessions, over four after a start. Five minutes cut uploads off; the
+// log line says how long each part took, so one that runs out names it.
+const teamUploadTimeout = 15 * time.Minute
 
 // startTeamUploadRuntime uploads derived figures to the team plane this
 // machine joined (ADR 0012), every team.interval. It reads the enrolment
@@ -44,15 +46,11 @@ func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components,
 		Days: cfg.Team.EffectiveDays(), RepoNames: cfg.Team.EffectiveRepoNames(), ClientVersion: version.Version,
 		Allow: shareAllowed(cfg, bcap.DestinationTeam),
 	}
-	deps := teamshare.DepsFor(components.Aggregator)
-	// Read only when the server accepts schema 2 (teamshare.ServerSchema).
-	deps.FinOps = teamshare.FinOpsFor(cfg, components.Aggregator, components.Store, components.Spend)
-	// Read only when the server accepts schema 3; vendor cost only on an
-	// owner's or admin's machine, with the admin keys configured here.
-	deps.Schema3 = teamshare.Schema3{
-		Placed:      teamshare.PlacedFor(uniteconomics.Deps{Turns: deps.Turns, Repos: gitlog.NewRepos()}),
-		VendorCosts: teamshare.VendorCostsFor(func(ctx context.Context) map[string]string { return bootstrap.AdminKeys(ctx, cfg) }),
-	}
+	// The schema 2 and 3 sections are read only when the server accepts
+	// them (teamshare.ServerSchema); vendor cost only on an owner's or
+	// admin's machine, with the admin keys configured here.
+	deps := teamshare.MachineDeps(cfg, components.Aggregator, components.Store, components.Spend,
+		func(ctx context.Context) map[string]string { return bootstrap.AdminKeys(ctx, cfg) })
 	sup.Go("team-upload", func(ctx context.Context) error {
 		wait := time.NewTimer(teamFirstUpload)
 		defer wait.Stop()
