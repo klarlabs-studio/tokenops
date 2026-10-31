@@ -9,7 +9,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
@@ -38,14 +37,10 @@ type FinOps struct {
 	Waste func(ctx context.Context, turns TurnReader, since, until time.Time) ([]avoidable.Day, error)
 }
 
-// FinOpsFor reads this machine's plans, event store, rate card and
-// ledgers. A nil store reads nothing; a nil engine leaves the money the
-// rate card prices out.
-func FinOpsFor(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, eng *spend.Engine) FinOps {
-	if store == nil {
-		return FinOps{}
-	}
-	waste := avoidable.DepsFor(cfg, agg, store, eng)
+// finOpsFor reads this machine's plans, event store and rate card, and
+// the waste report through waste. A nil engine leaves the money the rate
+// card prices out.
+func finOpsFor(cfg config.Config, store *sqlite.Store, eng *spend.Engine, waste avoidable.Deps) FinOps {
 	return FinOps{
 		Plans: func() headroom.Deps {
 			d := headroom.Deps{Config: &cfg, Reader: store, PlanHistory: planhistory.LoadDefault}
