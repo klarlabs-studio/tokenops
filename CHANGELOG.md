@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.116.4 - 2026-10-31
+
 ### Fixed
 
 - **team:** the daemon's team uploads could still run out of their 5-minute deadline. macOS runs the daemon at background priority, where an upload takes about four times as long as in a terminal: about two minutes an hour on a machine with 2,300 sessions, and over four for the first upload after the daemon starts, which is the one that failed. An upload now has 15 minutes, which still stops a hung one well before the next. The first upload after a start is also faster: the repositories, the waste report and the units of work each looked up every session directory's git repository on their own, and now share one lookup, so `tokenops team preview` takes about 53 seconds instead of 83 the first time.
