@@ -69,8 +69,9 @@ func ValidProvider(s string) bool {
 	return ok
 }
 
-// ValidPlan reports whether plan is a catalog plan of provider, or a
-// binding any provider may have.
+// ValidPlan reports whether plan is a catalog plan of provider, by its
+// current name or one the vendor retired, or a binding any provider may
+// have.
 func ValidPlan(provider, plan string) bool {
 	if !ValidProvider(provider) {
 		return false
@@ -79,11 +80,23 @@ func ValidPlan(provider, plan string) bool {
 		return true
 	}
 	for _, p := range providers.Plans() {
-		if p.Name == plan {
+		if p.Name == plan || slices.Contains(p.FormerNames, plan) {
 			return p.Provider == provider
 		}
 	}
 	return false
+}
+
+// CurrentPlan is the catalog name plan has now: a name a vendor retired
+// (an older client still sends claude-max-20x for Claude Ultra) is the
+// plan's current one, and any other name is returned as it is.
+func CurrentPlan(plan string) string {
+	for _, p := range providers.Plans() {
+		if slices.Contains(p.FormerNames, plan) {
+			return p.Name
+		}
+	}
+	return plan
 }
 
 // ValidWasteClass reports whether s is a waste class.

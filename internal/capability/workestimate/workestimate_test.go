@@ -28,7 +28,7 @@ func openStore(t *testing.T) *sqlite.Store {
 }
 
 func anthropicConfig() *config.Config {
-	return &config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}}
+	return &config.Config{Plans: map[string]string{"anthropic": "claude-max"}}
 }
 
 // meter records a Claude usage-meter reading of the five-hour window.

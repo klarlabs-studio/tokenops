@@ -33,12 +33,12 @@ func TestPlanAdviceToolReplaysTheBoundPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	d := PlanDeps{Config: &config.Config{Plans: map[string]string{"anthropic": "claude-max-5x"}}, Store: st}
+	d := PlanDeps{Config: &config.Config{Plans: map[string]string{"anthropic": "claude-max"}}, Store: st}
 	res, err := planAdvice(context.Background(), d, planAdviceInput{Days: 45})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Days != 45 || len(res.Providers) != 1 || res.Providers[0].Plan != "claude-max-5x" {
+	if res.Days != 45 || len(res.Providers) != 1 || res.Providers[0].Plan != "claude-max" {
 		t.Fatalf("advice = %+v", res)
 	}
 	if _, err := planAdvice(context.Background(), d, planAdviceInput{Days: 120}); err == nil {

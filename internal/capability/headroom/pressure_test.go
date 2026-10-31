@@ -54,7 +54,7 @@ func TestWindowPressureIsUnknownWithoutAReading(t *testing.T) {
 	}{
 		"no plan bound":        {cfg: map[string]string{}, reader: promptReader{}},
 		"no rate-limit window": {cfg: map[string]string{"anthropic": "pay-as-you-go"}, reader: promptReader{}},
-		"unknown plan":         {cfg: map[string]string{"anthropic": "claude-ultra"}, reader: promptReader{}},
+		"unknown plan":         {cfg: map[string]string{"anthropic": "claude-galaxy"}, reader: promptReader{}},
 		"no event store":       {cfg: map[string]string{"anthropic": "claude-pro"}},
 	}
 	for name, tc := range cases {
@@ -112,9 +112,9 @@ func TestWindowPressurePrefersTheVendorsReading(t *testing.T) {
 // Without a vendor reading it falls back to counting plan-included
 // messages — which is all a client like Claude Code offers.
 func TestWindowPressureFallsBackToTheMessageCount(t *testing.T) {
-	plan, ok := plans.Lookup("claude-max-20x")
+	plan, ok := plans.Lookup("claude-max")
 	if !ok {
-		t.Skip("claude-max-20x not in catalog")
+		t.Skip("claude-max not in catalog")
 	}
 	now := time.Now()
 	// A fifth of the allowance, expressed against the catalog rather than a
@@ -137,7 +137,7 @@ func TestWindowPressureFallsBackToTheMessageCount(t *testing.T) {
 			},
 		})
 	}
-	got, ok := headroom.WindowPressure(context.Background(), cfgWith(map[string]string{"anthropic": "claude-max-20x"}),
+	got, ok := headroom.WindowPressure(context.Background(), cfgWith(map[string]string{"anthropic": "claude-max"}),
 		msgs, eventschema.ProviderAnthropic, now)
 	if !ok {
 		t.Fatal("the message-count fallback must still work")

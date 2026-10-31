@@ -122,7 +122,7 @@ var FirstWeekChecklist = []ChecklistItem{
 	},
 	{
 		Description: "Bind your subscription plan so headroom math sees real activity",
-		NextAction:  "tokenops plan set anthropic claude-max-20x",
+		NextAction:  "tokenops plan set anthropic claude-ultra",
 	},
 	{
 		Description: "Accumulate 7 days of attributed events for spend forecasting",

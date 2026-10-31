@@ -220,8 +220,8 @@ func TestDXUsesARecentAnalysis(t *testing.T) {
 // finding; staying, or a saving read with low confidence, is none.
 func TestPlanAdviceFinding(t *testing.T) {
 	saving := plans.Advice{Provider: "anthropic", Confidence: plans.ConfidenceMedium, Days: 30,
-		Recommendation: &plans.Recommendation{Verdict: plans.VerdictSwitch, Material: true, Plan: "claude-max-5x",
-			Display: "Claude Max 5x", SavingsUSD: 100, Summary: "Claude Max 5x would have cost $100/mo less than Claude Max 20x, with no lockouts."}}
+		Recommendation: &plans.Recommendation{Verdict: plans.VerdictSwitch, Material: true, Plan: "claude-max",
+			Display: "Claude Max", SavingsUSD: 100, Summary: "Claude Max would have cost $100/mo less than Claude Ultra, with no lockouts."}}
 	stay := plans.Advice{Provider: "openai", Confidence: plans.ConfidenceMedium,
 		Recommendation: &plans.Recommendation{Verdict: plans.VerdictStay}}
 	thin := saving
@@ -231,7 +231,7 @@ func TestPlanAdviceFinding(t *testing.T) {
 		t.Fatalf("findings = %+v", r.Findings)
 	}
 	f := r.Findings[0]
-	if f.Kind != KindPlan || f.Level != LevelInfo || !strings.Contains(f.Title, "Claude Max 5x") || !strings.Contains(f.Title, "$100/mo") {
+	if f.Kind != KindPlan || f.Level != LevelInfo || !strings.Contains(f.Title, "Claude Max") || !strings.Contains(f.Title, "$100/mo") {
 		t.Errorf("finding = %+v", f)
 	}
 	if !strings.Contains(f.Action, "tokenops plan advise") || !strings.Contains(f.Evidence, "medium confidence") {

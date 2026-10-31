@@ -18,7 +18,7 @@ the terminal.
 TokenOps • AI Usage & Limits                                           Sun 4 Oct 09:30
 
 ╭────────────────────────────────────────╮  ╭────────────────────────────────────────╮
-│ Codex [local] PLAN Pro Standard ($100) │  │ Claude [meter]            PLAN Max 20x │
+│ Codex [local] PLAN Pro Standard ($100) │  │ Claude [meter]                PLAN Max │
 │ ────────────────────────────────────── │  │ ────────────────────────────────────── │
 │ Weekly                         9% left │  │ Session                       96% left │
 │ [ ━━━─────────────────────────────── ] │  │ [ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━─ ] │
@@ -139,7 +139,7 @@ tokenops glance --color always | less -R
 ```
 PLAN                       WINDOW            LEFT  RESETS    PACE
 Codex Pro Standard ($100)  Weekly              9%  30m       +37% · out in 23h 47m
-Claude Max 20x             Session            96%  4h 37m    -3% · lasts
+Claude Max                 Session            96%  4h 37m    -3% · lasts
                            Weekly · Fable    100%  5d 17h
 ```
 
@@ -334,7 +334,7 @@ wrong in a way that looks authoritative.
 ```bash
 tokenops plan list              # configured bindings + headroom
 tokenops plan catalog           # all 30 plans and their list prices
-tokenops plan set anthropic claude-max-20x
+tokenops plan set anthropic claude-ultra
 tokenops plan unset cursor
 tokenops plan headroom          # live consumption + overage risk
 tokenops plan history           # every recorded switch, oldest first
@@ -350,30 +350,32 @@ shows how often you would have run out and for how long, the fullest window,
 and the monthly cost, then recommends one:
 
 ```text
-anthropic: Claude Max 20x, replayed over the last 27 days (4 windows), confidence medium
+anthropic: Claude Max, replayed over the last 27 days (8 windows), confidence medium
 
   OPTION                               LOCKOUTS  BLOCKED  PEAK            PER MONTH  SAVES
-  Claude Pro                           4         24.0d    400% of weekly  $20.00     $180.00
-  Claude Max 5x                        0         -        80% of weekly   $100.00    $100.00
-  Claude Max 20x (now)                 0         -        20% of weekly   $200.00    -
-  Claude Pro + metered overflow        0         -        400% of weekly  $233.06    -$33.06
-  API at list price (no subscription)  0         -        -               $284.08    -$84.08
+  Claude Pro                           4         24.0d    400% of weekly  $20.00     $80.00
+  Claude Max (now)                     0         -        80% of weekly   $100.00    -
+  Claude Ultra                         0         -        40% of weekly   $200.00    -$100.00
+  Claude Pro + metered overflow        0         -        400% of weekly  $233.06    -$133.06
+  API at list price (no subscription)  0         -        -               $284.08    -$184.08
 
-  Recommendation: switch. Claude Max 5x would have cost $100/mo less than Claude Max 20x, with no lockouts; on Claude Max 20x you peaked at 20% of the weekly window.
+  Recommendation: stay. Claude Max fits: you peaked at 80% of the weekly window.
 ```
 
-How it works: a reading of 20% on Max 20x is four Pro windows of demand,
-which is 80% of Max 5x. Each reading is scaled by the plan in force when
+How it works: a weekly reading of 80% on Max is four Pro weeks of demand,
+which is 40% of Ultra. Each reading is scaled by the plan in force when
 it was taken (`plan history`), so a switch inside the period is handled.
 Blocked time runs from the moment a window would have run out to its
 reset, with overlapping windows counted once. Overflow and API prices
 come from the rate card applied to the usage your plan covered.
 
-Read it with its confidence label. Max 5x and 20x are Anthropic's stated
-multiples of Pro's allowance, Pro's own allowance is unverified (Anthropic
-no longer publishes it), and whether the weekly limits scale by the same
-multiples is not published either. So Claude advice is at best `medium`,
-and `low` with less than two weeks or two weekly windows of readings. If
+Read it with its confidence label. Max (5x Pro every 5 hours and every
+week) and Ultra (10x Pro every week, no 5-hour limit) are Anthropic's
+stated multiples of Pro's allowance, and Pro's own allowance is unverified
+(Anthropic no longer publishes it). So Claude advice is at best `medium`,
+and `low` with less than two weeks or two weekly windows of readings. On
+Ultra, which has no 5-hour window, nothing says how often Max or Pro would
+have run out within 5 hours, so advice there is `low` too. If
 you ran out on your current plan, the work you could not do left no
 readings, and the larger tiers' figures are a floor.
 
@@ -405,7 +407,7 @@ price, tax included — in `--currency` (default: your `money.currency`).
 Without it, plan cost uses the catalog's US list price, and `spend` says so.
 
 ```bash
-tokenops plan set anthropic claude-max-20x --price 214.60 --currency EUR
+tokenops plan set anthropic claude-ultra --price 214.60 --currency EUR
 ```
 
 A spend limit is recorded with the date it took effect, so an earlier

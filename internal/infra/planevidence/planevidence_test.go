@@ -48,8 +48,12 @@ func TestClaudeAccountTiers(t *testing.T) {
 		account, plan string
 		candidates    int
 	}{
-		{`{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_20x"}`, "claude-max-20x", 0},
-		{`{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_5x"}`, "claude-max-5x", 0},
+		{`{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_20x"}`, "claude-ultra", 0},
+		{`{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_5x"}`, "claude-max", 0},
+		// Guesses at what Claude Code reports once it follows the rename of
+		// Max 20x to Ultra; it still said max_20x on 2026-10-31.
+		{`{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_ultra"}`, "claude-ultra", 0},
+		{`{"organizationType":"claude_ultra"}`, "claude-ultra", 0},
 		{`{"organizationType":"claude_max"}`, "", 2},
 		{`{"organizationType":"claude_pro"}`, "claude-pro", 0},
 		{`{"organizationType":"claude_enterprise"}`, "claude-enterprise", 0},

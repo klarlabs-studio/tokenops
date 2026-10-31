@@ -440,7 +440,7 @@ type Docs struct {
 // Plan is a subscription in the plan catalog and its published limits.
 // plans.Plan is this type.
 type Plan struct {
-	// Name is the catalog identifier used in config (e.g. "claude-max-20x").
+	// Name is the catalog identifier used in config (e.g. "claude-ultra").
 	Name string
 	// Provider matches eventschema.Provider so the spend engine can
 	// route events to the right plan record.
@@ -486,6 +486,17 @@ type Plan struct {
 	// MessagesPerWindow of its own; Lookup computes it.
 	RelativeTo string
 	Multiplier float64
+	// WeeklyMultiplier is the tier's weekly allowance as a multiple of
+	// RelativeTo's, when the vendor states it apart from the per-session
+	// one: Ultra gets ten times Pro's week. Zero means Multiplier.
+	WeeklyMultiplier float64
+	// NoSessionLimit marks a tier the vendor says has no 5-hour limit, so
+	// only its weekly windows run out.
+	NoSessionLimit bool
+	// FormerNames are the catalog names the plan had before the vendor
+	// renamed it. A config, plan history or upload that still says one
+	// means this plan.
+	FormerNames []string
 	// SpendDenominated marks a plan whose limit is money, not a
 	// rate-limit window.
 	//

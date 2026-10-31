@@ -56,7 +56,7 @@ func TestCorrectGatewayAttributionFollowsTheRouteHistory(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}}
+	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-ultra"}}
 	now := time.Now().UTC()
 	if _, err := CorrectGateway(ctx, cfg, store, routes, now); err != nil {
 		t.Fatal(err)

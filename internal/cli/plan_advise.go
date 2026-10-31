@@ -27,7 +27,7 @@ func newPlanAdviseCmd(rf *rootFlags) *cobra.Command {
 		Use:   "advise",
 		Short: "Which plan tier would have fit the last 30 days (advice only)",
 		Long: `advise replays the last --days of each bound plan's windows against
-the plan's other tiers (Claude Pro, Max 5x, Max 20x), each tier with its
+the plan's other tiers (Claude Pro, Max, Ultra), each tier with its
 overflow billed at API list price, and no subscription at all (the API at
 list price). For each it shows how often you would have run out and for how
 long, the fullest window, and the monthly cost; then it recommends one.

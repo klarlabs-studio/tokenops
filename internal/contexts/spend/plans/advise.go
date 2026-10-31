@@ -16,13 +16,14 @@ import (
 // often it would have run out and for how long, and how full its windows
 // would have got. It is advice. Nothing here binds or switches a plan.
 //
-// A tier's allowance is a multiple of its family's base plan (Max 5x is
-// five times Pro). A reading of 40% on Max 20x is 8 Pro windows of demand,
-// which is 160% of Max 5x: the replay scales each measured share by the
-// ratio of the multiples, so it never needs the base plan's absolute
-// allowance. The multiples are what the vendor states; whether every
-// window (the weekly ones too) scales by them is not published, which is
-// why the answer carries a confidence label.
+// A tier's allowance is a multiple of its family's base plan (Max is five
+// times Pro). A weekly reading of 40% on Ultra is 4 Pro weeks of demand,
+// which is 80% of Max: the replay scales each measured share by the ratio
+// of the multiples, so it never needs the base plan's absolute allowance.
+// A tier may state its weekly multiple apart from its per-session one, or
+// have no session limit at all (Ultra); where the vendor states one
+// multiple, both windows are assumed to scale by it, which is why the
+// answer carries a confidence label.
 
 // Option kinds.
 const (
@@ -62,8 +63,11 @@ const (
 type Tier struct {
 	Name    string `json:"plan"`
 	Display string `json:"display"`
-	// Factor is the tier's allowance as a multiple of its family's base.
-	Factor float64 `json:"factor"`
+	// Factor is the tier's weekly allowance as a multiple of its family's
+	// base; SessionFactor its 5-hour one, absent when NoSessionLimit.
+	Factor         float64 `json:"factor"`
+	SessionFactor  float64 `json:"session_factor,omitempty"`
+	NoSessionLimit bool    `json:"no_session_limit,omitempty"`
 	// Derived is true when the allowance is stated as a multiple of
 	// another plan rather than published for the tier itself.
 	Derived bool `json:"derived,omitempty"`
@@ -73,24 +77,77 @@ type Tier struct {
 	PriceSource string `json:"price_source,omitempty"`
 }
 
+// sessionWindowMax is the longest window that is a session (5-hour)
+// window rather than a weekly one.
+const sessionWindowMax = 24 * time.Hour
+
 // TierOf is the family a plan belongs to, named by its base plan, and the
-// plan's allowance as a multiple of the base. ok is false for a plan with
-// no stated multiple, or one billed at API rates, which has no window to
-// scale.
+// plan's weekly allowance as a multiple of the base. ok is false for a
+// plan with no stated multiple, or one billed at API rates, which has no
+// window to scale.
 func TierOf(name string) (base string, factor float64, ok bool) {
+	t, base, ok := tierOf(name)
+	return base, t.Factor, ok
+}
+
+// tierOf is the plan as a replay candidate, unpriced, with its family.
+func tierOf(name string) (Tier, string, bool) {
 	p, known := Lookup(name)
 	if !known || p.SpendDenominated {
-		return "", 0, false
+		return Tier{}, "", false
 	}
-	if p.RelativeTo != "" && p.Multiplier > 0 {
-		return p.RelativeTo, p.Multiplier, true
+	t := Tier{Name: p.Name, Display: p.Display, NoSessionLimit: p.NoSessionLimit}
+	if weekly := weeklyMultiplier(p); p.RelativeTo != "" && weekly > 0 {
+		t.Factor, t.Derived = weekly, true
+		if !p.NoSessionLimit {
+			t.SessionFactor = p.Multiplier
+		}
+		return t, p.RelativeTo, true
 	}
 	for _, q := range catalog {
-		if q.RelativeTo == p.Name && q.Multiplier > 0 {
-			return p.Name, 1, true
+		if q.RelativeTo == p.Name && weeklyMultiplier(q) > 0 {
+			t.Factor, t.SessionFactor = 1, 1
+			return t, p.Name, true
 		}
 	}
-	return "", 0, false
+	return Tier{}, "", false
+}
+
+// weeklyMultiplier is p's weekly allowance as a multiple of its base's.
+func weeklyMultiplier(p Plan) float64 {
+	if p.WeeklyMultiplier > 0 {
+		return p.WeeklyMultiplier
+	}
+	return p.Multiplier
+}
+
+// WindowFactor is the plan's allowance in a window of length d, as a
+// multiple of its family's base, with the base. ok is false for a plan
+// with no stated multiple, and for a session window on a tier that has no
+// session limit.
+func WindowFactor(name string, d time.Duration) (base string, factor float64, ok bool) {
+	t, base, ok := tierOf(name)
+	if !ok {
+		return "", 0, false
+	}
+	f, limited := t.Allowance(d)
+	return base, f, limited
+}
+
+// Allowance is the tier's allowance in a window of length d, as a multiple
+// of its family's base. limited is false when the tier has no limit in
+// such a window: a session window on a tier with no session limit.
+func (t Tier) Allowance(d time.Duration) (factor float64, limited bool) {
+	if d > sessionWindowMax {
+		return t.Factor, t.Factor > 0
+	}
+	if t.NoSessionLimit {
+		return 0, false
+	}
+	if t.SessionFactor > 0 {
+		return t.SessionFactor, true
+	}
+	return t.Factor, t.Factor > 0
 }
 
 // TierFamily is every tier one person can move between from plan, by
@@ -104,12 +161,12 @@ func TierFamily(plan string) []Tier {
 	current, _ := Lookup(plan)
 	var out []Tier
 	for _, name := range Names() {
-		b, factor, ok := TierOf(name)
+		t, b, ok := tierOf(name)
 		p := catalog[name]
 		if !ok || b != base || (p.PerSeat && name != current.Name) {
 			continue
 		}
-		t := Tier{Name: name, Display: p.Display, Factor: factor, Derived: p.RelativeTo != "", MonthlyUSD: p.MonthlyUSD}
+		t.MonthlyUSD = p.MonthlyUSD
 		if t.MonthlyUSD > 0 {
 			t.PriceSource = "list"
 		}
@@ -211,9 +268,11 @@ type ReplayInput struct {
 	Since, Until time.Time
 	// Readings are the meter's window readings over the period.
 	Readings []QuotaReading
-	// FactorAt is the multiple of the plan in force at a moment, so a
-	// reading taken before a switch is scaled by the plan it was taken on.
-	FactorAt func(time.Time) (float64, bool)
+	// FactorAt is the allowance of the plan in force at a moment in a
+	// window of the given length, so a reading taken before a switch is
+	// scaled by the plan it was taken on. ok is false when that plan had no
+	// limit in such a window, or is not of the family.
+	FactorAt func(at time.Time, window time.Duration) (float64, bool)
 	// Current is the plan in force now, priced; Candidates its family.
 	Current    Tier
 	Candidates []Tier
@@ -281,32 +340,35 @@ type windowPoint struct {
 
 // windowInstance is one window of one kind, from its start to its reset.
 type windowInstance struct {
-	label  string
-	reset  time.Time
-	points []windowPoint
-	peak   float64
+	label    string
+	duration time.Duration
+	reset    time.Time
+	points   []windowPoint
+	peak     float64
 }
 
 // instancesOf groups readings into window instances, scaling each share
 // by the plan in force when it was read.
-func instancesOf(rs []QuotaReading, factorAt func(time.Time) (float64, bool)) []windowInstance {
+func instancesOf(rs []QuotaReading, factorAt func(time.Time, time.Duration) (float64, bool)) []windowInstance {
 	type key struct {
 		label string
 		reset time.Time
 	}
 	byLabel := map[string][]windowPoint{}
 	resets := map[string][]time.Time{}
+	durations := map[string]time.Duration{}
 	for _, r := range rs {
-		f, ok := factorAt(r.At)
-		if !ok || f <= 0 {
-			continue
-		}
 		for _, w := range r.Windows {
 			if w.Label == "" || w.ResetsAt.IsZero() || w.Duration <= 0 || strings.Contains(w.Label, "spend limit") {
 				continue
 			}
+			f, ok := factorAt(r.At, w.Duration)
+			if !ok || f <= 0 {
+				continue
+			}
 			byLabel[w.Label] = append(byLabel[w.Label], windowPoint{at: r.At, demand: w.UsedPct / 100 * f})
 			resets[w.Label] = append(resets[w.Label], w.ResetsAt)
+			durations[w.Label] = w.Duration
 		}
 	}
 	out := make([]windowInstance, 0, len(rs))
@@ -323,7 +385,7 @@ func instancesOf(rs []QuotaReading, factorAt func(time.Time) (float64, bool)) []
 		for _, i := range idx {
 			if cur == nil || rst[i].Sub(cur.reset) >= instanceResetGranularity {
 				k := key{label, rst[i]}
-				cur = &windowInstance{label: label, reset: rst[i]}
+				cur = &windowInstance{label: label, duration: durations[label], reset: rst[i]}
 				groups[k] = cur
 				order = append(order, k)
 			}
@@ -380,11 +442,15 @@ type simulation struct {
 	overflowShare float64
 }
 
-func simulate(ws []windowInstance, factor float64, until time.Time, early []EarlyReset) simulation {
+func simulate(ws []windowInstance, t Tier, until time.Time, early []EarlyReset) simulation {
 	var s simulation
 	var spans, cutSpans [][2]time.Time
 	total, over := map[string]float64{}, map[string]float64{}
 	for _, w := range ws {
+		factor, limited := t.Allowance(w.duration)
+		if !limited {
+			continue
+		}
 		pct := math.Round(w.peak/factor*1000) / 10
 		if pct > s.peakPct || (pct == s.peakPct && w.label > s.peakWindow) {
 			s.peakPct, s.peakWindow = pct, w.label
@@ -449,7 +515,7 @@ func Replay(in ReplayInput) Advice {
 		Since: in.Since, Until: in.Until, Confidence: ConfidenceLow}
 	factorAt := in.FactorAt
 	if factorAt == nil {
-		factorAt = func(time.Time) (float64, bool) { return in.Current.Factor, in.Current.Factor > 0 }
+		factorAt = func(_ time.Time, d time.Duration) (float64, bool) { return in.Current.Allowance(d) }
 	}
 	ws := instancesOf(in.Readings, factorAt)
 	a.WindowsMeasured = len(ws)
@@ -483,7 +549,7 @@ func Replay(in ReplayInput) Advice {
 	}
 	sims := map[string]simulation{}
 	for _, t := range candidates {
-		s := simulate(ws, t.Factor, in.Until, in.EarlyResets)
+		s := simulate(ws, t, in.Until, in.EarlyResets)
 		sims[t.Name] = s
 		o := Option{Kind: OptionPlan, Plan: t.Name, Display: t.Display, Current: t.Name == in.Current.Name,
 			Lockouts: s.lockouts, BlockedMinutes: int(s.blocked.Round(time.Minute) / time.Minute),
@@ -554,7 +620,7 @@ func confidence(in ReplayInput, days float64, ws []windowInstance) string {
 		longest[w.label]++
 	}
 	weekly := longest["weekly"]
-	if days < adviceMinDays || (weekly > 0 && weekly < 2) {
+	if days < adviceMinDays || (weekly > 0 && weekly < 2) || sessionsUnseen(in) {
 		return ConfidenceLow
 	}
 	for _, t := range in.Candidates {
@@ -566,6 +632,21 @@ func confidence(in ReplayInput, days float64, ws []windowInstance) string {
 		return ConfidenceMedium
 	}
 	return ConfidenceHigh
+}
+
+// sessionsUnseen is true when the plan in force has no session limit and
+// a candidate has one: the replay sees none of the demand a session window
+// would have run out on.
+func sessionsUnseen(in ReplayInput) bool {
+	if !in.Current.NoSessionLimit {
+		return false
+	}
+	for _, t := range in.Candidates {
+		if !t.NoSessionLimit {
+			return true
+		}
+	}
+	return false
 }
 
 func caveats(in ReplayInput, cur *Option, candidates []Tier) []string {
@@ -585,8 +666,13 @@ func caveats(in ReplayInput, cur *Option, candidates []Tier) []string {
 		}
 		out = append(out, fmt.Sprintf("Tier allowances are derived: %s are the vendor's stated multiples of %s's allowance, "+
 			"and %s's own allowance is unverified (the vendor no longer publishes it). The replay scales your measured "+
-			"window shares by those multiples and assumes every window, the weekly ones too, scales the same way.",
+			"window shares by those multiples; where a tier states one multiple, its weekly windows are assumed to scale by it too.",
 			joinAnd(derived), base, base))
+	}
+	if sessionsUnseen(in) {
+		out = append(out, fmt.Sprintf("%s has no 5-hour limit, so its readings say nothing of 5-hour demand: "+
+			"how often a tier with one would have run out within 5 hours is not known, and its figures cover the weekly windows only.",
+			in.Current.Display))
 	}
 	if cur != nil && cur.Lockouts > 0 {
 		out = append(out, fmt.Sprintf("You ran out %d time(s) on %s: work you could not do then left no readings, "+

@@ -145,7 +145,7 @@ func TestDeclarePlanCoverage(t *testing.T) {
 		t.Fatalf("no plans: %d options, err %v", len(s.opts), err)
 	}
 	cfg := validConfig()
-	cfg.Plans = map[string]string{"anthropic": "claude-max-20x"}
+	cfg.Plans = map[string]string{"anthropic": "claude-ultra"}
 	s, buf := newTestStartup(cfg)
 	if err := s.declarePlanCoverage(context.Background()); err != nil {
 		t.Fatal(err)

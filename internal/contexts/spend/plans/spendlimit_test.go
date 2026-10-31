@@ -34,7 +34,7 @@ func TestSpendDenominatedPlanNeedsALimit(t *testing.T) {
 		t.Fatalf("a supplied limit should be accepted: %v", err)
 	}
 	// A windowed plan neither needs nor accepts one.
-	if err := ValidateSpendLimit("claude-max-20x", 0, false); err != nil {
+	if err := ValidateSpendLimit("claude-ultra", 0, false); err != nil {
 		t.Fatalf("a windowed plan needs no spend limit: %v", err)
 	}
 }

@@ -51,7 +51,7 @@ func runSessionPromptHook(t *testing.T, stateDir, session string) string {
 // additionalContext, on its own: model routing being off does not hold
 // it back, and it is said once, not on every turn.
 func TestRouteGuardInjectsTheHeadroomNoteOncePerStep(t *testing.T) {
-	writeCoachConfig(t, "plans:\n  anthropic: claude-max-20x\n")
+	writeCoachConfig(t, "plans:\n  anthropic: claude-ultra\n")
 	writeLimits(t)
 	dir := t.TempDir()
 	out := runSessionPromptHook(t, dir, "hn-1")
@@ -73,13 +73,13 @@ func TestRouteGuardInjectsTheHeadroomNoteOncePerStep(t *testing.T) {
 
 // coach.headroom_note: false turns the note off.
 func TestRouteGuardHeadroomNoteToggle(t *testing.T) {
-	writeCoachConfig(t, "plans:\n  anthropic: claude-max-20x\ncoach:\n  headroom_note: false\n")
+	writeCoachConfig(t, "plans:\n  anthropic: claude-ultra\ncoach:\n  headroom_note: false\n")
 	writeLimits(t)
 	if out := runSessionPromptHook(t, t.TempDir(), "hn-off"); out != "" {
 		t.Errorf("note emitted while turned off: %s", out)
 	}
 	// So does turning the inform power off.
-	writeCoachConfig(t, "plans:\n  anthropic: claude-max-20x\ncoach:\n  powers:\n    inform: \"off\"\n")
+	writeCoachConfig(t, "plans:\n  anthropic: claude-ultra\ncoach:\n  powers:\n    inform: \"off\"\n")
 	if out := runSessionPromptHook(t, t.TempDir(), "hn-inform-off"); out != "" {
 		t.Errorf("note emitted with the inform power off: %s", out)
 	}
@@ -87,7 +87,7 @@ func TestRouteGuardHeadroomNoteToggle(t *testing.T) {
 
 // `tokenops coach headroom-note off` writes the setting.
 func TestCoachHeadroomNoteCommand(t *testing.T) {
-	writeCoachConfig(t, "plans:\n  anthropic: claude-max-20x\n")
+	writeCoachConfig(t, "plans:\n  anthropic: claude-ultra\n")
 	var out bytes.Buffer
 	root := NewRoot()
 	root.SetArgs([]string{"coach", "headroom-note", "off"})
@@ -118,7 +118,7 @@ func TestHeadroomNoteTravelsOnlyPerTurn(t *testing.T) {
 			t.Errorf("hook %s is wired to SessionStart", s.name)
 		}
 	}
-	writeCoachConfig(t, "plans:\n  anthropic: claude-max-20x\n")
+	writeCoachConfig(t, "plans:\n  anthropic: claude-ultra\n")
 	writeLimits(t)
 	dir := t.TempDir()
 	tp := writeCoachTranscript(t, dir, 1, "claude-opus-5")

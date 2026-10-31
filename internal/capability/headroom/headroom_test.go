@@ -42,7 +42,7 @@ func TestProvidersAreAlwaysInAStableOrder(t *testing.T) {
 	deps := headroom.Deps{
 		Config: cfgWith(map[string]string{
 			"openai":    "gpt-plus",
-			"anthropic": "claude-max-20x",
+			"anthropic": "claude-ultra",
 			"cursor":    "cursor-pro",
 		}),
 		Reader: &fakeReader{},
@@ -102,7 +102,7 @@ func TestNoPlansIsAnAnswerNotAnError(t *testing.T) {
 // conflating them sends an operator to fix the wrong thing.
 func TestNoReaderIsItsOwnAnswer(t *testing.T) {
 	got, err := headroom.Compute(context.Background(),
-		headroom.Deps{Config: cfgWith(map[string]string{"anthropic": "claude-max-20x"})},
+		headroom.Deps{Config: cfgWith(map[string]string{"anthropic": "claude-ultra"})},
 		time.Now())
 
 	if err != nil {
@@ -120,7 +120,7 @@ func TestNoReaderIsItsOwnAnswer(t *testing.T) {
 // rendered as an empty report.
 func TestAReadFailureIsReturned(t *testing.T) {
 	_, err := headroom.Compute(context.Background(), headroom.Deps{
-		Config: cfgWith(map[string]string{"anthropic": "claude-max-20x"}),
+		Config: cfgWith(map[string]string{"anthropic": "claude-ultra"}),
 		Reader: &fakeReader{err: errors.New("disk on fire")},
 	}, time.Now())
 
@@ -167,7 +167,7 @@ func TestAnUnknownPlanIsReported(t *testing.T) {
 // Per-provider spend limits come from config.PlanLimits and must reach
 // the domain. Both adapters read them; only the capability should now.
 func TestConfiguredLimitsReachTheComputation(t *testing.T) {
-	cfg := cfgWith(map[string]string{"anthropic": "claude-max-20x"})
+	cfg := cfgWith(map[string]string{"anthropic": "claude-ultra"})
 	cfg.PlanLimits = map[string]config.PlanLimit{
 		"anthropic": {SpendLimitUSD: 42, Window: "monthly"},
 	}
@@ -185,12 +185,12 @@ func TestConfiguredLimitsReachTheComputation(t *testing.T) {
 // A plan TokenOps followed on a client's word is said on the glance, with
 // the command that undoes it, so the operator sees it where they look.
 func TestPlanFollowsAreNotedOnTheGlance(t *testing.T) {
-	note := "anthropic now on claude-max-5x from 2026-10-14 09:00 UTC, as Claude Code reports (…) — `tokenops plan set anthropic claude-max-20x` if that is wrong"
+	note := "anthropic now on claude-max from 2026-10-14 09:00 UTC, as Claude Code reports (…) — `tokenops plan set anthropic claude-ultra` if that is wrong"
 	deps := headroom.Deps{
-		Config: cfgWith(map[string]string{"anthropic": "claude-max-5x"}),
+		Config: cfgWith(map[string]string{"anthropic": "claude-max"}),
 		Reader: &fakeReader{},
 		PlanFollows: func(plans map[string]string, _ time.Time) []string {
-			if plans["anthropic"] != "claude-max-5x" {
+			if plans["anthropic"] != "claude-max" {
 				return nil
 			}
 			return []string{note}

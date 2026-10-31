@@ -435,7 +435,7 @@ type boundariesIn struct {
 type configureIn struct {
 	Setting       string  `json:"setting" jsonschema:"required,enum=plan,enum=budget,enum=mode,enum=preferred_model,enum=usage_meter,description=plan: bind a subscription plan to a provider (omit provider to list them). budget: set or remove a spend budget. mode: passive or active. preferred_model: the most expensive model a provider may be routed to. usage_meter: connect claude.ai's own usage meter."`
 	Provider      string  `json:"provider,omitempty" jsonschema:"description=plan and preferred_model: the provider, e.g. anthropic. budget: limit it to what one provider billed, e.g. fireworks"`
-	Plan          string  `json:"plan,omitempty" jsonschema:"description=plan: a plan name from the catalog, e.g. claude-max-20x"`
+	Plan          string  `json:"plan,omitempty" jsonschema:"description=plan: a plan name from the catalog, e.g. claude-ultra"`
 	SpendLimitUSD float64 `json:"spend_limit_usd,omitempty" jsonschema:"description=plan: spend limit in USD for a plan billed at API rates"`
 	LimitWindow   string  `json:"limit_window,omitempty" jsonschema:"enum=monthly,enum=weekly,enum=daily,description=plan: period the spend limit covers (default monthly)"`
 	RateFactor    float64 `json:"rate_factor,omitempty" jsonschema:"description=plan: scale estimated spend to a negotiated rate (0.8 = 20% off list)"`

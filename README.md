@@ -53,8 +53,8 @@ Or grab a prebuilt binary from the [releases page](https://github.com/klarlabs-s
 
 ```bash
 tokenops init                                  # writes config, registers MCP, installs hooks
-tokenops plan set anthropic claude-max-20x     # bind your tier (init tells you if it can't)
-tokenops plan set anthropic claude-max-20x --price 214.60 --currency EUR   # optional: what your bill says
+tokenops plan set anthropic claude-ultra     # bind your tier (init tells you if it can't)
+tokenops plan set anthropic claude-ultra --price 214.60 --currency EUR   # optional: what your bill says
 tokenops daemon install                        # supervise `tokenops start` so ingestion survives reboot
 ```
 

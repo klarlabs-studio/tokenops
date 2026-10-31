@@ -212,9 +212,9 @@ const (
 
 // Plan names a subscription plan.
 type Plan struct {
-	// ID is the catalog name ("claude-max-5x").
+	// ID is the catalog name ("claude-max").
 	ID string
-	// Display is what the vendor calls it ("Claude Max 5x"); empty when
+	// Display is what the vendor calls it ("Claude Max"); empty when
 	// the catalog does not know it.
 	Display string
 }

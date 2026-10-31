@@ -41,7 +41,7 @@ func TestGlanceCarriesPlanUse(t *testing.T) {
 		Attributes: map[string]string{"granularity": "quota_snapshot", "seven_day_kind": "weekly_all", "seven_day_used_pct": "48.00", "seven_day_reset_at": week},
 		Payload:    &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic}}
 	deps := headroom.Deps{
-		Config: cfgWith(map[string]string{"anthropic": "claude-max-20x"}),
+		Config: cfgWith(map[string]string{"anthropic": "claude-ultra"}),
 		Reader: &eventsReader{envs: []*eventschema.Envelope{reading, turn(eventschema.CostSourcePlanIncluded, 750), turn(eventschema.CostSourceMetered, 250)}},
 	}
 	g, err := headroom.ComputeGlance(context.Background(), deps, now)

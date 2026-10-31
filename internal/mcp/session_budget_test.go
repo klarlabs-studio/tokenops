@@ -42,14 +42,14 @@ func TestSessionBudgetExplainsASpendBilledPlan(t *testing.T) {
 func TestSessionBudgetRendersTheSamePlanEveryCall(t *testing.T) {
 	d := planDepsFor(t, map[string]string{
 		"openai":    "gpt-plus",
-		"anthropic": "claude-max-20x",
+		"anthropic": "claude-ultra",
 	})
 	for range 20 { // map order is randomised per range; one pass proves nothing
 		out, err := sessionBudget(context.Background(), d)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.HasPrefix(out, "## Claude Max 20x") {
+		if !strings.HasPrefix(out, "## Claude Ultra") {
 			head, _, _ := strings.Cut(out, "\n")
 			t.Fatalf("rendered %q, want the first provider in sorted order (anthropic)", head)
 		}

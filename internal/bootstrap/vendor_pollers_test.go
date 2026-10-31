@@ -15,7 +15,7 @@ import (
 )
 
 func TestPlanCostSource(t *testing.T) {
-	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}}
+	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-ultra"}}
 	if got := PlanCostSource(cfg, eventschema.ProviderAnthropic); got != eventschema.CostSourcePlanIncluded {
 		t.Errorf("anthropic = %q; want plan_included", got)
 	}

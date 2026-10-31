@@ -36,12 +36,14 @@ the full catalog listed as the suggestion set.
 ## Supported plans
 
 `tokenops plan catalog` enumerates every plan TokenOps knows about.
-Snapshot as of 2026-09:
+Snapshot as of 2026-10-31. Anthropic renamed Max 5x to Max and Max 20x to
+Ultra on 2026-10-30; `claude-max-5x` and `claude-max-20x` still work and
+mean `claude-max` and `claude-ultra`.
 
 | Catalog name | Display | Provider | Window cap |
 |---|---|---|---|
-| `claude-max-5x` | Claude Max 5x | anthropic | ~50 msgs / 5h |
-| `claude-max-20x` | Claude Max 20x | anthropic | ~200 msgs / 5h |
+| `claude-max` | Claude Max | anthropic | 5x Pro / 5h and weekly |
+| `claude-ultra` | Claude Ultra | anthropic | 10x Pro weekly, no 5-hour limit |
 | `claude-pro` | Claude Pro | anthropic | ~45 msgs / 5h |
 | `gpt-plus` | ChatGPT Plus | openai | model-dependent / 5h |
 | `gpt-pro` | ChatGPT Pro (tier unspecified) | openai | model-dependent / 5h |
@@ -115,12 +117,12 @@ Returns a `HeadroomReport` per configured plan with:
 - `note` — populated when math falls through (e.g. plan publishes no
   cap at all, or there isn't yet ≥7d of plan-included traffic).
 
-Example output for Claude Max 20x:
+Example output for Claude Max:
 
 ```
-Claude Max 20x (claude-max-20x) — risk low
+Claude Max (claude-max) — risk low
   tokens this month: 478732 (no monthly cap)
-  window:  27 / 200 messages per 5h (13.5%) — resets in 5h0m0s
+  window:  27 / 225 messages per 5h (12.0%) — resets in 5h0m0s
 ```
 
 The same report is available via the `tokenops_glance (view=headroom)` MCP tool.

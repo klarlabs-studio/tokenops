@@ -20,7 +20,7 @@ tokenops explain decision:6f1c…  # why TokenOps decided what it did`,
 tokenops init --yes              # take every default`,
 	"detect":     `tokenops detect`,
 	"statusline": `tokenops statusline install      # Claude Code runs it on every turn`,
-	"plan set": `tokenops plan set anthropic claude-max-20x
+	"plan set": `tokenops plan set anthropic claude-ultra
 tokenops plan set openai gpt-pro-5x --price 229 --currency EUR`,
 	"spend units": `tokenops spend units                # the last 7 days against the 4 weeks before
 tokenops spend units --since 30d --json`,

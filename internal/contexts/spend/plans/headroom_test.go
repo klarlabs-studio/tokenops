@@ -108,7 +108,7 @@ func TestHeadroomNoPublishedQuota(t *testing.T) {
 	}
 }
 
-// windowPlan mirrors a Claude Max 20x shape: rate-limit window + cap,
+// windowPlan mirrors a Claude Ultra shape: rate-limit window + cap,
 // no monthly token quota.
 func windowPlan(cap int64, window time.Duration) Plan {
 	return Plan{
@@ -180,7 +180,7 @@ func TestHeadroomVendorResetIsNotAnEstimate(t *testing.T) {
 }
 
 func TestSessionBudgetEstimatesTheResetFromTheWindowStart(t *testing.T) {
-	b, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
+	b, err := ComputeSessionBudget("claude-max", SessionBudgetInputs{
 		WindowMessages:  10,
 		WindowStartedAt: midMonth().Add(-4 * time.Hour),
 		Now:             midMonth(),
@@ -343,7 +343,7 @@ func TestComputeHeadroomUsesCatalog(t *testing.T) {
 	// Smoke test that the catalog path is wired — most plans have no
 	// monthly cap, so we just confirm the lookup succeeds and emits a
 	// note rather than crashing.
-	r, err := ComputeHeadroom("claude-max-20x", HeadroomInputs{
+	r, err := ComputeHeadroom("claude-ultra", HeadroomInputs{
 		ConsumedTokens: 0,
 		Last7DayTokens: 0,
 		Now:            midMonth(),

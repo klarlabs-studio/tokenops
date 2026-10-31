@@ -22,7 +22,7 @@ func TestAuditToolCharacterization(t *testing.T) {
 	rec := audit.NewRecorder(store)
 	base := time.Date(2026, 1, 2, 9, 0, 0, 0, time.UTC)
 	for i, e := range []audit.Entry{
-		{ID: "a1", Action: audit.ActionConfigChange, Actor: "cli", Target: "plans.anthropic", Details: map[string]any{"to": "claude-max-5x"}},
+		{ID: "a1", Action: audit.ActionConfigChange, Actor: "cli", Target: "plans.anthropic", Details: map[string]any{"to": "claude-max"}},
 		{ID: "a2", Action: audit.ActionBudgetUpdate, Actor: "mcp", Target: "budget.daily"},
 		{ID: "a3", Action: audit.ActionConfigChange, Actor: "mcp", Target: "mode", Details: map[string]any{"to": "advise", "from": "observe"}},
 	} {

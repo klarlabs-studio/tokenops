@@ -103,7 +103,7 @@ func TestActionRoutesRefuseWhatTheyDoNotTake(t *testing.T) {
 		{"/api/mode", "application/json", `{"mode":"turbo"}`},
 		{"/api/budgets", "application/json", `{"name":"x","delete":true}`},
 		{"/api/routing/rules", "application/json", `{"provider":"anthropic"}`},
-		{"/api/plans", "application/json", `{"plan":"claude-max-20x"}`},
+		{"/api/plans", "application/json", `{"plan":"claude-ultra"}`},
 	} {
 		if rec := post(s, tc.path, tc.ctype, tc.body); rec.Code != http.StatusBadRequest {
 			t.Errorf("POST %s %s %s = %d, want 400", tc.path, tc.ctype, tc.body, rec.Code)
@@ -123,7 +123,7 @@ func TestBudgetRuleAndPlanActions(t *testing.T) {
 	for _, tc := range []struct{ path, body string }{
 		{"/api/budgets", `{"name":"monthly","limit_usd":50}`},
 		{"/api/routing/rules", `{"provider":"anthropic","from_model":"claude-opus-5","to_model":"claude-sonnet-5","quality":0.9}`},
-		{"/api/plans", `{"provider":"anthropic","plan":"claude-max-20x"}`},
+		{"/api/plans", `{"provider":"anthropic","plan":"claude-ultra"}`},
 	} {
 		if rec := post(s, tc.path, "application/json", tc.body); rec.Code != http.StatusOK {
 			t.Fatalf("POST %s = %d %s", tc.path, rec.Code, rec.Body)
@@ -131,7 +131,7 @@ func TestBudgetRuleAndPlanActions(t *testing.T) {
 		<-f.applied
 	}
 	cfg, err := config.ReadMutable(f.path)
-	if err != nil || len(cfg.Budgets) != 1 || len(cfg.Optimizer.RoutingRules) != 1 || cfg.Plans["anthropic"] != "claude-max-20x" {
+	if err != nil || len(cfg.Budgets) != 1 || len(cfg.Optimizer.RoutingRules) != 1 || cfg.Plans["anthropic"] != "claude-ultra" {
 		t.Fatalf("config = %+v, %v", cfg, err)
 	}
 }

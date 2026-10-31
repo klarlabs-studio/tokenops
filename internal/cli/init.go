@@ -278,7 +278,7 @@ func renderDetection(w fmtWriter, ds []detect.Detection) {
 		fmt.Fprintf(w, "  [%s] %s — %s\n", d.Confidence, d.Provider, d.Hint)
 		fmt.Fprintf(w, "    evidence: %s\n", d.Evidence)
 		// A bare API key means metered billing. Printing "run: tokenops
-		// plan set anthropic claude-max-20x" under a hint that says "no
+		// plan set anthropic claude-ultra" under a hint that says "no
 		// plan" contradicted itself in adjacent lines.
 		if !d.SuggestsPlan {
 			fmt.Fprintln(w, "    no plan to bind — metered traffic is costed from the rate card")
@@ -286,7 +286,7 @@ func renderDetection(w fmtWriter, ds []detect.Detection) {
 		}
 		switch d.Provider {
 		case "anthropic":
-			fmt.Fprintln(w, "    run: tokenops plan set anthropic claude-max-20x  # or claude-max-5x | claude-pro")
+			fmt.Fprintln(w, "    run: tokenops plan set anthropic claude-ultra  # or claude-max | claude-pro")
 		case "openai":
 			fmt.Fprintln(w, "    run: tokenops plan set openai gpt-plus  # or gpt-pro-5x | gpt-pro-20x | gpt-pro-500")
 		case "cursor":

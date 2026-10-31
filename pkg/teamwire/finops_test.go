@@ -16,14 +16,14 @@ func pct(v float64) *float64 { return &v }
 func finopsUpload() Upload {
 	u := validUpload()
 	u.Schema = SchemaFinOps
-	u.PlanDays = []PlanDay{{Day: "2026-10-08", Provider: "anthropic", Plan: "claude-max-5x", UtilizationPct: pct(42.5),
+	u.PlanDays = []PlanDay{{Day: "2026-10-08", Provider: "anthropic", Plan: "claude-max", UtilizationPct: pct(42.5),
 		UtilizationWindows: 1, CoveragePct: pct(80), PlanTokens: 800, BilledTokens: 200, Lockouts: 1, BlockedMinutes: 35}}
 	u.Waste = []Waste{{Day: "2026-10-08", Repo: "klarlabs/tokenops", Kind: KindEdit, Class: WasteReread,
 		Turns: 2, Tokens: 300, APIEquivalentUSD: 0.12}}
 	u.Savings = []SavingsDay{{Day: "2026-10-07", Interventions: 3, Held: 1, RefusedRereads: 2, RefusedTokens: 900,
 		RefusedUSD: 0.3, HoldoutUSD: pct(0.5), RealizedUSD: 0.8, AvoidableUSD: 1.1}}
-	u.PlanAdvice = []PlanAdvice{{Provider: "anthropic", Plan: "claude-max-20x", Verdict: "switch", Kind: "plan",
-		RecommendedPlan: "claude-max-5x", MonthlyDeltaUSD: 100, Material: true, RecommendedLockouts: 1,
+	u.PlanAdvice = []PlanAdvice{{Provider: "anthropic", Plan: "claude-ultra", Verdict: "switch", Kind: "plan",
+		RecommendedPlan: "claude-max", MonthlyDeltaUSD: 100, Material: true, RecommendedLockouts: 1,
 		RecommendedBlockedMinutes: 40, Confidence: "medium", Days: 30, WindowsMeasured: 12}}
 	return u
 }
@@ -158,5 +158,24 @@ func TestMeMaxSchemaOptional(t *testing.T) {
 	raw, _ := json.Marshal(Me{})
 	if strings.Contains(string(raw), "max_schema") {
 		t.Errorf("zero max_schema encoded: %s", raw)
+	}
+}
+
+// An older client still sends the names Anthropic retired: the server
+// accepts them and files them under the plan's current name.
+func TestRetiredPlanNames(t *testing.T) {
+	for _, plan := range []string{"claude-max-20x", "claude-max-5x", "claude-ultra", "claude-max"} {
+		if !ValidPlan("anthropic", plan) {
+			t.Errorf("ValidPlan(anthropic, %q) = false", plan)
+		}
+	}
+	if ValidPlan("openai", "claude-max-20x") {
+		t.Error("a retired Anthropic name is valid for another provider")
+	}
+	for old, want := range map[string]string{"claude-max-20x": "claude-ultra", "claude-max-5x": "claude-max",
+		"claude-max": "claude-max", "gpt-plus": "gpt-plus", "pay-as-you-go": "pay-as-you-go"} {
+		if got := CurrentPlan(old); got != want {
+			t.Errorf("CurrentPlan(%q) = %q, want %q", old, got, want)
+		}
 	}
 }

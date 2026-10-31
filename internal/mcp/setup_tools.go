@@ -45,7 +45,7 @@ func (d SetupDeps) getenv(k string) string {
 
 type planSetInput struct {
 	Provider      string  `json:"provider,omitempty" jsonschema:"description=Provider to bind, e.g. anthropic. Omit to list the current bindings."`
-	Plan          string  `json:"plan,omitempty" jsonschema:"description=Plan name from the catalog, e.g. claude-max-20x or claude-enterprise."`
+	Plan          string  `json:"plan,omitempty" jsonschema:"description=Plan name from the catalog, e.g. claude-ultra or claude-enterprise."`
 	SpendLimitUSD float64 `json:"spend_limit_usd,omitempty" jsonschema:"description=Spend limit in USD for a plan billed at API rates (claude-enterprise). Not needed when the Claude usage meter is connected: Anthropic reports it."`
 	LimitWindow   string  `json:"limit_window,omitempty" jsonschema:"enum=monthly,enum=weekly,enum=daily,description=Period the spend limit covers. Default monthly."`
 	RateFactor    float64 `json:"rate_factor,omitempty" jsonschema:"description=Scale estimated spend to a negotiated rate (0.8 = 20% off list)."`

@@ -99,14 +99,18 @@ func Claude(home string) (Evidence, bool) {
 		Detail: "account type " + oa.OrganizationType + joinIf(", rate-limit tier ", tier) + joinIf(", seat ", oa.SeatTier),
 		Facts:  facts("account_type", oa.OrganizationType, "rate_limit_tier", tier, "seat_tier", oa.SeatTier)}
 	switch oa.OrganizationType {
-	case "claude_max":
+	case "claude_max", "claude_ultra":
+		// Claude Code kept reporting the old tiers after Anthropic renamed
+		// Max 20x to Ultra and Max 5x to Max.
 		switch {
-		case strings.Contains(tier, "max_20x"):
-			e.Plan = "claude-max-20x"
+		case strings.Contains(tier, "ultra"), strings.Contains(tier, "max_20x"):
+			e.Plan = "claude-ultra"
 		case strings.Contains(tier, "max_5x"):
-			e.Plan = "claude-max-5x"
+			e.Plan = "claude-max"
+		case oa.OrganizationType == "claude_ultra":
+			e.Plan = "claude-ultra"
 		default:
-			e.Candidates = []string{"claude-max-5x", "claude-max-20x"}
+			e.Candidates = []string{"claude-max", "claude-ultra"}
 		}
 	case "claude_pro":
 		e.Plan = "claude-pro"

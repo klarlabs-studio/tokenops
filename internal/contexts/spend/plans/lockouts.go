@@ -19,7 +19,7 @@ type DayLockouts struct {
 // reset (or until), is split across the days it spans, with overlapping
 // windows counted once.
 func LockoutsByDay(rs []QuotaReading, until time.Time) map[string]DayLockouts {
-	asRead := func(time.Time) (float64, bool) { return 1, true }
+	asRead := func(time.Time, time.Duration) (float64, bool) { return 1, true }
 	out := map[string]DayLockouts{}
 	var spans [][2]time.Time
 	for _, w := range instancesOf(rs, asRead) {

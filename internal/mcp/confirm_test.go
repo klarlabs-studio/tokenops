@@ -95,7 +95,7 @@ type mutation struct {
 var mutations = []mutation{
 	{"tokenops_routing", "decide", map[string]any{"action": "decide", "key": "anthropic|claude-sonnet-4|claude-opus-4", "decision": "approve"}, "tokenops routing decide 'anthropic|claude-sonnet-4|claude-opus-4' approve"},
 	{"tokenops_routing", "set_rule", map[string]any{"action": "set_rule", "provider": "anthropic", "from_model": "claude-opus*", "to_model": "claude-haiku-4", "quality": 0.9}, "tokenops routing rule set anthropic 'claude-opus*' claude-haiku-4"},
-	{"tokenops_configure", "plan", map[string]any{"setting": "plan", "provider": "anthropic", "plan": "claude-max-20x"}, "tokenops plan set anthropic claude-max-20x"},
+	{"tokenops_configure", "plan", map[string]any{"setting": "plan", "provider": "anthropic", "plan": "claude-ultra"}, "tokenops plan set anthropic claude-ultra"},
 	{"tokenops_configure", "budget", map[string]any{"setting": "budget", "name": "daily", "limit_usd": 10}, "tokenops budget set daily"},
 	{"tokenops_configure", "mode", map[string]any{"setting": "mode", "mode": "active"}, "tokenops mode active"},
 	{"tokenops_configure", "preferred_model", map[string]any{"setting": "preferred_model", "provider": "anthropic", "model": "claude-opus-4"}, "tokenops preferred-model set anthropic claude-opus-4"},

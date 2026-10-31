@@ -224,7 +224,7 @@ func vendor(r plans.HeadroomReport) string {
 	return providers.DisplayName(r.Provider)
 }
 
-// planName is the plan without its vendor's name: "Max 20x", "Pro
+// planName is the plan without its vendor's name: "Ultra", "Pro
 // Standard ($100)".
 func planName(r plans.HeadroomReport) string {
 	d := r.Display

@@ -35,7 +35,7 @@ func TestSessionBudgetAuthoritativeOverridesMessageCount(t *testing.T) {
 	// The message-count path would say "continue" (0 messages), but the
 	// vendor's own meter reads 87% — the authoritative value must win and
 	// drive a slow_down at high confidence.
-	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
+	out, err := ComputeSessionBudget("claude-ultra", SessionBudgetInputs{
 		WindowMessages: 0, // heuristic would see an empty window
 		Authoritative: &AuthoritativeWindow{
 			UsedPct: 87, ResetsIn: 42 * time.Minute, Source: "claude_usage_meter:seven_day",
@@ -104,8 +104,8 @@ func TestSessionBudgetAuthoritativeUsesVendorShape(t *testing.T) {
 }
 
 func TestSessionBudgetContinueWhenLowUsage(t *testing.T) {
-	// Claude Max 20x: 200 msgs / 5h. 20 consumed, 8 in last 30 min.
-	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
+	// Claude Ultra: 200 msgs / 5h. 20 consumed, 8 in last 30 min.
+	out, err := ComputeSessionBudget("claude-max", SessionBudgetInputs{
 		WindowMessages: 20,
 		RecentMessages: 8,
 		RecentWindow:   30 * time.Minute,
@@ -127,8 +127,8 @@ func TestSessionBudgetContinueWhenLowUsage(t *testing.T) {
 
 func TestSessionBudgetSlowDownWhenHighUsage(t *testing.T) {
 	// 85% of the allowance with moderate burn — slow down.
-	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
-		WindowMessages: pctOf(t, "claude-max-20x", 85),
+	out, err := ComputeSessionBudget("claude-max", SessionBudgetInputs{
+		WindowMessages: pctOf(t, "claude-max", 85),
 		RecentMessages: 12,
 		RecentWindow:   30 * time.Minute,
 		Now:            time.Now().UTC(),
@@ -143,8 +143,8 @@ func TestSessionBudgetSlowDownWhenHighUsage(t *testing.T) {
 
 func TestSessionBudgetWaitWhenExhausted(t *testing.T) {
 	// Fully consumed, whatever the allowance is.
-	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
-		WindowMessages: capOf(t, "claude-max-20x"),
+	out, err := ComputeSessionBudget("claude-max", SessionBudgetInputs{
+		WindowMessages: capOf(t, "claude-max"),
 		RecentMessages: 5,
 		RecentWindow:   30 * time.Minute,
 		Now:            time.Now().UTC(),
@@ -165,8 +165,8 @@ func TestSessionBudgetSwitchModelWhenBurnHigh(t *testing.T) {
 	// switch_model band. The burn is scaled to the allowance for the same
 	// reason the consumption is.
 	const pct = 65
-	used := pctOf(t, "claude-max-20x", pct)
-	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
+	used := pctOf(t, "claude-max", pct)
+	out, err := ComputeSessionBudget("claude-max", SessionBudgetInputs{
 		WindowMessages: used,
 		RecentMessages: used / 5,
 		RecentWindow:   30 * time.Minute,
@@ -182,8 +182,8 @@ func TestSessionBudgetSwitchModelWhenBurnHigh(t *testing.T) {
 }
 
 func TestSessionBudgetLowConfidenceWithoutHistory(t *testing.T) {
-	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
-		WindowMessages: pctOf(t, "claude-max-20x", 30),
+	out, err := ComputeSessionBudget("claude-max", SessionBudgetInputs{
+		WindowMessages: pctOf(t, "claude-max", 30),
 		RecentMessages: 0,
 		RecentWindow:   0,
 		Now:            time.Now().UTC(),

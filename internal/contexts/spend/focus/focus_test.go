@@ -71,7 +71,7 @@ func TestPlanCoveredUsageIsFreeAtListPrice(t *testing.T) {
 	day := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
 	rows := focus.V1_2.Build([]focus.Usage{{
 		Day: day, Provider: "anthropic", Model: "claude-opus-5", PlanCovered: true,
-		Plan: focus.Plan{ID: "claude-max-5x", Display: "Claude Max 5x"}, Requests: 4, Tokens: 2_500_000, ListUSD: 37.5,
+		Plan: focus.Plan{ID: "claude-max", Display: "Claude Max"}, Requests: 4, Tokens: 2_500_000, ListUSD: 37.5,
 	}}, nil)
 	if len(rows) != 1 {
 		t.Fatalf("rows: %+v", rows)
@@ -93,7 +93,7 @@ func TestPlanCoveredUsageIsFreeAtListPrice(t *testing.T) {
 	if got := rec[colIndex(t, "PricingUnit")]; got != "1000000 Tokens" {
 		t.Errorf("PricingUnit: %q", got)
 	}
-	if r.ServiceName != "Claude Max 5x" || r.SkuID != "claude-opus-5" || r.ProviderName != "Anthropic" {
+	if r.ServiceName != "Claude Max" || r.SkuID != "claude-opus-5" || r.ProviderName != "Anthropic" {
 		t.Errorf("service %q, sku %q, provider %q", r.ServiceName, r.SkuID, r.ProviderName)
 	}
 	if r.ServiceCategory != "AI and Machine Learning" || r.ServiceSubcategory != "Generative AI" {
@@ -135,7 +135,7 @@ func TestPlanFeesArePurchasesSplitByBillingPeriod(t *testing.T) {
 	from := time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)
 	rows := focus.V1_2.Build(nil, []focus.Purchase{{
-		Provider: "anthropic", Plan: focus.Plan{ID: "claude-max-5x", Display: "Claude Max 5x"},
+		Provider: "anthropic", Plan: focus.Plan{ID: "claude-max", Display: "Claude Max"},
 		From: from, To: to, Amount: 20, Currency: "USD", Months: 0.6,
 	}})
 	purchases := byCategory(rows, "Purchase")
@@ -152,7 +152,7 @@ func TestPlanFeesArePurchasesSplitByBillingPeriod(t *testing.T) {
 	if sep.EffectiveCost != sep.BilledCost || sep.ListCost != sep.BilledCost {
 		t.Errorf("a subscription is not a commitment discount: its effective cost is what it costs: %+v", sep)
 	}
-	if sep.ChargeFrequency != "Recurring" || sep.ConsumedQuantity != nil || sep.SkuID != "claude-max-5x" {
+	if sep.ChargeFrequency != "Recurring" || sep.ConsumedQuantity != nil || sep.SkuID != "claude-max" {
 		t.Errorf("frequency %q consumed %v sku %q", sep.ChargeFrequency, sep.ConsumedQuantity, sep.SkuID)
 	}
 	if got := focus.V1_2.Record(sep)[colIndex(t, "PricingUnit")]; got != "Months" {
@@ -235,7 +235,7 @@ func TestMetered14UsageSplitsTheEstimateByKind(t *testing.T) {
 func TestPlanCovered14UsageIsContractedAtZero(t *testing.T) {
 	rows := focus.V1_4.Build([]focus.Usage{{
 		Day: time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC), Provider: "anthropic", Model: "claude-opus-5",
-		PlanCovered: true, Plan: focus.Plan{ID: "claude-max-5x", Display: "Claude Max 5x"}, Requests: 1, Tokens: 1_000_000,
+		PlanCovered: true, Plan: focus.Plan{ID: "claude-max", Display: "Claude Max"}, Requests: 1, Tokens: 1_000_000,
 		Priced: []focus.TokenPrice{{Kind: focus.TokensOutput, Tokens: 1_000_000, PerMillion: 25}},
 	}}, nil)
 	r := rows[0]

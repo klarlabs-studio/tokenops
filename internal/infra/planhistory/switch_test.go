@@ -20,7 +20,7 @@ func TestRecordAuditsASwitchMadeNow(t *testing.T) {
 	db := filepath.Join(t.TempDir(), "events.db")
 	now := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
 	if _, err := Record(ctx, Switch{
-		Provider: "anthropic", Previous: "claude-max-20x", Plan: "claude-max-5x", From: now, Now: now,
+		Provider: "anthropic", Previous: "claude-ultra", Plan: "claude-max", From: now, Now: now,
 		DBPath: db, Actor: "claude_code",
 		Evidence: map[string]any{"account_type": "claude_max", "rate_limit_tier": "default_claude_max_5x"},
 	}); err != nil {
@@ -37,8 +37,8 @@ func TestRecordAuditsASwitchMadeNow(t *testing.T) {
 	}
 	e := entries[0]
 	evidence, _ := e.Details["evidence"].(map[string]any)
-	if e.Actor != "claude_code" || e.Target != "anthropic" || e.Details["previous"] != "claude-max-20x" ||
-		e.Details["plan"] != "claude-max-5x" || evidence["rate_limit_tier"] != "default_claude_max_5x" {
+	if e.Actor != "claude_code" || e.Target != "anthropic" || e.Details["previous"] != "claude-ultra" ||
+		e.Details["plan"] != "claude-max" || evidence["rate_limit_tier"] != "default_claude_max_5x" {
 		t.Errorf("entry = %+v", e)
 	}
 }
@@ -69,12 +69,12 @@ func TestReportsRoundTrip(t *testing.T) {
 		t.Fatalf("missing file: %v %v", got, err)
 	}
 	at := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
-	want := map[string]Report{"anthropic": {Plan: "claude-max-5x", Client: "claude_code", Detail: "account type claude_max", FirstSeen: at}}
+	want := map[string]Report{"anthropic": {Plan: "claude-max", Client: "claude_code", Detail: "account type claude_max", FirstSeen: at}}
 	if err := f.Save(want); err != nil {
 		t.Fatal(err)
 	}
 	got, err := f.Load()
-	if err != nil || got["anthropic"].Plan != "claude-max-5x" || !got["anthropic"].FirstSeen.Equal(at) {
+	if err != nil || got["anthropic"].Plan != "claude-max" || !got["anthropic"].FirstSeen.Equal(at) {
 		t.Fatalf("Load = %+v, %v", got, err)
 	}
 }

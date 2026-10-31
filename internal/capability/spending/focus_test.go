@@ -39,14 +39,14 @@ func TestFocusExportMapsChargesAndPlanFees(t *testing.T) {
 		{Day: sep3, Provider: "openai", Model: "gpt-5.5", Requests: 1, InputTokens: 100, OutputTokens: 10,
 			CostUSD: 0.01, ListUSD: 0.01, Unpriced: true},
 	}}
-	// Pro until the 2nd, Max 5x from then on, at the operator's own price.
+	// Pro until the 2nd, Max from then on, at the operator's own price.
 	history := plans.History{
 		{Provider: "anthropic", Plan: "claude-pro", From: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)},
-		{Provider: "anthropic", Plan: "claude-max-5x", From: time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC), Price: 90, Currency: "EUR"},
+		{Provider: "anthropic", Plan: "claude-max", From: time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC), Price: 90, Currency: "EUR"},
 	}
 	now := time.Date(2026, 9, 11, 0, 0, 0, 0, time.UTC)
 	got, err := FocusExport(context.Background(), src, FocusQuery{
-		History: history, Plans: map[string]string{"anthropic": "claude-max-5x"}, Now: now, Version: "1.2",
+		History: history, Plans: map[string]string{"anthropic": "claude-max"}, Now: now, Version: "1.2",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -67,17 +67,17 @@ func TestFocusExportMapsChargesAndPlanFees(t *testing.T) {
 			purchases = append(purchases, line+" "+r.ChargePeriodStart.Format("01-02"))
 		}
 	}
-	if strings.Join(usage, "|") != "Claude Max 5x USD|OpenAI API USD" {
+	if strings.Join(usage, "|") != "Claude Max USD|OpenAI API USD" {
 		t.Errorf("usage rows name the plan in force that day: %v", usage)
 	}
-	if strings.Join(purchases, "|") != "Claude Pro USD 09-01|Claude Max 5x EUR 09-02" {
+	if strings.Join(purchases, "|") != "Claude Pro USD 09-01|Claude Max EUR 09-02" {
 		t.Errorf("each plan in force is a purchase in its own currency: %v", purchases)
 	}
 	for _, r := range got.Rows {
-		if r.ServiceName == "Claude Max 5x" && r.ChargeCategory == "Purchase" {
+		if r.ServiceName == "Claude Max" && r.ChargeCategory == "Purchase" {
 			want := plans.PeriodCost(90, plans.Period{From: time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC), To: now})
 			if r.BilledCost != want {
-				t.Errorf("Max 5x fee %v, want %v prorated from the operator's price", r.BilledCost, want)
+				t.Errorf("Max fee %v, want %v prorated from the operator's price", r.BilledCost, want)
 			}
 		}
 	}
@@ -138,7 +138,7 @@ func TestFocusExport14PricesEachKindOfToken(t *testing.T) {
 		case r.ChargeCategory != "Usage":
 		case r.SkuID == "gpt-next":
 			unknownRows++
-		case r.ServiceName == "Claude Max 5x" || r.BillingAccountID == "anthropic/subscription":
+		case r.ServiceName == "Claude Max" || r.BillingAccountID == "anthropic/subscription":
 			list += r.ListCost
 			kinds[r.SkuPriceID] += *r.ConsumedQuantity
 		default:

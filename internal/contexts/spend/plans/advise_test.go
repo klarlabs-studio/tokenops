@@ -17,11 +17,12 @@ func TestTierOf(t *testing.T) {
 		ok     bool
 	}{
 		{"claude-pro", "claude-pro", 1, true},
-		{"claude-max-5x", "claude-pro", 5, true},
-		{"claude-max-20x", "claude-pro", 20, true},
-		{"claude-max", "claude-pro", 20, true}, // deprecated alias
-		{"claude-enterprise", "", 0, false},    // billed at API rates: no window to scale
-		{"gpt-plus", "", 0, false},             // no multiple modelled
+		{"claude-max", "claude-pro", 5, true},
+		{"claude-ultra", "claude-pro", 10, true},   // weekly: Ultra has no 5-hour limit
+		{"claude-max-20x", "claude-pro", 10, true}, // Ultra's former name
+		{"claude-max-5x", "claude-pro", 5, true},   // Max's former name
+		{"claude-enterprise", "", 0, false},        // billed at API rates: no window to scale
+		{"gpt-plus", "", 0, false},                 // no multiple modelled
 		{"nope", "", 0, false},
 	}
 	for _, c := range cases {
@@ -33,18 +34,32 @@ func TestTierOf(t *testing.T) {
 }
 
 func TestTierFamily(t *testing.T) {
-	fam := TierFamily("claude-max-20x")
+	fam := TierFamily("claude-ultra")
 	names := make([]string, 0, len(fam))
 	for _, tier := range fam {
 		names = append(names, tier.Name)
 	}
 	// Team seats are bought per member with a minimum, not by one person
 	// moving down a tier; Enterprise is billed at API rates.
-	if got := strings.Join(names, ","); got != "claude-pro,claude-max-5x,claude-max-20x" {
+	if got := strings.Join(names, ","); got != "claude-pro,claude-max,claude-ultra" {
 		t.Fatalf("family = %s", got)
 	}
 	if fam[0].Derived || !fam[1].Derived || fam[2].MonthlyUSD != 200 || fam[2].PriceSource != "list" {
 		t.Errorf("tiers = %+v", fam)
+	}
+	// Max is five times Pro in both windows; Ultra ten times Pro's week,
+	// with no 5-hour limit.
+	if fam[1].Factor != 5 || fam[1].SessionFactor != 5 || fam[2].Factor != 10 || !fam[2].NoSessionLimit {
+		t.Errorf("tiers = %+v", fam)
+	}
+	if f, limited := fam[2].Allowance(5 * time.Hour); limited || f != 0 {
+		t.Errorf("Ultra's 5-hour allowance = %v %v, want none", f, limited)
+	}
+	if f, limited := fam[2].Allowance(week); !limited || f != 10 {
+		t.Errorf("Ultra's weekly allowance = %v %v, want 10", f, limited)
+	}
+	if TierFamily("claude-max-20x")[2].Name != "claude-ultra" {
+		t.Error("a retired name's family is not the plan's")
 	}
 	// A team seat's own family keeps the seat itself.
 	team := TierFamily("claude-team-premium")
@@ -67,9 +82,13 @@ func weekReadings(reset time.Time, at []time.Duration, used []float64) []QuotaRe
 	return out
 }
 
+// maxTiers is a family at 1, 5 and 20 times its base, every window scaling
+// alike: the replay's arithmetic, apart from what any vendor sells now.
+// The names are Anthropic's retired ones, which still order by allowance.
 func maxTiers() (pro, five, twenty Tier) {
-	fam := TierFamily("claude-max-20x")
-	return fam[0], fam[1], fam[2]
+	return Tier{Name: "claude-pro", Display: "Claude Pro", Factor: 1, SessionFactor: 1, MonthlyUSD: 20, PriceSource: "list"},
+		Tier{Name: "claude-max-5x", Display: "Claude Max 5x", Factor: 5, SessionFactor: 5, Derived: true, MonthlyUSD: 100, PriceSource: "list"},
+		Tier{Name: "claude-max-20x", Display: "Claude Max 20x", Factor: 20, SessionFactor: 20, Derived: true, MonthlyUSD: 200, PriceSource: "list"}
 }
 
 func optionFor(t *testing.T, a Advice, kind, plan string) Option {
@@ -98,7 +117,7 @@ func TestReplayScalesWindowsAcrossTiers(t *testing.T) {
 	}
 	in := ReplayInput{
 		Provider: "anthropic", Since: since, Until: until, Readings: rs,
-		FactorAt: func(time.Time) (float64, bool) { return 20, true },
+		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true },
 		Current:  twenty, Candidates: []Tier{pro, five, twenty},
 		ListValueUSD: 280, ListValueKnown: true,
 	}
@@ -173,7 +192,7 @@ func TestReplayRecommendsStayingWhenNothingCheaperFits(t *testing.T) {
 	}
 	a := Replay(ReplayInput{
 		Provider: "anthropic", Since: since, Until: until, Readings: rs,
-		FactorAt: func(time.Time) (float64, bool) { return 20, true },
+		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true },
 		Current:  twenty, Candidates: []Tier{pro, five, twenty},
 		ListValueUSD: 4000, ListValueKnown: true,
 	})
@@ -196,7 +215,7 @@ func TestReplayRecommendsUpgradeWhenTheCurrentPlanLocksOut(t *testing.T) {
 	}
 	a := Replay(ReplayInput{
 		Provider: "anthropic", Since: since, Until: until, Readings: rs,
-		FactorAt: func(time.Time) (float64, bool) { return 5, true },
+		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 5, true },
 		Current:  five, Candidates: []Tier{pro, five, twenty},
 	})
 	cur := optionFor(t, a, OptionPlan, "claude-max-5x")
@@ -241,7 +260,7 @@ func TestReplayFollowsThePlanInForceAtEachReading(t *testing.T) {
 	}
 	a := Replay(ReplayInput{
 		Provider: "anthropic", Since: since, Until: until, Readings: rs,
-		FactorAt: func(at time.Time) (float64, bool) {
+		FactorAt: func(at time.Time, _ time.Duration) (float64, bool) {
 			if at.Before(switched) {
 				return 5, true
 			}
@@ -262,7 +281,7 @@ func TestReplayWithTooLittleHistoryIsLowConfidence(t *testing.T) {
 	a := Replay(ReplayInput{
 		Provider: "anthropic", Since: until.Add(-30 * 24 * time.Hour), Until: until,
 		Readings: weekReadings(reset, []time.Duration{3 * 24 * time.Hour, 5 * 24 * time.Hour}, []float64{1, 2}),
-		FactorAt: func(time.Time) (float64, bool) { return 20, true },
+		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true },
 		Current:  twenty, Candidates: []Tier{pro, five, twenty},
 	})
 	if a.Confidence != ConfidenceLow {
@@ -296,7 +315,7 @@ func TestReplayUnionsOverlappingLockouts(t *testing.T) {
 	}
 	pro, _, twenty := maxTiers()
 	a := Replay(ReplayInput{Provider: "anthropic", Since: since, Until: until, Readings: rs,
-		FactorAt: func(time.Time) (float64, bool) { return 20, true }, Current: twenty, Candidates: []Tier{pro, twenty}})
+		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true }, Current: twenty, Candidates: []Tier{pro, twenty}})
 	p := optionFor(t, a, OptionPlan, "claude-pro")
 	if p.Lockouts != 2 {
 		t.Fatalf("pro = %+v", p)
@@ -373,7 +392,7 @@ func TestReplayAtTheTopTierNeverUpgradesToItself(t *testing.T) {
 	}
 	a := Replay(ReplayInput{
 		Provider: "anthropic", Since: since, Until: until, Readings: rs,
-		FactorAt: func(time.Time) (float64, bool) { return 20, true },
+		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true },
 		Current:  twenty, Candidates: []Tier{pro, five, twenty},
 		ListValueUSD: 4000, ListValueKnown: true,
 	})
@@ -420,7 +439,7 @@ func TestReplayEndsLockoutsAtAnEarlyReset(t *testing.T) {
 	rs, early := lockoutCycle(base)
 	_, _, twenty := maxTiers()
 	a := Replay(ReplayInput{Provider: "openai", Since: base, Until: base.Add(6 * 24 * time.Hour), Readings: rs,
-		FactorAt: func(time.Time) (float64, bool) { return 20, true }, Current: twenty, Candidates: []Tier{twenty},
+		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true }, Current: twenty, Candidates: []Tier{twenty},
 		EarlyResets: []EarlyReset{early}})
 	cur := optionFor(t, a, OptionPlan, "claude-max-20x")
 	if cur.Lockouts != 1 || cur.BlockedMinutes != 180 {
@@ -437,7 +456,7 @@ func TestReplaySaysWhenTheVendorResetTheTopTierEarly(t *testing.T) {
 	pro, five, twenty := maxTiers()
 	a := Replay(ReplayInput{Provider: "openai", Since: base, Until: base.Add(14 * 24 * time.Hour),
 		Readings: append(rs1, rs2...), EarlyResets: []EarlyReset{e1, e2},
-		FactorAt: func(time.Time) (float64, bool) { return 20, true },
+		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true },
 		Current:  twenty, Candidates: []Tier{pro, five, twenty}})
 	r := a.Recommendation
 	if r == nil || r.Verdict != VerdictStay || r.Plan != "claude-max-20x" {
