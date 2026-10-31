@@ -33,7 +33,7 @@ func claudeHome(t *testing.T, tier string) string {
 func TestPlanFollowerRebindsWhatTheClientReports(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(cfgPath, []byte("plans:\n  anthropic: claude-max-20x\n"), 0o600); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("plans:\n  anthropic: claude-ultra\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var logs bytes.Buffer
@@ -47,14 +47,14 @@ func TestPlanFollowerRebindsWhatTheClientReports(t *testing.T) {
 	}
 	f.check(context.Background())
 	cfg, err := config.ReadMutable(cfgPath)
-	if err != nil || cfg.Plans["anthropic"] != "claude-max-5x" {
+	if err != nil || cfg.Plans["anthropic"] != "claude-max" {
 		t.Fatalf("plans = %v, %v", cfg.Plans, err)
 	}
 	if applied != 1 {
 		t.Errorf("applied %d times, want 1", applied)
 	}
-	if out := logs.String(); !strings.Contains(out, "claude-max-5x") ||
-		!strings.Contains(out, "tokenops plan set anthropic claude-max-20x") {
+	if out := logs.String(); !strings.Contains(out, "claude-max") ||
+		!strings.Contains(out, "tokenops plan set anthropic claude-ultra") {
 		t.Errorf("log does not say what changed and how to undo it:\n%s", out)
 	}
 	logs.Reset()

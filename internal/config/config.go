@@ -46,7 +46,7 @@ type Config struct {
 	Shutdown     ShutdownConfig    `yaml:"shutdown"`
 	Providers    map[string]string `yaml:"providers"`
 	// Plans maps provider name → plan catalog identifier (e.g.
-	// "anthropic" → "claude-max-20x"). Requests routed to a provider with
+	// "anthropic" → "claude-ultra"). Requests routed to a provider with
 	// a configured plan are billed as plan_included (CostUSD=0) and
 	// roll up to the plan's monthly quota instead — except a
 	// spend-denominated plan (usage-based Enterprise), which is billed at
@@ -184,6 +184,7 @@ func Load(path string) (Config, error) {
 
 	applyEnvOverrides(&cfg)
 	expandHomePaths(&cfg)
+	cfg.renamePlans()
 
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err

@@ -69,14 +69,14 @@ func TestBindPlanLeavesExistingBinding(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(cfgPath,
-		[]byte("listen: 127.0.0.1:7878\nplans:\n    anthropic: claude-max-20x\n"), 0o600); err != nil {
+		[]byte("listen: 127.0.0.1:7878\nplans:\n    anthropic: claude-ultra\n"), 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	step := bindPlan(cfgPath)
 	if step.Manual || step.Err != nil {
 		t.Fatalf("existing binding should be a no-op: %+v", step)
 	}
-	if !strings.Contains(step.Detail, "claude-max-20x") {
+	if !strings.Contains(step.Detail, "claude-ultra") {
 		t.Errorf("detail should name the bound plan: %q", step.Detail)
 	}
 }
@@ -144,7 +144,7 @@ func TestRunSetupTouchesOnlyItsTarget(t *testing.T) {
 	settings := filepath.Join(sandbox, ".claude", "settings.json")
 	cfgPath := filepath.Join(sandbox, "config.yaml")
 	if err := os.WriteFile(cfgPath,
-		[]byte("listen: 127.0.0.1:7878\nplans:\n    anthropic: claude-max-20x\n"), 0o600); err != nil {
+		[]byte("listen: 127.0.0.1:7878\nplans:\n    anthropic: claude-ultra\n"), 0o600); err != nil {
 		t.Fatalf("seed config: %v", err)
 	}
 
@@ -181,7 +181,7 @@ func TestRunSetupTouchesOnlyItsTarget(t *testing.T) {
 	}
 }
 
-// writeHomeWithEvidence is a home where Claude Code reports Max 20x and
+// writeHomeWithEvidence is a home where Claude Code reports Ultra and
 // Codex reports Plus.
 func writeHomeWithEvidence(t *testing.T) string {
 	t.Helper()
@@ -221,7 +221,7 @@ func TestBindPlansFromWhatTheClientsReport(t *testing.T) {
 		}
 	}
 	cfg, err := config.ReadMutable(cfgPath)
-	if err != nil || cfg.Plans["anthropic"] != "claude-max-20x" || cfg.Plans["openai"] != "gpt-plus" {
+	if err != nil || cfg.Plans["anthropic"] != "claude-ultra" || cfg.Plans["openai"] != "gpt-plus" {
 		t.Fatalf("plans %v, %v", cfg.Plans, err)
 	}
 	for _, s := range bindPlans(cfgPath, home) {
@@ -249,11 +249,11 @@ func TestBindPlansFollowsAPlanTheClientReports(t *testing.T) {
 		}
 	}
 	if followed == nil || !followed.Changed || followed.Manual ||
-		!strings.Contains(followed.Detail, "claude-max-20x") ||
+		!strings.Contains(followed.Detail, "claude-ultra") ||
 		!strings.Contains(followed.Detail, "`tokenops plan set anthropic claude-pro`") {
 		t.Fatalf("follow not reported: %+v", followed)
 	}
-	if cfg, _ := config.ReadMutable(cfgPath); cfg.Plans["anthropic"] != "claude-max-20x" {
+	if cfg, _ := config.ReadMutable(cfgPath); cfg.Plans["anthropic"] != "claude-ultra" {
 		t.Errorf("the reported plan was not bound: %v", cfg.Plans)
 	}
 	for _, s := range bindPlans(cfgPath, home) {
@@ -274,7 +274,7 @@ func TestBindPlansKeepsTheOperatorsLaterChoice(t *testing.T) {
 	home := writeHomeWithEvidence(t)
 	_ = bindPlans(cfgPath, home)
 	if _, err := actions.SetPlan(context.Background(), cfgPath, actions.PlanRequest{
-		Provider: "anthropic", Plan: "claude-max-5x", Actor: "cli",
+		Provider: "anthropic", Plan: "claude-max", Actor: "cli",
 	}, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
@@ -285,10 +285,10 @@ func TestBindPlansKeepsTheOperatorsLaterChoice(t *testing.T) {
 			kept = &s
 		}
 	}
-	if kept == nil || kept.Changed || kept.Manual || !strings.Contains(kept.Detail, "claude-max-20x") {
+	if kept == nil || kept.Changed || kept.Manual || !strings.Contains(kept.Detail, "claude-ultra") {
 		t.Fatalf("kept choice not reported: %+v", kept)
 	}
-	if cfg, _ := config.ReadMutable(cfgPath); cfg.Plans["anthropic"] != "claude-max-5x" {
+	if cfg, _ := config.ReadMutable(cfgPath); cfg.Plans["anthropic"] != "claude-max" {
 		t.Errorf("the operator's plan was replaced: %v", cfg.Plans)
 	}
 }

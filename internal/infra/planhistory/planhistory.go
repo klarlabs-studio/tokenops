@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -57,6 +58,7 @@ func (f File) Load() (plans.History, error) {
 		// A line that does not parse is skipped rather than failing every
 		// report that reads the history.
 		if json.Unmarshal(sc.Bytes(), &b) == nil && b.Provider != "" {
+			b.Plan, _ = plans.ResolveAlias(b.Plan)
 			h = append(h, b)
 		}
 	}
@@ -90,4 +92,64 @@ func (f File) Append(bs ...plans.Binding) error {
 	}
 	_, err = fh.Write(buf.Bytes())
 	return err
+}
+
+// RenameRetiredPlans rewrites the recorded changes to a plan by a name the
+// catalog retired under the plan's current name, and says how many it
+// rewrote. A line that does not parse, and every field but the plan, is
+// kept as written.
+func (f File) RenameRetiredPlans() (int, error) {
+	fh, err := os.OpenFile(f.Path, os.O_RDWR, 0o600)
+	if errors.Is(err, fs.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = fh.Close() }()
+	unlock, err := filelock.Lock(fh)
+	if err != nil {
+		return 0, err
+	}
+	defer unlock()
+	data, err := io.ReadAll(fh)
+	if err != nil {
+		return 0, err
+	}
+	lines := bytes.SplitAfter(data, []byte("\n"))
+	renamed := 0
+	for i, line := range lines {
+		var rec map[string]json.RawMessage
+		if json.Unmarshal(line, &rec) != nil {
+			continue
+		}
+		var name string
+		if json.Unmarshal(rec["plan"], &name) != nil {
+			continue
+		}
+		current, retired := plans.ResolveAlias(name)
+		if !retired {
+			continue
+		}
+		rec["plan"], _ = json.Marshal(current)
+		b, err := json.Marshal(rec)
+		if err != nil {
+			return 0, err
+		}
+		if bytes.HasSuffix(line, []byte("\n")) {
+			b = append(b, '\n')
+		}
+		lines[i] = b
+		renamed++
+	}
+	if renamed == 0 {
+		return 0, nil
+	}
+	if err := fh.Truncate(0); err != nil {
+		return 0, err
+	}
+	if _, err := fh.WriteAt(bytes.Join(lines, nil), 0); err != nil {
+		return 0, err
+	}
+	return renamed, nil
 }

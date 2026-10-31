@@ -41,15 +41,25 @@ var catalog = func() map[string]Plan {
 // they should resolve to. Lookup follows the alias and ResolveAlias
 // surfaces the rename so CLI verbs print a deprecation notice instead
 // of an error. Stale docs / blog posts from before the v0.6.0 catalog
-// split keep working.
-var deprecatedAliases = map[string]string{
-	"claude-max":      "claude-max-20x",
-	"claude-code-pro": "claude-pro",
-	"codex-plus":      "gpt-plus",
-	"gpt-team":        "gpt-business",
-	// Google renamed Google One AI Premium to Google AI Pro.
-	"gemini-ai-premium": "gemini-ai-pro",
-}
+// split keep working, and so does every plan's FormerNames.
+//
+// "claude-max" meant Max 20x until Anthropic gave the name to the $100
+// plan; it is a catalog plan again, not an alias.
+var deprecatedAliases = func() map[string]string {
+	out := map[string]string{
+		"claude-code-pro": "claude-pro",
+		"codex-plus":      "gpt-plus",
+		"gpt-team":        "gpt-business",
+		// Google renamed Google One AI Premium to Google AI Pro.
+		"gemini-ai-premium": "gemini-ai-pro",
+	}
+	for _, p := range catalog {
+		for _, old := range p.FormerNames {
+			out[old] = p.Name
+		}
+	}
+	return out
+}()
 
 // PayAsYouGo binds a provider billed per token with no subscription, so
 // its spend is measured against a limit the operator sets: a Fireworks or

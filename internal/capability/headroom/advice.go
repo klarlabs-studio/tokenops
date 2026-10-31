@@ -148,8 +148,8 @@ func replayInput(provider, name string, h plans.History, envs []*eventschema.Env
 	in := plans.ReplayInput{
 		Provider: provider, Since: since, Until: now,
 		Readings: plans.QuotaReadingsFrom(envs, provider, since, now),
-		FactorAt: func(t time.Time) (float64, bool) {
-			b, f, ok := plans.TierOf(h.At(provider, t, name))
+		FactorAt: func(t time.Time, window time.Duration) (float64, bool) {
+			b, f, ok := plans.WindowFactor(h.At(provider, t, name), window)
 			return f, ok && b == base
 		},
 		Current: current, Candidates: family,

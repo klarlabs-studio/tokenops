@@ -132,7 +132,7 @@ func tightWindowDeps(t *testing.T) RoutingAdviceDeps {
 	if err := st.Append(context.Background(), reading); err != nil {
 		t.Fatal(err)
 	}
-	cfg := &config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}}
+	cfg := &config.Config{Plans: map[string]string{"anthropic": "claude-max"}}
 	cfg.Optimizer.SmartRouting.Enabled = true
 	return RoutingAdviceDeps{Config: cfg, Store: st}
 }

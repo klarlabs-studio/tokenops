@@ -26,8 +26,8 @@ func TestGlobalConfigFlagReachesCommandsThatWrite(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	for _, args := range [][]string{
-		{"-c", "PATH", "plan", "set", "anthropic", "claude-max-20x", "--no-restart"},
-		{"plan", "set", "anthropic", "claude-max-20x", "--config", "PATH", "--no-restart"},
+		{"-c", "PATH", "plan", "set", "anthropic", "claude-ultra", "--no-restart"},
+		{"plan", "set", "anthropic", "claude-ultra", "--config", "PATH", "--no-restart"},
 	} {
 		path := filepath.Join(t.TempDir(), "other.yaml")
 		if err := os.WriteFile(path, []byte("storage:\n  enabled: true\n"), 0o600); err != nil {
@@ -47,7 +47,7 @@ func TestGlobalConfigFlagReachesCommandsThatWrite(t *testing.T) {
 			t.Fatalf("%v: %v\n%s", args, err, out.String())
 		}
 		b, err := os.ReadFile(path)
-		if err != nil || !strings.Contains(string(b), "claude-max-20x") {
+		if err != nil || !strings.Contains(string(b), "claude-ultra") {
 			t.Errorf("%v did not write %s:\n%s", args, path, b)
 		}
 		if def, err := defaultConfigPath(); err == nil {

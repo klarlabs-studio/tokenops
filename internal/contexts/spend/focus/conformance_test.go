@@ -212,7 +212,7 @@ func validate(t *testing.T, data []byte) []string {
 
 func sampleDataset() ([]focus.Usage, []focus.Purchase) {
 	day := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
-	maxPlan := focus.Plan{ID: "claude-max-5x", Display: "Claude Max 5x"}
+	maxPlan := focus.Plan{ID: "claude-max", Display: "Claude Max"}
 	usage := []focus.Usage{
 		{Day: day, Provider: "anthropic", Model: "claude-opus-5", Plan: maxPlan, PlanCovered: true,
 			Requests: 40, Tokens: 3_250_000, ListUSD: 48.75},

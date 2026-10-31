@@ -51,25 +51,34 @@ func providerAnthropic() Descriptor {
 			Setup: "`tokenops init` installs the status line; `tokenops vendor-usage setup claude-subscription` connects the claude.ai meter",
 		},
 		Plans: []Plan{
+			// Anthropic renamed Max 5x to Max and Max 20x to Ultra on
+			// 2026-10-30, and moved subscribers across at the same price.
 			{
-				Name:        "claude-max-5x",
-				Display:     "Claude Max 5x",
+				Name:        "claude-max",
+				Display:     "Claude Max",
 				RelativeTo:  "claude-pro",
 				Multiplier:  5,
 				WindowUnit:  "messages",
-				SourceURL:   "https://support.claude.com/en/articles/11049741-what-is-the-max-plan (2026-09): \"five times the Pro plan's per-session usage allowance\"",
+				FormerNames: []string{"claude-max-5x"},
+				SourceURL:   "https://support.claude.com/en/articles/11049741-what-is-the-max-plan (2026-10-31): \"five times the Pro plan's usage every five hours and every week\"",
 				MonthlyUSD:  100,
-				PriceSource: "https://support.claude.com/en/articles/11049741 (2026-09-30): Max 5x $100 per month",
+				PriceSource: "https://claude.com/pricing (2026-10-31): Max $100 per month",
 			},
 			{
-				Name:        "claude-max-20x",
-				Display:     "Claude Max 20x",
-				RelativeTo:  "claude-pro",
-				Multiplier:  20,
-				WindowUnit:  "messages",
-				SourceURL:   "https://support.claude.com/en/articles/11049741-what-is-the-max-plan (2026-09): \"20 times the Pro plan's per-session usage allowance\"",
+				Name:             "claude-ultra",
+				Display:          "Claude Ultra",
+				RelativeTo:       "claude-pro",
+				WeeklyMultiplier: 10,
+				NoSessionLimit:   true,
+				// Its shortest window is the week.
+				RateLimitWindow: 7 * 24 * time.Hour,
+				WindowUnit:      "messages",
+				FormerNames:     []string{"claude-max-20x"},
+				// The 5-hour limit is lifted for verified accounts; what an
+				// unverified account's is, the vendor does not say.
+				SourceURL:   "https://claude.com/pricing (2026-10-31): \"No 5-hour limit\" (\"for verified accounts\"), \"10x Pro usage every week\"",
 				MonthlyUSD:  200,
-				PriceSource: "https://support.claude.com/en/articles/11049741 (2026-09-30): Max 20x $200 per month",
+				PriceSource: "https://claude.com/pricing (2026-10-31): Ultra $200 per month",
 			},
 			{
 				Name:             "claude-enterprise",

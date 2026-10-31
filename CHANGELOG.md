@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- **plans:** Anthropic renamed its plans on 2026-10-30: Max 5x is now **Max** (`claude-max`) and Max 20x is now **Ultra** (`claude-ultra`), at the same prices. Ultra is not Max 20x under a new name: Anthropic gives it ten times Pro's usage per week and no 5-hour limit for verified accounts, so TokenOps now measures it against the week. `tokenops plan advise` reads each tier's windows by what Anthropic states for them, Max's 5-hour and weekly windows at five times Pro's and Ultra's week at ten. On Ultra its readings say nothing about 5-hour demand, so advice there says so and is low confidence. Preparing work on Ultra measures against the weekly window. `claude-max-5x` and `claude-max-20x` still work everywhere and mean Max and Ultra.
+- **plans:** nothing to run after upgrading. Every read of the config already uses the new names, and the daemon writes them into the config file and the plan history at start; only the plan names change, and every other byte of the config, comments included, stays as you left it. Team uploads carry the new names, and an older client's old names are accepted.
+
 ## 0.116.4 - 2026-10-31
 
 ### Fixed

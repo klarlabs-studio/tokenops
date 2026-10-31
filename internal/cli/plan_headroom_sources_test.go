@@ -37,7 +37,7 @@ func TestPlanHeadroomReadsTheVendorWindow(t *testing.T) {
 	}
 	_ = st.Close()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(cfgPath, []byte("plans:\n  anthropic: claude-max-20x\n"), 0o600); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("plans:\n  anthropic: claude-max\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

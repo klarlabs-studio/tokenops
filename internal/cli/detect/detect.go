@@ -45,7 +45,7 @@ type Detection struct {
 	//
 	// It is false for a bare API key, which means metered billing. The
 	// wizard used to print "run: tokenops plan set anthropic
-	// claude-max-20x" directly beneath the hint "raw API key — likely
+	// claude-ultra" directly beneath the hint "raw API key — likely
 	// metered usage, no plan", contradicting itself in adjacent lines —
 	// and binding a Max plan against metered traffic makes every headroom
 	// figure wrong in a way that looks authoritative.
@@ -127,7 +127,7 @@ func detectClaudeCode(env Env) []Detection {
 	}
 	candidate := claudehome.Resolve(env.Getenv, home)
 	if info, err := env.Stat(candidate); err == nil && info.IsDir() {
-		// Claude Code uses ~/.claude. Tier (Max 5x / Max 20x / Pro)
+		// Claude Code uses ~/.claude. Tier (Max / Ultra / Pro)
 		// cannot be inferred without an API call — the wizard must
 		// prompt.
 		return []Detection{{
@@ -135,7 +135,7 @@ func detectClaudeCode(env Env) []Detection {
 			Plan:         "", // ambiguous tier; wizard prompts
 			Confidence:   ConfidenceMedium,
 			Evidence:     candidate,
-			Hint:         "Claude Code installed; pick your plan tier (Max 20x, Max 5x, Pro)",
+			Hint:         "Claude Code installed; pick your plan tier (Ultra, Max, Pro)",
 			SuggestsPlan: true,
 		}}
 	}

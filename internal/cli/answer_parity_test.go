@@ -156,7 +156,7 @@ func sameAnswer(t *testing.T, what string, cli, tool any) {
 var parityWindow = []string{"--since", "2026-01-01T00:00:00Z", "--until", "2026-01-08T00:00:00Z"}
 
 func TestCLIAndMCPGiveTheSameAnswer(t *testing.T) {
-	f := newParityFixture(t, map[string]string{"anthropic": "claude-max-20x"})
+	f := newParityFixture(t, map[string]string{"anthropic": "claude-ultra"})
 	toolWindow := map[string]any{"since": "2026-01-01T00:00:00Z", "until": "2026-01-08T00:00:00Z"}
 
 	t.Run("spend totals", func(t *testing.T) {

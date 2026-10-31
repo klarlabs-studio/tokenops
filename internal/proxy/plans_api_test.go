@@ -58,7 +58,7 @@ func TestPlanRoutesServeTheVendorWindows(t *testing.T) {
 			"five_hour_used_pct": "72.00", "five_hour_reset_at": now.Add(time.Hour).Format(time.RFC3339),
 			"granularity": "quota_snapshot",
 		}}
-	cfg := &config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}}
+	cfg := &config.Config{Plans: map[string]string{"anthropic": "claude-ultra"}}
 	s := New("127.0.0.1:0", WithPlans(func() headroom.Deps {
 		return headroom.Deps{Config: cfg, Reader: planEvents{[]*eventschema.Envelope{reading}}}
 	}))
@@ -82,7 +82,7 @@ func TestPlanRoutesServeTheVendorWindows(t *testing.T) {
 // GET /api/plans/advice answers from the capability `tokenops plan advise`
 // and tokenops_glance (view=plan_advice) use; a bad period is a 400.
 func TestPlanAdviceRoute(t *testing.T) {
-	cfg := &config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}}
+	cfg := &config.Config{Plans: map[string]string{"anthropic": "claude-ultra"}}
 	s := New("127.0.0.1:0", WithPlans(func() headroom.Deps {
 		return headroom.Deps{Config: cfg, Reader: planEvents{}}
 	}))
@@ -90,7 +90,7 @@ func TestPlanAdviceRoute(t *testing.T) {
 	if code := getAPI(t, s, "/api/plans/advice?days=60", &body); code != http.StatusOK || body.Days != 60 || len(body.Providers) != 1 {
 		t.Fatalf("advice = %d %+v", code, body)
 	}
-	if a := body.Providers[0]; a.Plan != "claude-max-20x" || a.Confidence != "low" {
+	if a := body.Providers[0]; a.Plan != "claude-ultra" || a.Confidence != "low" {
 		t.Errorf("advice = %+v, want low confidence with no readings", a)
 	}
 	for _, bad := range []string{"/api/plans/advice?days=x", "/api/plans/advice?days=91"} {

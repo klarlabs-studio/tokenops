@@ -13,7 +13,7 @@ import (
 )
 
 // seedFocusExportFixture writes two days of September 2026 usage, plan
-// covered and metered, and a config binding Anthropic to Max 5x. HOME is
+// covered and metered, and a config binding Anthropic to Max. HOME is
 // a fresh directory, so no plan history from another test applies.
 func seedFocusExportFixture(t *testing.T) (dbPath, cfgPath string) {
 	t.Helper()
@@ -21,7 +21,7 @@ func seedFocusExportFixture(t *testing.T) (dbPath, cfgPath string) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	cfgPath = filepath.Join(home, "config.yaml")
-	if err := os.WriteFile(cfgPath, []byte("plans:\n  anthropic: claude-max-5x\n"), 0o600); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("plans:\n  anthropic: claude-max\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	dbPath = filepath.Join(home, "events.db")

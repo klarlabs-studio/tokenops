@@ -112,7 +112,7 @@ func TestSpendTextShowsPlanCostAndValue(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := file.Append(plans.Binding{
-		Provider: "anthropic", Plan: "claude-max-20x",
+		Provider: "anthropic", Plan: "claude-ultra",
 		From: time.Now().Add(-60 * 24 * time.Hour), Recorded: time.Now(),
 	}); err != nil {
 		t.Fatal(err)
@@ -122,7 +122,7 @@ func TestSpendTextShowsPlanCostAndValue(t *testing.T) {
 	v := spendView{Window: "last 30d", Currency: "USD"}
 	v.Summary.APIEquivalentUSD = 11400
 	rate := money.Rate{Currency: "EUR", PerUSD: 1 / 1.1355, Date: "2026-09-30", Source: "ecb"}
-	fillPlanCost(&v, map[string]string{"anthropic": "claude-max-20x"}, "EUR", rate, true,
+	fillPlanCost(&v, map[string]string{"anthropic": "claude-ultra"}, "EUR", rate, true,
 		time.Now().Add(-30*24*time.Hour), time.Now())
 	if err := writeSpendText(&out, v); err != nil {
 		t.Fatal(err)
@@ -148,10 +148,10 @@ func TestSpendTextShowsPlanCostAndValue(t *testing.T) {
 func TestPlanSetRecordsThePrice(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(cfgPath, []byte("money:\n  currency: EUR\nplans:\n  anthropic: claude-max-20x\n"), 0o600); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("money:\n  currency: EUR\nplans:\n  anthropic: claude-ultra\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	runPlanCmd(t, "set", "anthropic", "claude-max-20x", "--price", "214.60",
+	runPlanCmd(t, "set", "anthropic", "claude-ultra", "--price", "214.60",
 		"--config", cfgPath, "--db", filepath.Join(dir, "events.db"), "--no-restart")
 	if hist := runPlanCmd(t, "history"); !strings.Contains(hist, "at 214.60 EUR/month") {
 		t.Errorf("plan history:\n%s", hist)

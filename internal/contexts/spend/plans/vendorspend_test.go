@@ -112,7 +112,7 @@ func TestAssembleHeadroomInputsCarriesEverySource(t *testing.T) {
 	spend := meterReading(vsNow.Add(-5*time.Minute), "1095.63", "1500.00", "USD", false)
 	r := staticReader{window, spend}
 
-	max, err := AssembleHeadroomInputs(ctx, r, nil, "anthropic", "claude-max-20x", SpendLimit{}, vsNow)
+	max, err := AssembleHeadroomInputs(ctx, r, nil, "anthropic", "claude-max", SpendLimit{}, vsNow)
 	if err != nil {
 		t.Fatal(err)
 	}

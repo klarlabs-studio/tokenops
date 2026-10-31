@@ -38,16 +38,16 @@ func seedConfig(t *testing.T) string {
 
 func TestPlanSetWritesProviderBinding(t *testing.T) {
 	path := seedConfig(t)
-	output := runPlanSet(t, path, "anthropic", "claude-max-20x")
+	output := runPlanSet(t, path, "anthropic", "claude-ultra")
 
 	cfg, err := readMutableConfig(path)
 	if err != nil {
 		t.Fatalf("read back: %v", err)
 	}
-	if got := cfg.Plans["anthropic"]; got != "claude-max-20x" {
-		t.Errorf("plans.anthropic=%q want claude-max-20x", got)
+	if got := cfg.Plans["anthropic"]; got != "claude-ultra" {
+		t.Errorf("plans.anthropic=%q want claude-ultra", got)
 	}
-	if !strings.Contains(output, "claude-max-20x") {
+	if !strings.Contains(output, "claude-ultra") {
 		t.Errorf("expected plan name in output: %s", output)
 	}
 	// Asserted on the property, not the wording: the change is inert until
@@ -75,15 +75,15 @@ func TestPlanSetRejectsUnknownPlan(t *testing.T) {
 func TestPlanSetUpdatesExisting(t *testing.T) {
 	path := seedConfig(t)
 	runPlanSet(t, path, "anthropic", "claude-pro")
-	output := runPlanSet(t, path, "anthropic", "claude-max-20x")
-	if !strings.Contains(output, "claude-pro -> claude-max-20x") {
+	output := runPlanSet(t, path, "anthropic", "claude-ultra")
+	if !strings.Contains(output, "claude-pro -> claude-ultra") {
 		t.Errorf("expected upgrade message, got: %s", output)
 	}
 }
 
 func TestPlanUnsetRemovesBinding(t *testing.T) {
 	path := seedConfig(t)
-	runPlanSet(t, path, "anthropic", "claude-max-20x")
+	runPlanSet(t, path, "anthropic", "claude-ultra")
 
 	cmd := withConfigFlag(newPlanUnsetCmd())
 	out := &bytes.Buffer{}
@@ -106,7 +106,7 @@ func TestPlanSetMissingConfigFile(t *testing.T) {
 	cmd.SetErr(out)
 	cmd.SetArgs([]string{
 		"--config", filepath.Join(t.TempDir(), "no-such.yaml"),
-		"anthropic", "claude-max-20x",
+		"anthropic", "claude-ultra",
 	})
 	err := cmd.Execute()
 	if err == nil {

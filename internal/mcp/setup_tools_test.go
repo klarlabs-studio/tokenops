@@ -99,10 +99,10 @@ func TestPlanSetToolRefusesAnEnterprisePlanWithNoLimit(t *testing.T) {
 }
 
 func TestPlanSetToolListsAndClears(t *testing.T) {
-	f := newSetupFixture(t, "plans:\n  anthropic: claude-max-20x\n")
+	f := newSetupFixture(t, "plans:\n  anthropic: claude-ultra\n")
 	srv := f.server()
 	listed := callTool(t, srv, "tokenops_plan_set", map[string]any{})
-	if plans, _ := listed["plans"].(map[string]any); plans["anthropic"] != "claude-max-20x" {
+	if plans, _ := listed["plans"].(map[string]any); plans["anthropic"] != "claude-ultra" {
 		t.Errorf("list = %v", listed)
 	}
 	callTool(t, srv, "tokenops_plan_set", map[string]any{"provider": "anthropic", "clear": true})

@@ -15,7 +15,7 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// planAdviseStore writes four weeks on Max 20x peaking at 20% of each
+// planAdviseStore writes four weeks on Ultra peaking at 20% of each
 // weekly window, with a plan-covered Sonnet turn a day, and a config
 // binding the plan. It returns the config and store paths.
 func planAdviseStore(t *testing.T) (cfgPath, db string) {
@@ -60,7 +60,7 @@ func planAdviseStore(t *testing.T) (cfgPath, db string) {
 	}
 	_ = st.Close()
 	cfgPath = filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(cfgPath, []byte("plans:\n  anthropic: claude-max-20x\n"), 0o600); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("plans:\n  anthropic: claude-ultra\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return cfgPath, db
@@ -73,7 +73,7 @@ func TestPlanAdvise(t *testing.T) {
 		t.Fatalf("plan advise: %v\n%s", err, out)
 	}
 	for _, want := range []string{
-		"Claude Max 20x", "Claude Max 5x", "API at list price", "LOCKOUTS", "peaked", "confidence medium",
+		"Claude Ultra", "Claude Max", "API at list price", "LOCKOUTS", "peaked", "confidence low", "no 5-hour limit",
 		"unverified", "TokenOps never switches a plan",
 	} {
 		if !strings.Contains(out, want) {
@@ -92,13 +92,13 @@ func TestPlanAdvise(t *testing.T) {
 	if p.Days != 60 || len(p.Providers) != 1 || p.Providers[0].Recommendation == nil {
 		t.Fatalf("payload = %+v", p)
 	}
-	if r := p.Providers[0].Recommendation; r.Verdict != "switch" || r.Plan != "claude-max-5x" {
+	if r := p.Providers[0].Recommendation; r.Verdict != "switch" || r.Plan != "claude-max" {
 		t.Errorf("recommendation = %+v", r)
 	}
 
 	// The advice binds nothing.
 	cfg, err := os.ReadFile(cfgPath)
-	if err != nil || string(cfg) != "plans:\n  anthropic: claude-max-20x\n" {
+	if err != nil || string(cfg) != "plans:\n  anthropic: claude-ultra\n" {
 		t.Errorf("config after advise = %q %v", cfg, err)
 	}
 	if _, err := executeRoot(t, "--config", cfgPath, "plan", "advise", "--db", db, "--days", "91"); err == nil {

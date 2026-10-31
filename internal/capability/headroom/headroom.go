@@ -108,7 +108,7 @@ func (r Result) Answered() bool { return len(r.Reports) > 0 }
 // restart"; that variable is read once, when a process loads its config,
 // so set in a shell it never reached a running daemon.
 const UnconfiguredHint = "no plans configured; bind one with `tokenops plan set <provider> <plan>` " +
-	"(e.g. `tokenops plan set anthropic claude-max-20x`) or tokenops_configure (setting=plan); " +
+	"(e.g. `tokenops plan set anthropic claude-ultra`) or tokenops_configure (setting=plan); " +
 	"either restarts a supervised daemon so the plan applies at once"
 
 // StorageDisabledHint says how to get an event store.

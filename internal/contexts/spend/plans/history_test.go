@@ -79,8 +79,8 @@ func TestCatalogPricesArePinned(t *testing.T) {
 			t.Errorf("%s has a price with no source", name)
 		}
 	}
-	if p, _ := Lookup("claude-max-20x"); p.MonthlyUSD != 200 {
-		t.Errorf("claude-max-20x = %v (relative tiers must keep their own price)", p.MonthlyUSD)
+	if p, _ := Lookup("claude-ultra"); p.MonthlyUSD != 200 {
+		t.Errorf("claude-ultra = %v (relative tiers must keep their own price)", p.MonthlyUSD)
 	}
 	if p, _ := Lookup("gpt-pro-5x"); p.MonthlyUSD != 100 {
 		t.Errorf("gpt-pro-5x = %v", p.MonthlyUSD)
@@ -91,10 +91,10 @@ func TestCatalogPricesArePinned(t *testing.T) {
 // priced at what was paid then.
 func TestPeriodsCarryThePrice(t *testing.T) {
 	h := History{
-		{Provider: "anthropic", Plan: "claude-max-20x", Recorded: day(1), Price: 214.60, Currency: "EUR"},
-		{Provider: "anthropic", Plan: "claude-max-20x", From: day(20), Recorded: day(20), Price: 199, Currency: "EUR"},
+		{Provider: "anthropic", Plan: "claude-ultra", Recorded: day(1), Price: 214.60, Currency: "EUR"},
+		{Provider: "anthropic", Plan: "claude-ultra", From: day(20), Recorded: day(20), Price: 199, Currency: "EUR"},
 	}
-	got := h.Periods("anthropic", day(1), day(30), "claude-max-20x")
+	got := h.Periods("anthropic", day(1), day(30), "claude-ultra")
 	if len(got) != 2 || got[0].Price != 214.60 || got[1].Price != 199 || got[1].Currency != "EUR" {
 		t.Fatalf("Periods = %+v", got)
 	}
