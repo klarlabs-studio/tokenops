@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.116.6 - 2026-11-01
+
+### Fixed
+
+- **findings:** the coach's findings in `tokenops glance` counted the read guard's and the session budgets' ledgers over their whole history, so a finding could say the read guard refused 259 re-reads when it had refused 3 in the last week, and disagree with the team upload, which counts the last 7 days. The findings on re-read files, refused re-reads and sessions past their budget now count the last 7 days and say so ("in the last 7 days"). The run-out score and the session budget still read the whole history.
+
 ## 0.116.5 - 2026-10-31
 
 ### Changed
