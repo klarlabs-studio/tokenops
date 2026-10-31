@@ -1046,7 +1046,7 @@ then restarts itself (when supervised) so the new limits apply.
   what the client reported (account type, rate-limit tier, `plan_type`).
 - It is said once, in `init`'s output and the daemon log, and noted on
   `tokenops glance` for a week, each time with the command that undoes
-  it, for example `tokenops plan set anthropic claude-max-20x`.
+  it, for example `tokenops plan set anthropic claude-ultra`.
 - If you set a plan yourself after the client started reporting its
   plan, yours is kept until the client reports a different plan. TokenOps
   does not switch back and forth.
@@ -1067,7 +1067,7 @@ such as Enterprise, is left out and flagged.
 Record what your bill says, in your currency, with `--price`:
 
 ```bash
-tokenops plan set anthropic claude-max-20x --price 214.60 --currency EUR
+tokenops plan set anthropic claude-ultra --price 214.60 --currency EUR
 ```
 
 ```yaml

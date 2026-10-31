@@ -5,7 +5,8 @@ import "testing"
 // Anthropic publishes Max and Team allowances only as multiples of Pro, and
 // no longer publishes an absolute for any of them. The catalog held three
 // independent absolutes that had drifted out of that relationship: Pro 45
-// against Max 5x 50 is 1.1x where the vendor documents 5x.
+// against Max 50 is 1.1x where the vendor documents 5x. Ultra has no
+// per-session allowance to derive (TestUltraHasNoSessionWindow).
 func TestMaxTiersDeriveFromPro(t *testing.T) {
 	pro, ok := Lookup("claude-pro")
 	if !ok {
@@ -15,8 +16,7 @@ func TestMaxTiersDeriveFromPro(t *testing.T) {
 		name string
 		mult float64
 	}{
-		{"claude-max-5x", 5},
-		{"claude-max-20x", 20},
+		{"claude-max", 5},
 		{"claude-team-standard", 1.25},
 		{"claude-team-premium", 6.25},
 	} {
@@ -53,8 +53,11 @@ func TestEveryRelativePlanNamesAPlanThatExists(t *testing.T) {
 			t.Errorf("%s derives from %s, which is itself derived — keep the chain one deep",
 				name, p.RelativeTo)
 		}
-		if p.Multiplier <= 0 {
-			t.Errorf("%s is relative to %s with multiplier %v", name, p.RelativeTo, p.Multiplier)
+		if p.Multiplier <= 0 && p.WeeklyMultiplier <= 0 {
+			t.Errorf("%s is relative to %s with no multiplier", name, p.RelativeTo)
+		}
+		if p.NoSessionLimit && p.Multiplier > 0 {
+			t.Errorf("%s has no session limit but a per-session multiplier %v", name, p.Multiplier)
 		}
 	}
 }

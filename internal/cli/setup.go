@@ -69,7 +69,7 @@ func realSetupTarget() (setupTarget, error) {
 // Code hooks, and binds a subscription plan when detection is unambiguous.
 //
 // Two things are deliberately NOT automated. Binding a plan when detection
-// cannot tell Max 20x from Pro would silently produce wrong headroom maths,
+// cannot tell Ultra from Pro would silently produce wrong headroom maths,
 // and pointing a client's base URL at the local proxy reroutes the
 // operator's real traffic — that is their call to make, not a side effect
 // of running init.

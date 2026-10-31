@@ -37,7 +37,7 @@ func TestLiveQuotaReadsTheMostConstrainedWindow(t *testing.T) {
 		"five_hour_kind": "session", "five_hour_used_pct": "12.00", "five_hour_reset_at": now.Add(2 * time.Hour).Format(time.RFC3339Nano),
 		"seven_day_kind": "weekly_all", "seven_day_used_pct": "81.00", "seven_day_reset_at": now.Add(48 * time.Hour).Format(time.RFC3339Nano),
 	}, "claude-usage-meter")
-	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}, Storage: config.StorageConfig{Enabled: true, Path: path}}
+	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-max"}, Storage: config.StorageConfig{Enabled: true, Path: path}}
 	q := readPlan(context.Background(), cfg, eventschema.ProviderAnthropic, now).Quota
 	if q == nil || q.Window.Label != "weekly" || q.Window.UsedPct != 81 {
 		t.Fatalf("liveQuota = %+v, want the 81%% weekly window", q)
@@ -51,9 +51,9 @@ func TestLiveQuotaNeedsAPlanAndAFreshReading(t *testing.T) {
 	stale := meterStore(t, now.Add(-2*time.Hour), attrs, "claude-usage-meter")
 	for name, cfg := range map[string]config.Config{
 		"no plan":       {Storage: config.StorageConfig{Enabled: true, Path: fresh}},
-		"unknown plan":  {Plans: map[string]string{"anthropic": "claude-ultra"}, Storage: config.StorageConfig{Enabled: true, Path: fresh}},
-		"stale reading": {Plans: map[string]string{"anthropic": "claude-max-20x"}, Storage: config.StorageConfig{Enabled: true, Path: stale}},
-		"no store":      {Plans: map[string]string{"anthropic": "claude-max-20x"}, Storage: config.StorageConfig{Enabled: true, Path: filepath.Join(t.TempDir(), "absent.db")}},
+		"unknown plan":  {Plans: map[string]string{"anthropic": "claude-galaxy"}, Storage: config.StorageConfig{Enabled: true, Path: fresh}},
+		"stale reading": {Plans: map[string]string{"anthropic": "claude-max"}, Storage: config.StorageConfig{Enabled: true, Path: stale}},
+		"no store":      {Plans: map[string]string{"anthropic": "claude-max"}, Storage: config.StorageConfig{Enabled: true, Path: filepath.Join(t.TempDir(), "absent.db")}},
 	} {
 		if q := readPlan(context.Background(), cfg, eventschema.ProviderAnthropic, now).Quota; q != nil {
 			t.Errorf("%s: liveQuota = %+v, want no live window", name, q)
@@ -68,7 +68,7 @@ func TestReadPlanSaysWhyTheReadingIsLost(t *testing.T) {
 	attrs := map[string]string{"five_hour_kind": "session", "five_hour_used_pct": "50.00", "five_hour_reset_at": now.Add(time.Hour).Format(time.RFC3339Nano)}
 	stale := meterStore(t, now.Add(-20*time.Hour-time.Minute), attrs, "claude-usage-meter")
 	empty := meterStore(t, now, map[string]string{"other": "x"}, "claude-code-jsonl")
-	max := map[string]string{"anthropic": "claude-max-20x"}
+	max := map[string]string{"anthropic": "claude-max"}
 
 	r := readPlan(context.Background(), config.Config{Plans: max, Storage: config.StorageConfig{Enabled: true, Path: stale}}, eventschema.ProviderAnthropic, now)
 	if r.Quota != nil || !r.Flat || !strings.Contains(r.Lost, "20h old") || !strings.Contains(r.Lost, "vendor-usage setup claude-subscription") {
@@ -129,7 +129,7 @@ func TestReadPlanForecastsTheRunOut(t *testing.T) {
 		}
 	}
 	_ = s.Close()
-	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}, Storage: config.StorageConfig{Enabled: true, Path: path}}
+	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-max"}, Storage: config.StorageConfig{Enabled: true, Path: path}}
 	q := readPlan(context.Background(), cfg, eventschema.ProviderAnthropic, now).Quota
 	if q == nil || len(q.Burn.Warnings) != 1 || q.Burn.Warnings[0].Window.Label != "5-hour" {
 		t.Fatalf("quota = %+v, want a 5-hour run-out forecast", q)

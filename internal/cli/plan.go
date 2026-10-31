@@ -77,9 +77,9 @@ set after the client started reporting its plan is kept until the client
 reports a different one, so this command is also how you correct it.
 
 Example:
-  tokenops plan set anthropic claude-max-20x
+  tokenops plan set anthropic claude-ultra
   tokenops plan set openai gpt-pro-5x --since 2026-09-01
-  tokenops plan set anthropic claude-max-20x --price 214.60 --currency EUR
+  tokenops plan set anthropic claude-ultra --price 214.60 --currency EUR
 
 --price records what you pay per month as it appears on your bill
 (regional price, tax included); without it, reports use the catalog's
@@ -236,7 +236,7 @@ func newPlanListCmd(rf *rootFlags) *cobra.Command {
 				return writeControlJSON(cmd, bound)
 			}
 			if len(cfg.Plans) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "no plans configured; run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-max-20x`)")
+				fmt.Fprintln(cmd.OutOrStdout(), "no plans configured; run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-ultra`)")
 				return nil
 			}
 			// Sorted for the same reason headroom is: a table whose rows

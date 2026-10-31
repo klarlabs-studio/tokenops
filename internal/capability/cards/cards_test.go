@@ -16,9 +16,9 @@ import (
 func sample() headroom.Glance {
 	balance := 12.5
 	var g headroom.Glance
-	g.Insight.Summary = "Claude Max 20x session budget currently recommends continuing."
+	g.Insight.Summary = "Claude Ultra session budget currently recommends continuing."
 	g.Headroom.Reports = []plans.HeadroomReport{
-		{Provider: "anthropic", Display: "Claude Max 20x", OverageRisk: plans.RiskLow, Windows: []plans.VendorWindow{
+		{Provider: "anthropic", Display: "Claude Ultra", OverageRisk: plans.RiskLow, Windows: []plans.VendorWindow{
 			{Name: "5h", UsedPct: 4, ResetsIn: "4h37m0s", Pace: &plans.WindowPace{Status: plans.PaceBehind, DeltaPct: -3, LastsToReset: true}},
 			{Name: "week (Fable)", UsedPct: 0, ResetsIn: "137h0m0s"}}},
 		{Provider: "openai", Display: "ChatGPT Pro Standard ($100)", OverageRisk: plans.RiskHigh,
@@ -120,7 +120,7 @@ func TestCardContents(t *testing.T) {
 	out := Render(sample(), Options{Width: 130, Costs: costs, Now: time.Date(2026, 10, 4, 9, 30, 0, 0, time.UTC)})
 	for _, want := range []string{
 		"TokenOps • AI Usage & Limits", "Oct",
-		"Codex [local]", "PLAN Pro Standard ($100)", "Claude", "PLAN Max 20x",
+		"Codex [local]", "PLAN Pro Standard ($100)", "Claude", "PLAN Ultra",
 		"Weekly", "9% left", "Resets in 30m", "Pace: ahead (+37%) · out in 23h 47m",
 		"Session", "Pace: behind (-3%) · lasts to reset", "Weekly · Fable", "100% left",
 		"Extra usage", "$41.50 / $100", "Credit left:", "$12.50", "Overage risk:", "HIGH",

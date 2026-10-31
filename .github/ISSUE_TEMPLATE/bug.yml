@@ -68,7 +68,7 @@ body:
       description: Numbered steps from a clean install. The more deterministic, the faster the fix.
       placeholder: |
         1. `tokenops init`
-        2. `tokenops plan set anthropic claude-max-20x`
+        2. `tokenops plan set anthropic claude-ultra`
         3. `tokenops start`
         4. ...
     validations:

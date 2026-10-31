@@ -93,24 +93,24 @@ func planEvents() []*eventschema.Envelope {
 }
 
 func TestPlanDays(t *testing.T) {
-	// The plan moved from Max 5x to Max 20x at the start of 8 October;
-	// "claude-max" is the old alias of Max 20x. A binding the catalog does
-	// not know is not sent.
+	// The plan moved from Max to Ultra at the start of 8 October, recorded
+	// under the names Anthropic later retired: the upload says Max and
+	// Ultra. A binding the catalog does not know is not sent.
 	history := plans.History{
 		{Provider: "anthropic", Plan: "claude-max-5x", From: now.AddDate(0, 0, -30)},
-		{Provider: "anthropic", Plan: "claude-max", From: time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)},
+		{Provider: "anthropic", Plan: "claude-max-20x", From: time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)},
 	}
-	bound := map[string]string{"anthropic": "claude-max", "openai": "a plan of my own"}
+	bound := map[string]string{"anthropic": "claude-max-20x", "openai": "a plan of my own"}
 	got := PlanDays(planEvents(), bound, history, []string{"2026-10-06", "2026-10-07", "2026-10-08"}, now)
 	if len(got) != 2 {
 		t.Fatalf("plan days = %+v", got)
 	}
 	d7, d8 := got[0], got[1]
-	if d7.Day != "2026-10-07" || d7.Plan != "claude-max-5x" || d7.Lockouts != 1 || d7.BlockedMinutes != 120 ||
+	if d7.Day != "2026-10-07" || d7.Plan != "claude-max" || d7.Lockouts != 1 || d7.BlockedMinutes != 120 ||
 		d7.UtilizationPct == nil || *d7.UtilizationPct != 100 || d7.UtilizationWindows != 1 || d7.CoveragePct != nil {
 		t.Errorf("7 October = %+v", d7)
 	}
-	if d8.Day != "2026-10-08" || d8.Plan != "claude-max-20x" || d8.Lockouts != 0 || d8.UtilizationPct != nil ||
+	if d8.Day != "2026-10-08" || d8.Plan != "claude-ultra" || d8.Lockouts != 0 || d8.UtilizationPct != nil ||
 		d8.CoveragePct == nil || *d8.CoveragePct != 75 || d8.PlanTokens != 750 || d8.BilledTokens != 250 {
 		t.Errorf("8 October = %+v", d8)
 	}

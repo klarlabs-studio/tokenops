@@ -139,7 +139,7 @@ func TestLatestAuthoritativeWindow_NoSnapshotReturnsNil(t *testing.T) {
 	reader := authFakeReader{events: []*eventschema.Envelope{
 		env(now, map[string]string{"granularity": "assistant_turn"}), // no quota attr
 	}}
-	p, _ := Lookup("claude-max-20x")
+	p, _ := Lookup("claude-ultra")
 	if a := LatestAuthoritativeWindow(context.Background(), reader, eventschema.ProviderAnthropic, p, now); a != nil {
 		t.Errorf("expected nil when no snapshot present, got %+v", a)
 	}

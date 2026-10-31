@@ -40,6 +40,7 @@ func ReadMutable(path string) (Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return Config{}, fmt.Errorf("parse %s: %w", path, err)
 	}
+	cfg.renamePlans()
 	return cfg, nil
 }
 

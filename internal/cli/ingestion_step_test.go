@@ -182,14 +182,14 @@ func TestValuePerPlanNeedsAPlanCostToCompareWith(t *testing.T) {
 	now := time.Now().UTC()
 	v := &spendView{}
 	v.Summary.APIEquivalentUSD = 0.52
-	fillPlanCost(v, map[string]string{"ratio-test": "claude-max-20x"}, "USD", money.Rate{}, false, now.Add(-time.Minute), now)
+	fillPlanCost(v, map[string]string{"ratio-test": "claude-ultra"}, "USD", money.Rate{}, false, now.Add(-time.Minute), now)
 	if v.PlanCost >= minPlanCostForRatio || v.ValuePerPlanUnit != 0 {
 		t.Errorf("plan cost %.4f, ratio %.1f; want no ratio below one unit", v.PlanCost, v.ValuePerPlanUnit)
 	}
 	v = &spendView{}
 	v.Summary.APIEquivalentUSD = 400
-	fillPlanCost(v, map[string]string{"ratio-test": "claude-max-20x"}, "USD", money.Rate{}, false, now.AddDate(0, 0, -30), now)
+	fillPlanCost(v, map[string]string{"ratio-test": "claude-ultra"}, "USD", money.Rate{}, false, now.AddDate(0, 0, -30), now)
 	if v.ValuePerPlanUnit <= 1 {
-		t.Errorf("a month of Max 20x against $400 of usage: ratio %.1f", v.ValuePerPlanUnit)
+		t.Errorf("a month of Ultra against $400 of usage: ratio %.1f", v.ValuePerPlanUnit)
 	}
 }

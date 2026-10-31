@@ -53,7 +53,7 @@ func TestBurnReadsTheLookbacksFromHistory(t *testing.T) {
 		{"claude-usage-meter", now.Add(-20 * time.Minute), fiveHourAt("50.00", reset)},
 		{"claude-usage-meter", now.Add(-2 * time.Minute), fiveHourAt("60.00", reset)},
 	}}
-	cfg := *cfgWith(map[string]string{"anthropic": "claude-max-20x"})
+	cfg := *cfgWith(map[string]string{"anthropic": "claude-ultra"})
 	cur, v := headroom.Burn(context.Background(), cfg, r, eventschema.ProviderAnthropic, now)
 	if len(cur.Windows) != 1 || !cur.At.Equal(now.Add(-2*time.Minute)) {
 		t.Fatalf("current reading = %+v", cur)
@@ -76,7 +76,7 @@ func TestBurnStaleReading(t *testing.T) {
 		{"claude-usage-meter", now.Add(-90 * time.Minute), fiveHourAt("20.00", reset)},
 		{"claude-usage-meter", now.Add(-25 * time.Minute), fiveHourAt("60.00", reset)},
 	}}
-	cfg := *cfgWith(map[string]string{"anthropic": "claude-max-20x"})
+	cfg := *cfgWith(map[string]string{"anthropic": "claude-ultra"})
 	if _, v := headroom.Burn(context.Background(), cfg, r, eventschema.ProviderAnthropic, now); !v.Stale || len(v.Warnings) != 0 {
 		t.Fatalf("a 25-minute-old reading forecast: %+v", v)
 	}

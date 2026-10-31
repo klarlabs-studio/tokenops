@@ -3,6 +3,7 @@ package plans
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCatalogEntriesHaveProviderAndSource(t *testing.T) {
@@ -66,7 +67,7 @@ func TestProductSurfaceNamesAreNotCanonicalPlans(t *testing.T) {
 		}
 	}
 	if _, ok := Lookup("claude-code-max"); ok {
-		t.Error("ambiguous claude-code-max must require an explicit 5x or 20x plan")
+		t.Error("ambiguous claude-code-max must require an explicit claude-max or claude-ultra")
 	}
 }
 
@@ -75,7 +76,7 @@ func TestValidateRejectsUnknownWithSuggestions(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for typo")
 	}
-	if !strings.Contains(err.Error(), "claude-max-5x") {
+	if !strings.Contains(err.Error(), "claude-ultra") {
 		t.Errorf("error should list valid plans, got: %v", err)
 	}
 }
@@ -86,29 +87,38 @@ func TestValidateAcceptsKnown(t *testing.T) {
 	}
 }
 
-func TestResolveAliasMapsClaudeMax(t *testing.T) {
-	modern, aliased := ResolveAlias("claude-max")
-	if !aliased {
-		t.Fatal("claude-max should resolve to a modern name")
+// Anthropic renamed Max 5x to Max and Max 20x to Ultra on 2026-10-30. The
+// retired names mean the plans they became; "claude-max" is the $100 plan
+// again, no longer the pre-v0.6 alias of Max 20x.
+func TestRetiredAnthropicNamesResolve(t *testing.T) {
+	for old, want := range map[string]string{"claude-max-5x": "claude-max", "claude-max-20x": "claude-ultra"} {
+		if got, aliased := ResolveAlias(old); !aliased || got != want {
+			t.Errorf("ResolveAlias(%q) = %q %v, want %q", old, got, aliased, want)
+		}
+		if p, ok := Lookup(old); !ok || p.Name != want {
+			t.Errorf("Lookup(%q) = %q %v, want %q", old, p.Name, ok, want)
+		}
+		if err := Validate(old); err != nil {
+			t.Errorf("Validate(%q): %v", old, err)
+		}
 	}
-	if modern != "claude-max-20x" {
-		t.Errorf("modern=%q want claude-max-20x", modern)
+	if got, aliased := ResolveAlias("claude-max"); aliased {
+		t.Errorf("claude-max is a catalog plan, not an alias of %q", got)
+	}
+	if p, ok := Lookup("claude-max"); !ok || p.Display != "Claude Max" || p.MonthlyUSD != 100 {
+		t.Errorf("Lookup(claude-max) = %+v %v", p, ok)
 	}
 }
 
-func TestLookupFollowsAlias(t *testing.T) {
-	p, ok := Lookup("claude-max")
-	if !ok {
-		t.Fatal("Lookup must accept deprecated alias")
+// Ultra has no 5-hour limit and ten times Pro's week: its shortest window
+// is the week, and it claims no message count of its own.
+func TestUltraHasNoSessionWindow(t *testing.T) {
+	p, ok := Lookup("claude-ultra")
+	if !ok || !p.NoSessionLimit || p.MessagesPerWindow != 0 || p.RateLimitWindow != 7*24*time.Hour || p.WeeklyMultiplier != 10 {
+		t.Fatalf("claude-ultra = %+v %v", p, ok)
 	}
-	if p.Name != "claude-max-20x" {
-		t.Errorf("aliased lookup returned %q want claude-max-20x", p.Name)
-	}
-}
-
-func TestValidateAcceptsAlias(t *testing.T) {
-	if err := Validate("claude-max"); err != nil {
-		t.Errorf("Validate should accept deprecated alias: %v", err)
+	if m, _ := Lookup("claude-max"); m.MessagesPerWindow != 5*catalog["claude-pro"].MessagesPerWindow {
+		t.Errorf("claude-max allows %d per window, want five times Pro's", m.MessagesPerWindow)
 	}
 }
 

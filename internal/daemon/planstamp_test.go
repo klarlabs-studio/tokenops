@@ -18,7 +18,7 @@ func (c *captureSink) AppendBatch(_ context.Context, envs []*eventschema.Envelop
 }
 
 func TestPlanStampSink(t *testing.T) {
-	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}}
+	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-ultra"}}
 	next := &captureSink{}
 	sink := newPlanStampSink(next, cfg)
 

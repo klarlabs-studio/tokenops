@@ -40,7 +40,7 @@ func TestLiveWindowPicksTheMostConstrained(t *testing.T) {
 		"five_hour_kind": "session", "five_hour_used_pct": "12.00", "five_hour_reset_at": now.Add(2 * time.Hour).Format(time.RFC3339Nano),
 		"seven_day_kind": "weekly_all", "seven_day_used_pct": "81.00", "seven_day_reset_at": now.Add(48 * time.Hour).Format(time.RFC3339Nano),
 	}}
-	w, ok := headroom.LiveWindow(context.Background(), *cfgWith(map[string]string{"anthropic": "claude-max-20x"}), r, eventschema.ProviderAnthropic, now)
+	w, ok := headroom.LiveWindow(context.Background(), *cfgWith(map[string]string{"anthropic": "claude-ultra"}), r, eventschema.ProviderAnthropic, now)
 	if !ok || w.Label != "weekly" || w.UsedPct != 81 {
 		t.Fatalf("LiveWindow = %+v, %v; want the 81%% weekly window", w, ok)
 	}
@@ -57,7 +57,7 @@ func TestLiveWindowFromTheStatusLineAlone(t *testing.T) {
 		"five_hour_used_pct": "64.00", "five_hour_reset_at": now.Add(time.Hour).Format(time.RFC3339),
 		"granularity": "quota_snapshot",
 	}}
-	w, ok := headroom.LiveWindow(context.Background(), *cfgWith(map[string]string{"anthropic": "claude-max-20x"}), r, eventschema.ProviderAnthropic, now)
+	w, ok := headroom.LiveWindow(context.Background(), *cfgWith(map[string]string{"anthropic": "claude-ultra"}), r, eventschema.ProviderAnthropic, now)
 	if !ok || w.Label != "5-hour" || w.UsedPct != 64 {
 		t.Fatalf("LiveWindow = %+v, %v; want the status line's 64%% 5-hour window", w, ok)
 	}
@@ -66,14 +66,14 @@ func TestLiveWindowFromTheStatusLineAlone(t *testing.T) {
 func TestLiveWindowFallsBack(t *testing.T) {
 	now := time.Now()
 	attrs := map[string]string{"five_hour_kind": "session", "five_hour_used_pct": "50.00", "five_hour_reset_at": now.Add(time.Hour).Format(time.RFC3339Nano)}
-	bound := *cfgWith(map[string]string{"anthropic": "claude-max-20x"})
+	bound := *cfgWith(map[string]string{"anthropic": "claude-ultra"})
 	for name, tc := range map[string]struct {
 		plans    map[string]string
 		r        headroom.AttributeReader
 		provider eventschema.Provider
 	}{
 		"no plan":         {nil, &fakeAttrs{attrs: attrs, at: now}, eventschema.ProviderAnthropic},
-		"unknown plan":    {map[string]string{"anthropic": "claude-ultra"}, &fakeAttrs{attrs: attrs, at: now}, eventschema.ProviderAnthropic},
+		"unknown plan":    {map[string]string{"anthropic": "claude-galaxy"}, &fakeAttrs{attrs: attrs, at: now}, eventschema.ProviderAnthropic},
 		"stale reading":   {bound.Plans, &fakeAttrs{attrs: attrs, at: now.Add(-2 * time.Hour)}, eventschema.ProviderAnthropic},
 		"read error":      {bound.Plans, &fakeAttrs{err: errors.New("busy")}, eventschema.ProviderAnthropic},
 		"no reader":       {bound.Plans, nil, eventschema.ProviderAnthropic},

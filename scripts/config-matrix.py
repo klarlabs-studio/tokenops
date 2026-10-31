@@ -157,7 +157,7 @@ def profiles():
     P["minimal-passive"] = (lambda r: {}, {"mcp": True})
     P["active-budgets-watch"] = (lambda r: {
         "mode": "active",
-        "plans": {"anthropic": "claude-max-20x", "openai": "gpt-plus"},
+        "plans": {"anthropic": "claude-ultra", "openai": "gpt-plus"},
         "preferred_models": {"anthropic": "claude-opus-5"},
         "budgets": [{"name": "weekly-usd", "window": "weekly", "limit_usd": 50, "warn_at": 0.5, "crit_at": 0.9},
                     {"name": "daily-tokens", "window": "daily", "basis": "tokens", "limit_tokens": 1000000}],
@@ -219,7 +219,7 @@ def profiles():
     P["coach-context-autonomous"] = (lambda r: {"coach": {"autonomy": "advise", "powers": {"context": "autonomous"}},
                                                 "coaching": {"context_limits": [{"workflow_prefix": "claude-code:",
                                                                                  "compact_at_tokens": 500000}]}}, {"mcp": True})
-    P["plan-limits"] = (lambda r: {"plans": {"anthropic": "claude-max-20x"},
+    P["plan-limits"] = (lambda r: {"plans": {"anthropic": "claude-ultra"},
                                    "plan_limits": {"anthropic": {"spend_limit_usd": 200, "window": "monthly"}}}, {})
     # Invalid configs must be refused at startup with a clear message.
     bad = {

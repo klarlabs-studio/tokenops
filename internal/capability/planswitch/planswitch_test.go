@@ -78,7 +78,7 @@ func TestFutureStartIsRefused(t *testing.T) {
 // A mid-month switch prices each part at its own plan.
 func TestCostProratesAcrossASwitch(t *testing.T) {
 	h := plans.History(plans.History(nil).Switch("openai", "gpt-plus", "gpt-pro-5x", day(16), day(16)))
-	costs := Cost(h, map[string]string{"openai": "gpt-pro-5x", "anthropic": "claude-max-20x"}, day(1), day(31), FX{})
+	costs := Cost(h, map[string]string{"openai": "gpt-pro-5x", "anthropic": "claude-ultra"}, day(1), day(31), FX{})
 	if len(costs) != 2 {
 		t.Fatalf("costs = %+v", costs)
 	}
@@ -110,13 +110,13 @@ func TestCostFlagsUnpricedPlans(t *testing.T) {
 func TestCostUsesTheOperatorsPriceAndCurrency(t *testing.T) {
 	h := &memHistory{}
 	if _, err := Record(context.Background(), h, nil, Change{
-		Provider: "anthropic", Plan: "claude-max-20x", From: day(1), Now: day(1), Price: 214.60, Currency: "eur",
+		Provider: "anthropic", Plan: "claude-ultra", From: day(1), Now: day(1), Price: 214.60, Currency: "eur",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	perDay := func(m float64) float64 { return m / (365.2425 / 12) }
 	fx := FX{Currency: "EUR", PerUSD: 0.85}
-	costs := Cost(h.h, map[string]string{"anthropic": "claude-max-20x", "openai": "gpt-plus"}, day(1), day(11), fx)
+	costs := Cost(h.h, map[string]string{"anthropic": "claude-ultra", "openai": "gpt-plus"}, day(1), day(11), fx)
 	anthropic, openai := costs[0], costs[1]
 	if p := anthropic.Periods[0]; p.Source != "yours" || math.Abs(p.Amount-10*perDay(214.60)) > 0.01 {
 		t.Errorf("anthropic = %+v", p)
@@ -125,7 +125,7 @@ func TestCostUsesTheOperatorsPriceAndCurrency(t *testing.T) {
 		t.Errorf("openai = %+v", p)
 	}
 	// Shown in USD with no rate, the EUR price cannot be converted.
-	usd := Cost(h.h, map[string]string{"anthropic": "claude-max-20x"}, day(1), day(11), FX{})
+	usd := Cost(h.h, map[string]string{"anthropic": "claude-ultra"}, day(1), day(11), FX{})
 	if usd[0].Complete || usd[0].Periods[0].Priced {
 		t.Errorf("converted EUR without a rate: %+v", usd[0])
 	}
@@ -169,10 +169,10 @@ func TestCorrectSpendCoverageWithoutHistory(t *testing.T) {
 }
 
 func TestCorrectSpendCoverageOnlyTouchesTheSpendPlansStretch(t *testing.T) {
-	// Max 20x until the 10th, Enterprise since: only the Enterprise
+	// Ultra until the 10th, Enterprise since: only the Enterprise
 	// stretch is re-marked; usage under Max stays covered.
 	h := plans.History{
-		{Provider: "anthropic", Plan: "claude-max-20x"},
+		{Provider: "anthropic", Plan: "claude-ultra"},
 		{Provider: "anthropic", Plan: "claude-enterprise", From: day(10)},
 	}
 	r := &rangeRestamper{}

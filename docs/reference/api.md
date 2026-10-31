@@ -135,7 +135,7 @@ The write routes are guarded more tightly than the reads:
 
 ```bash
 curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"provider":"anthropic","plan":"claude-max-20x"}' http://127.0.0.1:7878/api/plans
+  -d '{"provider":"anthropic","plan":"claude-ultra"}' http://127.0.0.1:7878/api/plans
 ```
 
 Connecting a vendor's login (`tokenops vendor-usage setup`) is not on

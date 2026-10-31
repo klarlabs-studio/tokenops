@@ -18,7 +18,7 @@ import (
 // where the window stood; review_work measures what the task took and sets
 // it against the estimate.
 func TestPrepareAndReviewWorkCarryTheWindowShare(t *testing.T) {
-	d := tightWindowDeps(t) // anthropic on claude-max-20x, meter at 95%
+	d := tightWindowDeps(t) // anthropic on claude-max, meter at 95%
 	srv := NewServer("tokenops", "test", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err := RegisterRoutingAdviceTools(srv, d); err != nil {
 		t.Fatal(err)

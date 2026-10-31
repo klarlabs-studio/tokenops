@@ -49,31 +49,31 @@ func lastSwitch(t *testing.T, provider string) (plan string, from time.Time) {
 	return plan, from
 }
 
-// The operator moved from Max 20x to Max 5x; Claude Code says so. TokenOps
+// The operator moved from Ultra to Max; Claude Code says so. TokenOps
 // follows it at once, records the switch with its evidence in the history
 // and the audit log, and tells the operator how to undo it.
 func TestFollowRebindsToTheReportedPlan(t *testing.T) {
-	path := sandbox(t, "plans:\n  anthropic: claude-max-20x\n")
+	path := sandbox(t, "plans:\n  anthropic: claude-ultra\n")
 	store := followStore(t)
 	now := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
-	got, err := FollowClientPlans(context.Background(), path, claudeReports("claude-max-5x", "default_claude_max_5x"), store, now)
+	got, err := FollowClientPlans(context.Background(), path, claudeReports("claude-max", "default_claude_max_5x"), store, now)
 	if err != nil || len(got.Followed) != 1 || len(got.Kept) != 0 {
 		t.Fatalf("follow = %+v, %v", got, err)
 	}
 	f := got.Followed[0]
-	if f.Previous != "claude-max-20x" || f.Plan != "claude-max-5x" || !f.Since.Equal(now) {
+	if f.Previous != "claude-ultra" || f.Plan != "claude-max" || !f.Since.Equal(now) {
 		t.Errorf("followed = %+v", f)
 	}
 	note := f.Note()
-	for _, want := range []string{"claude-max-5x", "Claude Code", "default_claude_max_5x", "`tokenops plan set anthropic claude-max-20x`"} {
+	for _, want := range []string{"claude-max", "Claude Code", "default_claude_max_5x", "`tokenops plan set anthropic claude-ultra`"} {
 		if !strings.Contains(note, want) {
 			t.Errorf("note %q lacks %q", note, want)
 		}
 	}
-	if reload(t, path).Plans["anthropic"] != "claude-max-5x" {
+	if reload(t, path).Plans["anthropic"] != "claude-max" {
 		t.Error("binding not written")
 	}
-	if plan, from := lastSwitch(t, "anthropic"); plan != "claude-max-5x" || !from.Equal(now) {
+	if plan, from := lastSwitch(t, "anthropic"); plan != "claude-max" || !from.Equal(now) {
 		t.Errorf("history ends on %s from %s", plan, from)
 	}
 	entries, err := audit.NewRecorder(store).Query(context.Background(), audit.Filter{Action: audit.ActionPlanChange})
@@ -81,13 +81,13 @@ func TestFollowRebindsToTheReportedPlan(t *testing.T) {
 		t.Fatalf("audit = %+v, %v", entries, err)
 	}
 	evidence, _ := entries[0].Details["evidence"].(map[string]any)
-	if entries[0].Actor != "claude_code" || entries[0].Details["previous"] != "claude-max-20x" ||
+	if entries[0].Actor != "claude_code" || entries[0].Details["previous"] != "claude-ultra" ||
 		evidence["rate_limit_tier"] != "default_claude_max_5x" || evidence["account_type"] != "claude_max" {
 		t.Errorf("audit entry = %+v", entries[0])
 	}
 
 	// Said once: the same report again changes nothing.
-	again, err := FollowClientPlans(context.Background(), path, claudeReports("claude-max-5x", "default_claude_max_5x"), store, now.Add(time.Hour))
+	again, err := FollowClientPlans(context.Background(), path, claudeReports("claude-max", "default_claude_max_5x"), store, now.Add(time.Hour))
 	if err != nil || len(again.Followed) != 0 || len(again.Kept) != 0 {
 		t.Errorf("second pass = %+v, %v", again, err)
 	}
@@ -96,21 +96,21 @@ func TestFollowRebindsToTheReportedPlan(t *testing.T) {
 // The switch takes effect from when the client first reported the plan,
 // not from when TokenOps got round to applying it, and no earlier.
 func TestFollowTakesEffectFromTheFirstReport(t *testing.T) {
-	path := sandbox(t, "plans:\n  anthropic: claude-max-20x\n")
+	path := sandbox(t, "plans:\n  anthropic: claude-ultra\n")
 	first := time.Date(2026, 10, 12, 8, 0, 0, 0, time.UTC)
 	reports, err := planhistory.DefaultReports()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := reports.Save(map[string]planhistory.Report{"anthropic": {Plan: "claude-max-5x", Client: "claude_code", FirstSeen: first}}); err != nil {
+	if err := reports.Save(map[string]planhistory.Report{"anthropic": {Plan: "claude-max", Client: "claude_code", FirstSeen: first}}); err != nil {
 		t.Fatal(err)
 	}
 	now := first.Add(48 * time.Hour)
-	got, err := FollowClientPlans(context.Background(), path, claudeReports("claude-max-5x", "default_claude_max_5x"), followStore(t), now)
+	got, err := FollowClientPlans(context.Background(), path, claudeReports("claude-max", "default_claude_max_5x"), followStore(t), now)
 	if err != nil || len(got.Followed) != 1 || !got.Followed[0].Since.Equal(first) {
 		t.Fatalf("follow = %+v, %v", got, err)
 	}
-	if plan, from := lastSwitch(t, "anthropic"); plan != "claude-max-5x" || !from.Equal(first) {
+	if plan, from := lastSwitch(t, "anthropic"); plan != "claude-max" || !from.Equal(first) {
 		t.Errorf("history ends on %s from %s", plan, from)
 	}
 }
@@ -118,21 +118,21 @@ func TestFollowTakesEffectFromTheFirstReport(t *testing.T) {
 // The operator corrects TokenOps after the client's report: their choice
 // stands until the client reports a different plan again.
 func TestFollowKeepsTheOperatorsLaterChoice(t *testing.T) {
-	path := sandbox(t, "plans:\n  anthropic: claude-max-20x\n")
+	path := sandbox(t, "plans:\n  anthropic: claude-ultra\n")
 	store := followStore(t)
 	ctx := context.Background()
 	t0 := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
-	if _, err := FollowClientPlans(ctx, path, claudeReports("claude-max-5x", "default_claude_max_5x"), store, t0); err != nil {
+	if _, err := FollowClientPlans(ctx, path, claudeReports("claude-max", "default_claude_max_5x"), store, t0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SetPlan(ctx, path, PlanRequest{Provider: "anthropic", Plan: "claude-max-20x", Actor: "cli", Store: store}, t0.Add(time.Hour)); err != nil {
+	if _, err := SetPlan(ctx, path, PlanRequest{Provider: "anthropic", Plan: "claude-ultra", Actor: "cli", Store: store}, t0.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	kept, err := FollowClientPlans(ctx, path, claudeReports("claude-max-5x", "default_claude_max_5x"), store, t0.Add(2*time.Hour))
-	if err != nil || len(kept.Followed) != 0 || len(kept.Kept) != 1 || kept.Kept[0].Plan != "claude-max-20x" {
+	kept, err := FollowClientPlans(ctx, path, claudeReports("claude-max", "default_claude_max_5x"), store, t0.Add(2*time.Hour))
+	if err != nil || len(kept.Followed) != 0 || len(kept.Kept) != 1 || kept.Kept[0].Plan != "claude-ultra" {
 		t.Fatalf("follow after the operator's choice = %+v, %v", kept, err)
 	}
-	if reload(t, path).Plans["anthropic"] != "claude-max-20x" {
+	if reload(t, path).Plans["anthropic"] != "claude-ultra" {
 		t.Fatal("the operator's choice was overwritten")
 	}
 	// The client now reports another plan: that is news, and is followed.
@@ -149,17 +149,17 @@ func TestFollowKeepsTheOperatorsLaterChoice(t *testing.T) {
 // unknown plan_type) changes nothing, and does not reset when the last
 // clear report started.
 func TestFollowIgnoresAmbiguousReports(t *testing.T) {
-	path := sandbox(t, "plans:\n  anthropic: claude-max-20x\n  openai: gpt-plus\n")
+	path := sandbox(t, "plans:\n  anthropic: claude-ultra\n  openai: gpt-plus\n")
 	now := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
 	got, err := FollowClientPlans(context.Background(), path, []planevidence.Evidence{
-		{Provider: "anthropic", From: "Claude Code", Client: "claude_code", Candidates: []string{"claude-max-5x", "claude-max-20x"}},
+		{Provider: "anthropic", From: "Claude Code", Client: "claude_code", Candidates: []string{"claude-max", "claude-ultra"}},
 		{Provider: "openai", From: "Codex", Client: "codex", Detail: "plan_type galaxy"},
 	}, followStore(t), now)
 	if err != nil || len(got.Followed) != 0 || len(got.Kept) != 0 {
 		t.Fatalf("follow = %+v, %v", got, err)
 	}
 	cfg := reload(t, path)
-	if cfg.Plans["anthropic"] != "claude-max-20x" || cfg.Plans["openai"] != "gpt-plus" {
+	if cfg.Plans["anthropic"] != "claude-ultra" || cfg.Plans["openai"] != "gpt-plus" {
 		t.Errorf("plans = %v", cfg.Plans)
 	}
 	reports, _ := planhistory.DefaultReports()
@@ -172,7 +172,7 @@ func TestFollowIgnoresAmbiguousReports(t *testing.T) {
 func TestFollowBindsAnUnboundProvider(t *testing.T) {
 	path := sandbox(t, "listen: 127.0.0.1:7878\n")
 	now := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
-	got, err := FollowClientPlans(context.Background(), path, claudeReports("claude-max-5x", "default_claude_max_5x"), followStore(t), now)
+	got, err := FollowClientPlans(context.Background(), path, claudeReports("claude-max", "default_claude_max_5x"), followStore(t), now)
 	if err != nil || len(got.Followed) != 1 || got.Followed[0].Previous != "" {
 		t.Fatalf("follow = %+v, %v", got, err)
 	}
@@ -184,21 +184,21 @@ func TestFollowBindsAnUnboundProvider(t *testing.T) {
 // The glance says what TokenOps followed for a week, while it is still
 // the binding; an operator's correction ends it at once.
 func TestRecentPlanFollowsAreNotedForAWeek(t *testing.T) {
-	path := sandbox(t, "plans:\n  anthropic: claude-max-20x\n")
+	path := sandbox(t, "plans:\n  anthropic: claude-ultra\n")
 	now := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
-	if _, err := FollowClientPlans(context.Background(), path, claudeReports("claude-max-5x", "default_claude_max_5x"), followStore(t), now); err != nil {
+	if _, err := FollowClientPlans(context.Background(), path, claudeReports("claude-max", "default_claude_max_5x"), followStore(t), now); err != nil {
 		t.Fatal(err)
 	}
-	bound := map[string]string{"anthropic": "claude-max-5x"}
+	bound := map[string]string{"anthropic": "claude-max"}
 	notes := RecentPlanFollows(bound, now.Add(24*time.Hour))
 	if len(notes) != 1 || !strings.Contains(notes[0], "Claude Code") ||
-		!strings.Contains(notes[0], "`tokenops plan set anthropic claude-max-20x`") {
+		!strings.Contains(notes[0], "`tokenops plan set anthropic claude-ultra`") {
 		t.Fatalf("notes = %q", notes)
 	}
 	if got := RecentPlanFollows(bound, now.Add(8*24*time.Hour)); len(got) != 0 {
 		t.Errorf("a week later still noted: %q", got)
 	}
-	if got := RecentPlanFollows(map[string]string{"anthropic": "claude-max-20x"}, now.Add(time.Hour)); len(got) != 0 {
+	if got := RecentPlanFollows(map[string]string{"anthropic": "claude-ultra"}, now.Add(time.Hour)); len(got) != 0 {
 		t.Errorf("noted after the operator's correction: %q", got)
 	}
 }

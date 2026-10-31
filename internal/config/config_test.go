@@ -230,7 +230,7 @@ func TestNextActionsEmptyWhenNoBlockers(t *testing.T) {
 
 func TestValidateAcceptsKnownPlan(t *testing.T) {
 	cfg := Default()
-	cfg.Plans = map[string]string{"anthropic": "claude-max-20x"}
+	cfg.Plans = map[string]string{"anthropic": "claude-ultra"}
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("Validate rejected known plan: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestValidateRejectsUnknownPlan(t *testing.T) {
 	if !strings.Contains(err.Error(), "plans[anthropic]") {
 		t.Errorf("error should name the offending provider key: %v", err)
 	}
-	if !strings.Contains(err.Error(), "claude-max-5x") {
+	if !strings.Contains(err.Error(), "claude-max") {
 		t.Errorf("error should suggest valid plans: %v", err)
 	}
 }

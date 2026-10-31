@@ -51,7 +51,7 @@ func TestPlanSetStoresTheSpendLimit(t *testing.T) {
 func TestPlanSetLeavesWindowedPlansAlone(t *testing.T) {
 	path := seedConfig(t)
 	cmd := withConfigFlag(newPlanSetCmd())
-	cmd.SetArgs([]string{"anthropic", "claude-max-20x", "--no-restart", "--config", path})
+	cmd.SetArgs([]string{"anthropic", "claude-ultra", "--no-restart", "--config", path})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("set: %v", err)
 	}

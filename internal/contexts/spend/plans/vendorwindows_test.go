@@ -39,7 +39,7 @@ func TestVendorWindowsPerVendor(t *testing.T) {
 // A weekly window near its limit is the risk, however empty the 5-hour
 // window is.
 func TestBusiestVendorWindowSetsTheRisk(t *testing.T) {
-	p, _ := Lookup("claude-max-20x")
+	p, _ := Lookup("claude-ultra")
 	report := computeHeadroomFor(p, HeadroomInputs{
 		Now:           time.Now(),
 		VendorWindows: []VendorWindow{{Name: "week", UsedPct: 85}, {Name: "5h", UsedPct: 3}},
@@ -52,7 +52,7 @@ func TestBusiestVendorWindowSetsTheRisk(t *testing.T) {
 // The session budget follows the busiest window the vendor reports.
 func TestSessionBudgetFromVendorWindows(t *testing.T) {
 	now := time.Now().UTC()
-	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
+	out, err := ComputeSessionBudget("claude-ultra", SessionBudgetInputs{
 		Now: now,
 		VendorWindows: []VendorWindow{
 			{Name: "week", UsedPct: 87, Duration: 7 * 24 * time.Hour, ResetsAt: now.Add(48 * time.Hour)},

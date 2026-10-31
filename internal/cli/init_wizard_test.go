@@ -52,7 +52,7 @@ func TestWizardAsksWhatTheEvidenceLeftOpen(t *testing.T) {
 		t.Errorf("questions:\n%s", out)
 	}
 	cfg, err := config.ReadMutable(cfgPath)
-	if err != nil || cfg.Plans["anthropic"] != "claude-max-20x" {
+	if err != nil || cfg.Plans["anthropic"] != "claude-ultra" {
 		t.Fatalf("plans %v, %v", cfg.Plans, err)
 	}
 	file, _ := planhistory.Default()
@@ -62,7 +62,7 @@ func TestWizardAsksWhatTheEvidenceLeftOpen(t *testing.T) {
 	}
 	priced := false
 	for _, b := range h {
-		if b.Plan == "claude-max-20x" && b.Price == 214.6 && b.Currency == "EUR" {
+		if b.Plan == "claude-ultra" && b.Price == 214.6 && b.Currency == "EUR" {
 			priced = true
 		}
 	}
