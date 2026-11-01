@@ -136,7 +136,9 @@ type Report struct {
 	// Achieved is the cost per achieved outcome: the work on every
 	// judged execution, including those that were not achieved, over
 	// the achieved ones.
-	Achieved    Unit        `json:"achieved_outcomes"`
+	Achieved Unit `json:"achieved_outcomes"`
+	// Failures is the period's work that did not stand.
+	Failures    Failures    `json:"failures"`
 	Classes     []ClassCost `json:"classes"`
 	ClassMethod string      `json:"class_method"`
 	// Calibrations are the plan-window sizes the shares are measured
@@ -207,6 +209,7 @@ func Build(in Inputs) Report {
 	r.Commits, classes = in.commitUnit(current, total)
 	r.PRs = in.prUnit(total)
 	r.Outcomes, r.Achieved = in.outcomeUnits(total)
+	r.Failures = in.failures(current, total)
 	for _, c := range taskclass.ChangeClasses() {
 		if cc := classes[c]; cc != nil {
 			cc.Current.finish()

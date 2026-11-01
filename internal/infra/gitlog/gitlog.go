@@ -6,6 +6,7 @@ package gitlog
 import (
 	"context"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,7 +19,14 @@ type Commit struct {
 	At      time.Time
 	Subject string
 	Branch  string
+	// Reverts is the commit this one undoes, as its body names it
+	// ("This reverts commit <sha>."), full or abbreviated; empty for a
+	// commit that is not a revert.
+	Reverts string
 }
+
+// revertedSHA reads the commit a revert's body names.
+var revertedSHA = regexp.MustCompile(`This reverts commit ([0-9a-f]{7,40})`)
 
 // Repos resolves directories to repository roots and lists commits,
 // caching both: a month of sessions names the same few repositories many
@@ -88,13 +96,14 @@ func (r *Repos) Commits(ctx context.Context, root string, since time.Time) ([]Co
 		// (feat/x) is told from a remote copy (origin/feat/x) by where it
 		// lives rather than by the shape of its name.
 		"--decorate-refs=refs/heads/",
-		"--format=%H%x1f%at%x1f%s%x1f%D")
+		// The body can span lines, so records end in a record separator.
+		"--format=%H%x1f%at%x1f%s%x1f%D%x1f%b%x1e")
 	if err != nil {
 		return nil, err
 	}
 	var commits []Commit
-	for _, line := range strings.Split(out, "\n") {
-		parts := strings.SplitN(line, "\x1f", 4)
+	for _, record := range strings.Split(out, "\x1e") {
+		parts := strings.SplitN(strings.TrimLeft(record, "\n"), "\x1f", 5)
 		if len(parts) < 3 {
 			continue
 		}
@@ -103,8 +112,13 @@ func (r *Repos) Commits(ctx context.Context, root string, since time.Time) ([]Co
 			continue
 		}
 		c := Commit{SHA: parts[0], At: time.Unix(at, 0).UTC(), Subject: parts[2]}
-		if len(parts) == 4 {
+		if len(parts) >= 4 {
 			c.Branch = branchOf(parts[3])
+		}
+		if len(parts) == 5 {
+			if m := revertedSHA.FindStringSubmatch(parts[4]); m != nil {
+				c.Reverts = m[1]
+			}
 		}
 		commits = append(commits, c)
 	}

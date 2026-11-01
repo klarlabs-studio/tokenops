@@ -10,6 +10,7 @@ import (
 	"context"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
@@ -62,6 +63,34 @@ type CommitCost struct {
 	Sessions int `json:"sessions"`
 	// WorkMinutes is from the first turn to the commit.
 	WorkMinutes float64 `json:"work_minutes"`
+	// Reverted is set when a later commit of the operator's reverted
+	// this one within RevertWindow: the work did not stand.
+	Reverted bool `json:"reverted,omitempty"`
+}
+
+// RevertWindow is how soon after a commit a revert of it counts as the
+// commit not standing. A revert much later undoes a change that stood for
+// a while, for reasons the work that led to it may not explain.
+const RevertWindow = 14 * 24 * time.Hour
+
+// Reverted is the commits in commitsOf that a revert within RevertWindow
+// undid, by repository root and full SHA. A revert names the commit in
+// full or abbreviated.
+func Reverted(commitsOf map[string][]gitlog.Commit) map[[2]string]bool {
+	out := map[[2]string]bool{}
+	for root, cs := range commitsOf {
+		for _, r := range cs {
+			if r.Reverts == "" {
+				continue
+			}
+			for _, c := range cs {
+				if strings.HasPrefix(c.SHA, r.Reverts) && !r.At.Before(c.At) && r.At.Sub(c.At) <= RevertWindow {
+					out[[2]string{root, c.SHA}] = true
+				}
+			}
+		}
+	}
+	return out
 }
 
 // Report is the cost of each commit in a window, and of the work that
@@ -215,6 +244,7 @@ func Attribute(since time.Time, turns []analytics.SessionTurn, dirs map[string]s
 	rootOf map[string]string, commitsOf map[string][]gitlog.Commit) Report {
 	r := Report{Since: since, Method: Method, Commits: []CommitCost{}}
 	type key struct{ root, sha string }
+	undone := Reverted(commitsOf)
 	byCommit := map[key]*CommitCost{}
 	sessions := map[key]map[string]bool{}
 	first := map[key]time.Time{}
@@ -240,7 +270,8 @@ func Attribute(since time.Time, turns []analytics.SessionTurn, dirs map[string]s
 		k := key{root, c.SHA}
 		cc := byCommit[k]
 		if cc == nil {
-			cc = &CommitCost{Repo: filepath.Base(root), Root: root, SHA: c.SHA[:min(12, len(c.SHA))], At: c.At, Subject: c.Subject, Branch: c.Branch}
+			cc = &CommitCost{Repo: filepath.Base(root), Root: root, SHA: c.SHA[:min(12, len(c.SHA))], At: c.At, Subject: c.Subject, Branch: c.Branch,
+				Reverted: undone[[2]string{root, c.SHA}]}
 			byCommit[k] = cc
 			sessions[k] = map[string]bool{}
 			first[k] = t.At

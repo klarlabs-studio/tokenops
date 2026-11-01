@@ -349,3 +349,32 @@ func TestOwnerName(t *testing.T) {
 		}
 	}
 }
+
+// A revert names the commit it undoes in its body, as git revert writes
+// it: "This reverts commit <sha>."
+func TestCommitsNameTheCommitARevertUndoes(t *testing.T) {
+	isolateGit(t)
+	const me = "me@example.com"
+	since := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	repo := newRepo(t, me)
+	commit(t, repo, me, "feat: a thing", since.Add(time.Hour))
+	sha := run(t, repo, nil, "rev-parse", "HEAD")
+	stamp := strconv.FormatInt(since.Add(2*time.Hour).Unix(), 10) + " +0000"
+	run(t, repo, []string{"GIT_AUTHOR_DATE=" + stamp, "GIT_COMMITTER_DATE=" + stamp},
+		"commit", "-q", "--allow-empty", "--no-verify", "-m", `Revert "feat: a thing"`, "-m", "This reverts commit "+sha+".\n\nIt broke the build.")
+	commit(t, repo, me, "fix: another", since.Add(3*time.Hour))
+
+	got, err := NewRepos().Commits(context.Background(), repo, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("commits = %q", subjects(got))
+	}
+	if got[0].Reverts != "" || got[2].Reverts != "" {
+		t.Errorf("a plain commit names a revert: %+v", got)
+	}
+	if got[1].Reverts != sha || got[1].Subject != `Revert "feat: a thing"` {
+		t.Errorf("revert = %+v, want it to name %s", got[1], sha)
+	}
+}

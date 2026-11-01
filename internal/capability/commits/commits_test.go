@@ -107,3 +107,26 @@ func TestNewest(t *testing.T) {
 		t.Error("Newest(0) trimmed")
 	}
 }
+
+// A commit undone by a revert within RevertWindow is marked reverted; one
+// reverted later, or not at all, is not.
+func TestAttributeMarksRevertedCommits(t *testing.T) {
+	dirs := map[string]sessiondirs.Dir{"a": {CWD: "/w/app"}}
+	rootOf := map[string]string{"/w/app": "/w/app"}
+	commitsOf := map[string][]gitlog.Commit{"/w/app": {
+		{SHA: "1111111111111111", At: t0.Add(time.Hour), Subject: "feat: undone"},
+		{SHA: "2222222222222222", At: t0.Add(2 * time.Hour), Subject: "feat: kept"},
+		{SHA: "3333333333333333", At: t0.Add(3 * time.Hour), Subject: "feat: undone too late"},
+		{SHA: "4444444444444444", At: t0.Add(5 * time.Hour), Subject: `Revert "feat: undone"`, Reverts: "1111111"},
+		{SHA: "5555555555555555", At: t0.Add(3*time.Hour + RevertWindow + time.Hour), Subject: `Revert "feat: undone too late"`, Reverts: "3333333333333333"},
+	}}
+	turns := []analytics.SessionTurn{turn("a", 0, 1), turn("a", 90*time.Minute, 2), turn("a", 150*time.Minute, 4)}
+	r := Attribute(t0, turns, dirs, rootOf, commitsOf)
+	reverted := map[string]bool{}
+	for _, c := range r.Commits {
+		reverted[c.Subject] = c.Reverted
+	}
+	if !reverted["feat: undone"] || reverted["feat: kept"] || reverted["feat: undone too late"] {
+		t.Errorf("reverted = %v", reverted)
+	}
+}
