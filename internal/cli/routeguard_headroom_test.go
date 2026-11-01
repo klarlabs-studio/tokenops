@@ -63,7 +63,8 @@ func TestRouteGuardInjectsTheHeadroomNoteOncePerStep(t *testing.T) {
 	if h.HookEventName != "UserPromptSubmit" {
 		t.Errorf("event = %q, want UserPromptSubmit", h.HookEventName)
 	}
-	if !strings.HasPrefix(h.AdditionalContext, "Plan headroom: 5h window 38% left (resets ") || !strings.Contains(h.AdditionalContext, "week 61% left") {
+	// The fixture's 5h window runs out before it resets, so the note says when.
+	if !strings.HasPrefix(h.AdditionalContext, "Plan headroom: 5h window 38% left (runs out ~") || !strings.Contains(h.AdditionalContext, "resets ") || !strings.Contains(h.AdditionalContext, "week 61% left") {
 		t.Errorf("context = %q, want the 5h and week windows", h.AdditionalContext)
 	}
 	if again := runSessionPromptHook(t, dir, "hn-1"); again != "" {
