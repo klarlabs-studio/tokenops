@@ -6,6 +6,7 @@
 
 - **units:** `tokenops spend units` says how much of the period went on work that did not stand: work on a commit a revert of yours undid within 14 days, read from the "This reverts commit <sha>" line git revert writes, and work under an execution recorded as not achieved. Each commit in `tokenops spend --by commit --json` says whether it was reverted. A revert someone else made, or one written without that line, is not seen.
 - **spend:** `tokenops spend --by subagent` splits spend between the sessions' own turns and their subagents, by subagent type, and `--by session` ranks the sessions themselves, subagents included. The MCP tool's `by` takes both too. Calls a client makes on its own behalf without writing them to its transcripts cannot be counted, and the reference says so.
+- **coach:** the coach's own subagent moves are now measured against a randomized holdout. With `coach.models: autonomous`, the same share the coach holdout sets (10% by default, `tokenops coach holdout`) of the moves it would make is held back: the subagent runs on the model the agent asked for, and the move it would have been is recorded. Each kind of move is judged against those held-back runs once 8 have settled, rather than against whatever unmoved work happened nearby, which a study of replayed coding-agent runs found cannot tell what a different model would have done. A kind that does worse than its holdout is retracted as before, and `tokenops explain moves` says which comparison each verdict rests on.
 
 ### Fixed
 

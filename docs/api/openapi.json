@@ -940,6 +940,9 @@
                               "moves": {
                                 "type": "integer"
                               },
+                              "randomized": {
+                                "type": "boolean"
+                              },
                               "rate": {
                                 "type": "number"
                               },
@@ -1068,6 +1071,9 @@
                                   },
                                   "moves": {
                                     "type": "integer"
+                                  },
+                                  "randomized": {
+                                    "type": "boolean"
                                   },
                                   "rate": {
                                     "type": "number"
@@ -1615,6 +1621,9 @@
                               "moves": {
                                 "type": "integer"
                               },
+                              "randomized": {
+                                "type": "boolean"
+                              },
                               "rate": {
                                 "type": "number"
                               },
@@ -1743,6 +1752,9 @@
                                   },
                                   "moves": {
                                     "type": "integer"
+                                  },
+                                  "randomized": {
+                                    "type": "boolean"
                                   },
                                   "rate": {
                                     "type": "number"
