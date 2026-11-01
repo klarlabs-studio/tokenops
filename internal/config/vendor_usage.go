@@ -289,6 +289,11 @@ type AnthropicUsageConfig struct {
 	AdminKey    string        `yaml:"admin_key"`
 	Interval    time.Duration `yaml:"interval"`
 	BucketWidth string        `yaml:"bucket_width"`
+	// AnalyticsKey is a Claude Enterprise Analytics API key (created by
+	// the primary owner in claude.ai, scope read:analytics). It reads
+	// Claude Code use by the organisation's claude.ai sign-ins, which
+	// the admin key's report leaves out (tokenops spend claude-code).
+	AnalyticsKey string `yaml:"analytics_key"`
 }
 
 // ClaudeCodeUsageConfig enables reading ~/.claude/stats-cache.json and

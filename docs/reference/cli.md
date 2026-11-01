@@ -683,6 +683,35 @@ paths or session ids. The team plane does not receive these figures yet:
 its upload carries per-day buckets, which have no field for a count of
 pull requests or outcomes.
 
+#### Claude Code in your organisation, as Anthropic reports it
+
+`tokenops spend claude-code` reads Anthropic's own Claude Code analytics
+for your organisation, one UTC day at a time (the last 7 days, or
+`--days`, up to 90), from every report a configured key reaches:
+
+```
+Claude Code in your Console organisation, 2026-10-26 to 2026-11-01 (UTC)
+
+  DAY        USERS SESSIONS COMMITS  PRS    +LINES    -LINES  ACCEPTED   TOKENS    EST. $
+  2026-10-31     4       12       5    2       900       300       90%     1.2M    $14.20
+  ...
+```
+
+Anthropic reports it per user; TokenOps sums it and keeps no names or
+addresses. ACCEPTED is the share of Claude Code's edit proposals (Edit,
+MultiEdit, Write, NotebookEdit) that were accepted, and EST. $ is
+Anthropic's estimated cost. `--json` and `tokenops_spend` with
+`view: claude_code` return each day's figures by tool and by model.
+
+| Key | Reads |
+|---|---|
+| Claude Console admin key: `vendor_usage.anthropic.admin_key`, `TOKENOPS_ANTHROPIC_ADMIN_KEY` | Claude Code billed through the Console organisation, with tokens and Anthropic's estimated cost by model |
+| Claude Enterprise Analytics API key: `vendor_usage.anthropic.analytics_key`, `TOKENOPS_ANTHROPIC_ANALYTICS_KEY`, or `tokenops vendor-usage enable anthropic-analytics --analytics-key -` | Claude Code by the Enterprise organisation's claude.ai sign-ins. No cost in this report, and about a day behind; days not published yet are listed as pending |
+
+With both keys, each report is printed on its own. Pro, Max and Team
+subscriptions have no such report; TokenOps reads those from each
+machine's transcripts. `GET /api/spend/claude-code` returns the same.
+
 #### Avoidable usage: one waste taxonomy in dollars and window share
 
 `tokenops spend waste` says how much of the period's usage was avoidable,

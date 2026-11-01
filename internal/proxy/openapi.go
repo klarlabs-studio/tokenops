@@ -12,6 +12,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/boundaries"
+	"go.klarlabs.de/tokenops/internal/capability/claudecodeorg"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/decisions"
@@ -96,6 +97,7 @@ var APICatalog = []RouteDoc{
 	{Method: "GET", Path: "/api/spend/series", Summary: "Spend and tokens bucketed over time", Params: []Param{sinceParam, untilParam}},
 	{Method: "GET", Path: "/api/spend/forecast", Summary: "Daily spend projected forward"},
 	{Method: "GET", Path: "/api/spend/cache_stats", Summary: "Prompt cache hits and savings"},
+	{Method: "GET", Path: "/api/spend/claude-code", Summary: "The organisation's Claude Code use as Anthropic reports it, per UTC day, from every configured key (Claude Console admin key, Claude Enterprise Analytics API key), summed over users with no names; 409 when no key is configured", Params: []Param{q("days", "integer", "UTC days up to and including today, 1 to 90; 7 when omitted")}, Response: claudecodeorg.Result{}},
 	{Method: "GET", Path: "/api/spend/units", Summary: "Cost per commit, merged pull request, recorded and achieved outcome and change class, against the 4 weeks before; plan-window shares on a flat-rate plan; work no unit took, by why", Params: []Param{sinceParam}, Response: uniteconomics.Report{}},
 	{Method: "GET", Path: "/api/spend/waste", Summary: "Avoidable usage by waste class (redundant re-reads, cache-miss rebuilds, over-tiered model, retry loops, oversized context, abandoned sessions), each token in one class, in API-equivalent dollars and plan-window share; what was realized beside it; the guardrail to switch on next", Params: []Param{sinceParam}, Response: avoidable.Report{}},
 	{Method: "GET", Path: "/api/spend/commits", Summary: "What each of the operator's commits cost: the agent work that led to it, priced; subjects withheld", Params: []Param{sinceParam, q("limit", "integer", "most recent commits to list; 50 when omitted")}, Response: commits.Report{}},

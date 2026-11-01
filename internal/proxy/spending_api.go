@@ -2,11 +2,14 @@ package proxy
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
+	"go.klarlabs.de/tokenops/internal/capability/claudecodeorg"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
@@ -108,6 +111,31 @@ func (a *AnalyticsHandlers) spendUnits(w http.ResponseWriter, r *http.Request) {
 	}, since, time.Now())
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeAPIJSON(w, http.StatusOK, res)
+}
+
+// spendClaudeCode is the organisation's Claude Code use as Anthropic
+// reports it, per UTC day, from every report a configured key reaches,
+// summed over users with no names kept.
+func (a *AnalyticsHandlers) spendClaudeCode(w http.ResponseWriter, r *http.Request) {
+	days := 7
+	if v := r.URL.Query().Get("days"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > claudecodeorg.MaxDays {
+			writeAPIError(w, http.StatusBadRequest, fmt.Errorf("days: 1 to %d", claudecodeorg.MaxDays))
+			return
+		}
+		days = n
+	}
+	res, err := claudecodeorg.ReadAll(r.Context(), a.claudeCode, time.Now(), days)
+	if errors.Is(err, claudecodeorg.ErrNoKey) {
+		writeAPIError(w, http.StatusConflict, err)
+		return
+	}
+	if err != nil {
+		writeAPIError(w, http.StatusBadGateway, err)
 		return
 	}
 	writeAPIJSON(w, http.StatusOK, res)
