@@ -1735,6 +1735,74 @@ a 10% effective false-positive rate is not worth more autonomy. While the
 coach only observes, the session-budget tips it would have given are recorded
 as shadow calls, which is the evidence for letting it speak.
 
+#### Tips at decision points
+
+The coach speaks to the agent where a choice is made, naming the one
+thing the tip is about, rather than in a line after the turn:
+
+| Decision point | Where it comes from | What it names |
+|---|---|---|
+| A tool call | the read guard on Claude Code (PreToolUse) | the file re-read or the search repeated ([loop tips](#loop-tips)) |
+| A subagent launch | the route guard on Claude Code's `Agent` tool (PreToolUse), while `models` is `advise` | the subagent type, and the cheaper model its work fits: `this Explore subagent runs on claude-opus-5; its work looks like lookup, which claude-haiku-4-5 fits. Pass model: "haiku" when you launch the next Explore subagent like it.` While the plan runs short it names the window too |
+| The turn's model choice | the route guard (UserPromptSubmit) | the model advised for the turn |
+| `tokenops_prepare_work` | the MCP tool's `coach_tips` | the plan window the task may not fit or that is nearly used or running out at its pace (`window_fit`, `window_low`), or the cheaper model the work fits (`model_fit`) |
+
+A tip at a tool call or a subagent launch is a note to the agent
+(`additionalContext`) with no permission decision: it never answers the
+operator's permission prompt and never changes the call. Tips follow the
+coach: none when `coach.powers.inform` is `off` or `coach.verbosity` is
+`quiet` (the model advice follows the `models` power and its own quiet
+rule).
+
+**Throttle.** A session hears at most `coach.tips.per_hour` decision-point
+tips in any hour (6 by default), and the same tip, its kind and the thing
+it names, not again within `coach.tips.cooldown` (1h by default). Tips
+from `tokenops_prepare_work` carry no session and share one budget.
+`verbose` still gives the model advice every applicable turn.
+
+**What the agent did instead.** What the agent does next settles a tip,
+and the follow-through ledger keeps the context, never contents or
+prompts: the same file read or the same search run again within 5 tool
+calls ignores a loop tip ("read store.go again"); the next launch of the
+same subagent type on the same model ignores a subagent tip ("launched
+Explore on opus again"), and on a cheaper one follows it; advice the
+session stays on the same tier through ignores it ("stayed on
+claude-opus-5"); `tokenops_review_work` settles the model tip from the
+models the workflow's steps ran on. `tokenops coach` shows, for each
+kind, the last ignored offer's decision point and what the agent did
+instead.
+
+**Retired kinds.** A kind of tip or advice that was seen and settled at
+least 20 times in the last 30 days, and ignored at least 80% of those
+times, is retired: the coach stops giving it, and `tokenops coach` and the
+glance's findings say so with the figures:
+
+```text
+  follow-through:
+    inform tips on reread_churn: 2 followed, 18 ignored · last ignored at a tool call: read store.go again · retired: ignored 18 of the 20 times it was seen in the last 30 days (`tokenops coach reinstate reread_churn` brings it back)
+```
+
+Only evidence of being seen counts. A tip at a decision point counts as
+seen once the agent acts after it; a Stop-hook tip only when it was shown
+on the status line, so a tip nobody saw is unseen, not ignored, and never
+retires anything. Tips about work about to stop (a window at 90% or
+forecast to run out) are never retired. Retirement is reversible:
+[`tokenops coach reinstate <kind>`](#tokenops-coach-reinstate-kind-all)
+brings a kind back, and only evidence after that counts again.
+
+### `tokenops coach reinstate <kind|all>`
+
+```bash
+tokenops coach reinstate reread_churn   # a retired tip kind
+tokenops coach reinstate edit           # a model move retracted for quality
+tokenops coach reinstate all
+```
+
+Brings back a tip or advice kind the coach [retired](#tips-at-decision-points)
+for being ignored, and a model move it retracted because work it moved did
+worse (`tokenops explain moves`). The evidence before it no longer counts
+toward retiring or quieting the kind again.
+
 ### `tokenops coach preset [observe|advise|guided|autopilot]`
 
 Sets every power and the verbosity in one choice, then makes the machine
@@ -2318,11 +2386,15 @@ loop; the tip is a prompt to step back, not a verdict. Session length is
 not counted against anyone.
 
 Loop tips follow the coach: nothing is said when `coach.powers.inform` is
-`off` or `coach.verbosity` is `quiet`. Each tip is recorded in the coach's
-follow-through ledger as delivered to the agent, so it counts toward the
-coach's tips but never as seen or ignored by you. An install from before
-loop tips gains the second matcher when `tokenops init` or `tokenops hooks
-install --read-guard` runs again.
+`off` or `coach.verbosity` is `quiet`, and the [decision-point
+throttle](#tips-at-decision-points) bounds how many a session hears. Each
+tip is recorded in the coach's follow-through ledger as delivered to the
+agent at a tool call, with the file's base name or the search. The agent's
+next calls settle it: the same file read, or the same search run, again
+within 5 tool calls is ignoring it; an edit after a search loop, or 5
+calls without the loop, is following it. A session that ends first leaves
+it unseen. An install from before loop tips gains the second matcher when
+`tokenops init` or `tokenops hooks install --read-guard` runs again.
 
 ### `tokenops hooks install --client codex`
 
