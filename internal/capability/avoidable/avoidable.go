@@ -98,6 +98,10 @@ type Inputs struct {
 	// Price reprices a turn; nil leaves the cache rebuilds and the
 	// over-tiered model unpriced.
 	Price Pricer
+	// Lint reads the context lint for the prompt prefix changes' likely
+	// causes, only for the projects those rebuilds ran in; nil names
+	// none.
+	Lint Linter
 	// Windows are each provider's plan window readings.
 	Windows map[string][]plans.QuotaWindow
 	// Savings is the realized-savings ledger over the period; Steps each
@@ -153,6 +157,11 @@ type CauseCost struct {
 	// TTL is, for idle gaps, the cache lifetime most of them outlived:
 	// "5m" or "1h".
 	TTL string `json:"ttl,omitempty"`
+	// Likely are, for prompt prefix changes, the context lint's items
+	// that plausibly explain them, joined as LikelyMethod says; absent
+	// when none is found or the lint was not read.
+	Likely       []LikelyCause `json:"likely,omitempty"`
+	LikelyMethod string        `json:"likely_method,omitempty"`
 }
 
 // TopCause is the cause that accounts for most of the class's dollars;
@@ -288,6 +297,7 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 		byClass[c], tokensOf[c], sessionsOf[c] = cc, map[string]int64{}, map[string]bool{}
 	}
 	causes := newCauseBook()
+	likely := newLikelyBook(in)
 	usageTokens := map[string]int64{}
 	avoidTokens := map[string]int64{}
 	r.Calibrations = calibrations(in)
@@ -317,6 +327,9 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 			avoidTokens[t.Provider] += n
 			if note, ok := b.rebuilds[p]; ok && c == waste.ClassCacheRebuild {
 				causes.add(note, t, n, v)
+				if note.cause == waste.CausePrefixChanged {
+					likely.add(t)
+				}
 			}
 		}
 	}
@@ -329,6 +342,7 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 		cc.WindowShare = shares(r.Calibrations, tokensOf[c])
 		if c == waste.ClassCacheRebuild {
 			cc.Causes = causes.costs(r.Calibrations)
+			likely.attach(cc.Causes)
 		}
 		r.Avoidable.Tokens += cc.Tokens
 		r.Avoidable.APIEquivalentUSD += cc.APIEquivalentUSD

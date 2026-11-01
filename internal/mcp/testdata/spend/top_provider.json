@@ -6,7 +6,8 @@
       "requests": 4,
       "tokens": 1601000,
       "cost_usd": 3.75,
-      "api_equivalent_usd": 10.05
+      "api_equivalent_usd": 10.05,
+      "cache_read_share": 0
     }
   ],
   "currency": "USD"

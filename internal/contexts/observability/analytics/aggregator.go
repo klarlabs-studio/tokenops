@@ -142,7 +142,11 @@ type Row struct {
 	CacheReadTokens    int64 `json:"-"`
 	CacheWriteTokens   int64 `json:"-"`
 	CacheWrite1hTokens int64 `json:"-"`
-	CostUSD            float64
+	// CacheReadShare is the share of InputTokens read from the prompt
+	// cache (CacheReadShare); nil when the row has no input. Only the
+	// spend reports' ranked rows fill it.
+	CacheReadShare *float64 `json:"CacheReadShare,omitempty"`
+	CostUSD        float64
 	// APIEquivalentUSD is what this row would have billed at API list
 	// prices: CostUSD plus a list-price recompute of its plan-included
 	// and trial traffic (which is $0 real). For metered rows it equals
