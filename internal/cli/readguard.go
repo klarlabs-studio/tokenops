@@ -86,7 +86,10 @@ in circles: the same file read three times in its last ten tool calls, or
 the same Grep or Glob run three times with no edit in between. The note
 names the file or the search and is given once per file or search per
 session, at the tool call itself. It follows the coach: nothing is said
-when coach.inform is off or verbosity is quiet.
+when coach.inform is off or verbosity is quiet, and coach.tips bounds how
+many a session hears in an hour. What the agent does next settles the
+note: the same file read, or the same search run, again within five tool
+calls is ignoring it; anything else is following it.
 
 Bare invocation is the hook handler (reads PreToolUse JSON on stdin). Use
 'tokenops read-guard hook' to print the settings.json block, and
@@ -111,7 +114,7 @@ Bare invocation is the hook handler (reads PreToolUse JSON on stdin). Use
 // (readguard.ObserveCall): a note to the agent when it re-reads one file
 // or repeats one search. speak says whether the coach may give one; a
 // tip never changes whether a read is allowed.
-func runReadGuardHook(cmd *cobra.Command, mode readguard.Mode, dir string, speak func(kind string) bool) error {
+func runReadGuardHook(cmd *cobra.Command, mode readguard.Mode, dir string, speak func(session string, tip readguard.LoopTip) bool) error {
 	body, err := io.ReadAll(cmd.InOrStdin())
 	if err != nil {
 		return nil // fail open
@@ -129,11 +132,21 @@ func runReadGuardHook(cmd *cobra.Command, mode readguard.Mode, dir string, speak
 	if call.Kind == readguard.CallRead {
 		dec = evaluateRead(in, mode, dir, now)
 	}
-	tip, told := readguard.ObserveCall(dir, in.SessionID, in.AgentID, call, speak)
+	var gate func(readguard.LoopTip) bool
+	if speak != nil {
+		gate = func(t readguard.LoopTip) bool { return speak(in.SessionID, t) }
+	}
+	obs := readguard.Observe(dir, in.SessionID, in.AgentID, call, gate, coachcap.NewID)
+	ledger := coachLedger()
+	// What the agent did after an earlier tip settles it: the context
+	// the coach learns from, recorded without contents.
+	for _, o := range obs.Settled {
+		coachcap.RecordAgentOutcome(ledger, now, o.ID, o.Kind, o.Followed, o.Instead, o.Evidence)
+	}
 	note := ""
-	if told {
-		note = tip.Message()
-		coachcap.RecordTip(coachLedger(), now, coachcap.NewID(), in.SessionID, tip.Kind, coachcap.ViaAgent)
+	if obs.Spoke {
+		note = obs.Tip.Message()
+		coachcap.RecordTipAt(ledger, now, obs.ID, in.SessionID, obs.Tip.Kind, coachcap.PointToolCall, obs.Tip.Object(), "")
 	}
 	if !dec.Block && note == "" {
 		return nil // allow: exit 0 with no stdout
@@ -193,23 +206,22 @@ func loopCall(in preToolUseInput) (readguard.Call, bool) {
 	return readguard.Call{}, false
 }
 
-// loopTipGate says whether the coach may give a loop tip of a kind: the
-// inform power is not off, verbosity is not quiet (a loop is not work
-// about to stop, the only tips quiet still speaks), and the kind has not
-// been quieted by being ignored. The config is read only when a tip is
-// due, so the hook stays cheap on every other call. An unreadable config
-// reads as the defaults, as for the Stop hook's tips.
-func loopTipGate(rf *rootFlags) func(kind string) bool {
-	return func(kind string) bool {
+// loopTipGate says whether the coach may give a loop tip: the inform
+// power is not off, verbosity is not quiet (a loop is not work about to
+// stop, the only tips quiet still speaks), the kind has not been quieted
+// or retired, and the decision-point throttle admits it (coach.tips: a
+// few tips per session an hour, the same file or search not again within
+// the cool-down). The config is read only when a tip is due, so the hook
+// stays cheap on every other call. An unreadable config reads as the
+// defaults, as for the Stop hook's tips.
+func loopTipGate(rf *rootFlags) func(session string, tip readguard.LoopTip) bool {
+	return func(session string, tip readguard.LoopTip) bool {
+		now := time.Now()
 		cfg, err := loadConfig(rf)
 		if err != nil {
 			cfg = config.Default()
 		}
-		report := coachcap.Build(cfg)
-		if report.Effective(config.PowerInform) == config.AutonomyOff || report.Verbosity == config.VerbosityQuiet {
-			return false
-		}
-		return !coachcap.Quieter(coachLedger(), time.Now())(config.PowerInform, kind)
+		return coachcap.NewTipGate(cfg, coachLedger(), now).Held(session, config.PowerInform, tip.Kind, tip.Object()) == ""
 	}
 }
 

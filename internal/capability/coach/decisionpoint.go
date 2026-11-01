@@ -122,11 +122,7 @@ func (g *TipGate) Deliver(session, ref string, tips []DecisionTip) []DecisionTip
 			continue
 		}
 		t.ID = NewID()
-		e := ft.Entry{
-			Type: ft.EntryOffer, ID: t.ID, At: g.now.UTC(), Session: session,
-			Power: config.PowerInform, Channel: ft.ChannelTip, Kind: t.Kind, Via: ft.ViaAgent,
-			Point: t.Point, Object: t.Object, Ref: ref,
-		}
+		e := tipAt(g.now, t.ID, session, t.Kind, t.Point, t.Object, ref)
 		if g.ledger != nil {
 			_ = g.ledger.Append(e)
 		}
@@ -136,6 +132,24 @@ func (g *TipGate) Deliver(session, ref string, tips []DecisionTip) []DecisionTip
 		out = append(out, t)
 	}
 	return out
+}
+
+// RecordTipAt records a tip given to the agent at a decision point,
+// naming the one object it is about. ref is what can settle it later,
+// such as a workflow_id; it may be empty.
+func RecordTipAt(l Ledger, now time.Time, id, session, kind, point, object, ref string) {
+	if l == nil || id == "" {
+		return
+	}
+	_ = l.Append(tipAt(now, id, session, kind, point, object, ref))
+}
+
+func tipAt(now time.Time, id, session, kind, point, object, ref string) ft.Entry {
+	return ft.Entry{
+		Type: ft.EntryOffer, ID: id, At: now.UTC(), Session: session,
+		Power: config.PowerInform, Channel: ft.ChannelTip, Kind: kind, Via: ft.ViaAgent,
+		Point: point, Object: object, Ref: ref,
+	}
 }
 
 // RecordAdviceAt is RecordAdvice for advice given at a decision point,
