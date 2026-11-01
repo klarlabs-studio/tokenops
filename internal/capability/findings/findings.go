@@ -252,12 +252,18 @@ func windowWords(name string) string {
 
 // quota warns about every window that runs out before it resets, and
 // names a plan with room to take the work meanwhile.
-func quota(reports []plans.HeadroomReport) []Finding {
+func quota(reports []plans.HeadroomReport) []Finding { return quotaAt(reports, time.Now()) }
+
+// quotaAt is quota at now, which banked allowances' expiry is read
+// against.
+func quotaAt(reports []plans.HeadroomReport, now time.Time) []Finding {
 	var out []Finding
 	for _, r := range reports {
 		if f, ok := staleReading(r); ok {
 			out = append(out, f)
 		}
+		expiring := r.Allowances.ExpiringWithin(now, lapseWithin)
+		folded := len(expiring) == 0
 		for _, w := range r.Windows {
 			if w.Stale {
 				// Its share is not known to be current; warning on it
@@ -278,7 +284,7 @@ func quota(reports []plans.HeadroomReport) []Finding {
 					Evidence: fmt.Sprintf("Nothing left; it ran %.0f points ahead of an even pace", p.DeltaPct),
 				}
 			case lapsing(w):
-				out = append(out, Finding{
+				f := Finding{
 					Key:      key(KindQuota, r.Provider, w.Name, "lapse"),
 					Kind:     KindQuota,
 					Level:    LevelInfo,
@@ -287,7 +293,15 @@ func quota(reports []plans.HeadroomReport) []Finding {
 						math.Max(0, 100-w.UsedPct)),
 					Evidence: "Unused headroom does not carry over to the next week",
 					Action:   "Bring forward the work you were keeping for later: a refactor, a test backfill, a review.",
-				})
+				}
+				if !folded {
+					// One finding says both: the week's headroom and the
+					// banked allowance lapse together.
+					f.Title += ", and " + expiringPhrase(expiring, now)
+					f.Evidence += "; " + allowanceEvidence(expiring)
+					folded = true
+				}
+				out = append(out, f)
 				continue
 			case p.Status == plans.PaceAhead && !p.LastsToReset:
 				f = Finding{
@@ -309,8 +323,85 @@ func quota(reports []plans.HeadroomReport) []Finding {
 			}
 			out = append(out, f)
 		}
+		if !folded {
+			out = append(out, allowanceLapse(r, expiring, now))
+		}
 	}
 	return out
+}
+
+// allowanceLapse is the lapse finding for banked allowances about to
+// expire while no window is lapsing. It carries the weekly window's key,
+// so it is the same finding as a lapsing week, not a second alert.
+func allowanceLapse(r plans.HeadroomReport, expiring []plans.Allowance, now time.Time) Finding {
+	window := "allowance"
+	var week *plans.VendorWindow
+	for i, w := range r.Windows {
+		if w.Duration >= 7*24*time.Hour && !strings.Contains(w.Name, "(") {
+			window, week = w.Name, &r.Windows[i]
+			break
+		}
+	}
+	evidence := allowanceEvidence(expiring)
+	action := "Redeem it in " + vendor(r) + " before it expires."
+	if week != nil && !week.Stale {
+		evidence += fmt.Sprintf("; the %s is %.0f%% used", windowWords(week.Name), week.UsedPct)
+		if in := resetsIn(*week); in > 0 {
+			evidence += " and resets in " + human(in)
+		}
+		action = fmt.Sprintf("Redeem it in %s before it expires: now it would give back the %.0f%% of the %s used so far.",
+			vendor(r), math.Min(100, week.UsedPct), windowWords(week.Name))
+	}
+	f := Finding{
+		Key:      key(KindQuota, r.Provider, window, "lapse"),
+		Kind:     KindQuota,
+		Level:    LevelInfo,
+		Provider: r.Provider,
+		Title:    fmt.Sprintf("%s: %s", vendor(r), expiringPhrase(expiring, now)),
+		Evidence: evidence,
+		Action:   action,
+	}
+	if week != nil {
+		f.Window = week.Name
+	}
+	return f
+}
+
+// expiringPhrase says what is about to lapse: "1 reset credit expires in
+// 6h 0m unused", "2 reset credits expire within 6h 0m unused".
+func expiringPhrase(expiring []plans.Allowance, now time.Time) string {
+	noun := allowanceNoun(expiring[0].Kind)
+	soonest := human(expiring[0].ExpiresAt.Sub(now))
+	if len(expiring) == 1 {
+		return fmt.Sprintf("1 %s expires in %s unused", noun, soonest)
+	}
+	last := human(expiring[len(expiring)-1].ExpiresAt.Sub(now))
+	return fmt.Sprintf("%d %ss expire within %s unused, the first in %s", len(expiring), noun, last, soonest)
+}
+
+// allowanceEvidence says where the allowance comes from and what it is.
+func allowanceEvidence(expiring []plans.Allowance) string {
+	a := expiring[0]
+	what := "banked " + allowanceNoun(a.Kind)
+	if a.Title != "" {
+		what += " (" + a.Title + ")"
+	}
+	if !a.GrantedAt.IsZero() {
+		what += " granted " + clock(a.GrantedAt)
+	}
+	what += ", expiring " + clock(a.ExpiresAt)
+	if a.Source != "" {
+		what += ", as " + a.Source + " reported it at " + clock(a.ObservedAt)
+	}
+	return what + "; an allowance not used by its expiry is lost"
+}
+
+// allowanceNoun names an allowance kind in words.
+func allowanceNoun(kind string) string {
+	if kind == plans.AllowanceResetCredit {
+		return "reset credit"
+	}
+	return kind
 }
 
 // Headroom about to lapse: a weekly window this close to its reset with

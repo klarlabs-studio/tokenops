@@ -3635,6 +3635,51 @@
                           "items": {
                             "additionalProperties": false,
                             "properties": {
+                              "allowances": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "available": {
+                                    "type": "integer"
+                                  },
+                                  "items": {
+                                    "items": {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "expires_at": {
+                                          "format": "date-time",
+                                          "type": "string"
+                                        },
+                                        "granted_at": {
+                                          "format": "date-time",
+                                          "type": "string"
+                                        },
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "kind": {
+                                          "type": "string"
+                                        },
+                                        "observed_at": {
+                                          "format": "date-time",
+                                          "type": "string"
+                                        },
+                                        "source": {
+                                          "type": "string"
+                                        },
+                                        "title": {
+                                          "type": "string"
+                                        },
+                                        "used_pct": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "type": "object"
+                                    },
+                                    "type": "array"
+                                  }
+                                },
+                                "type": "object"
+                              },
                               "balance_usd": {
                                 "type": "number"
                               },
@@ -4728,6 +4773,51 @@
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "allowances": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "available": {
+                                "type": "integer"
+                              },
+                              "items": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "expires_at": {
+                                      "format": "date-time",
+                                      "type": "string"
+                                    },
+                                    "granted_at": {
+                                      "format": "date-time",
+                                      "type": "string"
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "kind": {
+                                      "type": "string"
+                                    },
+                                    "observed_at": {
+                                      "format": "date-time",
+                                      "type": "string"
+                                    },
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    },
+                                    "used_pct": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
+                          },
                           "balance_usd": {
                             "type": "number"
                           },

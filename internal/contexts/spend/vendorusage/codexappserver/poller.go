@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -39,7 +41,18 @@ type Poller struct {
 	bus     events.Bus
 	opts    PollerOptions
 	lastKey string
+	// credits is the reset-credit count the last read reported, and
+	// details the credits last read in detail, at detailsAt, for that
+	// count: kept so a read without details still carries their expiry.
+	credits   int64
+	details   []ResetCredit
+	detailsAt time.Time
 }
+
+// creditDetailsEvery is how often the reset credits are read in detail
+// while the account has some. Codex fetches them in a lookup of their own;
+// credits are granted and expire over days, not minutes.
+const creditDetailsEvery = time.Hour
 
 // NewPoller returns a poller publishing to bus.
 func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
@@ -73,14 +86,16 @@ func (p *Poller) Run(ctx context.Context) error {
 // Scan asks Codex once, and stores one reading per limit bucket whose
 // windows changed since the last scan.
 func (p *Poller) Scan(ctx context.Context) {
-	buckets, err := ReadAll(ctx, p.opts.Dial)
 	now := p.opts.Now()
+	details := p.credits > 0 && now.Sub(p.detailsAt) >= creditDetailsEvery
+	buckets, err := ReadAllWith(ctx, p.opts.Dial, ReadOptions{CreditDetails: details})
 	if err != nil {
 		p.opts.Health.Failed(err, now)
 		p.opts.Logger.Warn("codex-app-server: rate limits not read", "err", err)
 		return
 	}
 	p.opts.Health.Succeeded(now)
+	p.keepCreditDetails(&buckets[0], details, now)
 	envs := make([]*eventschema.Envelope, 0, len(buckets))
 	var key strings.Builder
 	for _, b := range buckets {
@@ -100,6 +115,27 @@ func (p *Poller) Scan(ctx context.Context) {
 			p.opts.Logger.Warn("codex-app-server: reading not stored", "err", err)
 		}
 	}
+}
+
+// keepCreditDetails remembers the reset credits a detailed read returned,
+// and gives a read without details the ones last read, while the count is
+// unchanged. A changed count means a credit was granted, redeemed or
+// expired: the details are read again on the next scan.
+func (p *Poller) keepCreditDetails(def *Snapshot, detailed bool, now time.Time) {
+	rc := def.ResetCredits
+	if rc == nil {
+		p.credits, p.details, p.detailsAt = 0, nil, time.Time{}
+		return
+	}
+	switch {
+	case detailed:
+		p.details, p.detailsAt = rc.Credits, now
+	case rc.AvailableCount != p.credits:
+		p.details, p.detailsAt = nil, time.Time{}
+	case rc.Credits == nil && p.details != nil:
+		rc.Credits = p.details
+	}
+	p.credits = rc.AvailableCount
 }
 
 // Envelope is a snapshot as a reading: no model and no tokens, so usage
@@ -124,6 +160,9 @@ func Envelope(s Snapshot, at time.Time) *eventschema.Envelope {
 	if s.RateLimitReachedType != "" {
 		attrs["limit_reached"] = s.RateLimitReachedType
 	}
+	if s.ResetCredits != nil {
+		maps.Copy(attrs, plans.AllowanceAttributes(int(s.ResetCredits.AvailableCount), allowances(s.ResetCredits.Credits)))
+	}
 	h := sha256.Sum256([]byte(SourceTag + "|" + strconv.FormatInt(at.UnixNano(), 10) + "|" + s.LimitID))
 	return &eventschema.Envelope{
 		ID:            "cas-" + hex.EncodeToString(h[:8]),
@@ -134,6 +173,29 @@ func Envelope(s Snapshot, at time.Time) *eventschema.Envelope {
 		Attributes:    attrs,
 		Payload:       &eventschema.PromptEvent{Provider: eventschema.ProviderOpenAI, Status: 200},
 	}
+}
+
+// allowances is the reset credits still available, as allowances: one
+// redeemed or being redeemed is no longer banked.
+func allowances(credits []ResetCredit) []plans.Allowance {
+	var out []plans.Allowance
+	for _, c := range credits {
+		if c.Status != "" && c.Status != "available" {
+			continue
+		}
+		a := plans.Allowance{Kind: plans.AllowanceResetCredit, ID: c.ID}
+		if c.Title != nil {
+			a.Title = *c.Title
+		}
+		if c.GrantedAt > 0 {
+			a.GrantedAt = time.Unix(c.GrantedAt, 0).UTC()
+		}
+		if c.ExpiresAt != nil && *c.ExpiresAt > 0 {
+			a.ExpiresAt = time.Unix(*c.ExpiresAt, 0).UTC()
+		}
+		out = append(out, a)
+	}
+	return out
 }
 
 func attributesKey(attrs map[string]string) string {

@@ -89,7 +89,10 @@ Coach · 5 findings
 
 They cover a quota window that runs out before it resets (and a plan with
 room to take the work), a weekly window that resets within a day with 40%
-or more unused (it does not carry over), files the agent re-reads unchanged, sessions past
+or more unused (it does not carry over), a banked allowance that expires
+within a day unused (Codex's rate-limit reset credits, read from its app
+server; said in the same lapse finding as the week, never as a second
+alert), files the agent re-reads unchanged, sessions past
 their budget, the one change that would most improve how sessions go,
 session sources that cannot be read, kinds of advice the coach stopped
 giving because they were ignored, and what the coach would have said while
