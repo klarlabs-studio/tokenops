@@ -9,6 +9,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
+	"go.klarlabs.de/tokenops/internal/capability/claudecodeorg"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
@@ -77,6 +78,10 @@ type topConsumersInput struct {
 type costPerCommitInput struct {
 	Since string `json:"since,omitempty" jsonschema:"description=RFC3339 timestamp or duration like '7d'; default 7d"`
 	Limit int    `json:"limit,omitempty" jsonschema:"description=Most recent commits to list (default 20); the totals cover them all"`
+}
+
+type claudeCodeOrgInput struct {
+	Days int `json:"days,omitempty" jsonschema:"minimum=1,maximum=90,description=UTC days up to and including today (default 7)"`
 }
 
 type wasteInput struct {
@@ -316,6 +321,29 @@ func RegisterTools(s *Server, d Deps) error {
 			deps := avoidable.DepsFor(cfg, d.Aggregator, d.Store, d.Spend)
 			deps.Waste = d.wasteConfig()
 			r, err := avoidable.Compute(ctx, deps, since, time.Now())
+			if err != nil {
+				return nil, err
+			}
+			return &r, nil
+		})
+
+	s.Tool("tokenops_claude_code_org").
+		Description("The organisation's Claude Code use as Anthropic reports it, per UTC day, summed over its users with no names: users, sessions, commits and pull requests Claude Code made, lines added and removed, accepted and rejected edits, tokens and Anthropic's estimated cost by model. One report per configured key: a Claude Console admin key (vendor_usage.anthropic.admin_key) reads Claude Code billed through the Console organisation, with cost; a Claude Enterprise Analytics API key (vendor_usage.anthropic.analytics_key) reads the Enterprise organisation's claude.ai sign-ins, without cost and about a day behind. Pro, Max and Team subscriptions have no such report.").
+		OutputSchema(claudecodeorg.Result{}).
+		Handler(func(ctx context.Context, in claudeCodeOrgInput) (*claudecodeorg.Result, error) {
+			cfg := config.Config{}
+			if d.Config != nil {
+				cfg = d.Config()
+			}
+			a := cfg.VendorUsage.Anthropic
+			days := in.Days
+			if days == 0 {
+				days = 7
+			}
+			r, err := claudecodeorg.ReadAll(ctx, claudecodeorg.Sources(a.AdminKey, a.AnalyticsKey), time.Now(), days)
+			if errors.Is(err, claudecodeorg.ErrNoKey) {
+				return nil, inputError(err)
+			}
 			if err != nil {
 				return nil, err
 			}

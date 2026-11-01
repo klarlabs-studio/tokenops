@@ -6625,6 +6625,150 @@
         "summary": "Prompt cache hits and savings"
       }
     },
+    "/api/spend/claude-code": {
+      "get": {
+        "operationId": "getSpendClaudeCode",
+        "parameters": [
+          {
+            "description": "UTC days up to and including today, 1 to 90; 7 when omitted",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "reports": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "days": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "api_keys": {
+                                  "type": "integer"
+                                },
+                                "commits": {
+                                  "type": "integer"
+                                },
+                                "day": {
+                                  "type": "string"
+                                },
+                                "lines_added": {
+                                  "type": "integer"
+                                },
+                                "lines_removed": {
+                                  "type": "integer"
+                                },
+                                "models": {
+                                  "properties": {},
+                                  "type": "object"
+                                },
+                                "pull_requests": {
+                                  "type": "integer"
+                                },
+                                "sessions": {
+                                  "type": "integer"
+                                },
+                                "tools": {
+                                  "properties": {},
+                                  "type": "object"
+                                },
+                                "users": {
+                                  "type": "integer"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "pending": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "scope": {
+                            "type": "string"
+                          },
+                          "since": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "total": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "api_keys": {
+                                "type": "integer"
+                              },
+                              "commits": {
+                                "type": "integer"
+                              },
+                              "day": {
+                                "type": "string"
+                              },
+                              "lines_added": {
+                                "type": "integer"
+                              },
+                              "lines_removed": {
+                                "type": "integer"
+                              },
+                              "models": {
+                                "properties": {},
+                                "type": "object"
+                              },
+                              "pull_requests": {
+                                "type": "integer"
+                              },
+                              "sessions": {
+                                "type": "integer"
+                              },
+                              "tools": {
+                                "properties": {},
+                                "type": "object"
+                              },
+                              "users": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "until": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "The organisation's Claude Code use as Anthropic reports it, per UTC day, from every configured key (Claude Console admin key, Claude Enterprise Analytics API key), summed over users with no names; 409 when no key is configured"
+      }
+    },
     "/api/spend/commits": {
       "get": {
         "operationId": "getSpendCommits",

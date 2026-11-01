@@ -88,7 +88,8 @@ Coach · 5 findings
 ```
 
 They cover a quota window that runs out before it resets (and a plan with
-room to take the work), files the agent re-reads unchanged, sessions past
+room to take the work), a weekly window that resets within a day with 40%
+or more unused (it does not carry over), files the agent re-reads unchanged, sessions past
 their budget, the one change that would most improve how sessions go,
 session sources that cannot be read, kinds of advice the coach stopped
 giving because they were ignored, and what the coach would have said while
@@ -691,6 +692,35 @@ return the same report; it holds derived figures only, never subjects,
 paths or session ids. The team plane does not receive these figures yet:
 its upload carries per-day buckets, which have no field for a count of
 pull requests or outcomes.
+
+#### Claude Code in your organisation, as Anthropic reports it
+
+`tokenops spend claude-code` reads Anthropic's own Claude Code analytics
+for your organisation, one UTC day at a time (the last 7 days, or
+`--days`, up to 90), from every report a configured key reaches:
+
+```
+Claude Code in your Console organisation, 2026-10-26 to 2026-11-01 (UTC)
+
+  DAY        USERS SESSIONS COMMITS  PRS    +LINES    -LINES  ACCEPTED   TOKENS    EST. $
+  2026-10-31     4       12       5    2       900       300       90%     1.2M    $14.20
+  ...
+```
+
+Anthropic reports it per user; TokenOps sums it and keeps no names or
+addresses. ACCEPTED is the share of Claude Code's edit proposals (Edit,
+MultiEdit, Write, NotebookEdit) that were accepted, and EST. $ is
+Anthropic's estimated cost. `--json` and `tokenops_spend` with
+`view: claude_code` return each day's figures by tool and by model.
+
+| Key | Reads |
+|---|---|
+| Claude Console admin key: `vendor_usage.anthropic.admin_key`, `TOKENOPS_ANTHROPIC_ADMIN_KEY` | Claude Code billed through the Console organisation, with tokens and Anthropic's estimated cost by model |
+| Claude Enterprise Analytics API key: `vendor_usage.anthropic.analytics_key`, `TOKENOPS_ANTHROPIC_ANALYTICS_KEY`, or `tokenops vendor-usage enable anthropic-analytics --analytics-key -` | Claude Code by the Enterprise organisation's claude.ai sign-ins. No cost in this report, and about a day behind; days not published yet are listed as pending |
+
+With both keys, each report is printed on its own. Pro, Max and Team
+subscriptions have no such report; TokenOps reads those from each
+machine's transcripts. `GET /api/spend/claude-code` returns the same.
 
 #### Avoidable usage: one waste taxonomy in dollars and window share
 
@@ -2205,7 +2235,7 @@ TokenOps wires four hooks into a client, each independent:
 | Hook | Fires | What it does |
 |---|---|---|
 | `--coach` | end of turn | the coaching nudge, against a per-session budget |
-| `--read-guard` | before a file read | refuses a redundant re-read of an unchanged file |
+| `--read-guard` | before a file read, search or edit | refuses a redundant re-read of an unchanged file, and tells the agent when it re-reads a file or repeats a search ([loop tips](#loop-tips)) |
 | `--route-guard` | when you submit a prompt | states the case for a cheaper model when the one in use is over-spec, and the [plan headroom note](#tokenops-coach-headroom-note-on-off) |
 | `--boundary` | before every tool call | checks your [action boundaries](https://team.klarlabs.de/guide/boundaries); Claude Code and opencode only |
 
@@ -2235,6 +2265,42 @@ only once nothing is left in it.
 `status` reports the hook, its event, and the binary each entry calls, and
 flags an entry pointing at a different binary than the one you ran — which
 is what a stale `hooks install` from an older install looks like.
+
+### Loop tips
+
+On Claude Code the read guard is installed on two matchers: `Read`, and
+`Grep|Glob|Edit|MultiEdit|Write|NotebookEdit`. The second lets it notice
+the agent going round in circles and say so at the tool call where it
+happens, rather than in a line after the turn that is easily missed:
+
+- **Re-read churn:** the same file read 3 times in the agent's last 10
+  tool calls the hook saw, changed or not. A ranged read counts only
+  against the same range, so paging through a large file is not churn.
+- **Search loop:** the same `Grep` or `Glob` (tool, pattern and path, and
+  for `Grep` its `glob` and `type`) run 3 times in the last 10 tool calls
+  with no `Edit`, `MultiEdit`, `Write` or `NotebookEdit` in between.
+
+The tip is a short note to the agent (`additionalContext`), never a
+refusal, and it never changes whether a read is allowed:
+
+```
+tokenops: you have read readguard.go (internal/cli/readguard.go) 3 times in the last 10 tool calls. Keep the part you need in view, or say what you are looking for in it, instead of reading it again.
+```
+
+It names the file, or the search with its pattern cut at 60 characters,
+and quotes nothing else: no file contents, no prompt text. Each is given
+once per file or search per session, and a subagent's calls are counted
+apart from the main agent's. The hook sees only the edits made through
+those tools, so a file changed by a shell command does not reset a search
+loop; the tip is a prompt to step back, not a verdict. Session length is
+not counted against anyone.
+
+Loop tips follow the coach: nothing is said when `coach.powers.inform` is
+`off` or `coach.verbosity` is `quiet`. Each tip is recorded in the coach's
+follow-through ledger as delivered to the agent, so it counts toward the
+coach's tips but never as seen or ignored by you. An install from before
+loop tips gains the second matcher when `tokenops init` or `tokenops hooks
+install --read-guard` runs again.
 
 ### `tokenops hooks install --client codex`
 

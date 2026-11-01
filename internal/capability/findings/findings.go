@@ -277,6 +277,18 @@ func quota(reports []plans.HeadroomReport) []Finding {
 					Title:    fmt.Sprintf("%s's %s is used up until it resets in %s", vendor(r), windowWords(w.Name), human(resetsIn(w))),
 					Evidence: fmt.Sprintf("Nothing left; it ran %.0f points ahead of an even pace", p.DeltaPct),
 				}
+			case lapsing(w):
+				out = append(out, Finding{
+					Key:      key(KindQuota, r.Provider, w.Name, "lapse"),
+					Kind:     KindQuota,
+					Level:    LevelInfo,
+					Provider: r.Provider, Window: w.Name,
+					Title: fmt.Sprintf("%s's %s resets in %s with %.0f%% unused", vendor(r), windowWords(w.Name), human(resetsIn(w)),
+						math.Max(0, 100-w.UsedPct)),
+					Evidence: "Unused headroom does not carry over to the next week",
+					Action:   "Bring forward the work you were keeping for later: a refactor, a test backfill, a review.",
+				})
+				continue
 			case p.Status == plans.PaceAhead && !p.LastsToReset:
 				f = Finding{
 					Key:   key(KindQuota, r.Provider, w.Name),
@@ -299,6 +311,23 @@ func quota(reports []plans.HeadroomReport) []Finding {
 		}
 	}
 	return out
+}
+
+// Headroom about to lapse: a weekly window this close to its reset with
+// at least this much of it left.
+const (
+	lapseWithin  = 24 * time.Hour
+	lapseMinLeft = 40.0
+)
+
+// lapsing reports whether w is a weekly window about to reset with much
+// of it unused.
+func lapsing(w plans.VendorWindow) bool {
+	if w.Duration < 7*24*time.Hour || w.Pace == nil || !w.Pace.LastsToReset {
+		return false
+	}
+	in := resetsIn(w)
+	return in > 0 && in <= lapseWithin && 100-w.UsedPct >= lapseMinLeft
 }
 
 func resetsIn(w plans.VendorWindow) time.Duration {

@@ -42,6 +42,7 @@ type vendorUsageEnableFlags struct {
 	userID      string
 	email       string
 	adminKey    string
+	analytics   string
 	bucketWidth string
 	oauthToken  string
 	useGHCLI    bool
@@ -65,6 +66,7 @@ var vendorUsageSources = []string{
 	"gemini-cli",
 	"pi-sessions",
 	"anthropic-admin",
+	"anthropic-analytics",
 	"fireworks",
 	"vendor-accounts",
 }
@@ -94,6 +96,7 @@ func (f *vendorUsageEnableFlags) secretFlags() []secretFlag {
 		{"session-key", "TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY", "claude.ai sessionKey", &f.sessionKey},
 		{"cookie", "TOKENOPS_CURSOR_COOKIE", "WorkosCursorSessionToken cookie", &f.cookie},
 		{"admin-key", "TOKENOPS_ANTHROPIC_ADMIN_KEY", "Anthropic admin key", &f.adminKey},
+		{"analytics-key", "TOKENOPS_ANTHROPIC_ANALYTICS_KEY", "Claude Enterprise Analytics API key", &f.analytics},
 		{"oauth-token", "TOKENOPS_COPILOT_OAUTH_TOKEN", "GitHub Copilot OAuth token", &f.oauthToken},
 	}
 }
@@ -167,8 +170,13 @@ Sources:
                       default database path.
   anthropic-admin     Anthropic Admin API usage report poller. Required:
                       --admin-key (or env TOKENOPS_ANTHROPIC_ADMIN_KEY).
+  anthropic-analytics Claude Enterprise Analytics API key, read by
+                      tokenops spend claude-code for the organisation's
+                      claude.ai sign-ins. Required: --analytics-key (or
+                      env TOKENOPS_ANTHROPIC_ANALYTICS_KEY). No poller;
+                      disabling forgets the key.
 
-Secret flags (--session-key, --cookie, --admin-key, --oauth-token) take
+Secret flags (--session-key, --cookie, --admin-key, --analytics-key, --oauth-token) take
 "-" to read the value from stdin: a hidden prompt on a terminal, or one
 line from a pipe. A value typed on the command line still works but is
 deprecated — every user can see it in ps output and it stays in shell
@@ -209,6 +217,7 @@ Where secrets end up:
 	cmd.Flags().StringVar(&f.userID, "user-id", "", "Cursor user_id (cursor); your Fireworks user, for your own spend limit (fireworks)")
 	cmd.Flags().StringVar(&f.email, "email", "", "the email you sign in to Fireworks with, to find your user by when no file names it (fireworks)")
 	cmd.Flags().StringVar(&f.adminKey, "admin-key", "", "Anthropic admin key (anthropic-admin); \"-\" reads stdin; env TOKENOPS_ANTHROPIC_ADMIN_KEY")
+	cmd.Flags().StringVar(&f.analytics, "analytics-key", "", "Claude Enterprise Analytics API key (anthropic-analytics); \"-\" reads stdin; env TOKENOPS_ANTHROPIC_ANALYTICS_KEY")
 	cmd.Flags().StringVar(&f.bucketWidth, "bucket-width", "", "anthropic-admin bucket width (1m|1h|1d); empty keeps current")
 	cmd.Flags().StringVar(&f.oauthToken, "oauth-token", "", "GitHub Copilot OAuth token (github-copilot); \"-\" reads stdin; env TOKENOPS_COPILOT_OAUTH_TOKEN. Empty = auto-discover")
 	cmd.Flags().BoolVar(&f.useGHCLI, "use-gh-cli", false, "github-copilot: also ask the GitHub CLI for its token (gh auth token) when no Copilot sign-in is found")
@@ -350,6 +359,16 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		if f.interval > 0 {
 			cfg.VendorUsage.Anthropic.Interval = f.interval
 		}
+	case "anthropic-analytics":
+		if !enabled {
+			cfg.VendorUsage.Anthropic.AnalyticsKey = ""
+			break
+		}
+		key := envSecret(f.analytics, "TOKENOPS_ANTHROPIC_ANALYTICS_KEY")
+		if key == "" {
+			return fmt.Errorf("anthropic-analytics requires --analytics-key or TOKENOPS_ANTHROPIC_ANALYTICS_KEY (the primary owner creates one in claude.ai, Organization settings, API)")
+		}
+		cfg.VendorUsage.Anthropic.AnalyticsKey = key
 	default:
 		return fmt.Errorf("unknown source %q; valid: %v", source, vendorUsageSources)
 	}
