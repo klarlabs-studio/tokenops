@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
@@ -88,6 +89,43 @@ func mergeHook(hooks map[string]any, event, matcher string, entry map[string]any
 	}
 	hooks[event] = append(groups, group)
 	return true, ""
+}
+
+// retireMatchers removes the entries carrying marker from event's groups
+// under any of matchers, pruning groups left empty. Returns whether
+// anything was removed.
+func retireMatchers(hooks map[string]any, event, marker string, matchers ...string) bool {
+	if len(matchers) == 0 {
+		return false
+	}
+	groups, _ := hooks[event].([]any)
+	removed := false
+	kept := make([]any, 0, len(groups))
+	for _, g := range groups {
+		gm, ok := g.(map[string]any)
+		if !ok || !slices.Contains(matchers, matcherOf(gm)) {
+			kept = append(kept, g)
+			continue
+		}
+		hlist, _ := gm["hooks"].([]any)
+		rest := make([]any, 0, len(hlist))
+		for _, h := range hlist {
+			if hm, ok := h.(map[string]any); ok && isMarkerEntry(hm, marker) {
+				removed = true
+				continue
+			}
+			rest = append(rest, h)
+		}
+		if len(rest) == 0 {
+			continue
+		}
+		gm["hooks"] = rest
+		kept = append(kept, gm)
+	}
+	if removed {
+		hooks[event] = kept
+	}
+	return removed
 }
 
 // eventEntries decomposes one element of an event's list into the hook

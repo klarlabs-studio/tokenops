@@ -40,6 +40,8 @@ type preToolUseInput struct {
 		Path    string `json:"path"`
 		Glob    string `json:"glob"`
 		Type    string `json:"type"`
+		// Command is a Bash call's command.
+		Command string `json:"command"`
 	} `json:"tool_input"`
 }
 
@@ -80,6 +82,13 @@ redundant unchanged full re-reads. Ranged reads (offset/limit) are always
 allowed. With no --mode, the guard follows coaching.delivery in config.yaml:
 intervene means active, anything else means observe. Pass --mode to pin one
 regardless of config.
+
+Wired onto Bash too, it notices a read-only command (git status, git diff,
+ls, grep, …) run again in the same directory within ten minutes with no
+edit and no other command in between: active mode refuses it with a
+pointer to the earlier run, observe mode records it. Its output is
+already in the agent's context. A change made outside the session is
+invisible to the hook, so the refusal says how to run it anyway.
 
 It also gives the agent a short note, never a refusal, when it goes round
 in circles: the same file read three times in its last ten tool calls, or
@@ -128,6 +137,7 @@ func runReadGuardHook(cmd *cobra.Command, mode readguard.Mode, dir string, speak
 	if !ok {
 		return nil // not a tool we handle -> no-op (allow normal flow)
 	}
+	call.At = now
 	var dec readguard.Decision
 	if call.Kind == readguard.CallRead {
 		dec = evaluateRead(in, mode, dir, now)
@@ -142,6 +152,15 @@ func runReadGuardHook(cmd *cobra.Command, mode readguard.Mode, dir string, speak
 	// the coach learns from, recorded without contents.
 	for _, o := range obs.Settled {
 		coachcap.RecordAgentOutcome(ledger, now, o.ID, o.Kind, o.Followed, o.Instead, o.Evidence)
+	}
+	if obs.Repeat != nil {
+		// A read-only command run again with nothing changed since:
+		// refused in active mode with a pointer to the earlier run,
+		// recorded either way.
+		readguard.RecordRepeat(dir, in.SessionID, in.AgentID, mode, now)
+		if mode == readguard.ModeActive {
+			dec = readguard.Decision{Block: true, Action: readguard.ActionBlocked, Reason: obs.Repeat.Reason()}
+		}
 	}
 	note := ""
 	if obs.Spoke {
@@ -202,6 +221,11 @@ func loopCall(in preToolUseInput) (readguard.Call, bool) {
 		}, true
 	case "Edit", "MultiEdit", "Write", "NotebookEdit":
 		return readguard.Call{Kind: readguard.CallEdit}, true
+	case "Bash":
+		if strings.TrimSpace(ti.Command) == "" {
+			return readguard.Call{}, false
+		}
+		return readguard.BashCall(ti.Command, in.Cwd, time.Time{}), true
 	}
 	return readguard.Call{}, false
 }
@@ -284,6 +308,10 @@ func writeReadGuardStats(out io.Writer, s readguard.Stats) {
 		fmt.Fprintln(out, "\nThose reclaimable re-reads are real waste. Switch the hook to --mode active to reclaim them.")
 	} else if s.RepeatReads > 0 && s.WouldBlock+s.Blocked == 0 {
 		fmt.Fprintln(out, "\nAll your repeat reads so far were post-edit or ranged — read-guard correctly leaves those alone. Keep observing.")
+	}
+	if s.RepeatCommands > 0 {
+		fmt.Fprintf(out, "\nRepeated commands (read-only, run again with nothing changed): %d · %d refused (active mode)\n",
+			s.RepeatCommands, s.RepeatCommandsBlocked)
 	}
 }
 

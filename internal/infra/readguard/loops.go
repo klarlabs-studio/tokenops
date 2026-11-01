@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -62,6 +63,9 @@ const (
 	CallRead   CallKind = "read"
 	CallSearch CallKind = "search"
 	CallEdit   CallKind = "edit"
+	// CallCommand is a Bash command that only reads (repeat.go); a Bash
+	// command that may change things is a CallEdit.
+	CallCommand CallKind = "command"
 )
 
 // Call is one tool call the hook saw, reduced to what loop detection and
@@ -79,6 +83,11 @@ type Call struct {
 	Pattern, Glob, Type string
 	// Cwd is the session's working directory, for shortening paths.
 	Cwd string
+	// Command is a read-only command's normalised form.
+	Command string
+	// At is when the call was made; zero puts no time on its window
+	// entry.
+	At time.Time
 }
 
 // LoopTip is a loop the hook noticed and may tell the agent about.
@@ -91,6 +100,8 @@ type LoopTip struct {
 type loopEntry struct {
 	Kind CallKind `json:"k"`
 	Key  string   `json:"key,omitempty"`
+	// At is the call's time in unix seconds, for the repeat window.
+	At int64 `json:"at,omitempty"`
 }
 
 type loopState struct {
@@ -135,6 +146,9 @@ type Observation struct {
 	ID    string
 	// Settled are earlier tips this call settled.
 	Settled []TipOutcome
+	// Repeat is set when the call is a read-only command run again with
+	// nothing changed since that the hook saw (repeat.go).
+	Repeat *CommandRepeat
 }
 
 // ObserveCall records one tool call in the agent context's window and
@@ -166,8 +180,19 @@ func Observe(dir, sessionID, agentID string, c Call, speak func(LoopTip) bool, n
 
 	var o Observation
 	o.Settled, st.Pending = settle(st.Pending, c)
+	o.Repeat = repeatOf(st.Recent, c)
 
-	st.Recent = append(st.Recent, loopEntry{Kind: c.Kind, Key: c.countKey()})
+	entry := loopEntry{Kind: c.Kind, Key: c.countKey()}
+	switch {
+	case o.Repeat != nil:
+		// The output in the agent's context is the earlier run's: a
+		// refused repeat produced none, and a repeat let through in
+		// observe mode is timed conservatively from the first.
+		entry.At = o.Repeat.ranAt
+	case !c.At.IsZero():
+		entry.At = c.At.Unix()
+	}
+	st.Recent = append(st.Recent, entry)
 	if len(st.Recent) > LoopWindow {
 		st.Recent = append([]loopEntry(nil), st.Recent[len(st.Recent)-LoopWindow:]...)
 	}
@@ -269,6 +294,8 @@ func (c Call) countKey() string {
 		return hashKey("read", c.Path, c.Range)
 	case CallSearch:
 		return hashKey("search", c.Tool, normalizePattern(c.Pattern), cleanSearchPath(c.Path), c.Glob, c.Type)
+	case CallCommand:
+		return hashKey("command", c.Cwd, c.Command)
 	}
 	return ""
 }

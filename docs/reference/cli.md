@@ -2400,7 +2400,7 @@ TokenOps wires four hooks into a client, each independent:
 | Hook | Fires | What it does |
 |---|---|---|
 | `--coach` | end of turn | the coaching nudge, against a per-session budget |
-| `--read-guard` | before a file read, search or edit | refuses a redundant re-read of an unchanged file, and tells the agent when it re-reads a file or repeats a search ([loop tips](#loop-tips)) |
+| `--read-guard` | before a file read, search, edit or Bash command | refuses a redundant re-read of an unchanged file and, in active mode, a [repeated read-only command](#repeated-commands); tells the agent when it re-reads a file or repeats a search ([loop tips](#loop-tips)) |
 | `--route-guard` | when you submit a prompt | states the case for a cheaper model when the one in use is over-spec, and the [plan headroom note](#tokenops-coach-headroom-note-on-off) |
 | `--boundary` | before every tool call | checks your [action boundaries](https://team.klarlabs.de/guide/boundaries); Claude Code and opencode only |
 
@@ -2455,9 +2455,10 @@ tokenops: you have read readguard.go (internal/cli/readguard.go) 3 times in the 
 It names the file, or the search with its pattern cut at 60 characters,
 and quotes nothing else: no file contents, no prompt text. Each is given
 once per file or search per session, and a subagent's calls are counted
-apart from the main agent's. The hook sees only the edits made through
-those tools, so a file changed by a shell command does not reset a search
-loop; the tip is a prompt to step back, not a verdict. Session length is
+apart from the main agent's. The hook sees the edit tools and every Bash
+command; a Bash command that may change things resets a search loop like
+an edit. A file changed by the operator or another process is invisible
+to it, so the tip is a prompt to step back, not a verdict. Session length is
 not counted against anyone.
 
 Loop tips follow the coach: nothing is said when `coach.powers.inform` is
@@ -2470,6 +2471,30 @@ within 5 tool calls is ignoring it; an edit after a search loop, or 5
 calls without the loop, is following it. A session that ends first leaves
 it unseen. An install from before loop tips gains the second matcher when
 `tokenops init` or `tokenops hooks install --read-guard` runs again.
+
+#### Repeated commands
+
+The read guard is installed on Bash as well. A read-only command (`git
+status`, `git diff`, `git log`, `ls`, `cat`, `grep`, `rg`, `find`
+without an action that changes things) run again in the same working
+directory, within 10 minutes and the agent's last 10 tool calls, with no
+edit and no other Bash command in between, already has its answer in the
+agent's context. A command that chains, pipes, redirects or substitutes
+is never read-only.
+
+It follows the read guard's mode. In observe mode the repeat is recorded
+and runs; in active mode (the waste power at `autonomous`) it is refused
+with a pointer to the earlier run: "`git status` ran 2m ago (the previous
+tool call), and nothing has changed since that this session made; its
+output is above". A change made outside the session is invisible to the
+hook, so the refusal says to run it again with a flag or path added.
+`tokenops coach stats` counts the repeats seen and refused; the command
+itself is not recorded. On the machine it was built on, 1 in 296
+read-only commands repeated this way (`tokenops dx` measures it), so it
+is a small saving.
+
+An install from before this moves read-guard's second matcher to
+include Bash, without leaving the old one behind.
 
 ### `tokenops hooks install --client codex`
 

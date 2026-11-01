@@ -195,7 +195,8 @@ func wireHooks(path, exe string, boundary bool) setupStep {
 
 	var changed []string
 	for _, sp := range specsForModeWithRoute(true, true, false, boundary, coachhook.DefaultBudgetUSD, "", "") {
-		if ok, _ := mergeHook(hooks, sp.event, sp.matcher, commandEntry(exe, sp.args), sp.marker); ok {
+		retired := retireMatchers(hooks, sp.event, sp.marker, sp.supersedes...)
+		if ok, _ := mergeHook(hooks, sp.event, sp.matcher, commandEntry(exe, sp.args), sp.marker); ok || retired {
 			changed = append(changed, sp.name)
 		}
 	}

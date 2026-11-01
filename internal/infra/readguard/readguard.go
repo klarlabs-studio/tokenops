@@ -91,6 +91,9 @@ type ledgerEvent struct {
 	Repeat    bool      `json:"repeat,omitempty"`  // this path was read earlier in the session
 	Ranged    bool      `json:"ranged,omitempty"`  // used offset/limit
 	Changed   bool      `json:"changed,omitempty"` // file changed since the last read
+	// Kind is "command" for a repeated read-only command (repeat.go),
+	// empty for a Read.
+	Kind string `json:"kind,omitempty"`
 }
 
 // Evaluate is the pure-ish decision + side effects for one Read. dir is the
@@ -176,6 +179,11 @@ type Stats struct {
 	RepeatReads      int   `json:"repeat_reads"`     // path read again in a session
 	RepeatPostEdit   int   `json:"repeat_post_edit"` // allowed: file changed
 	RepeatRanged     int   `json:"repeat_ranged"`    // allowed: ranged re-read
+	// RepeatCommands counts read-only commands run again with nothing
+	// changed since: would-block in observe mode, of which
+	// RepeatCommandsBlocked were refused in active mode.
+	RepeatCommands        int `json:"repeat_commands"`
+	RepeatCommandsBlocked int `json:"repeat_commands_blocked"`
 }
 
 // ReadStats reads the ledger and aggregates it.
@@ -205,8 +213,15 @@ func ReadStatsSince(dir string, since time.Time) (Stats, error) {
 		if e.TS.Before(since) {
 			continue
 		}
-		s.Events++
 		sessions[e.Session] = struct{}{}
+		if e.Kind == kindCommand {
+			s.RepeatCommands++
+			if e.Action == ActionBlocked {
+				s.RepeatCommandsBlocked++
+			}
+			continue
+		}
+		s.Events++
 		if e.Repeat {
 			s.RepeatReads++
 			switch {

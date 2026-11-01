@@ -31,6 +31,10 @@ type hookSpec struct {
 	matcher string // tool matcher; "" means "all" (Stop has no matcher)
 	marker  string // args[0] that identifies our entry (coach-hook / read-guard)
 	args    []string
+	// supersedes are matchers this entry was installed under before; an
+	// install moves it off them, so an upgraded settings file does not
+	// run the hook twice for one tool.
+	supersedes []string
 }
 
 // hookMarkers is every verb tokenops installs, in install order, and the
@@ -123,11 +127,12 @@ func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget f
 		// edits. The same command handles them; an edit is only
 		// counted, never answered.
 		out = append(out, hookSpec{
-			name:    "read-guard (search loops)",
-			event:   "PreToolUse",
-			matcher: loopTipMatcher,
-			marker:  "read-guard",
-			args:    readGuardArgs(guardMode),
+			name:       "read-guard (search loops, repeated commands)",
+			event:      "PreToolUse",
+			matcher:    loopTipMatcher,
+			marker:     "read-guard",
+			args:       readGuardArgs(guardMode),
+			supersedes: []string{legacyLoopTipMatcher},
 		})
 	}
 	if routeGuard {
@@ -170,8 +175,13 @@ func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget f
 }
 
 // loopTipMatcher is the second matcher read-guard is installed on: the
-// searches a loop tip watches and the edits that reset one.
-const loopTipMatcher = "Grep|Glob|Edit|MultiEdit|Write|NotebookEdit"
+// searches a loop tip watches, the edits that reset one, and Bash, whose
+// read-only commands it answers when run again with nothing changed and
+// whose other commands reset the window like an edit.
+const loopTipMatcher = "Grep|Glob|Edit|MultiEdit|Write|NotebookEdit|Bash"
+
+// legacyLoopTipMatcher is loopTipMatcher before Bash was added.
+const legacyLoopTipMatcher = "Grep|Glob|Edit|MultiEdit|Write|NotebookEdit"
 
 // readGuardArgs builds the installed command. No --mode means "follow
 // coaching.delivery", which is what we want in settings.json: one place
@@ -362,7 +372,9 @@ func installClientHooks(out io.Writer, client, settingsPath string, sel hookSele
 		if strings.EqualFold(client, hookClientCodex) {
 			entry = codexCommandEntry(exe, sp.args)
 		}
+		retired := retireMatchers(hooks, sp.event, sp.marker, sp.supersedes...)
 		changed, warn := mergeHook(hooks, sp.event, sp.matcher, entry, sp.marker)
+		changed = changed || retired
 		if warn != "" {
 			fmt.Fprintf(out, "  warning: %s\n", warn)
 		}
