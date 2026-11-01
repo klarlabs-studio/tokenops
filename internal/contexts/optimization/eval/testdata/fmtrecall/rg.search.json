@@ -1,0 +1,6 @@
+{"description":"rg -n with matches in three files (no dedicated formatter)","evidence":[
+ {"kind":"match","text":"internal/billing/invoice.go"},
+ {"kind":"match","text":"41:func (i *Invoice) Total() Money {"},
+ {"kind":"match","text":"internal/billing/report.go"},
+ {"kind":"match","text":"58:  totals[inv.Customer] = totals[inv.Customer].Add(inv.Total())"},
+ {"kind":"match","text":"102: if order.Total() != invoice.Total() {"}]}

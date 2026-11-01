@@ -1,0 +1,4 @@
+{"description":"ls -la of a package directory (no dedicated formatter)","evidence":[
+ {"kind":"match","text":"credit.go"},
+ {"kind":"match","text":"invoice_test.go"},
+ {"kind":"match","text":"rates.json -> ../config/rates.json"}]}

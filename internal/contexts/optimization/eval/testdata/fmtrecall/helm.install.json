@@ -1,0 +1,4 @@
+{"description":"helm install with a long NOTES block","evidence":[
+ {"kind":"exit_status","text":"STATUS: deployed"},
+ {"kind":"match","text":"REVISION: 3"},
+ {"kind":"match","text":"NAMESPACE: production"}]}

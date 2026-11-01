@@ -1,0 +1,3 @@
+{"description":"yarn install with peer-dependency warnings","evidence":[
+ {"kind":"exit_status","text":"Done in 34.21s."},
+ {"kind":"match","text":"has unmet peer dependency","critical":false}]}

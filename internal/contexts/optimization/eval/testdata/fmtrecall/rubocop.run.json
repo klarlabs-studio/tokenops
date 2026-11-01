@@ -1,0 +1,5 @@
+{"description":"rubocop with two offenses","evidence":[
+ {"kind":"error_location","text":"app/models/user.rb:10:5"},
+ {"kind":"error_location","text":"app/controllers/users_controller.rb:22:3"},
+ {"kind":"error_message","text":"Lint/UnusedMethodArgument"},
+ {"kind":"count","text":"42 files inspected, 2 offenses detected"}]}

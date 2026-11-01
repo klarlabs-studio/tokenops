@@ -1,0 +1,5 @@
+{"command":"pytest","description":"pytest stopped by a collection error","evidence":[
+ {"kind":"failing_test","text":"tests/test_checkout.py"},
+ {"kind":"error_location","text":"tests/test_checkout.py:3"},
+ {"kind":"error_message","text":"ImportError: cannot import name 'apply_coupon' from 'shop.checkout'"},
+ {"kind":"exit_status","text":"Interrupted: 1 error during collection"}]}

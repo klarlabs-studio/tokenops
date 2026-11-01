@@ -1,0 +1,5 @@
+{"description":"pulumi preview with a create, update and delete","evidence":[
+ {"kind":"changed_path","text":"assets"},
+ {"kind":"changed_path","text":"old-role"},
+ {"kind":"changed_path","text":"instanceType: \"t2.micro\" => \"t2.small\""},
+ {"kind":"count","text":"- 1 to delete"}]}

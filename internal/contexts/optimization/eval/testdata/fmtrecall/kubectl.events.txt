@@ -1,0 +1,11 @@
+LAST SEEN   TYPE      REASON              OBJECT                               MESSAGE
+12m         Normal    Scheduled           pod/api-7c9d8b6f5-q2w3e              Successfully assigned prod/api-7c9d8b6f5-q2w3e to node-3
+12m         Normal    Pulling             pod/api-7c9d8b6f5-q2w3e              Pulling image "example/api:2.8.0"
+11m         Normal    Pulled              pod/api-7c9d8b6f5-q2w3e              Successfully pulled image "example/api:2.8.0" in 41s
+11m         Normal    Created             pod/api-7c9d8b6f5-q2w3e              Created container api
+11m         Normal    Started             pod/api-7c9d8b6f5-q2w3e              Started container api
+9m          Warning   Unhealthy           pod/api-7c9d8b6f5-q2w3e              Readiness probe failed: HTTP probe failed with statuscode: 503
+8m          Warning   BackOff             pod/api-7c9d8b6f5-q2w3e              Back-off restarting failed container api in pod api-7c9d8b6f5-q2w3e
+6m          Warning   FailedScheduling    pod/worker-5b6c7d8e9-r4t5y           0/6 nodes are available: 6 Insufficient memory.
+5m          Normal    ScalingReplicaSet   deployment/api                       Scaled up replica set api-7c9d8b6f5 to 3
+2m          Warning   OOMKilled           pod/batch-1730365200-x8z9a           Container batch exceeded its memory limit

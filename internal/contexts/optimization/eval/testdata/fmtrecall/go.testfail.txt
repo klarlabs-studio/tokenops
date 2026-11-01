@@ -1,0 +1,22 @@
+=== RUN   TestInvoiceTotal
+--- PASS: TestInvoiceTotal (0.00s)
+=== RUN   TestInvoiceTotalSkipsVoidedLines
+    invoice_test.go:95: Total() = 150, want 100
+--- FAIL: TestInvoiceTotalSkipsVoidedLines (0.00s)
+=== RUN   TestCreditNote
+=== RUN   TestCreditNote/full_refund
+=== RUN   TestCreditNote/partial_refund
+    credit_test.go:41: refund = 0, want 25
+--- FAIL: TestCreditNote (0.00s)
+    --- PASS: TestCreditNote/full_refund (0.00s)
+    --- FAIL: TestCreditNote/partial_refund (0.00s)
+=== RUN   TestTaxRate
+--- PASS: TestTaxRate (0.00s)
+FAIL
+FAIL	example.com/shop/internal/billing	0.412s
+ok  	example.com/shop/internal/catalog	0.230s
+ok  	example.com/shop/internal/cart	0.318s
+# example.com/shop/internal/checkout [example.com/shop/internal/checkout.test]
+internal/checkout/flow.go:57:9: undefined: applyCoupon
+FAIL	example.com/shop/internal/checkout [build failed]
+FAIL

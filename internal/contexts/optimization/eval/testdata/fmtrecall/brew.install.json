@@ -1,0 +1,3 @@
+{"description":"brew install node with a dependency","evidence":[
+ {"kind":"installed","text":"/opt/homebrew/Cellar/node/22.7.0"},
+ {"kind":"match","text":"icu4c"}]}

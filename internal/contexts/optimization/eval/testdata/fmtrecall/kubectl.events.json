@@ -1,0 +1,6 @@
+{"command":"kubectl","description":"kubectl get events with warnings among normal churn","evidence":[
+ {"kind":"error_message","text":"Readiness probe failed: HTTP probe failed with statuscode: 503"},
+ {"kind":"failed_resource","text":"Back-off restarting failed container api"},
+ {"kind":"error_message","text":"0/6 nodes are available: 6 Insufficient memory."},
+ {"kind":"failed_resource","text":"pod/batch-1730365200-x8z9a"},
+ {"kind":"error_message","text":"OOMKilled"}]}

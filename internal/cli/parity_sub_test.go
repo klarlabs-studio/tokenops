@@ -75,6 +75,7 @@ var subCLIOnly = map[string]string{
 	"fmt hook":                  "is a hook entry point invoked by a client, not a user",
 	"fmt recover":               "prints a stored full output by recovery id, which the agent already receives inline",
 	"fmt bench":                 "measures formatters over a corpus of captured outputs — a contributor tool",
+	"fmt eval":                  "scores this build's formatters against a labeled corpus — a fixed property of the binary, not the operator's state, and a CI gate for labeled captures",
 	"rules bench":               "benchmarks rule profiles against scenarios — a tool for working on TokenOps itself",
 	"pricing refresh":           "fetches and snapshots the rate card — catalog maintenance, not a question",
 	"pricing diff":              "diffs rate-card snapshots — catalog maintenance",

@@ -1,0 +1,3 @@
+{"description":"apt-get install of the postgres client","evidence":[
+ {"kind":"installed","text":"postgresql-client postgresql-client-16 postgresql-client-common libpq5"},
+ {"kind":"count","text":"0 upgraded, 4 newly installed, 0 to remove and 12 not upgraded."}]}

@@ -1,0 +1,5 @@
+{"description":"vitest with one failing test","evidence":[
+ {"kind":"failing_test","text":"Order › computes total with tax"},
+ {"kind":"error_message","text":"expected 108 to be 110"},
+ {"kind":"error_location","text":"src/models/order.test.ts:18:24"},
+ {"kind":"count","text":"Tests  1 failed | 36 passed (37)"}]}

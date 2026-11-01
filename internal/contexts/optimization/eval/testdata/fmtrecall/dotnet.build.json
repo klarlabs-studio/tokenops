@@ -1,0 +1,7 @@
+{"description":"dotnet build with two compile errors","evidence":[
+ {"kind":"error_location","text":"/src/MyApp/Services/OrderService.cs(51,9)"},
+ {"kind":"error_message","text":"error CS1002: ; expected"},
+ {"kind":"error_location","text":"/src/MyApp/Services/OrderService.cs(52,17)"},
+ {"kind":"error_message","text":"error CS0103: The name 'total' does not exist in the current context"},
+ {"kind":"exit_status","text":"Build FAILED."},
+ {"kind":"count","text":"2 Error(s)"}]}

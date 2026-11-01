@@ -1,0 +1,6 @@
+{"description":"cargo test with one failing test","evidence":[
+ {"kind":"failing_test","text":"invoice::tests::skips_voided_lines"},
+ {"kind":"error_location","text":"src/invoice.rs:88:9"},
+ {"kind":"error_message","text":"assertion `left == right` failed"},
+ {"kind":"exit_status","text":"test result: FAILED. 5 passed; 1 failed"},
+ {"kind":"error_message","text":"left: 150"}]}

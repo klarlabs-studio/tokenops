@@ -1,0 +1,4 @@
+{"description":"terraform plan updating one instance in place","evidence":[
+ {"kind":"changed_path","text":"aws_instance.web will be updated in-place"},
+ {"kind":"changed_path","text":"instance_type                = \"t2.micro\" -> \"t2.small\""},
+ {"kind":"count","text":"Plan: 0 to add, 1 to change, 0 to destroy."}]}

@@ -1,0 +1,4 @@
+{"description":"curl -v of a JSON endpoint","evidence":[
+ {"kind":"exit_status","text":"HTTP/2 200"},
+ {"kind":"match","text":"{\"users\":[{\"id\":1,\"name\":\"alice\"},{\"id\":2,\"name\":\"bob\"}],\"total\":2}"},
+ {"kind":"match","text":"GET /v1/users?limit=2"}]}

@@ -1,0 +1,5 @@
+{"description":"mix test with one failure","evidence":[
+ {"kind":"failing_test","text":"test creates a user (MyApp.AccountsTest)"},
+ {"kind":"error_location","text":"test/myapp/accounts_test.exs:15"},
+ {"kind":"error_message","text":"Assertion with == failed"},
+ {"kind":"count","text":"5 tests, 1 failure"}]}

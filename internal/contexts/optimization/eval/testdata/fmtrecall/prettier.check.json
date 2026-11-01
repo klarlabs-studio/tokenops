@@ -1,0 +1,5 @@
+{"description":"prettier --check with three unformatted files","evidence":[
+ {"kind":"changed_path","text":"src/components/Button.tsx"},
+ {"kind":"changed_path","text":"src/utils/format.ts"},
+ {"kind":"changed_path","text":"src/api/client.ts"},
+ {"kind":"count","text":"Code style issues found in 3 files."}]}

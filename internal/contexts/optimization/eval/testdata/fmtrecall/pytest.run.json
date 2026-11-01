@@ -1,0 +1,5 @@
+{"description":"pytest with one failing test","evidence":[
+ {"kind":"failing_test","text":"tests/test_utils.py::test_slugify"},
+ {"kind":"error_location","text":"tests/test_utils.py:42"},
+ {"kind":"error_message","text":"AssertionError: assert 'hello_world' == 'hello-world'"},
+ {"kind":"count","text":"1 failed, 47 passed"}]}

@@ -1,0 +1,4 @@
+{"description":"successful docker build with layer pulls","evidence":[
+ {"kind":"exit_status","text":"Successfully built 3b4c5d6e7f80"},
+ {"kind":"match","text":"Successfully tagged myapp:latest"},
+ {"kind":"match","text":"Step 6/9 : RUN npm run build"}]}

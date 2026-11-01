@@ -1,0 +1,4 @@
+{"description":"gem install rails","evidence":[
+ {"kind":"installed","text":"Successfully installed rails-7.1.4"},
+ {"kind":"installed","text":"Successfully installed nokogiri-1.16.7-arm64-darwin"},
+ {"kind":"count","text":"3 gems installed"}]}

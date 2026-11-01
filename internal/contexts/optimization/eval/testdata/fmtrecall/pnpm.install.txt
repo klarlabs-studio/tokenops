@@ -1,0 +1,23 @@
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Progress: resolved 214, reused 180, downloaded 12, added 0
+Progress: resolved 642, reused 601, downloaded 41, added 120
+Progress: resolved 912, reused 866, downloaded 46, added 912, done
+ WARN  deprecated eslint@8.57.1: This version is no longer supported.
+ WARN  Issues with peer dependencies found
+.
+└─┬ @vitejs/plugin-react 4.3.1
+  └── ✕ unmet peer vite@"^4.2.0 || ^5.0.0": found 6.0.1
+
+dependencies:
++ react 18.3.1
++ react-dom 18.3.1
++ zod 3.23.8
+
+devDependencies:
++ typescript 5.6.3
++ vite 6.0.1
+
+ ERR_PNPM_LIFECYCLE  esbuild@0.24.0 postinstall: `node install.js`
+Exit status 1
+Done in 8.4s

@@ -1,0 +1,8 @@
+{"description":"eslint over three files with errors and warnings","evidence":[
+ {"kind":"changed_path","text":"/app/src/index.ts","critical":true},
+ {"kind":"error_location","text":"3:1"},
+ {"kind":"error_message","text":"'React' is defined but never used"},
+ {"kind":"error_location","text":"45:3"},
+ {"kind":"error_message","text":"'onClick' is missing in props validation"},
+ {"kind":"changed_path","text":"/app/src/components/Button.tsx","critical":true},
+ {"kind":"count","text":"6 problems (4 errors, 2 warnings)"}]}

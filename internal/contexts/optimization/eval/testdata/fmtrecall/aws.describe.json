@@ -1,0 +1,4 @@
+{"description":"aws ec2 describe-instances table with an authorization error","evidence":[
+ {"kind":"error_message","text":"An error occurred (UnauthorizedOperation) when calling DescribeInstances"},
+ {"kind":"match","text":"i-2c3d4e5f6a7b8"},
+ {"kind":"match","text":"stopped"}]}

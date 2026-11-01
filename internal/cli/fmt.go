@@ -133,6 +133,7 @@ Examples:
 	cmd.Flags().BoolVar(&emitFlag, "emit", false, "append an OptimizationEvent to the events store (also set via config command_fmt.emit_events)")
 	cmd.Flags().StringVar(&dbFlag, "db", "", "events.db path for --emit (defaults to storage.path, else ~/.tokenops/events.db)")
 	cmd.AddCommand(newFmtBenchCmd(rf))
+	cmd.AddCommand(newFmtEvalCmd())
 	cmd.AddCommand(newFmtHookCmd(rf))
 	cmd.AddCommand(newFmtRecoverCmd())
 	cmd.AddCommand(newFmtLearnCmd(rf))

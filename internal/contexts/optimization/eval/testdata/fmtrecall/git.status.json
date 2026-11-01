@@ -1,0 +1,4 @@
+{"command":"git","description":"git status with one modified and many untracked files","evidence":[
+ {"kind":"changed_path","text":"internal/cli/fmt.go"},
+ {"kind":"changed_path","text":"internal/cli/fmt_bench.go","critical":false},
+ {"kind":"match","text":"Untracked files"}]}

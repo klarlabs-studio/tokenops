@@ -1,0 +1,20 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.7, pytest-8.3.3, pluggy-1.5.0
+rootdir: /home/dev/shop
+configfile: pyproject.toml
+collected 31 items / 1 error
+
+==================================== ERRORS ====================================
+___________________ ERROR collecting tests/test_checkout.py ____________________
+ImportError while importing test module '/home/dev/shop/tests/test_checkout.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/test_checkout.py:3: in <module>
+    from shop.checkout import apply_coupon
+E   ImportError: cannot import name 'apply_coupon' from 'shop.checkout' (/home/dev/shop/shop/checkout.py)
+=========================== short test summary info ============================
+ERROR tests/test_checkout.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 0.42s ===============================

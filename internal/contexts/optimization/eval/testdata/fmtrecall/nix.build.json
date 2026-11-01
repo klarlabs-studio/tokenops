@@ -1,0 +1,4 @@
+{"description":"nix build failing in one derivation","evidence":[
+ {"kind":"error_location","text":"main.c:12:5"},
+ {"kind":"error_message","text":"'ctx' undeclared"},
+ {"kind":"exit_status","text":"error: builder for '/nix/store/ccc-myapp-0.1.drv' failed with exit code 1"}]}

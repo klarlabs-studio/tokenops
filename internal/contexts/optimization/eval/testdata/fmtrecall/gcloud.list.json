@@ -1,0 +1,4 @@
+{"description":"gcloud compute instances list with a permission error","evidence":[
+ {"kind":"error_message","text":"PERMISSION_DENIED"},
+ {"kind":"match","text":"worker-1"},
+ {"kind":"match","text":"TERMINATED"}]}

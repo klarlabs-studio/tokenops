@@ -1,0 +1,20 @@
+commit 9f8e7d6c5b4a39281706f5e4d3c2b1a098765432
+Author: Dev One <dev1@example.com>
+Date:   Fri Oct 30 14:12:09 2026 +0100
+
+    fix(billing): skip voided lines in the invoice total
+
+
+
+commit 1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d
+Author: Dev Two <dev2@example.com>
+Date:   Thu Oct 29 09:41:55 2026 +0100
+
+    feat(billing): add credit notes
+
+commit 0f1e2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6
+Merge: 7a8b9c0 d1e2f3a
+Author: Dev One <dev1@example.com>
+Date:   Wed Oct 28 17:03:21 2026 +0100
+
+    Merge pull request #412 from example/feat/tax-rates

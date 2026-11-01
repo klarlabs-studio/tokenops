@@ -1,0 +1,5 @@
+{"description":"playwright run with one failing spec","evidence":[
+ {"kind":"failing_test","text":"cart/checkout.spec.ts:9:1 › completes checkout"},
+ {"kind":"error_message","text":"Error: expect(received).toBe(expected)"},
+ {"kind":"count","text":"1 failed"},
+ {"kind":"count","text":"23 passed"}]}

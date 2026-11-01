@@ -1,0 +1,5 @@
+{"description":"gradle build failing in javac","evidence":[
+ {"kind":"failed_resource","text":":app:compileDebugJavaWithJavac FAILED"},
+ {"kind":"error_location","text":"src/main/java/com/example/MainActivity.java:28"},
+ {"kind":"error_message","text":"error: cannot find symbol"},
+ {"kind":"exit_status","text":"BUILD FAILED in 6s"}]}

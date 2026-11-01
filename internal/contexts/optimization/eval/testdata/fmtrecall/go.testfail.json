@@ -1,0 +1,12 @@
+{"command":"go","description":"go test with failing tests, a failing subtest and a build failure","evidence":[
+ {"kind":"failing_test","text":"TestInvoiceTotalSkipsVoidedLines"},
+ {"kind":"error_location","text":"invoice_test.go:95"},
+ {"kind":"error_message","text":"Total() = 150, want 100"},
+ {"kind":"failing_test","text":"TestCreditNote/partial_refund"},
+ {"kind":"error_location","text":"credit_test.go:41"},
+ {"kind":"error_message","text":"refund = 0, want 25"},
+ {"kind":"failed_resource","text":"example.com/shop/internal/billing"},
+ {"kind":"error_location","text":"internal/checkout/flow.go:57:9"},
+ {"kind":"error_message","text":"undefined: applyCoupon"},
+ {"kind":"exit_status","text":"example.com/shop/internal/checkout [build failed]"},
+ {"kind":"match","text":"example.com/shop/internal/cart"}]}

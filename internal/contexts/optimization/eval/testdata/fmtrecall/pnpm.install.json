@@ -1,0 +1,6 @@
+{"command":"pnpm","description":"pnpm install with a peer conflict and a failed postinstall","evidence":[
+ {"kind":"error_message","text":"ERR_PNPM_LIFECYCLE  esbuild@0.24.0 postinstall"},
+ {"kind":"exit_status","text":"Exit status 1"},
+ {"kind":"error_message","text":"unmet peer vite@\"^4.2.0 || ^5.0.0\": found 6.0.1"},
+ {"kind":"installed","text":"+ zod 3.23.8"},
+ {"kind":"installed","text":"+ vite 6.0.1"}]}

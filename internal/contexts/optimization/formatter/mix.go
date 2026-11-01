@@ -27,9 +27,10 @@ func (m *Mix) Command() string { return "mix" }
 
 // CriticalLine treats failure and result signal as critical: Elixir error
 // tuples ("** (…"), numbered test-failure headers ("  N) test …"), "error:"
-// lines, and any summary line reporting a failure ("… failure"). The
-// "Compiling"/"Generated" progress markers and "warning:" advisories are
-// never critical.
+// lines, any summary line reporting a failure ("… failure"), and the bare
+// test-file location ExUnit prints under each failure header
+// ("test/foo_test.exs:15"). The "Compiling"/"Generated" progress markers
+// and "warning:" advisories are never critical.
 func (m *Mix) CriticalLine(line string) bool {
 	t := strings.TrimSpace(line)
 	if t == "" {
@@ -40,10 +41,31 @@ func (m *Mix) CriticalLine(line string) bool {
 		strings.HasPrefix(t, "error:"),
 		strings.Contains(t, "failure"):
 		return true
-	case isMixTestFailure(t):
+	case isMixTestFailure(t), isMixTestLocation(t):
 		return true
 	}
 	return false
+}
+
+// isMixTestLocation reports a line that is only a test file and line
+// number ("test/foo_test.exs:15"), the location ExUnit prints beneath a
+// failure header. ExUnit only loads files ending in _test.exs, so a
+// warning's location in lib/ or config/ never matches.
+func isMixTestLocation(t string) bool {
+	i := strings.LastIndex(t, "_test.exs:")
+	if i <= 0 || strings.ContainsAny(t, " \t") {
+		return false
+	}
+	digits := t[i+len("_test.exs:"):]
+	if digits == "" {
+		return false
+	}
+	for _, r := range digits {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // isMixTestFailure reports a numbered test-failure header ("N) test …"),

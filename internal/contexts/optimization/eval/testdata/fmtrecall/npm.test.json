@@ -1,0 +1,6 @@
+{"description":"npm test wrapping a failing vitest run","evidence":[
+ {"kind":"failing_test","text":"checkout > rejects an expired coupon"},
+ {"kind":"error_message","text":"AssertionError: expected [Function] to throw an error"},
+ {"kind":"error_location","text":"src/checkout.test.ts:31:42"},
+ {"kind":"exit_status","text":"npm error code 1"},
+ {"kind":"count","text":"Tests  1 failed | 10 passed (11)"}]}

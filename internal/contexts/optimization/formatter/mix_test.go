@@ -34,6 +34,8 @@ func TestMix_CriticalSurvivesEveryLevel(t *testing.T) {
 	m := NewMix()
 	critical := []string{
 		"1) test the thing works (MyAppTest)",
+		// The failing test's location: the agent opens this file next.
+		"test/my_app_test.exs:8",
 		"** (RuntimeError) boom",
 		"5 tests, 1 failure",
 	}
@@ -119,5 +121,26 @@ func TestMix_NonMatchingFallsBackToGeneric(t *testing.T) {
 	}
 	if !strings.Contains(res.Notes, "generic") {
 		t.Errorf("expected generic fallback, got %q", res.Notes)
+	}
+}
+
+// ExUnit prints a failing test's file:line on the line under its header.
+// That location is critical; a warning's location in lib/ is not.
+func TestMix_CriticalLineCoversTheFailureLocation(t *testing.T) {
+	m := NewMix()
+	tests := []struct {
+		line string
+		want bool
+	}{
+		{"     test/my_app_test.exs:8", true},
+		{"test/myapp/accounts_test.exs:15", true},
+		{"  lib/foo.ex:10", false},
+		{"  config/runtime.exs:4", false},
+		{"Finished in 0.3 seconds", false},
+	}
+	for _, tc := range tests {
+		if got := m.CriticalLine(tc.line); got != tc.want {
+			t.Errorf("CriticalLine(%q) = %v, want %v", tc.line, got, tc.want)
+		}
 	}
 }
