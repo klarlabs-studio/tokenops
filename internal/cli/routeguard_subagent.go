@@ -90,8 +90,10 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 	coachcap.RecordResolutions(ledger, now, routeResolutions(routeguard.ObserveSubagent(
 		stateDir, in.SessionID, requested, eventschema.ProviderAnthropic, catalog, candidates)))
 	coachcap.RecordResolutions(ledger, now, proposalResolutions(routeguard.SettleProposals(stateDir, in.SessionID, in.TranscriptPath)))
+	sessionModel := latestTranscriptModel(in.TranscriptPath)
+	settleSubagentTips(ledger, now, stateDir, in, requested, sessionModel, catalog, candidates)
 	rung := report.Effective(config.PowerModels)
-	if rung != config.AutonomyAsk && rung != config.AutonomyAutonomous {
+	if rung != config.AutonomyAdvise && rung != config.AutonomyAsk && rung != config.AutonomyAutonomous {
 		return nil
 	}
 	// The plan running short moves edit and deep work a tier further
@@ -99,11 +101,14 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 	// missing or stale reading is simply no pressure.
 	sub := routeguard.SubagentInput{
 		Description: description, Prompt: prompt, Requested: requested,
-		SessionModel: latestTranscriptModel(in.TranscriptPath),
+		SessionModel: sessionModel,
 		Provider:     eventschema.ProviderAnthropic, Catalog: catalog, Candidates: candidates,
 		Pressure: routeguard.ReadPressure("", boundaryledger.DefaultDir(), now),
 		// A move kind whose quality dropped is held (coachcap.VerifyMoves).
 		Retracted: coachcap.MoveStore().Retracted(),
+	}
+	if rung == config.AutonomyAdvise {
+		return tipSubagent(cmd, in, cfg, stateDir, ledger, now, sub)
 	}
 	if rung == config.AutonomyAsk {
 		return askSubagentMove(cmd, in, report, stateDir, ledger, now, sub)
@@ -266,4 +271,53 @@ func subagentBoundary(cmd *cobra.Command, cfg config.Config, in agentToolInput, 
 	}
 	call.AgentID, call.WorkflowID = bcap.Attribution(bcap.HarnessClaudeCode, in.SessionID, bcap.TranscriptProject(in.TranscriptPath))
 	return guardWithTimeout(cmd.Context(), cfg, call, bcap.Env{Attended: sessionAttended(), Approval: cfg.ApprovalMode()}, bcap.Guard)
+}
+
+// settleSubagentTips settles the tips given at earlier launches of this
+// subagent type against the model this launch runs on: what the agent
+// asked for, or the session's model when it inherits.
+func settleSubagentTips(ledger coachcap.Ledger, now time.Time, dir string, in agentToolInput, requested, sessionModel string, catalog *routeguard.Catalog, candidates []string) {
+	launched := requested
+	if launched == "" || strings.EqualFold(launched, "inherit") {
+		launched = sessionModel
+	}
+	rank := routeguard.ModelRank(launched, eventschema.ProviderAnthropic, catalog, candidates)
+	for _, o := range routeguard.SettleSubagentTips(dir, in.SessionID, routeguard.SubagentType(in.ToolInput), launched, rank) {
+		coachcap.RecordAgentOutcome(ledger, now, o.ID, coachcap.TipSubagentModel, o.Followed, o.Instead, o.Evidence)
+	}
+}
+
+// tipSubagent is the coach's note at a subagent launch while models is at
+// advise: when this subagent's work fits a cheaper model than the one it
+// runs on, it says so, naming the subagent type and the model, for the
+// next launch like it. The note rides PreToolUse additionalContext and
+// carries no permissionDecision, so it never skips the operator's
+// permission prompt and never changes the call. It is a tip like the
+// coach's others: silent when inform is off or verbosity quiet, held by
+// the decision-point throttle, quieted or retired when ignored.
+func tipSubagent(cmd *cobra.Command, in agentToolInput, cfg config.Config, dir string, ledger coachcap.Ledger, now time.Time, sub routeguard.SubagentInput) error {
+	dec := routeguard.EvaluateSubagent(sub)
+	if !dec.Rewrite {
+		return nil
+	}
+	typ := routeguard.SubagentType(in.ToolInput)
+	if coachcap.NewTipGate(cfg, ledger, now).Held(in.SessionID, config.PowerInform, coachcap.TipSubagentModel, typ) != "" {
+		return nil
+	}
+	why := fmt.Sprintf("its work looks like %s, which %s fits", dec.Kind, dec.To)
+	if dec.Pressure != nil {
+		why += "; " + dec.Pressure.Why()
+	}
+	note := fmt.Sprintf("tokenops: this %s subagent runs on %s; %s. Pass model: %q when you launch the next %s subagent like it.",
+		typ, dec.From, why, dec.ToAlias, typ)
+	id := coachcap.NewID()
+	routeguard.OpenSubagentTip(dir, in.SessionID, routeguard.SubagentTip{
+		ID: id, Type: typ, To: dec.To,
+		FromRank: routeguard.ModelRank(dec.From, eventschema.ProviderAnthropic, sub.Catalog, sub.Candidates),
+	})
+	coachcap.RecordTipAt(ledger, now, id, in.SessionID, coachcap.TipSubagentModel, coachcap.PointSubagent, typ, in.ToolUseID)
+	out := hookDecision{}
+	out.HookSpecificOutput.HookEventName = "PreToolUse"
+	out.HookSpecificOutput.AdditionalContext = note
+	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 }

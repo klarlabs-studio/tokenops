@@ -16,6 +16,23 @@ const (
 	PointModelChoice = ft.PointModelChoice
 )
 
+// The kinds of tip the coach gives at a subagent launch and when work is
+// prepared. The read guard's loop tips are readguard.TipRereadChurn and
+// readguard.TipSearchLoop; the per-turn model advice is kept by the kind
+// of work it is about.
+const (
+	// TipSubagentModel: this subagent type runs on a model above what
+	// its work needs.
+	TipSubagentModel = "subagent_model"
+	// TipWindowFit: the task, from earlier ones like it, may not fit
+	// what is left of the plan window.
+	TipWindowFit = "window_fit"
+	// TipWindowLow: the plan window is nearly used.
+	TipWindowLow = "window_low"
+	// TipModelFit: the work fits a cheaper model than the one named.
+	TipModelFit = "model_fit"
+)
+
 // Retirement is a tip kind the coach retired, and why.
 type Retirement = ft.Retirement
 
