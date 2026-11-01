@@ -200,7 +200,10 @@ func routeAdvice(cfg config.Config, in userPromptSubmitInput, mode routeguard.Mo
 		Verbosity: coachcap.Build(cfg).Verbosity,
 		AutoKinds: autoKinds,
 		Quieted:   quietedKinds(ledger, now),
-		NewID:     coachcap.NewID,
+		// The advice is a tip at the turn's model choice: the
+		// decision-point throttle holds it like the coach's others.
+		Hold:  adviceHold(cfg, ledger, in.SessionID, now),
+		NewID: coachcap.NewID,
 		// Only Claude's plan windows are read locally; another provider's
 		// turn is advised without a price of quota.
 		Price: claudeQuotaPrice(prov, now),
@@ -212,7 +215,8 @@ func routeAdvice(cfg config.Config, in userPromptSubmitInput, mode routeguard.Mo
 	if !dec.Advise {
 		return ""
 	}
-	coachcap.RecordAdvice(ledger, now, dec.OfferID, in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To)
+	coachcap.RecordAdviceAt(ledger, now, dec.OfferID, in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To,
+		coachcap.PointModelChoice, dec.To)
 	savings.RecordRoute(savings.DefaultLedger(), now, dec.OfferID, in.SessionID, string(dec.Kind), dec.From, dec.To)
 	return fmt.Sprintf(
 		"tokenops: %s. Consider %s for this task (switch with /model, or delegate it to a subagent on that model). Staying on %s is fine if you prefer.",
@@ -241,10 +245,23 @@ func quietedKinds(l coachcap.Ledger, now time.Time) func(routeguard.Kind) bool {
 	}
 }
 
+// adviceHold reads the ledger only when advice is due: the throttle holds
+// the advice when the session has had its tips for the hour, or the same
+// advice (kind and model) was given within the cool-down.
+func adviceHold(cfg config.Config, l coachcap.Ledger, session string, now time.Time) func(routeguard.Kind, string) bool {
+	var gate *coachcap.TipGate
+	return func(k routeguard.Kind, to string) bool {
+		if gate == nil {
+			gate = coachcap.NewAdviceGate(cfg, l, now)
+		}
+		return gate.Held(session, config.PowerModels, string(k), to) != ""
+	}
+}
+
 func routeResolutions(rs []routeguard.Resolution) []coachcap.Resolution {
 	out := make([]coachcap.Resolution, 0, len(rs))
 	for _, r := range rs {
-		out = append(out, coachcap.Resolution{ID: r.ID, Kind: string(r.Kind), Followed: r.Followed, Evidence: r.Evidence})
+		out = append(out, coachcap.Resolution{ID: r.ID, Kind: string(r.Kind), Followed: r.Followed, Evidence: r.Evidence, Instead: r.Instead})
 	}
 	return out
 }

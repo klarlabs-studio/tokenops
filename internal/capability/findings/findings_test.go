@@ -283,3 +283,26 @@ func TestCountedFindingsReadInTheSingular(t *testing.T) {
 		t.Fatalf("findings:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }
+
+// A kind the coach retired is a finding that says why and how to bring
+// it back, instead of the quiet one.
+func TestRetiredTipKind(t *testing.T) {
+	r := Compute(Inputs{Coach: &coach.Report{FollowThrough: []ft.Summary{{
+		Power: "inform", Channel: ft.ChannelTip, Kind: "reread_churn", Followed: 2, Ignored: 18, Quiet: true,
+		Retired: &ft.Retirement{Power: "inform", Kind: "reread_churn", Seen: 20, Ignored: 18},
+	}}}})
+	var got []Finding
+	for _, f := range r.Findings {
+		if strings.HasPrefix(f.Key, "coach:retired") || strings.HasPrefix(f.Key, "coach:quiet") {
+			got = append(got, f)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("coach findings = %+v", got)
+	}
+	f := got[0]
+	if f.Title != "The coach retired re-read tips" || !strings.Contains(f.Evidence, "ignored 18 of the 20 times") ||
+		!strings.Contains(f.Action, "tokenops coach reinstate reread_churn") {
+		t.Fatalf("retired finding = %+v", f)
+	}
+}

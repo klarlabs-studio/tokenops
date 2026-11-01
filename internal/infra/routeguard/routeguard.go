@@ -102,6 +102,11 @@ type Input struct {
 	// down unless the tier they fit adds more quality than its
 	// price-weighted extra plan use, as subagent routing does.
 	Price *QuotaPrice
+	// Hold reports that advice of kind toward model to is held back by
+	// the coach's decision-point throttle: the session has had its tips
+	// for the hour, or the same advice was given within the cool-down.
+	// Verbose still advises. Nil holds nothing.
+	Hold func(kind taskclass.Kind, to string) bool
 }
 
 // Decision is what the guard concluded.
@@ -135,6 +140,9 @@ type Resolution struct {
 	Kind     taskclass.Kind
 	Followed bool
 	Evidence string
+	// Instead is what the session did instead, when the advice was
+	// ignored ("stayed on claude-opus-5").
+	Instead string
 }
 
 // AdviceWindow is how many later turns advice waits to be followed before
@@ -161,6 +169,9 @@ type state struct {
 	Open   map[taskclass.Kind]*openAdvice `json:"open,omitempty"`
 	// Proposals are subagent moves put to the operator (models: ask).
 	Proposals []Proposal `json:"proposals,omitempty"`
+	// Tips are subagent tips waiting for the next launch of their type
+	// (models: advise).
+	Tips []SubagentTip `json:"tips,omitempty"`
 }
 
 // tierForKind maps what the work is to the capability it needs.
@@ -266,6 +277,11 @@ func Evaluate(in Input) Decision {
 	if d.Advise && in.Verbosity != "verbose" && in.Quieted != nil && in.Quieted(kind) {
 		d.Advise, d.Quieted = false, true
 	}
+	if d.Advise && in.Verbosity != "verbose" && in.Hold != nil && in.Hold(kind, target) {
+		// Not argued: once the hour or the cool-down passes, the case
+		// can still be made in this session.
+		d.Advise = false
+	}
 	if d.Advise {
 		st.Argued[kind] = true
 		d.OfferID = st.offer(kind, tierRank[cur.Tier], target, in.NewID)
@@ -330,7 +346,8 @@ func (st *state) observe(rank int, model, how string) []Resolution {
 		case rank > 0 && rank < o.FromRank:
 			out = append(out, Resolution{ID: o.ID, Kind: kind, Followed: true, Evidence: how + model})
 		case o.Turns+1 >= AdviceWindow:
-			out = append(out, Resolution{ID: o.ID, Kind: kind, Evidence: fmt.Sprintf("still on the same tier %d turns later", AdviceWindow)})
+			out = append(out, Resolution{ID: o.ID, Kind: kind, Evidence: fmt.Sprintf("still on the same tier %d turns later", AdviceWindow),
+				Instead: "stayed on " + model})
 		default:
 			o.Turns++
 			continue

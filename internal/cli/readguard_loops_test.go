@@ -28,7 +28,7 @@ type hookOut struct {
 	} `json:"hookSpecificOutput"`
 }
 
-func runGuard(t *testing.T, mode readguard.Mode, dir string, speak func(string) bool, payload map[string]any) (hookOut, string) {
+func runGuard(t *testing.T, mode readguard.Mode, dir string, speak func(string, readguard.LoopTip) bool, payload map[string]any) (hookOut, string) {
 	t.Helper()
 	body, _ := json.Marshal(payload)
 	cmd := &cobra.Command{}
@@ -54,7 +54,7 @@ func readPayload(file, cwd string) map[string]any {
 	}
 }
 
-func speakAlways(string) bool { return true }
+func speakAlways(string, readguard.LoopTip) bool { return true }
 
 // The third read of a file carries the note, and the guard's decision on
 // every read is the one it makes with no tips at all.
@@ -97,7 +97,7 @@ func TestReadGuardHookAddsTheChurnNoteWithoutChangingTheDecision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := strings.Count(string(b), `"kind":"reread_churn"`); n != 2 || !strings.Contains(string(b), `"via":"agent"`) {
+	if n := strings.Count(string(b), `"point":"tool_call"`); n != 2 || !strings.Contains(string(b), `"via":"agent"`) {
 		t.Fatalf("ledger = %s", b)
 	}
 }
@@ -159,7 +159,7 @@ func TestLoopTipGateFollowsTheCoach(t *testing.T) {
 			if tt.config != "" {
 				writeCoachConfig(t, tt.config)
 			}
-			if got := loopTipGate(&rootFlags{})(readguard.TipSearchLoop); got != tt.want {
+			if got := loopTipGate(&rootFlags{})("s1", readguard.LoopTip{Kind: readguard.TipSearchLoop}); got != tt.want {
 				t.Fatalf("gate = %v, want %v", got, tt.want)
 			}
 		})
@@ -197,5 +197,66 @@ func TestHooksInstallUpgradesReadGuardToTheLoopMatcher(t *testing.T) {
 	}
 	if !strings.Contains(out, "Already up to date") {
 		t.Fatalf("a second install changed something:\n%s", out)
+	}
+}
+
+// The gate throttles: the same file is not named again within the
+// cool-down, and a session gets coach.tips.per_hour tips in an hour.
+func TestLoopTipGateThrottles(t *testing.T) {
+	isolateHome(t)
+	writeCoachConfig(t, "coach:\n  tips:\n    per_hour: 2\n")
+	cwd := t.TempDir()
+	read := func(name string) map[string]any {
+		return readPayload(filepath.Join(cwd, name), cwd)
+	}
+	gate := loopTipGate(&rootFlags{})
+	notes := 0
+	for _, name := range []string{"a.go", "b.go", "c.go"} {
+		dir := t.TempDir() // a fresh window, so only the ledger remembers
+		for range 3 {
+			if got, _ := runGuard(t, readguard.ModeObserve, dir, gate, read(name)); got.HookSpecificOutput.AdditionalContext != "" {
+				notes++
+			}
+		}
+	}
+	if notes != 2 {
+		t.Fatalf("notes = %d over three files; want the hour's 2", notes)
+	}
+	// a.go again in a fresh window: held by the cool-down and the budget.
+	dir := t.TempDir()
+	for range 3 {
+		if got, _ := runGuard(t, readguard.ModeObserve, dir, gate, read("a.go")); got.HookSpecificOutput.AdditionalContext != "" {
+			t.Fatal("the same file was named again within the cool-down")
+		}
+	}
+}
+
+// What the agent does after a tip is recorded: re-reading the file is
+// ignoring it, with what it did instead, and seen by the agent.
+func TestReadGuardHookRecordsWhatTheAgentDidInstead(t *testing.T) {
+	isolateHome(t)
+	cwd := t.TempDir()
+	dir := t.TempDir()
+	payload := readPayload(filepath.Join(cwd, "store.go"), cwd)
+	for range 4 {
+		runGuard(t, readguard.ModeObserve, dir, speakAlways, payload)
+	}
+	entries, err := coachLedger().Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var offer, seen, resolve bool
+	for _, e := range entries {
+		switch e.Type {
+		case "offer":
+			offer = e.Point == "tool_call" && e.Object == "store.go" && e.Kind == readguard.TipRereadChurn
+		case "seen":
+			seen = e.Via == "agent"
+		case "resolve":
+			resolve = e.Outcome == "ignored" && e.Instead == "read store.go again"
+		}
+	}
+	if !offer || !seen || !resolve {
+		t.Fatalf("ledger = %+v; want the offer at the tool call, seen by the agent, ignored with what it did instead", entries)
 	}
 }

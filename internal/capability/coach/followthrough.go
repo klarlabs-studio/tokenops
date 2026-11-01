@@ -29,6 +29,8 @@ type Resolution struct {
 	Kind     string
 	Followed bool
 	Evidence string
+	// Instead is what was done instead of following it, when ignored.
+	Instead string
 }
 
 // RecordAdvice records advice the coach gave, under the ID it was given.
@@ -102,7 +104,11 @@ func RecordResolutions(l Ledger, now time.Time, rs []Resolution) {
 		if r.Followed {
 			o = ft.OutcomeFollowed
 		}
-		entries = append(entries, ft.Entry{Type: ft.EntryResolve, ID: r.ID, At: now.UTC(), Kind: r.Kind, Outcome: o, Evidence: r.Evidence})
+		instead := r.Instead
+		if r.Followed {
+			instead = ""
+		}
+		entries = append(entries, ft.Entry{Type: ft.EntryResolve, ID: r.ID, At: now.UTC(), Kind: r.Kind, Outcome: o, Evidence: r.Evidence, Instead: instead})
 	}
 	_ = l.Append(entries...)
 }
@@ -179,7 +185,9 @@ func RecordSubagentApproval(l Ledger, now time.Time, id, session, toolUseID, kin
 }
 
 // Quieter returns whether advice of a power and kind has been ignored
-// often enough that the coach stops offering it. A ledger that cannot be
+// often enough that the coach stops offering it: quieted by a run of
+// ignored offers, or retired for being ignored most times it was seen
+// (ft.Retired) until the operator reinstates it. A ledger that cannot be
 // read quiets nothing: missing evidence must not silence the coach.
 func Quieter(l Ledger, now time.Time) func(power, kind string) bool {
 	none := func(string, string) bool { return false }
@@ -190,8 +198,7 @@ func Quieter(l Ledger, now time.Time) func(power, kind string) bool {
 	if err != nil || len(entries) == 0 {
 		return none
 	}
-	records := ft.Fold(entries, now)
-	return func(power, kind string) bool { return ft.Quieted(records, power, kind, now) }
+	return ft.Silenced(entries, now)
 }
 
 // History is the follow-through evidence per kind of intervention.
@@ -203,7 +210,7 @@ func History(l Ledger, now time.Time) []ft.Summary {
 	if err != nil {
 		return nil
 	}
-	return ft.Summarize(ft.Fold(entries, now), now)
+	return ft.SummarizeLedger(entries, now)
 }
 
 // CountMoves is how many changes the coach has made on its own for power.
@@ -282,6 +289,7 @@ func Status(cfg config.Config, l Ledger, levers ContextLevers, now time.Time) Re
 	r := Build(cfg)
 	r.Preset = CurrentPreset(cfg)
 	r.FollowThrough = History(l, now)
+	r.Retired = RetiredKinds(r.FollowThrough)
 	r.Activity = Activities(l, now)
 	r.Presets = PresetSummaries()
 	if levers != nil {

@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestCoachPowerPrecedence(t *testing.T) {
 	c := Default()
@@ -123,5 +126,38 @@ func TestInterruptionsPerDay(t *testing.T) {
 		if got := (QuietConfig{MaxPerDay: tc.set}).InterruptionsPerDay(); got != tc.want {
 			t.Errorf("max_per_day %d = %d, want %d", tc.set, got, tc.want)
 		}
+	}
+}
+
+// The decision-point tip throttle defaults to a few tips an hour and an
+// hour's cool-down, and rejects values that would make it meaningless.
+func TestCoachTipThrottle(t *testing.T) {
+	n := func(v int) *int { return &v }
+	for _, tc := range []struct {
+		name     string
+		tips     CoachTipsConfig
+		perHour  int
+		cooldown time.Duration
+		valid    bool
+	}{
+		{"unset is the defaults", CoachTipsConfig{}, DefaultCoachTipsPerHour, DefaultCoachTipCooldown, true},
+		{"set values are used", CoachTipsConfig{PerHour: n(2), Cooldown: "30m"}, 2, 30 * time.Minute, true},
+		{"the most per hour", CoachTipsConfig{PerHour: n(MaxCoachTipsPerHour)}, MaxCoachTipsPerHour, DefaultCoachTipCooldown, true},
+		{"zero per hour is rejected", CoachTipsConfig{PerHour: n(0)}, DefaultCoachTipsPerHour, DefaultCoachTipCooldown, false},
+		{"too many per hour is rejected", CoachTipsConfig{PerHour: n(MaxCoachTipsPerHour + 1)}, DefaultCoachTipsPerHour, DefaultCoachTipCooldown, false},
+		{"a cool-down under a minute is rejected", CoachTipsConfig{Cooldown: "30s"}, DefaultCoachTipsPerHour, DefaultCoachTipCooldown, false},
+		{"a cool-down that is no duration is rejected", CoachTipsConfig{Cooldown: "soon"}, DefaultCoachTipsPerHour, DefaultCoachTipCooldown, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Default()
+			c.Coach.Tips = tc.tips
+			p, cd := c.CoachTipThrottle()
+			if p != tc.perHour || cd != tc.cooldown {
+				t.Fatalf("CoachTipThrottle = %d, %s; want %d, %s", p, cd, tc.perHour, tc.cooldown)
+			}
+			if err := c.Validate(); (err == nil) != tc.valid {
+				t.Fatalf("Validate = %v; want valid %v", err, tc.valid)
+			}
+		})
 	}
 }

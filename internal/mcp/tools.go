@@ -10,6 +10,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/claudecodeorg"
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
@@ -55,6 +56,11 @@ type Deps struct {
 	// Allocation returns the allocation rules at call time. Optional: nil
 	// tags nothing.
 	Allocation func() []allocation.Rule
+
+	// CoachLedger is the coach's follow-through ledger, where review
+	// settles the model tip tokenops_prepare_work gave for the workflow.
+	// Optional: nil settles nothing.
+	CoachLedger func() coachcap.Ledger
 }
 
 // --- input structs --------------------------------------------------------

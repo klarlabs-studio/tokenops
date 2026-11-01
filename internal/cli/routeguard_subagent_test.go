@@ -81,13 +81,17 @@ func TestSubagentGuardMovesWorkWhenAutonomous(t *testing.T) {
 	}
 }
 
-// Below autonomous the subagent call is left alone.
+// Below autonomous the subagent call is left alone: at advise the coach
+// may add a note for the next launch, but it neither rewrites the call
+// nor answers its permission prompt.
 func TestSubagentGuardLeavesCallsAloneBelowAutonomous(t *testing.T) {
+	isolateHome(t)
 	writeCoachConfig(t, models+"coach:\n  autonomy: advise\n")
 	dir := t.TempDir()
 	tp := writeCoachTranscript(t, dir, 1, "claude-opus-5")
-	if out := runSubagentHook(t, dir, map[string]any{"prompt": "find where the retention config is defined"}, tp); out != "" {
-		t.Fatalf("advise rewrote a subagent: %s", out)
+	out := runSubagentHook(t, dir, map[string]any{"prompt": "find where the retention config is defined"}, tp)
+	if strings.Contains(out, "permissionDecision") || strings.Contains(out, "updatedInput") {
+		t.Fatalf("advise touched the subagent call: %s", out)
 	}
 }
 
