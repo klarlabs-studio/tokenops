@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **spend:** `tokenops spend --by subagent` splits spend between the sessions' own turns and their subagents, by subagent type, and `--by session` ranks the sessions themselves, subagents included. The MCP tool's `by` takes both too. Calls a client makes on its own behalf without writing them to its transcripts cannot be counted, and the reference says so.
+
 ### Fixed
 
 - **claude-code:** TokenOps did not read what Claude Code's subagents did. Claude Code writes each subagent's turns to its own transcript beside the session's (`<session>/subagents/agent-<id>.jsonl`), and TokenOps read only the session's, so on a machine that runs subagents a week's spend, waste and units of work left out about a quarter of its tokens (27% of them, and 35% of the output, on one machine). Subagent turns are now read, once each, as the session's, and say which subagent made them and what type it was. A session's budget counts its subagents' spend too, and `tokenops sessions` reads each subagent's work as the subagent's, apart from the operator's own instructions, as it already did for Codex. The first start after the upgrade reads the subagent transcripts already on disk, so recent weeks' figures go up.
