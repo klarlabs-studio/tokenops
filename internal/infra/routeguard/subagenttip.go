@@ -67,13 +67,14 @@ func OpenSubagentTip(dir, session string, tip SubagentTip) {
 		return
 	}
 	st := loadState(dir, session)
-	kept := st.Tips[:0]
+	kept := make([]SubagentTip, 0, len(st.Tips)+1)
 	for _, t := range st.Tips {
 		if t.Type != tip.Type {
 			kept = append(kept, t)
 		}
 	}
-	st.Tips = append(kept, tip)
+	kept = append(kept, tip)
+	st.Tips = kept
 	saveState(dir, session, st)
 }
 

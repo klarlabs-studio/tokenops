@@ -14,7 +14,7 @@ func pointOffer(id, session, kind, object string, at time.Time) Entry {
 func TestThrottleAdmit(t *testing.T) {
 	now := t0.Add(10 * time.Hour)
 	many := func(n int, session string, age time.Duration) []Entry {
-		var out []Entry
+		out := make([]Entry, 0, n)
 		for i := range n {
 			out = append(out, pointOffer(fmt.Sprint(i), session, "reread_churn", fmt.Sprintf("f%d.go", i), now.Add(-age)))
 		}
