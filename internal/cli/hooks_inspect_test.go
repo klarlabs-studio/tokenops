@@ -59,8 +59,8 @@ func TestHooksUninstallRemovesRouteGuard(t *testing.T) {
 	if got := countMarker(hooks, "coach-hook"); got != 1 {
 		t.Fatalf("coach-hook should remain, found %d", got)
 	}
-	if got := countMarker(hooks, "read-guard"); got != 1 {
-		t.Fatalf("read-guard should remain, found %d", got)
+	if got := countMarker(hooks, "read-guard"); got != 2 {
+		t.Fatalf("read-guard should remain on both its matchers, found %d", got)
 	}
 }
 
