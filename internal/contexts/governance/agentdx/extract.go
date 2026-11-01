@@ -321,6 +321,16 @@ func appendTranscriptLine(out []Record, line []byte, since time.Time, withText b
 			if i < len(raws) {
 				tu.CallSignature = callSignature(p.Name, raws[i].Input)
 			}
+			switch {
+			case strings.EqualFold(p.Name, "bash") && i < len(raws):
+				if cmd, ok := readOnlyCommand(bashCommand(raws[i].Input)); ok {
+					tu.Command = cmd
+				} else {
+					tu.Mutates = true
+				}
+			case isEdit(p.Name):
+				tu.Mutates = true
+			}
 			out = append(out, tu)
 		}
 	}

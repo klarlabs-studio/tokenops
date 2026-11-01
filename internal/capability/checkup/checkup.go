@@ -92,6 +92,7 @@ func Compute(ctx context.Context, o Options) Report {
 	}
 	r.Findings = append(r.Findings, rereads(records, o.Installed["read-guard"])...)
 	r.Findings = append(r.Findings, standingContext(o.Home, turnsByCWD, r.Total)...)
+	r.Findings = append(r.Findings, startingContext(records, o.Home)...)
 	r.Findings = append(r.Findings, oversized(records, o.Installed["route-guard"])...)
 	if f, ok := dxFinding(r.DX); ok {
 		r.Findings = append(r.Findings, f)
