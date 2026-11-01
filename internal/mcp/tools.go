@@ -328,22 +328,22 @@ func RegisterTools(s *Server, d Deps) error {
 		})
 
 	s.Tool("tokenops_claude_code_org").
-		Description("The organisation's Claude Code use as Anthropic reports it, per UTC day, summed over its users with no names: users, sessions, commits and pull requests Claude Code made, lines added and removed, accepted and rejected edits, tokens and Anthropic's estimated cost by model. Needs a Claude Console admin key (vendor_usage.anthropic.admin_key). Covers Claude Code billed through the Console organisation; subscription sign-ins are not in it.").
-		OutputSchema(claudecodeorg.Report{}).
-		Handler(func(ctx context.Context, in claudeCodeOrgInput) (*claudecodeorg.Report, error) {
+		Description("The organisation's Claude Code use as Anthropic reports it, per UTC day, summed over its users with no names: users, sessions, commits and pull requests Claude Code made, lines added and removed, accepted and rejected edits, tokens and Anthropic's estimated cost by model. One report per configured key: a Claude Console admin key (vendor_usage.anthropic.admin_key) reads Claude Code billed through the Console organisation, with cost; a Claude Enterprise Analytics API key (vendor_usage.anthropic.analytics_key) reads the Enterprise organisation's claude.ai sign-ins, without cost and about a day behind. Pro, Max and Team subscriptions have no such report.").
+		OutputSchema(claudecodeorg.Result{}).
+		Handler(func(ctx context.Context, in claudeCodeOrgInput) (*claudecodeorg.Result, error) {
 			cfg := config.Config{}
 			if d.Config != nil {
 				cfg = d.Config()
 			}
-			key := cfg.VendorUsage.Anthropic.AdminKey
-			if key == "" {
-				return nil, inputError(errors.New("no Anthropic admin key: the operator sets vendor_usage.anthropic.admin_key or TOKENOPS_ANTHROPIC_ADMIN_KEY"))
-			}
+			a := cfg.VendorUsage.Anthropic
 			days := in.Days
 			if days == 0 {
 				days = 7
 			}
-			r, err := claudecodeorg.Read(ctx, claudecodeorg.Reporter(key), time.Now(), days)
+			r, err := claudecodeorg.ReadAll(ctx, claudecodeorg.Sources(a.AdminKey, a.AnalyticsKey), time.Now(), days)
+			if errors.Is(err, claudecodeorg.ErrNoKey) {
+				return nil, inputError(err)
+			}
 			if err != nil {
 				return nil, err
 			}

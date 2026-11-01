@@ -2,8 +2,13 @@ package anthropic
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrDayNotAvailable is a day the vendor has not published yet: Claude
+// Enterprise analytics lag about a day.
+var ErrDayNotAvailable = errors.New("not available yet")
 
 // ClaudeCodeReporter reads the Admin API's Claude Code analytics
 // (GET /v1/organizations/usage_report/claude_code): one UTC day of the

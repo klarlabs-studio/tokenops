@@ -6,6 +6,8 @@
 
 - **units:** `tokenops spend units` says how much of the period went on work that did not stand: work on a commit a revert of yours undid within 14 days, read from the "This reverts commit <sha>" line git revert writes, and work under an execution recorded as not achieved. Each commit in `tokenops spend --by commit --json` says whether it was reverted. A revert someone else made, or one written without that line, is not seen.
 - **spend:** `tokenops spend claude-code` reads Anthropic's Claude Code analytics for your Claude Console organisation with an admin key: per UTC day, users, sessions, commits and pull requests Claude Code made, lines added and removed, the share of its edits accepted, tokens and Anthropic's estimated cost by model. Anthropic reports it per user; TokenOps sums it and keeps no names. The MCP tool's spend has it as `view: claude_code`. It covers Claude Code billed through the Console organisation; subscription sign-ins are not in Anthropic's report.
+- **spend:** `tokenops spend claude-code` reads Anthropic's own Claude Code analytics for your organisation: per UTC day, users, sessions, commits and pull requests Claude Code made, lines added and removed, and the share of its edits accepted. With a Claude Console admin key it reads Claude Code billed through the Console organisation, with tokens and Anthropic's estimated cost by model. With a Claude Enterprise Analytics API key (`vendor_usage.anthropic.analytics_key`, or `tokenops vendor-usage enable anthropic-analytics`) it reads the Enterprise organisation's claude.ai sign-ins. Anthropic reports both per user; TokenOps sums them and keeps no names. Also `GET /api/spend/claude-code` and the MCP tool's spend with `view: claude_code`.
+
 
 ### Added
 

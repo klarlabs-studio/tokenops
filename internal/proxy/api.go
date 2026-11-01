@@ -8,6 +8,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
+	"go.klarlabs.de/tokenops/internal/capability/claudecodeorg"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/config"
@@ -31,6 +32,9 @@ type AnalyticsHandlers struct {
 	// allocation are the allocation rules the scorecard measures tagged
 	// spend with; WithConfig sets them.
 	allocation []allocation.Rule
+	// claudeCode are the Anthropic reports of the organisation's Claude
+	// Code use the configured keys reach; WithConfig sets them.
+	claudeCode []claudecodeorg.Source
 }
 
 // NewAnalyticsHandlers builds the handlers. Store, aggregator, and
@@ -56,6 +60,8 @@ func NewAnalyticsHandlers(store *sqlite.Store, agg *spending.EventAggregator, sp
 func (a *AnalyticsHandlers) WithConfig(cfg config.Config) *AnalyticsHandlers {
 	a.avoidable = avoidable.DepsFor(cfg, a.aggregator, a.store, a.spend)
 	a.allocation = cfg.AllocationRules()
+	an := cfg.VendorUsage.Anthropic
+	a.claudeCode = claudecodeorg.Sources(an.AdminKey, an.AnalyticsKey)
 	return a
 }
 
@@ -73,6 +79,7 @@ func (a *AnalyticsHandlers) Register(mux RouteMux) {
 	mux.HandleFunc("GET /api/spend/top", a.spendTop)
 	mux.HandleFunc("GET /api/spend/commits", a.spendCommits)
 	mux.HandleFunc("GET /api/spend/units", a.spendUnits)
+	mux.HandleFunc("GET /api/spend/claude-code", a.spendClaudeCode)
 	mux.HandleFunc("GET /api/spend/waste", a.spendWaste)
 	mux.HandleFunc("GET /api/spend/burn-rate", a.spendBurnRate)
 	mux.HandleFunc("GET /api/scorecard", a.scorecard)

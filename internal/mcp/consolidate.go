@@ -487,7 +487,7 @@ type spendOut struct {
 	Waste    *avoidable.Report     `json:"waste,omitempty"`
 	Tags     *allocation.Report    `json:"tags,omitempty"`
 	// ClaudeCode is the claude_code view.
-	ClaudeCode *claudecodeorg.Report `json:"claude_code,omitempty"`
+	ClaudeCode *claudecodeorg.Result `json:"claude_code,omitempty"`
 }
 
 type sessionsOut struct {
