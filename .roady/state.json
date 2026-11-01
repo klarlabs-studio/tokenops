@@ -1,6 +1,6 @@
 {
   "project_id": "tokenops",
-  "version": 363,
+  "version": 393,
   "task_states": {
     "analytics-aggregator": {
       "status": "done",
@@ -1052,78 +1052,168 @@
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-autopilot-earns-its-moves-against-a-holdout": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/824"
+      ],
+      "started_at": "2026-11-01T20:16:09.657976+01:00",
+      "completed_at": "2026-11-01T20:16:09.676474+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-boundaries-by-folder-and-hour": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/836"
+      ],
+      "started_at": "2026-11-01T20:16:09.971756+01:00",
+      "completed_at": "2026-11-01T20:16:10.000348+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-cache-read-share-and-why-a-cache-was-rebuilt": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/835"
+      ],
+      "started_at": "2026-11-01T20:16:09.837568+01:00",
+      "completed_at": "2026-11-01T20:16:09.857012+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-catalog-drift": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/838"
+      ],
+      "started_at": "2026-11-01T20:16:10.030929+01:00",
+      "completed_at": "2026-11-01T20:16:10.05478+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-fmt-is-measured-on-outcomes": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/837"
+      ],
+      "started_at": "2026-11-01T20:16:10.087435+01:00",
+      "completed_at": "2026-11-01T20:16:10.112549+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-read-subagent-transcripts": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/819"
+      ],
+      "started_at": "2026-11-01T20:16:09.471614+01:00",
+      "completed_at": "2026-11-01T20:16:09.492534+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-reverts-count-against-the-work-they-undo": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/823"
+      ],
+      "started_at": "2026-11-01T20:16:09.610421+01:00",
+      "completed_at": "2026-11-01T20:16:09.63169+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-room-elsewhere-and-headroom-about-to-lapse": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/830"
+      ],
+      "started_at": "2026-11-01T20:16:09.92758+01:00",
+      "completed_at": "2026-11-01T20:16:09.946943+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-routing-reads-the-pace-per-turn": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/826"
+      ],
+      "started_at": "2026-11-01T20:16:09.70189+01:00",
+      "completed_at": "2026-11-01T20:16:09.722239+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-the-coach-speaks-on-loops-and-churn": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/834"
+      ],
+      "started_at": "2026-11-01T20:16:09.791454+01:00",
+      "completed_at": "2026-11-01T20:16:09.810991+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-the-competitive-landscape-refreshed": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/831"
+      ],
+      "started_at": "2026-11-01T20:16:10.138863+01:00",
+      "completed_at": "2026-11-01T20:16:10.160646+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-the-read-guard-covers-repeat-commands": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/828"
+      ],
+      "started_at": "2026-11-01T20:16:09.746155+01:00",
+      "completed_at": "2026-11-01T20:16:09.766478+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-the-read-guard-forgets-what-a-compaction-dropped": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/821"
+      ],
+      "started_at": "2026-11-01T20:16:09.516135+01:00",
+      "completed_at": "2026-11-01T20:16:09.536629+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-what-ate-my-week": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/822"
+      ],
+      "started_at": "2026-11-01T20:16:09.560754+01:00",
+      "completed_at": "2026-11-01T20:16:09.582369+01:00",
       "elapsed_minutes": 0
     },
     "task-research-roadmap-november-2026-what-the-starting-context-costs": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "https://github.com/klarlabs-studio/tokenops/pull/829"
+      ],
+      "started_at": "2026-11-01T20:16:09.882089+01:00",
+      "completed_at": "2026-11-01T20:16:09.90317+01:00",
       "elapsed_minutes": 0
     },
     "task-risk-based-test-coverage-uplift": {
@@ -1479,5 +1569,5 @@
       "elapsed_minutes": 3
     }
   },
-  "updated_at": "2026-09-26T10:15:12.004482+02:00"
+  "updated_at": "2026-11-01T20:16:10.160646+01:00"
 }
