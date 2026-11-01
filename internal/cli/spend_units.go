@@ -128,14 +128,31 @@ func writeUnitReport(out io.Writer, r uniteconomics.Report) {
 		}
 		fmt.Fprintln(out)
 	}
+	writeFailures(out, r.Failures)
 	fmt.Fprintln(out, "\nAt API prices. How work was joined:")
 	for _, m := range []string{
 		"commit: " + r.Commits.Method, "merged PR: " + r.PRs.Method,
 		"outcome: " + r.Outcomes.Method, "class: " + r.ClassMethod, shareLine(r.ShareMethod),
+		"did not stand: " + r.Failures.Method,
 	} {
 		if m != "" {
 			fmt.Fprintf(out, "  %s\n", m)
 		}
+	}
+}
+
+// writeFailures says how much of the period went on work that did not
+// stand, when any did.
+func writeFailures(out io.Writer, f uniteconomics.Failures) {
+	if f.Reverted.Turns == 0 && f.NotAchieved.Turns == 0 {
+		return
+	}
+	fmt.Fprintf(out, "\n  Work that did not stand: %.0f%% of the period\n", f.Share*100)
+	if f.Reverted.Turns > 0 {
+		fmt.Fprintf(out, "  reverted within 14 days  %s on %d %s\n", usd(f.Reverted.APIEquivalentUSD), f.RevertedCommits, "commit"+plural(f.RevertedCommits))
+	}
+	if f.NotAchieved.Turns > 0 {
+		fmt.Fprintf(out, "  outcome not achieved     %s on %d %s\n", usd(f.NotAchieved.APIEquivalentUSD), f.NotAchievedOutcomes, "execution"+plural(f.NotAchievedOutcomes))
 	}
 }
 

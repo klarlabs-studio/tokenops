@@ -198,3 +198,24 @@ func TestOutcomeJoin(t *testing.T) {
 		t.Error("a turn with no outcome was joined")
 	}
 }
+
+// The work that did not stand: on a commit a revert undid, or under an
+// execution recorded as not achieved, as a share of the period.
+func TestBuildReportsTheExpensiveFailures(t *testing.T) {
+	in := fixture()
+	in.CommitsOf["/w/app"] = append(in.CommitsOf["/w/app"],
+		gitlog.Commit{SHA: "9999999999999999", At: t0.Add(2 * day), Subject: `Revert "feat(x): new"`, Reverts: "1111111111111111"})
+	f := Build(in).Failures
+	if f.RevertedCommits != 1 || f.Reverted.APIEquivalentUSD != 2 {
+		t.Errorf("reverted = %d commits, %+v", f.RevertedCommits, f.Reverted)
+	}
+	if f.NotAchievedOutcomes != 1 || f.NotAchieved.APIEquivalentUSD != 8 {
+		t.Errorf("not achieved = %d, %+v", f.NotAchievedOutcomes, f.NotAchieved)
+	}
+	if want := 10.0 / 126; math.Abs(f.Share-want) > 1e-9 {
+		t.Errorf("share = %v, want %v", f.Share, want)
+	}
+	if f.Method == "" {
+		t.Error("no method")
+	}
+}

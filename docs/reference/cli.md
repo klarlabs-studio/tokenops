@@ -634,7 +634,18 @@ Unit costs since 8 Oct 00:05, against the 4 weeks before
   commit             84% placed · not yet committed $5.00
   merged PR          84% placed · no pull request merged yet $5.00
   recorded outcome   66% placed · no recorded outcome $11.00
+
+  Work that did not stand: 12% of the period
+  reverted within 14 days  $4.00 on 1 commit
+  outcome not achieved     $6.00 on 1 execution
 ```
+
+- **Work that did not stand**: the work on a commit of yours that a later
+  commit of yours reverted within 14 days (git revert writes "This reverts
+  commit <sha>" into its message), and the work under an execution whose
+  recorded outcome is not achieved. It costs the same as work that stood,
+  so its share of the period is the expensive failures. A revert by
+  someone else, or one written by hand without that line, is not seen.
 
 - **Merged PR**: a pull request of yours that landed on the default branch,
   read from git alone: a squash commit whose subject ends `(#N)` or a
