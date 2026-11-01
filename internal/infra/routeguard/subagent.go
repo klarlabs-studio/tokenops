@@ -29,10 +29,12 @@ type SubagentInput struct {
 	Provider     eventschema.Provider
 	Catalog      *modeltier.Catalog
 	Candidates   []string
-	// Pressure is the Claude plan running short (ReadPressure), or nil.
-	// It moves edit and deep work one tier further down; with none,
+	// Price is the price of quota on the Claude plan (ReadQuotaPrice), or
+	// nil when nothing is known. Edit and deep work go one tier further
+	// down unless the tier they fit adds more quality than its
+	// price-weighted extra plan use (Escalation); with no price,
 	// placement is by the work alone.
-	Pressure *Pressure
+	Price *QuotaPrice
 	// Retracted reports whether moving kind work from one model family to
 	// another has been retracted because its quality dropped
 	// (moveverdict); such a move is not made. Nil retracts nothing.
@@ -48,9 +50,15 @@ type SubagentDecision struct {
 	// ToAlias is how the Agent tool names To.
 	ToAlias string
 	Reason  string
-	// Pressure is the evidence that moved the subagent further than its
-	// work alone would have; nil when the work alone placed it.
-	Pressure *Pressure
+	// Price is the price of quota that moved the subagent further than
+	// its work alone would have; nil when the work alone placed it.
+	Price *QuotaPrice
+	// Escalation is the weighing of the tier the work fits against the
+	// one below at the price, whichever way it went; nil when no price
+	// was known or no tier below could take the work.
+	Escalation *Escalation
+	// weighedAt is the price the escalation was weighed at.
+	weighedAt *QuotaPrice
 	// Held names a move that would have been made but was retracted
 	// because its quality dropped, "" when none was.
 	Held string
@@ -89,13 +97,22 @@ func EvaluateSubagent(in SubagentInput) SubagentDecision {
 	if calmOK && d.retracted(in, from, calm) {
 		calmOK = false
 	}
-	if pressed, ok := pressedTier(d.Kind); ok && in.Pressure != nil {
-		// Placed exactly: a pressed tier the menu cannot fill is no
-		// reason to fall further than one step.
-		if target, ok := placeSubagent(cat, in.Provider, cur.Tier, pressed, from, true); ok && (!calmOK || target != calm) && !d.retracted(in, from, target) {
-			d.Rewrite, d.To, d.ToAlias, d.Pressure = true, target, aliasFor(target), in.Pressure
-			d.Reason = fmt.Sprintf("%s; %s work moved from %s to %s", in.Pressure.Why(), d.Kind, from, target)
-			return d
+	if below, ok := pressedTier(d.Kind); ok && in.Price != nil {
+		// Placed exactly: a tier below the menu cannot fill is no reason
+		// to fall further than one step.
+		if target, ok := placeSubagent(cat, in.Provider, cur.Tier, below, from, true); ok && (!calmOK || target != calm) {
+			upper := from
+			if calmOK {
+				upper = calm
+			}
+			esc := weighEscalation(cat, in.Provider, d.Kind, in.Price, upper, target)
+			d.Escalation, d.weighedAt = &esc, in.Price
+			if !esc.Escalated && !d.retracted(in, from, target) {
+				d.Rewrite, d.To, d.ToAlias, d.Price = true, target, aliasFor(target), in.Price
+				d.Reason = fmt.Sprintf("%s; %s work moved from %s to %s, as %s's %.2f quality gain does not exceed its quota cost %.2f",
+					in.Price.Why(), d.Kind, from, target, upper, esc.Gain, esc.QuotaCost)
+				return d
+			}
 		}
 	}
 	if !calmOK {
@@ -104,6 +121,15 @@ func EvaluateSubagent(in SubagentInput) SubagentDecision {
 	d.Rewrite, d.To, d.ToAlias = true, calm, aliasFor(calm)
 	d.Reason = fmt.Sprintf("this subagent's work is %s; %s fits it and %s is on the %s tier", d.Kind, calm, from, cur.Tier)
 	return d
+}
+
+// Evidence is the price of quota and the escalation weighed at it, as a
+// ledger records them, whichever way it went; "" when none was weighed.
+func (d SubagentDecision) Evidence() string {
+	if d.Escalation == nil {
+		return ""
+	}
+	return d.Escalation.Evidence(d.weighedAt)
 }
 
 // retracted reports whether moving this kind of work from from to to has
@@ -136,9 +162,10 @@ func placeSubagent(cat *modeltier.Catalog, provider eventschema.Provider, cur, w
 	return target, true
 }
 
-// pressedTier is the tier subagent work wants while the plan is pressed:
-// one step down for edits and deep work. Lookups and research already
-// sit on what they need and stay there.
+// pressedTier is the tier below the one edits and deep work fit, which
+// they take on a plan whose price of quota outweighs the quality the tier
+// up adds (Escalation). Lookups and research already sit on what they
+// need and stay there.
 func pressedTier(k taskclass.Kind) (modeltier.Tier, bool) {
 	switch k {
 	case taskclass.KindEdit:

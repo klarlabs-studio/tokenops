@@ -109,7 +109,8 @@ func TestVerifyMovesRetractsASubagentMoveThatHurtQuality(t *testing.T) {
 	if again := VerifyMoves(e); again != "" {
 		t.Fatalf("told twice: %q", again)
 	}
-	// The route guard no longer makes the move, even under pressure.
+	// The route guard no longer makes the move, even at a high price of
+	// quota.
 	in := routeguard.SubagentInput{
 		Description: "Add a test for the parser", Requested: "opus", Provider: eventschema.ProviderAnthropic,
 		Catalog: routeguard.NewCatalog(spend.Table{Currency: "USD", Rates: map[spend.Key]spend.Rate{
@@ -118,7 +119,7 @@ func TestVerifyMovesRetractsASubagentMoveThatHurtQuality(t *testing.T) {
 			{Provider: "anthropic", Model: "claude-opus-5"}:    {InputPerMillion: 5, OutputPerMillion: 25},
 		}}),
 		Candidates: []string{"claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"},
-		Pressure:   &routeguard.Pressure{Vendor: "Claude", Window: "weekly", LeftPct: 20},
+		Price:      &routeguard.QuotaPrice{Vendor: "Claude", Window: "weekly", LeftPct: 20, Lambda: 0.4, Basis: "share_left"},
 		Retracted:  store.Retracted(),
 	}
 	if d := routeguard.EvaluateSubagent(in); d.Rewrite || d.Held == "" {

@@ -55,6 +55,33 @@ func PressureFromLimits(r claudelimits.Reading, now time.Time) (*Pressure, bool)
 	if r.ObservedAt.IsZero() || now.Sub(r.ObservedAt) > pressureLimitsFreshFor {
 		return nil, false
 	}
+	p := plans.WindowPressure("Claude", limitsWindows(r), now)
+	if p == nil {
+		return nil, false
+	}
+	p.ObservedAt, p.FreshUntil = r.ObservedAt.UTC(), r.ObservedAt.Add(pressureLimitsFreshFor).UTC()
+	p.Source = "claude_code_statusline"
+	return p, true
+}
+
+// PressureFromFigures judges the daemon's figures for the Claude plan. They
+// carry no reset, so only the floor applies.
+func PressureFromFigures(fig boundaryledger.Figures, now time.Time) (*Pressure, bool) {
+	if fig.ObservedAt.IsZero() || now.Sub(fig.ObservedAt) > pressureFiguresFreshFor {
+		return nil, false
+	}
+	p := plans.WindowPressure("Claude", figuresWindows(fig), now)
+	if p == nil {
+		return nil, false
+	}
+	p.ObservedAt, p.FreshUntil = fig.ObservedAt.UTC(), fig.ObservedAt.Add(pressureFiguresFreshFor).UTC()
+	p.Source = "daemon_glance"
+	return p, true
+}
+
+// limitsWindows are the status line's 5h and weekly windows with their
+// lengths and resets.
+func limitsWindows(r claudelimits.Reading) []plans.VendorWindow {
 	var windows []plans.VendorWindow
 	for _, w := range []struct {
 		name string
@@ -70,32 +97,17 @@ func PressureFromLimits(r claudelimits.Reading, now time.Time) (*Pressure, bool)
 			Name: w.name, UsedPct: w.win.UsedPct, Duration: w.dur, ResetsAt: time.Unix(w.win.ResetsAt, 0).UTC(),
 		})
 	}
-	p := plans.WindowPressure("Claude", windows, now)
-	if p == nil {
-		return nil, false
-	}
-	p.ObservedAt, p.FreshUntil = r.ObservedAt.UTC(), r.ObservedAt.Add(pressureLimitsFreshFor).UTC()
-	p.Source = "claude_code_statusline"
-	return p, true
+	return windows
 }
 
-// PressureFromFigures judges the daemon's figures for the Claude plan. They
-// carry no reset, so only the floor applies.
-func PressureFromFigures(fig boundaryledger.Figures, now time.Time) (*Pressure, bool) {
-	if fig.ObservedAt.IsZero() || now.Sub(fig.ObservedAt) > pressureFiguresFreshFor {
-		return nil, false
-	}
+// figuresWindows are the Claude plan's windows in the daemon's figures:
+// the share left, with no reset.
+func figuresWindows(fig boundaryledger.Figures) []plans.VendorWindow {
 	var windows []plans.VendorWindow
 	for _, name := range []string{"5h", "week"} {
 		if left, ok := fig.PlanLeftPct["anthropic"][name]; ok {
 			windows = append(windows, plans.VendorWindow{Name: name, UsedPct: 100 - left})
 		}
 	}
-	p := plans.WindowPressure("Claude", windows, now)
-	if p == nil {
-		return nil, false
-	}
-	p.ObservedAt, p.FreshUntil = fig.ObservedAt.UTC(), fig.ObservedAt.Add(pressureFiguresFreshFor).UTC()
-	p.Source = "daemon_glance"
-	return p, true
+	return windows
 }

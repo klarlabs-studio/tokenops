@@ -1628,7 +1628,7 @@ exits non-zero on anomalies, so it can gate CI.
 
 ## Explain
 
-### `tokenops explain [term | decision-id]`
+### `tokenops explain [term | decision-id | moves | price]`
 
 What a figure means, in plain words: what it measures, how it is worked
 out, how to read it, and for `dx` figures the grade bands. Given a
@@ -1644,6 +1644,20 @@ tokenops explain decision:6f1c…  # why TokenOps decided what it did
 
 Agents get the same answers from the `tokenops_explain` and
 `tokenops_explain (decision_id)` MCP tools.
+
+`tokenops explain price` shows the price of quota on the Claude plan now
+(λ, 0 to 1; ADR 0017): the binding window it comes from, the share the
+rest of that window wants at the pace so far against the share left, and
+for edits and deep work whether the tier they fit is worth its extra plan
+use at that price or they go a tier down. `--json` gives the same.
+
+```text
+Price of quota (λ): 0.74, from the Claude weekly window (binding: the highest price of the plan's windows)
+  At the pace so far the rest of the window wants ~212% of the plan; 54% is left.
+  λ = 1 − left ÷ wanted: 0 while the window lasts to its reset, nearer 1 the longer it would stand empty.
+A tier up is taken only when its quality gain exceeds λ × its extra plan use:
+  edit work not escalated to claude-opus-5: its 0.12 quality gain over claude-sonnet-5 does not exceed its quota cost 0.45 (price 0.74 × 60% more plan use)
+```
 
 ## Status line
 
@@ -1892,10 +1906,12 @@ session's first prompt and again only when a window crosses 50, 25 or 10%
 left, starts running out before its reset, or the binding window changes;
 otherwise nothing is added.
 
-The per-turn model advice reads the same pace: while the Claude plan runs
-short (a window forecast to run out well before its reset, or 25% or less
-left), an edit is advised a tier lower and deep work too, as subagent
-routing already does, and the advice says which window is short.
+The per-turn model advice reads the same pace, as a price of quota (see
+[`tokenops explain price`](#explain)):
+an edit or deep work is advised a tier lower once the tier it fits is no
+longer worth its extra plan use at that price, as subagent routing does,
+and the advice names the price and the window it comes from. The note
+itself stays information for the agent, never a cap.
 
 It travels in the prompt hook's `additionalContext`, which Claude Code
 inserts where the hook fired, after the part of the conversation already

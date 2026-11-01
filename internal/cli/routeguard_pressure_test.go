@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/moveverdict"
+	"go.klarlabs.de/tokenops/internal/contexts/learning"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 	"go.klarlabs.de/tokenops/internal/infra/moveverify"
 )
@@ -78,7 +80,10 @@ func TestSubagentGuardMovesEditsUnderPressure(t *testing.T) {
 	}
 	l := ledgerSince(t, start)
 	if len(l) != 1 || l[0]["channel"] != "move" || l[0]["kind"] != "edit" ||
-		!strings.Contains(l[0]["evidence"].(string), "plan_pressure: Claude weekly") ||
+		// The record names the price, its window and why the tier up
+		// was not taken (ADR 0017); it was plan_pressure before.
+		!strings.Contains(l[0]["evidence"].(string), "quota_price: λ 0.74 from Claude weekly") ||
+		!strings.Contains(l[0]["evidence"].(string), "escalation: edit work not escalated to claude-opus-5") ||
 		!strings.Contains(l[0]["evidence"].(string), "claude_code_statusline") {
 		t.Fatalf("ledger gained %v; want one edit move with the pressure as evidence", l)
 	}
@@ -104,7 +109,7 @@ func TestAskProposesPressedMoves(t *testing.T) {
 	if !strings.Contains(h.PermissionDecisionReason, "Claude weekly runs out") {
 		t.Errorf("the prompt does not say why: %q", h.PermissionDecisionReason)
 	}
-	if l := ledgerSince(t, start); len(l) != 1 || l[0]["channel"] != "approval" || !strings.Contains(l[0]["evidence"].(string), "plan_pressure") ||
+	if l := ledgerSince(t, start); len(l) != 1 || l[0]["channel"] != "approval" || !strings.Contains(l[0]["evidence"].(string), "quota_price") ||
 		l[0]["ref"] != "toolu_p" {
 		t.Fatalf("ledger gained %v; want the approval keyed to its Agent call", l)
 	}
@@ -166,5 +171,60 @@ func TestSubagentGuardKeysTheMoveToItsCall(t *testing.T) {
 	}
 	if l := ledgerSince(t, start); len(l) != 1 || l[0]["channel"] != "move" || l[0]["ref"] != "toolu_k" {
 		t.Fatalf("ledger gained %v", l)
+	}
+}
+
+// writeWeek leaves a status line reading of a week used usedPct with
+// resetsIn to go and the 5h window comfortable.
+func writeWeek(t *testing.T, usedPct float64, resetsIn time.Duration) {
+	t.Helper()
+	now := time.Now()
+	r := claudelimits.Reading{
+		ObservedAt: now.Add(-time.Minute),
+		FiveHour:   &claudelimits.Window{UsedPct: 10, ResetsAt: now.Add(4 * time.Hour).Unix()},
+		SevenDay:   &claudelimits.Window{UsedPct: usedPct, ResetsAt: now.Add(resetsIn).Unix()},
+	}
+	if err := claudelimits.Write("", r); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(claudelimits.DefaultPath()) })
+}
+
+// A week that runs a little short has a low price of quota: Opus's
+// quality gain on an edit still exceeds its extra plan use, so the edit
+// is escalated (left on Opus), where a threshold on running out at all
+// would have moved it.
+func TestSubagentGuardEscalatesEditsAtALowPrice(t *testing.T) {
+	writeCoachConfig(t, fourTiers+"coach:\n  autonomy: advise\n  powers:\n    models: autonomous\n")
+	// 60% used in 4 of 7 days: the rest wants 45% against 40% left, λ ≈ 0.11.
+	writeWeek(t, 60, 3*24*time.Hour)
+	dir := t.TempDir()
+	tp := writeCoachTranscript(t, dir, 1, "claude-opus-5")
+	if out := runSubagentHook(t, dir, editCall, tp); out != "" {
+		t.Fatalf("edit moved at a low price: %s", out)
+	}
+}
+
+// The price changes which move is proposed, not the randomisation: a move
+// the price makes is still held back at random by its Agent call and
+// recorded with the chance it had.
+func TestPricedMovesKeepTheHoldout(t *testing.T) {
+	writeCoachConfig(t, fourTiers+"coach:\n  autonomy: advise\n  powers:\n    models: autonomous\n")
+	writePressedWeek(t)
+	dir := t.TempDir()
+	tp := writeCoachTranscript(t, dir, 1, "claude-opus-5")
+	ref := ""
+	for i := 0; ref == ""; i++ {
+		if r := fmt.Sprintf("toolu_priced_%d", i); learning.InMoveHoldout(r, 10) {
+			ref = r
+		}
+	}
+	start := ledgerLen(t)
+	if out := runAgentHook(t, dir, "priced-holdout", ref, editCall, tp); out != "" {
+		t.Fatalf("a held priced move changed the call: %s", out)
+	}
+	l := ledgerSince(t, start)
+	if len(l) != 1 || l[0]["type"] != "holdout" || l[0]["to"] != "claude-sonnet-5" || !strings.Contains(l[0]["evidence"].(string), "10%") {
+		t.Fatalf("ledger gained %v; want the priced move held back with its chance", l)
 	}
 }
