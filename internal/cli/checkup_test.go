@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -30,5 +32,20 @@ func TestRenderCheckup(t *testing.T) {
 	renderCheckup(&b, checkup.Report{Window: "last 7d"})
 	if !strings.Contains(b.String(), "No agent turns found") {
 		t.Errorf("empty week:\n%s", b.String())
+	}
+}
+
+// The checkup runs before anything is set up: with no config and no store
+// the catalog-drift finding is left out and nothing fails.
+func TestWithDriftSourcesNeedsNothing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home)
+	t.Setenv("TOKENOPS_STORAGE_PATH", filepath.Join(home, "missing.db"))
+	var o checkup.Options
+	closeStore := withDriftSources(context.Background(), &rootFlags{}, &o)
+	defer closeStore()
+	if o.Events != nil || o.Price != nil {
+		t.Errorf("drift sources without a config or store: %+v", o)
 	}
 }

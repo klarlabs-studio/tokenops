@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,12 +11,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/checkup"
+	"go.klarlabs.de/tokenops/internal/infra/planhistory"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // newCheckupCmd is the one-shot look at a week of agent work. It runs on
 // a fresh machine with no config and no daemon, reading the clients' own
 // transcripts, so it is the first thing to run, before `init`.
-func newCheckupCmd() *cobra.Command {
+func newCheckupCmd(rf *rootFlags) *cobra.Command {
 	var (
 		days    int
 		jsonOut bool
@@ -31,6 +34,8 @@ and each leak it finds with the one command that fixes it:
   re-reads       files read again with no edit in between
   instructions   CLAUDE.md and AGENTS.md re-read on every turn
   model fit      lookups answered on a flagship model
+  catalog drift  your windows on two plan tiers disagree with the catalog's
+                 ratio between them (read from the event store, when there is one)
 
 It needs no config, no daemon and no store, and sends nothing anywhere.
 Instruction text is read in memory to classify it and never written.`,
@@ -47,7 +52,10 @@ Instruction text is read in memory to classify it and never written.`,
 			if !jsonOut {
 				progress = startActivity(cmd.ErrOrStderr(), "Reading a week of transcripts")
 			}
-			r := checkup.Compute(cmd.Context(), checkup.Options{Home: home, Days: days, Now: time.Now(), Installed: installedHooks()})
+			opts := checkup.Options{Home: home, Days: days, Now: time.Now(), Installed: installedHooks()}
+			closeStore := withDriftSources(cmd.Context(), rf, &opts)
+			defer closeStore()
+			r := checkup.Compute(cmd.Context(), opts)
 			if progress != nil {
 				progress.success("read")
 			}
@@ -63,6 +71,37 @@ Instruction text is read in memory to classify it and never written.`,
 	cmd.Flags().IntVar(&days, "days", 7, "how many days back to read")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "print the report as JSON")
 	return cmd
+}
+
+// withDriftSources gives the checkup what the catalog-drift finding reads:
+// the event store, the bound plans, the plan history and the rate card.
+// Each is optional, as the checkup runs before anything is set up: a
+// missing config, store or history leaves the finding out, never the
+// checkup. The returned func closes the store.
+func withDriftSources(ctx context.Context, rf *rootFlags, o *checkup.Options) func() {
+	cfg, err := loadConfig(rf)
+	if err != nil || len(cfg.Plans) == 0 {
+		return func() {}
+	}
+	path, err := resolvePlanDBIn("", cfg.Storage.Path)
+	if err != nil {
+		return func() {}
+	}
+	store, err := sqlite.OpenReadOnly(ctx, path)
+	if err != nil {
+		return func() {}
+	}
+	eng, err := buildSpendEngine(cfg)
+	if err != nil {
+		_ = store.Close()
+		return func() {}
+	}
+	history, err := planhistory.LoadDefault()
+	if err != nil {
+		history = nil
+	}
+	o.Events, o.Plans, o.PlanHistory, o.Price = storeReader{store: store}, cfg.Plans, history, eng.ComputeAt
+	return func() { _ = store.Close() }
 }
 
 // installedHooks names the TokenOps hooks Claude Code's settings wire.

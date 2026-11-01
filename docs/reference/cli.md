@@ -244,9 +244,31 @@ Sessions: A  (1880 instructions; `tokenops dx` for the breakdown)
     instruction files and the first instruction), with how many MCP
     servers and skills are configured. Every turn reads it again, so it
     is worth acting on from 40k tokens;
-  - lookups ("show me…", "list…") answered on a flagship model.
+  - lookups ("show me…", "list…") answered on a flagship model;
+  - catalog drift: your own plan windows on two tiers disagree with the
+    catalog's ratio between them (Max at five times Pro, Ultra's week at
+    ten). This one reads the event store and the plan history, so it
+    needs `tokenops init` and a plan switch in the last 90 days; without
+    them it is left out.
 
   A fix that is already installed says so instead of installing it again.
+- **Catalog drift** measures how much list value one percent of a window
+  held, per window, from the vendor's own readings and the requests
+  recorded up to the fullest reading, and compares the median on each
+  tier. It says nothing rather than guess. A window counts only when it
+  was filled from 10% to 99%, sat wholly on one plan, opened after the
+  read began, and was spent at least 90% on one model family (Opus,
+  Sonnet, Haiku, Fable): a percent weighs models differently, so tiers
+  are compared only within one family. Each tier needs 5 such windows.
+  The finding is raised when the measured ratio is at least 25% from the
+  catalog's and the catalog's lies outside the range the two tiers'
+  quartiles allow; at 50% or more it is a notice. One tier alone is not
+  checked: the catalog's base (Pro's 45 messages) is in chat messages,
+  which the readings do not measure. Use on claude.ai or another machine
+  fills the vendor's percent without reaching TokenOps' counts, so a
+  change in that share between the two tiers moves the ratio too. The
+  catalog changes by pull request (ADR 0002); the finding says to check
+  the vendor's page and open an issue.
 - **Sessions** is the same grade `tokenops dx` gives, from the same read.
 
 `--days 30` widens the window; `--json` prints the report as data.
