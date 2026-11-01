@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 )
 
@@ -78,5 +80,36 @@ func TestCoachLintContextText(t *testing.T) {
 	}
 	if strings.Contains(out, "Reviewed") {
 		t.Errorf("output carries file text:\n%s", out)
+	}
+}
+
+// The mid-session changes are measured whether or not any rebuilt the
+// cache, and a change that did reads as a finding with its count.
+func TestRenderLintContextMidSessionChanges(t *testing.T) {
+	share := func(v float64) *float64 { return &v }
+	r := prefixlint.Report{
+		Findings: []prefixlint.Finding{{Severity: prefixlint.SeverityMedium, Source: prefixlint.SourceSession,
+			Kind: prefixlint.KindContextEdit, Path: "/repo/CLAUDE.md", Token: "1 of 2 edits followed by a rebuild", Why: "w", Fix: "f"}},
+		Medium: 1, Transcripts: 3,
+		Changes: []prefixlint.ChangeImpact{
+			{Kind: prefixlint.KindToolSetChange, Changes: 12, Sessions: 4, Explained: 9, CacheReadShareBefore: share(0.97), CacheReadShareAfter: share(0.96)},
+			{Kind: prefixlint.KindContextEdit, Changes: 2, Sessions: 1, Rebuilds: 1},
+		},
+	}
+	cmd := &cobra.Command{}
+	var b strings.Builder
+	cmd.SetOut(&b)
+	renderLintContext(cmd, r)
+	out := b.String()
+	for _, want := range []string{
+		"/repo/CLAUDE.md",
+		"edited mid-session: 1 of 2 edits followed by a rebuild",
+		"Mid-session changes",
+		"tool set changed 12 times in 4 sessions: 0 followed by a rebuild (9 met a cache already cold); cache read 97% before, 96% after",
+		"context file edited 2 times in 1 session: 1 followed by a rebuild",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
 	}
 }

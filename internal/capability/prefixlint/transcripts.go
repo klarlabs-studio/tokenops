@@ -70,8 +70,9 @@ type hookRuns struct {
 // is hashed and scanned; none of it is kept.
 func (l *linter) recorded() {
 	runs := map[string]*hookRuns{}
+	l.changes = newChangeBook()
 	for _, path := range newestTranscripts(l.src.TranscriptRoot, l.maxTranscripts()) {
-		if readHookRuns(path, runs) {
+		if readTranscript(path, runs, l.changes) {
 			l.transcripts++
 		}
 	}
@@ -101,6 +102,7 @@ func (l *linter) recorded() {
 	for _, r := range ordered {
 		l.findings = append(l.findings, l.recordedFindings(r)...)
 	}
+	l.findings = append(l.findings, l.changes.findings()...)
 }
 
 func (l *linter) maxTranscripts() int {
@@ -249,21 +251,34 @@ func newestTranscripts(root string, max int) []string {
 	return out
 }
 
-var hookSuccess = []byte(`"hook_success"`)
+var (
+	hookSuccess = []byte(`"hook_success"`)
+	assistant   = []byte(`"assistant"`)
+	usage       = []byte(`"usage"`)
+	// changeAttachments are the attachments a mid-session change is
+	// recorded in, and the one that lists the session's loaded files.
+	changeAttachments = [][]byte{[]byte(`"edited_text_file"`), []byte(`"deferred_tools_delta"`),
+		[]byte(`"mcp_instructions_delta"`), []byte(`"instructions"`)}
+)
 
-// readHookRuns adds one transcript's hook runs to runs; false when the
-// file could not be read.
-func readHookRuns(path string, runs map[string]*hookRuns) bool {
+// readTranscript adds one transcript's hook runs to runs and its
+// mid-session changes to changes; false when the file could not be read.
+// A line is parsed only when its bytes show it can matter.
+func readTranscript(path string, runs map[string]*hookRuns, changes *changeBook) bool {
 	f, err := os.Open(path) //nolint:gosec // transcripts under the client's projects directory
 	if err != nil {
 		return false
 	}
 	defer func() { _ = f.Close() }()
 	br := bufio.NewReaderSize(f, 64*1024)
+	sessions := map[string]*sessionTrack{}
 	for {
 		line, err := br.ReadBytes('\n')
-		if bytes.Contains(line, hookSuccess) {
+		switch {
+		case bytes.Contains(line, hookSuccess):
 			addRun(line, runs)
+		case bytes.Contains(line, assistant) && bytes.Contains(line, usage), mentionsAny(line, changeAttachments):
+			changes.line(line, sessions)
 		}
 		if err == io.EOF {
 			return true
@@ -272,6 +287,15 @@ func readHookRuns(path string, runs map[string]*hookRuns) bool {
 			return true
 		}
 	}
+}
+
+func mentionsAny(line []byte, words [][]byte) bool {
+	for _, w := range words {
+		if bytes.Contains(line, w) {
+			return true
+		}
+	}
+	return false
 }
 
 func addRun(line []byte, runs map[string]*hookRuns) {

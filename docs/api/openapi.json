@@ -2051,6 +2051,36 @@
                     "medium": {
                       "type": "integer"
                     },
+                    "mid_session_changes": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "cache_read_share_after": {
+                            "type": "number"
+                          },
+                          "cache_read_share_before": {
+                            "type": "number"
+                          },
+                          "changes": {
+                            "type": "integer"
+                          },
+                          "explained": {
+                            "type": "integer"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "rebuilds": {
+                            "type": "integer"
+                          },
+                          "sessions": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "read": {
                       "items": {
                         "type": "string"

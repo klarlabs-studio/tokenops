@@ -1992,6 +1992,24 @@ It reads only what the harness loads into every session:
   but has not differed yet is not flagged, and a reordered JSON array is
   reported as output that varies, since array order can be content.
 
+- What changed during a session: the same transcripts record when the
+  tool or MCP server set changed between turns and when an always-loaded
+  file (`CLAUDE.md`, `AGENTS.md`, or a file the session's instructions
+  listed, such as an auto-memory `MEMORY.md`) was edited, by you or by the
+  agent. Each change is measured: the cache-read share of the turn just
+  before it against the turn just after, under "Mid-session changes" (and
+  `mid_session_changes` in the JSON). A change whose next turn wrote most
+  of the cached prompt again, with no idle gap past the cache's lifetime,
+  model switch or compaction to explain it, is a medium finding; one that
+  met a cache already cold (a session resumed an hour later) is counted
+  apart and left out of the shares. Claude Code appends these changes after
+  the turns before them rather than rewriting the prompt, so on the
+  machine this was built on 163 tool set changes and 18 context edits over
+  150 transcripts rebuilt nothing (cache read 92% before, 89% after; 99%
+  and 99%); the measure is there to show it if a harness behaves
+  otherwise. A change to the tool definitions that Claude Code makes
+  without recording it is not seen.
+
 Hooks are never run: the command text is read (`date`, `uuidgen`,
 `git status`, `git log`, `gh pr list`, `curl`, `ps`, `df`, `$RANDOM`,
 `datetime.now` and the like, unless the output goes to a file). Each finding names its file and line or hook,
