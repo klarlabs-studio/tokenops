@@ -52,6 +52,10 @@ func readOnlyCommand(cmd string) (string, bool) {
 	return strings.Join(fields, " "), true
 }
 
+// ReadOnlyCommand is readOnlyCommand for the read guard, which answers a
+// read-only command run again with nothing changed since.
+func ReadOnlyCommand(cmd string) (string, bool) { return readOnlyCommand(cmd) }
+
 // bashCommand reads the command a Bash tool call ran.
 func bashCommand(input json.RawMessage) string {
 	var in struct {
