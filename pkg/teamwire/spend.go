@@ -64,6 +64,13 @@ type UnitBucket struct {
 	// branch; MergedPRUSD is the value of the work placed on them.
 	MergedPRs   int64   `json:"merged_prs"`
 	MergedPRUSD float64 `json:"merged_pr_usd"`
+	// RevertedCommits counts the Commits a later revert of the member's
+	// undid within 14 days, and RevertedCommitUSD the value placed on
+	// them: the work that did not stand, the counterweight to the units.
+	// Schema 4 only. A revert that lands after the day was uploaded counts
+	// once the day is uploaded again.
+	RevertedCommits   int64   `json:"reverted_commits,omitempty"`
+	RevertedCommitUSD float64 `json:"reverted_commit_usd,omitempty"`
 }
 
 // VendorCost is what a vendor's own cost API reports the organisation was
@@ -98,6 +105,13 @@ func (u Upload) validateSpend(covered map[string]bool) error {
 		func(r UnitBucket) (string, string, error) { return r.Day, r.Day + "/" + r.Repo, r.Validate() }); err != nil {
 		return err
 	}
+	if u.Schema < SchemaReverts {
+		for _, r := range u.Units {
+			if r.RevertedCommits != 0 || r.RevertedCommitUSD != 0 {
+				return fmt.Errorf("units %s/%s: schema %d carries no reverted commits", r.Day, r.Repo, u.Schema)
+			}
+		}
+	}
 	return checkRows("vendor_cost", u.VendorCosts, MaxVendorCosts, covered,
 		func(r VendorCost) (string, string, error) { return r.Day, r.Day + "/" + r.Provider, r.Validate() })
 }
@@ -130,20 +144,28 @@ func (r UnitBucket) Validate() error {
 	if !ValidRepo(r.Repo) {
 		return errors.New("repo: not a repository label (name or owner/name)")
 	}
-	if err := nonNegative(map[string]int64{"tasks": r.Tasks, "commits": r.Commits, "merged_prs": r.MergedPRs}); err != nil {
+	if err := nonNegative(map[string]int64{"tasks": r.Tasks, "commits": r.Commits, "merged_prs": r.MergedPRs,
+		"reverted_commits": r.RevertedCommits}); err != nil {
 		return err
 	}
 	if err := dollars(map[string]float64{"task_usd": r.TaskUSD, "commit_usd": r.CommitUSD,
-		"merged_pr_usd": r.MergedPRUSD}); err != nil {
+		"merged_pr_usd": r.MergedPRUSD, "reverted_commit_usd": r.RevertedCommitUSD}); err != nil {
 		return err
 	}
 	for name, unit := range map[string]struct {
 		n int64
 		v float64
-	}{"task_usd": {r.Tasks, r.TaskUSD}, "commit_usd": {r.Commits, r.CommitUSD}, "merged_pr_usd": {r.MergedPRs, r.MergedPRUSD}} {
+	}{"task_usd": {r.Tasks, r.TaskUSD}, "commit_usd": {r.Commits, r.CommitUSD}, "merged_pr_usd": {r.MergedPRs, r.MergedPRUSD},
+		"reverted_commit_usd": {r.RevertedCommits, r.RevertedCommitUSD}} {
 		if unit.n == 0 && unit.v != 0 {
 			return fmt.Errorf("%s: a value placed on no unit", name)
 		}
+	}
+	if r.RevertedCommits > r.Commits {
+		return errors.New("reverted_commits: more than commits")
+	}
+	if r.RevertedCommitUSD > r.CommitUSD*(1+1e-9)+1e-9 {
+		return errors.New("reverted_commit_usd: more than commit_usd")
 	}
 	return nil
 }

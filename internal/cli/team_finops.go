@@ -114,10 +114,10 @@ func writeSpend(out io.Writer, u teamwire.Upload, note string) {
 	if len(u.Units) > 0 {
 		fmt.Fprintf(out, "\nFinished work: %d rows.\n", len(u.Units))
 		w := tabwriter.NewWriter(out, 0, 4, 2, ' ', tabwriter.AlignRight)
-		fmt.Fprintln(w, "DAY\tREPO\tTASKS\tVALUE\tCOMMITS\tVALUE\tMERGED PRS\tVALUE\t")
+		fmt.Fprintln(w, "DAY\tREPO\tTASKS\tVALUE\tCOMMITS\tVALUE\tREVERTED\tVALUE\tMERGED PRS\tVALUE\t")
 		for _, r := range u.Units {
-			fmt.Fprintf(w, "%s\t%s\t%d\t$%.2f\t%d\t$%.2f\t%d\t$%.2f\t\n", r.Day, r.Repo, r.Tasks, r.TaskUSD,
-				r.Commits, r.CommitUSD, r.MergedPRs, r.MergedPRUSD)
+			fmt.Fprintf(w, "%s\t%s\t%d\t$%.2f\t%d\t$%.2f\t%d\t$%.2f\t%d\t$%.2f\t\n", r.Day, r.Repo, r.Tasks, r.TaskUSD,
+				r.Commits, r.CommitUSD, r.RevertedCommits, r.RevertedCommitUSD, r.MergedPRs, r.MergedPRUSD)
 		}
 		_ = w.Flush()
 	}

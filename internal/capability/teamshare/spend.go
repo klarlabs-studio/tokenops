@@ -60,8 +60,9 @@ func PlacedFor(d uniteconomics.Deps) func(ctx context.Context, turns TurnReader,
 	}
 }
 
-// addSpend fills u's schema 3 sections and marks it schema 3. A reader
-// that fails leaves its section empty with a warning.
+// addSpend fills u's schema 3 sections and marks it schema 3, or schema 4
+// with the units' reverted commits when opts allows it. A reader that
+// fails leaves its section empty with a warning.
 func addSpend(ctx context.Context, d Deps, opts Options, shared TurnReader, u *teamwire.Upload, units []sessions.Unit,
 	turns []analytics.SessionTurn, repoOf map[string]string, now time.Time) []string {
 	u.Schema = teamwire.SchemaSpend
@@ -97,6 +98,13 @@ func addSpend(ctx context.Context, d Deps, opts Options, shared TurnReader, u *t
 		return l
 	}
 	u.Units = UnitRows(story.Group(units, story.Options{}), turns, placed, repoOf, labelOf, covered)
+	if opts.Schema >= teamwire.SchemaReverts {
+		u.Schema = teamwire.SchemaReverts
+	} else {
+		for i := range u.Units {
+			u.Units[i].RevertedCommits, u.Units[i].RevertedCommitUSD = 0, 0
+		}
+	}
 	if slices.Contains(teamwire.VendorCostRoles, opts.Role) && d.Schema3.VendorCosts != nil {
 		var w []string
 		done := lap(opts.Took, "vendor cost")
@@ -153,7 +161,8 @@ func SpendRows(turns []analytics.SessionTurn, repoOf map[string]string, covered 
 // UnitRows files the covered days' finished work by day and repository:
 // each task with recorded usage under the day it started and its
 // session's repository, each placed commit and pull request under the
-// day it landed and labelOf its repository.
+// day it landed and labelOf its repository. A commit a revert undid
+// counts among the day's commits and again among its reverted ones.
 func UnitRows(tasks []story.Task, turns []analytics.SessionTurn, placed []uniteconomics.Placed,
 	repoOf map[string]string, labelOf func(root string) string, covered map[string]bool) []teamwire.UnitBucket {
 	type key struct{ day, repo string }
@@ -192,6 +201,10 @@ func UnitRows(tasks []story.Task, turns []analytics.SessionTurn, placed []unitec
 		case uniteconomics.UnitCommit:
 			r.Commits++
 			r.CommitUSD += p.APIEquivalentUSD
+			if p.Reverted {
+				r.RevertedCommits++
+				r.RevertedCommitUSD += p.APIEquivalentUSD
+			}
 		case uniteconomics.UnitMergedPR:
 			r.MergedPRs++
 			r.MergedPRUSD += p.APIEquivalentUSD
