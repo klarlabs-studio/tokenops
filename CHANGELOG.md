@@ -5,6 +5,7 @@
 ### Fixed
 
 - **claude-code:** TokenOps did not read what Claude Code's subagents did. Claude Code writes each subagent's turns to its own transcript beside the session's (`<session>/subagents/agent-<id>.jsonl`), and TokenOps read only the session's, so on a machine that runs subagents a week's spend, waste and units of work left out about a quarter of its tokens (27% of them, and 35% of the output, on one machine). Subagent turns are now read, once each, as the session's, and say which subagent made them and what type it was. A session's budget counts its subagents' spend too, and `tokenops sessions` reads each subagent's work as the subagent's, apart from the operator's own instructions, as it already did for Codex. The first start after the upgrade reads the subagent transcripts already on disk, so recent weeks' figures go up.
+- **read guard:** after `/compact` the read guard could refuse a re-read the agent needed. A compaction drops the files the agent read from its context, but the guard went on treating them as already read, so an unchanged file read before the compaction was refused after it, and the agent was told to use a copy it no longer had. The guard now notices a compaction in the session's transcript and forgets every read from before it. Nothing to reinstall: the Read hook already installed does it.
 - **findings:** a count of one now reads in the singular: "The read guard refused 1 re-read", not "1 re-reads", and likewise for re-read files and sessions past their budget.
 
 ## 0.116.6 - 2026-11-01
