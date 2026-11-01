@@ -322,3 +322,23 @@ option:
   not seen. Comparing a session's cost with similar successful tasks
   (EET) is not done: the pause point does not know the task's kind, and
   that history is in the event store it never opens.
+
+## Folder and hours (amended 2026-11-01)
+
+- **Where and when are conditions.** `folder` (one or more absolute
+  folders or globs, read as an allocation rule's `dir` is) and `hours`
+  (time windows with optional weekdays, in the machine's time zone) join
+  `when`. A rule applies only when every condition holds; a rule without
+  them is unchanged.
+- **The working directory is compared and dropped.** The pause point and
+  route-guard take it from the hook's `cwd` (opencode: the plugin's
+  directory), compare it and keep nothing; a decision names the rule's
+  folder that matched, never the directory. `model_route` and `share` have
+  no session directory and refuse `folder` at load. Codex and Cursor send
+  none either, so a folder rule is not evaluated in their advice.
+- **Organisation rules take both, without a wire change.** They travel in
+  `when`, which `BoundaryRule` already carries. A condition only narrows
+  the rule it is on, and rules combine by the strictest match, so it cannot
+  loosen a local rule. Neither crosses into an approval request. A member
+  on an older TokenOps refuses a document using them and keeps the version
+  it holds, as for any rule it cannot parse.

@@ -2536,6 +2536,41 @@ shadow; `tokenops boundaries loop-breaker` adds it to an older config, and
 `tokenops boundaries promote loop-breaker` makes it pause. It keeps tool
 names and input hashes only, and is evaluated in Claude Code only.
 
+**Where and when.** Two conditions limit a rule to a project folder and a
+time of day; a rule with them applies only when they hold, together with its
+other conditions, and a rule without them applies everywhere and always:
+
+```yaml
+boundaries:
+  - name: acme-office-hours
+    action: continue
+    when:
+      folder: "~/clients/acme, ~/clients/globex/*"
+      hours: "mon-fri 09:00-18:00, 22:00-06:00"
+      session_cost_usd: ">= 10"
+    require: ask
+```
+
+`folder` is one or more absolute folders, separated by commas (`~` is your
+home): the session's working directory matches when it is one of them or
+inside one. Like an allocation rule's `dir`, a folder may be a glob
+(`~/clients/*`); case matters and symlinks are not resolved. Claude Code's
+hook and route-guard send the working directory, and opencode's plugin its
+own; Codex and Cursor do not, so `status` shows a folder rule as not
+evaluated there, and `model_route` and `share` rules do not take `folder`.
+`hours` is one or more windows, separated by commas, on a 24-hour clock in
+this machine's time zone: `09:00-18:00` (the end is not included),
+`22:00-06:00` across midnight, an optional weekday or range first
+(`mon-fri 09:00-18:00`, `sat`, `fri-mon`, `mon+wed 08:00-09:00`), or
+weekdays alone for whole days (`sat-sun`). A window across midnight
+belongs to the day it starts on: `fri 22:00-06:00` runs into Saturday
+morning. `status` lists each rule's conditions and says whether its hours
+hold now; a refusal and `tokenops explain` say which folder and time
+matched. The working directory is compared and dropped, never recorded.
+Organisation rules take both too: a condition only narrows the rule it is
+on, so it never loosens a local rule, and an approval sent to the team
+plane carries neither.
+
 ### `tokenops boundaries presence {enroll|enforce|status|rotate}`
 
 [Presence-checked approval](https://team.klarlabs.de/guide/boundaries#presence-checked-approval) on
