@@ -65,6 +65,7 @@ const (
 	ViaStopHook   = ft.ViaStopHook
 	ViaStatusLine = ft.ViaStatusLine
 	ViaAmbient    = ft.ViaAmbient
+	ViaAgent      = ft.ViaAgent
 )
 
 // RecordTip records a tip the coach gave about the session, under the ID

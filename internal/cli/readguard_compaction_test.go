@@ -37,7 +37,7 @@ func TestReadGuardHookAllowsTheReReadAfterACompaction(t *testing.T) {
 		var out bytes.Buffer
 		cmd.SetIn(bytes.NewReader(payload))
 		cmd.SetOut(&out)
-		if err := runReadGuardHook(cmd, readguard.ModeActive, dir); err != nil {
+		if err := runReadGuardHook(cmd, readguard.ModeActive, dir, nil); err != nil {
 			t.Fatal(err)
 		}
 		return out.String()
