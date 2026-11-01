@@ -32,7 +32,10 @@ func Lint(src Sources) Report {
 	if src.TranscriptRoot != "" {
 		l.recorded()
 	}
-	r := Report{Findings: l.findings, Read: l.read, Transcripts: l.transcripts}
+	r := Report{Findings: l.findings, Read: l.read, Transcripts: l.transcripts, Changes: []ChangeImpact{}}
+	if l.changes != nil {
+		r.Changes = l.changes.impacts()
+	}
 	if r.Findings == nil {
 		r.Findings = []Finding{}
 	}
@@ -57,6 +60,8 @@ type linter struct {
 	findings    []Finding
 	read        []string
 	transcripts int
+	// changes measures mid-session changes in the transcripts read.
+	changes *changeBook
 	// seen maps a read file to its index in read, so a file loaded by two
 	// clients or imported twice is read once.
 	seen map[string]int

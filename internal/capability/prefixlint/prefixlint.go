@@ -13,11 +13,15 @@
 // SessionStart and UserPromptSubmit hooks in its settings, and the AGENTS.md
 // files Codex and opencode load. A hook is never run: its command text is
 // read, and, when asked, the output Claude Code's transcripts recorded for
-// it. A finding carries the matched token only, never the text around it,
+// it. The same transcripts give the mid-session changes (changes.go): the
+// tool set changing, or an always-loaded file edited, between turns. A finding carries the matched token only, never the text around it,
 // and nothing is sent anywhere.
 package prefixlint
 
-import "fmt"
+import (
+	"fmt"
+	"path/filepath"
+)
 
 // Severities, most urgent first.
 const (
@@ -41,6 +45,8 @@ const (
 	SourceHook = "hook"
 	// SourceHookOutput is what transcripts recorded a hook printing.
 	SourceHookOutput = "hook-output"
+	// SourceSession is a change transcripts recorded during a session.
+	SourceSession = "session"
 )
 
 // Kinds of volatile text.
@@ -60,9 +66,24 @@ const (
 	KindRandom = "random-command"
 	// KindGit is a hook command that prints repository state.
 	KindGit = "git-command"
+	// KindRemote is a hook command that prints what it fetched over the
+	// network: curl, wget, gh pr list.
+	KindRemote = "remote-command"
+	// KindSystem is a hook command that prints the machine's moment-to-
+	// moment state: ps, df.
+	KindSystem = "system-command"
 	// KindOutputVaries is a hook whose recorded output differs between
 	// sessions, though no single token in it gives the reason.
 	KindOutputVaries = "output-varies"
+	// KindKeyOrder is a hook whose recorded output is the same JSON in
+	// different sessions with its keys in a different order or spacing.
+	KindKeyOrder = "unstable-json"
+	// KindToolSetChange is a session whose tool or MCP server set changed
+	// between turns, followed by a rebuild of the cached prefix.
+	KindToolSetChange = "tool-set-change"
+	// KindContextEdit is a context file edited during a session, followed
+	// by a rebuild of the cached prefix.
+	KindContextEdit = "context-edit"
 )
 
 // Hook events the lint reads.
@@ -104,9 +125,12 @@ type Report struct {
 	Read []string `json:"read"`
 	// Transcripts is how many transcripts were read for hook output.
 	Transcripts int `json:"transcripts_read"`
-	High        int `json:"high"`
-	Medium      int `json:"medium"`
-	Low         int `json:"low"`
+	// Changes measures the mid-session changes the transcripts recorded:
+	// the cache-read share of the turn before each against the turn after.
+	Changes []ChangeImpact `json:"mid_session_changes"`
+	High    int            `json:"high"`
+	Medium  int            `json:"medium"`
+	Low     int            `json:"low"`
 }
 
 // HighFindings are the report's high-severity findings.
@@ -127,17 +151,26 @@ func (f Finding) Subject() string {
 	case SourceHook:
 		return fmt.Sprintf("%s hook running `%s`", f.Hook, f.Token)
 	case SourceHookOutput:
+		if f.Kind == KindKeyOrder {
+			return fmt.Sprintf("%s hook `%s` printing JSON whose key order changes", f.Hook, f.Command)
+		}
 		return fmt.Sprintf("%s hook `%s` printing a %s", f.Hook, f.Command, f.Kind)
+	case SourceSession:
+		if f.Kind == KindToolSetChange {
+			return "tool set changing mid-session"
+		}
+		return fmt.Sprintf("`%s` edited mid-session", filepath.Base(f.Path))
 	}
 	return fmt.Sprintf("%s in a context file", f.Kind)
 }
 
 // InPrefix reports whether the item sits in the cached prefix, so a change
-// to it rebuilds the cache from there: a context file's line, or a
-// SessionStart hook's output. A UserPromptSubmit hook's output is
-// appended after the turns before it and leaves their cache alone.
+// to it rebuilds the cache from there: a context file's line, a
+// SessionStart hook's output, or a mid-session change measured to have
+// rebuilt it. A UserPromptSubmit hook's output is appended after the
+// turns before it and leaves their cache alone.
 func (f Finding) InPrefix() bool {
-	return f.Source == SourceFile || f.Hook == EventSessionStart
+	return f.Source == SourceFile || f.Source == SourceSession || f.Hook == EventSessionStart
 }
 
 // LoadedBy reports whether the harness client loads the item.

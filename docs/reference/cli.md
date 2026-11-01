@@ -1676,11 +1676,15 @@ Opus 5.5 high · ▰▰▰▰▱▱ 5h 62% ↻12:49 · wk 41% ↻Mon · ctx 71% 
   setting), so it warns before compaction rather than at 100%;
 - the prompt cache hit ratio, or, when under two minutes are left before
   the cache expires, **cache cold in 1m**, and **cache cold** once it has:
-  the next prompt then writes the whole context to the cache again. The
-  cache lives five minutes after the last request, or an hour when the
-  session writes it with the extended lifetime; the line reads both from
-  the timestamps and token counts at the end of the session's transcript,
-  never its text;
+  the next prompt then writes the whole context to the cache again. In
+  brackets is how much that is, the prompt the cache holds (**cache cold
+  in 1m (182k)**), so you can tell whether it is worth sending the next
+  prompt before it expires. It never suggests `/compact`: Claude Code
+  compacts an idle session itself, and a warning is information, not a
+  reason to interrupt. The cache lives five minutes after the last
+  request, or an hour when the session writes it with the extended
+  lifetime; the line reads both from the timestamps and token counts at
+  the end of the session's transcript, never its text;
 - the session's cost in your currency — marked "value" when a plan
   covers it, since then it is what the work was worth, not what you paid;
 - the coach's open tip, unless the coach is quiet or off.
@@ -2000,11 +2004,35 @@ It reads only what the harness loads into every session:
 - What hooks printed: the newest Claude Code transcripts (20 by default)
   record each hook's output. A `SessionStart` hook whose output carries a
   timestamp, a UUID or a commit hash, or differs from one session to the
-  next, is reported even when its command is a script.
+  next, is reported even when its command is a script. When the outputs
+  differ only in the order of a JSON value's keys (or its spacing), the
+  finding says so: the hook prints the same facts from a hash map in
+  whatever order it iterates, and sorting the keys fixes it. Only what the
+  transcripts show is judged; a command that could print unordered JSON
+  but has not differed yet is not flagged, and a reordered JSON array is
+  reported as output that varies, since array order can be content.
+
+- What changed during a session: the same transcripts record when the
+  tool or MCP server set changed between turns and when an always-loaded
+  file (`CLAUDE.md`, `AGENTS.md`, or a file the session's instructions
+  listed, such as an auto-memory `MEMORY.md`) was edited, by you or by the
+  agent. Each change is measured: the cache-read share of the turn just
+  before it against the turn just after, under "Mid-session changes" (and
+  `mid_session_changes` in the JSON). A change whose next turn wrote most
+  of the cached prompt again, with no idle gap past the cache's lifetime,
+  model switch or compaction to explain it, is a medium finding; one that
+  met a cache already cold (a session resumed an hour later) is counted
+  apart and left out of the shares. Claude Code appends these changes after
+  the turns before them rather than rewriting the prompt, so on the
+  machine this was built on 163 tool set changes and 18 context edits over
+  150 transcripts rebuilt nothing (cache read 92% before, 89% after; 99%
+  and 99%); the measure is there to show it if a harness behaves
+  otherwise. A change to the tool definitions that Claude Code makes
+  without recording it is not seen.
 
 Hooks are never run: the command text is read (`date`, `uuidgen`,
-`git status`, `git log`, `$RANDOM`, `datetime.now` and the like, unless
-the output goes to a file). Each finding names its file and line or hook,
+`git status`, `git log`, `gh pr list`, `curl`, `ps`, `df`, `$RANDOM`,
+`datetime.now` and the like, unless the output goes to a file). Each finding names its file and line or hook,
 the matched token and nothing around it, why it breaks the cache and the
 fix. Nothing is sent anywhere.
 
