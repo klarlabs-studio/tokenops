@@ -63,10 +63,18 @@ type fingerprint struct {
 type pathState struct {
 	FP    fingerprint `json:"fp"`
 	Reads int         `json:"reads"`
+	// ReadAt is when the file was last read, in unix nanoseconds, so a
+	// compaction after it can forget it. Zero on state written before it
+	// was kept, which a compaction treats as before.
+	ReadAt int64 `json:"read_at,omitempty"`
 }
 
 type sessionState struct {
 	Paths map[string]pathState `json:"paths"`
+	// TranscriptOffset is how far into the session's transcript
+	// ForgetCompacted has looked for compactions, so each call reads only
+	// what the transcript gained since the last.
+	TranscriptOffset int64 `json:"transcript_offset,omitempty"`
 }
 
 // ledgerEvent is one appended reclamation record. Repeat/Ranged/Changed
@@ -129,6 +137,7 @@ func Evaluate(dir, sessionID, agentID, filePath string, ranged bool, mode Mode, 
 	ps := prev
 	ps.FP = fp
 	ps.Reads++
+	ps.ReadAt = now.UnixNano()
 	if st.Paths == nil {
 		st.Paths = map[string]pathState{}
 	}

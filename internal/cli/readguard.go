@@ -22,9 +22,12 @@ type preToolUseInput struct {
 	// AgentID is present only for subagent tool calls; empty for the main
 	// agent. It scopes read-guard's ledger per agent-context so a subagent's
 	// read never blocks the main agent's later read of the same file.
-	AgentID   string `json:"agent_id"`
-	ToolName  string `json:"tool_name"`
-	ToolInput struct {
+	AgentID string `json:"agent_id"`
+	// TranscriptPath is the session's transcript, where a compaction
+	// shows up.
+	TranscriptPath string `json:"transcript_path"`
+	ToolName       string `json:"tool_name"`
+	ToolInput      struct {
 		FilePath string          `json:"file_path"`
 		Offset   json.RawMessage `json:"offset"`
 		Limit    json.RawMessage `json:"limit"`
@@ -96,6 +99,9 @@ func runReadGuardHook(cmd *cobra.Command, mode readguard.Mode, dir string) error
 	}
 	ranged := len(in.ToolInput.Offset) > 0 || len(in.ToolInput.Limit) > 0
 	now := time.Now()
+	if in.AgentID == "" {
+		readguard.ForgetCompacted(dir, in.SessionID, in.TranscriptPath)
+	}
 	dec := readguard.Evaluate(dir, in.SessionID, in.AgentID, in.ToolInput.FilePath, ranged, mode, now)
 	if dec.Action == readguard.ActionBlocked || dec.Action == readguard.ActionWouldBlock {
 		// A refusal is an action boundary: recorded with its expected
