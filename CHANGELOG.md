@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **findings:** a count of one now reads in the singular: "The read guard refused 1 re-read", not "1 re-reads", and likewise for re-read files and sessions past their budget.
+
 ## 0.116.6 - 2026-11-01
 
 ### Fixed

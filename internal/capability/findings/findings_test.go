@@ -261,3 +261,25 @@ func TestWriteSnapshotKeepsTheAnalysisWhenOneFigureIsNaN(t *testing.T) {
 		t.Errorf("stored %+v", got)
 	}
 }
+
+// A count of one reads in the singular.
+func TestCountedFindingsReadInTheSingular(t *testing.T) {
+	r := Compute(Inputs{
+		CoachHook: &coachhook.Stats{DistinctSessions: 1, AlertsByTier: map[string]int{"100%": 1}},
+		ReadGuard: &readguard.Stats{WouldBlock: 1, DistinctSessions: 1, Blocked: 1},
+	})
+	var got []string
+	for _, f := range r.Findings {
+		if f.Kind == KindWaste || f.Kind == KindBudget {
+			got = append(got, f.Title+" | "+f.Evidence)
+		}
+	}
+	want := []string{
+		"Agents re-read 1 unchanged file in full in the last 7 days | about 0 tokens of context spent on files already read, across 1 session",
+		"1 of 1 session ran past its budget in the last 7 days | the largest came to about $0.00 at API prices",
+		"The read guard refused 1 re-read in the last 7 days | about 0 tokens kept out of context",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("findings:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
