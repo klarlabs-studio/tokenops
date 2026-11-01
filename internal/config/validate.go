@@ -67,6 +67,9 @@ func (c Config) Validate() error {
 	if err := c.Optimizer.SmartRouting.Validate(); err != nil {
 		return err
 	}
+	if err := c.Optimizer.CommandFmt.Validate(); err != nil {
+		return err
+	}
 	if err := c.ModelPolicy.Policy().Validate(); err != nil {
 		return err
 	}

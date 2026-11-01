@@ -15,6 +15,7 @@ import (
 	mcpgo "go.klarlabs.de/mcp"
 	mcpserver "go.klarlabs.de/mcp/server"
 
+	"go.klarlabs.de/tokenops/internal/capability/fmtinsight"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -542,6 +543,16 @@ func experimentChange(args map[string]any) (*change, error) {
 		return &change{
 			summary: fmt.Sprintf("Stop the routing experiment %s%s; its evidence is kept.", quoted(id), details(args, "reason")),
 			command: cli("experiment stop", words(id), flagValue("--reason", reason)),
+		}, nil
+	case "fmt":
+		// An unreadable share is refused before the operator is asked.
+		share := argString(args, "fmt_share")
+		if _, err := fmtinsight.ParseExperiment(share); err != nil {
+			return nil, inputError(err)
+		}
+		return &change{
+			summary: fmt.Sprintf("Set the fmt outcome experiment to %s: that share of sessions, drawn by session id, get their command output raw instead of compressed, so fmt can be compared on how the work went.", quoted(share)),
+			command: cli("fmt experiment", words(argRaw(args, "fmt_share"))),
 		}, nil
 	}
 	return nil, nil // status

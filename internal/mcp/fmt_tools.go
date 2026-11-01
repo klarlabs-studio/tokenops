@@ -19,6 +19,11 @@ type fmtLearnInput struct {
 	NoJSONL    bool   `json:"no_jsonl,omitempty" jsonschema:"description=Skip folding in Claude Code log signal (wrapped-run index only)"`
 }
 
+type fmtExperimentInput struct {
+	Days       int    `json:"days,omitempty" jsonschema:"description=Window in days (default 30)"`
+	RecoverDir string `json:"recover_dir,omitempty" jsonschema:"description=Recovery store dir; defaults to ~/.tokenops/recovery"`
+}
+
 type fmtAnalyzeInput struct {
 	Root     string `json:"root,omitempty" jsonschema:"description=Claude Code projects dir; defaults to ~/.claude/projects"`
 	MaxFiles int    `json:"max_files,omitempty" jsonschema:"description=Cap sessions scanned (newest first); 0 uses the default cap"`
@@ -68,6 +73,27 @@ func RegisterFmtTools(s *Server, d FmtDeps) error {
 			return jsonString(rep), nil
 		})
 
+	s.Tool("tokenops_fmt_experiment").
+		Description("The fmt outcome experiment: with it on, a share of sessions drawn at random by session id get raw command output, and the arms are compared on outcomes rather than bytes saved: first-try and reworked instructions, repeated tool calls, tokens per instruction, and outcomes recorded under the session id. Counts per arm, the difference with a rough 95% interval over sessions, and \"not enough sessions yet\" until each arm has 4 sessions and 20 instructions. A difference that excludes zero is a lead to check, not a finding. Read-only; tokenops_experiment action fmt turns it on or off.").
+		Handler(func(ctx context.Context, in fmtExperimentInput) (string, error) {
+			days := in.Days
+			if days <= 0 {
+				days = fmtinsight.DefaultExperimentDays
+			}
+			since := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+			var outcomes map[string]string
+			if d.Outcomes != nil {
+				outcomes = d.Outcomes(ctx, since)
+			}
+			rep, err := fmtinsight.Experiment(d.commandFmt().Experiment, fmtinsight.ExperimentOptions{
+				RecoverDir: in.RecoverDir, Since: since, Outcomes: outcomes,
+			})
+			if err != nil {
+				return jsonString(map[string]string{"error": "read_index_failed", "hint": err.Error()}), nil
+			}
+			return jsonString(rep), nil
+		})
+
 	return nil
 }
 
@@ -101,6 +127,9 @@ type FmtDeps struct {
 	// ConfigGetter returns the live configuration; nil reads the
 	// built-in catalog alone.
 	ConfigGetter func() *config.Config
+	// Outcomes reads the recorded outcomes since a time, by execution
+	// id; nil compares the experiment's arms on transcripts alone.
+	Outcomes func(ctx context.Context, since time.Time) map[string]string
 }
 
 // commandFmt is the fmt configuration in effect now.

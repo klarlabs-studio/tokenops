@@ -16,7 +16,7 @@ func TestLearnIndex_RoundTrip(t *testing.T) {
 		Handled:      true,
 		CriticalKept: true,
 	}
-	if err := recordCompressRun(dir, "go", "balanced", res, time.Unix(0, 0)); err != nil {
+	if err := recordCompressRun(dir, "go", "balanced", res, fmtExperimentRun{}, time.Unix(0, 0)); err != nil {
 		t.Fatalf("recordCompressRun: %v", err)
 	}
 	recs, err := readLearnRecords(dir)
@@ -41,7 +41,7 @@ func TestLearnIndex_RoundTrip(t *testing.T) {
 func TestLearnIndex_NoRecoveryIDSkips(t *testing.T) {
 	dir := t.TempDir()
 	// Recovery disabled -> no RecoveryID -> no record written.
-	if err := recordCompressRun(dir, "go", "balanced", &fmtResult{}, time.Unix(0, 0)); err != nil {
+	if err := recordCompressRun(dir, "go", "balanced", &fmtResult{}, fmtExperimentRun{}, time.Unix(0, 0)); err != nil {
 		t.Fatalf("recordCompressRun: %v", err)
 	}
 	recs, _ := readLearnRecords(dir)
@@ -63,7 +63,7 @@ func TestLearnIndex_MissingIndexIsEmpty(t *testing.T) {
 func TestLearnIndex_GenericFallbackFlagged(t *testing.T) {
 	dir := t.TempDir()
 	res := &fmtResult{RecoveryID: "id1", BytesBefore: 500, BytesAfter: 480, Handled: false}
-	_ = recordCompressRun(dir, "jq", "balanced", res, time.Unix(0, 0))
+	_ = recordCompressRun(dir, "jq", "balanced", res, fmtExperimentRun{}, time.Unix(0, 0))
 	recs, _ := readLearnRecords(dir)
 	if len(recs) != 1 || !recs[0].GenericFallback {
 		t.Errorf("unhandled command must be flagged generic_fallback: %+v", recs)

@@ -95,6 +95,8 @@ var exactCases = []ExactCase{
 		[]Invocation{{Path: "experiment stop", Args: []string{"exp-1"}, Flags: map[string]any{"reason": "-regressed"}}}},
 	{"tokenops_experiment", map[string]any{"action": "stop", "experiment_id": "-exp"},
 		[]Invocation{{Path: "experiment stop", Args: []string{"-exp"}, Flags: map[string]any{"reason": ""}}}},
+	{"tokenops_experiment", map[string]any{"action": "fmt", "fmt_share": "25"},
+		[]Invocation{{Path: "fmt experiment", Args: []string{"25"}}}},
 }
 
 // shownCommand is the command a call shows the operator, after the

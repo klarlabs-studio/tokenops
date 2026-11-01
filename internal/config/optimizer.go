@@ -55,6 +55,28 @@ type CommandFmtConfig struct {
 	// noise regexes to drop per loss level. User rules run through the same
 	// critical-line survival guard as built-ins.
 	Formatters []CommandFmtFormatter `yaml:"formatters"`
+	// Experiment is the share of sessions, in percent, whose command
+	// output fmt passes through raw while recording what it would have
+	// saved, so fmt is judged on how the work went in each arm rather
+	// than on bytes saved (`tokenops fmt experiment`). The arm is drawn
+	// from the session id. 0, the default, is off; at most
+	// MaxFmtExperimentPercent.
+	Experiment int `yaml:"experiment,omitempty"`
+}
+
+// The fmt experiment's bounds: off unless the operator turns it on, and
+// never more than half the sessions on raw output.
+const (
+	DefaultFmtExperimentPercent = 50
+	MaxFmtExperimentPercent     = 50
+)
+
+// Validate rejects an experiment share outside its bounds.
+func (c CommandFmtConfig) Validate() error {
+	if c.Experiment < 0 || c.Experiment > MaxFmtExperimentPercent {
+		return fmt.Errorf("optimizer.command_fmt.experiment must be 0 (off) to %d percent, got %d", MaxFmtExperimentPercent, c.Experiment)
+	}
+	return nil
 }
 
 // CommandFmtFormatter is one user-defined formatter declaration.

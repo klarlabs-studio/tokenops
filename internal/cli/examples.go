@@ -43,6 +43,8 @@ tokenops fmt --level aggressive -- git log`,
 	"fmt recover": `tokenops fmt recover 01J9Z…`,
 	"fmt learn":   `tokenops fmt learn --apply`,
 	"fmt analyze": `tokenops fmt analyze --top 10`,
+	"fmt experiment": `tokenops fmt experiment on        # half the sessions get raw command output
+tokenops fmt experiment --days 14 # compare the arms on outcomes`,
 	"glance": `tokenops glance                  # every plan as a card, with the coach's findings
 tokenops glance --brief          # a table instead
 tokenops glance --findings       # only the findings, all of them`,
