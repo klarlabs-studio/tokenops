@@ -78,6 +78,7 @@ operator's instruction text and local file paths.
 | `GET /api/spend/cache_stats` | Prompt cache hits and savings |
 | `GET /api/spend/top` | Top consumers, ranked on the API equivalent |
 | `GET /api/spend/commits` | What each commit cost: the agent work that led to it, priced; subjects withheld |
+| `GET /api/spend/claude-code` | The organisation's Claude Code use as Anthropic reports it, per UTC day (`?days=`, 1 to 90; 7 when omitted), from every configured key: a Claude Console admin key (with Anthropic's estimated cost) and a Claude Enterprise Analytics API key (claude.ai sign-ins, about a day behind; unpublished days under `pending`). Summed over users, no names. 409 when neither key is configured |
 | `GET /api/spend/units` | Cost per commit, merged pull request, recorded and achieved outcome and change class against the 4 weeks before (`?since=`; the last 7 days when omitted), with plan-window shares on a flat-rate plan and the work no unit took |
 | `GET /api/spend/waste` | Avoidable usage by waste class, each token in one class, in API-equivalent dollars and plan-window share (`?since=`; the last 7 days when omitted), what was realized beside it, and the guardrail to switch on next |
 | `GET /api/spend/burn-rate` | Usage over the last hours |

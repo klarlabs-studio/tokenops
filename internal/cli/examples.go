@@ -22,6 +22,8 @@ tokenops init --yes              # take every default`,
 	"statusline": `tokenops statusline install      # Claude Code runs it on every turn`,
 	"plan set": `tokenops plan set anthropic claude-ultra
 tokenops plan set openai gpt-pro-5x --price 229 --currency EUR`,
+	"spend claude-code": `tokenops spend claude-code              # the last 7 UTC days, from every configured key
+tokenops spend claude-code --days 30 --json`,
 	"spend units": `tokenops spend units                # the last 7 days against the 4 weeks before
 tokenops spend units --since 30d --json`,
 	"spend waste": `tokenops spend waste                # the last 7 days

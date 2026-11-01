@@ -39,6 +39,7 @@ func (c Config) Redacted() Config {
 	}
 	mask(&redacted.Dashboard.AdminToken)
 	mask(&redacted.VendorUsage.Anthropic.AdminKey)
+	mask(&redacted.VendorUsage.Anthropic.AnalyticsKey)
 	mask(&redacted.VendorUsage.ClaudeUsageMeter.SessionKey)
 	mask(&redacted.VendorUsage.ClaudeUsageMeter.Clearance)
 	if len(redacted.VendorUsage.ClaudeUsageMeter.BrowserCookies) > 0 {

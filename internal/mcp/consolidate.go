@@ -14,6 +14,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
+	"go.klarlabs.de/tokenops/internal/capability/claudecodeorg"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
@@ -312,7 +313,7 @@ type glanceIn struct {
 }
 
 type spendIn struct {
-	View           string   `json:"view,omitempty" jsonschema:"enum=summary,enum=top,enum=burn,enum=forecast,enum=commits,enum=units,enum=waste,enum=tags,description=summary (default): spend and tokens over a window. top: the largest consumers. burn: the last hours, hour by hour. forecast: daily spend projected forward. commits: what each of the operator's commits cost, from the agent work that led to it. units: cost per commit, merged pull request, outcome and change class against the 4 weeks before, with plan-window shares on a flat-rate plan. waste: avoidable usage by waste class in dollars and plan-window share, what was realized, and the guardrail to switch on next. tags: spend per project, client or cost centre, by the operator's allocation rules."`
+	View           string   `json:"view,omitempty" jsonschema:"enum=summary,enum=top,enum=burn,enum=forecast,enum=commits,enum=units,enum=waste,enum=tags,enum=claude_code,description=summary (default): spend and tokens over a window. top: the largest consumers. burn: the last hours, hour by hour. forecast: daily spend projected forward. commits: what each of the operator's commits cost, from the agent work that led to it. units: cost per commit, merged pull request, outcome and change class against the 4 weeks before, with plan-window shares on a flat-rate plan. waste: avoidable usage by waste class in dollars and plan-window share, what was realized, and the guardrail to switch on next. tags: spend per project, client or cost centre, by the operator's allocation rules. claude_code: the organisation's Claude Code use as Anthropic reports it (users, sessions, commits, pull requests, lines, accepted edits, tokens and estimated cost per UTC day), read with a Claude Console admin key; it covers Claude Code billed through the Console organisation, not subscription sign-ins."`
 	Since          string   `json:"since,omitempty" jsonschema:"description=summary, top, commits, units, waste and tags: RFC3339 time or a duration such as 24h or 7d"`
 	Until          string   `json:"until,omitempty" jsonschema:"description=summary, top and tags: RFC3339 time; open when omitted"`
 	WorkflowID     string   `json:"workflow_id,omitempty" jsonschema:"description=summary: one workflow"`
@@ -322,6 +323,7 @@ type spendIn struct {
 	Hours          int      `json:"hours,omitempty" jsonschema:"minimum=1,maximum=168,description=burn: lookback in hours (default 24)"`
 	HorizonDays    int      `json:"horizon_days,omitempty" jsonschema:"minimum=1,maximum=30,description=forecast: days ahead (default 7)"`
 	Limit          int      `json:"limit,omitempty" jsonschema:"description=commits: most recent commits to list (default 20); the totals cover them all"`
+	Days           int      `json:"days,omitempty" jsonschema:"minimum=1,maximum=90,description=claude_code: UTC days up to and including today (default 7)"`
 	IncludeSources []string `json:"include_sources,omitempty" jsonschema:"description=re-admit an excluded activity source: mcp-session"`
 }
 
@@ -484,6 +486,8 @@ type spendOut struct {
 	Units    *uniteconomics.Report `json:"units,omitempty"`
 	Waste    *avoidable.Report     `json:"waste,omitempty"`
 	Tags     *allocation.Report    `json:"tags,omitempty"`
+	// ClaudeCode is the claude_code view.
+	ClaudeCode *claudecodeorg.Result `json:"claude_code,omitempty"`
 }
 
 type sessionsOut struct {
@@ -588,14 +592,15 @@ func publicTools() []publicTool {
 			description: "What was spent and where it went: totals over a window, the top consumers, the burn over recent hours, or a forecast. On a flat-rate plan billed cost is about zero, so read the API-equivalent value and tokens.",
 			selector:    "view", def: "summary", input: spendIn{}, output: spendOut{},
 			routes: map[string]route{
-				"summary":  {inner: "tokenops_spend_summary", params: params("since", "until", "workflow_id", "agent_id", "include_sources")},
-				"top":      {inner: "tokenops_top_consumers", params: params("by", "top", "since", "until", "include_sources")},
-				"burn":     {inner: "tokenops_burn_rate", params: params("hours", "include_sources")},
-				"forecast": {inner: "tokenops_forecast", params: params("horizon_days", "include_sources")},
-				"commits":  {inner: "tokenops_cost_per_commit", params: params("since", "limit")},
-				"units":    {inner: "tokenops_unit_costs", params: params("since")},
-				"waste":    {inner: "tokenops_waste", params: params("since")},
-				"tags":     {inner: "tokenops_spend_tags", params: params("by", "since", "until", "include_sources")},
+				"summary":     {inner: "tokenops_spend_summary", params: params("since", "until", "workflow_id", "agent_id", "include_sources")},
+				"top":         {inner: "tokenops_top_consumers", params: params("by", "top", "since", "until", "include_sources")},
+				"burn":        {inner: "tokenops_burn_rate", params: params("hours", "include_sources")},
+				"forecast":    {inner: "tokenops_forecast", params: params("horizon_days", "include_sources")},
+				"commits":     {inner: "tokenops_cost_per_commit", params: params("since", "limit")},
+				"units":       {inner: "tokenops_unit_costs", params: params("since")},
+				"waste":       {inner: "tokenops_waste", params: params("since")},
+				"tags":        {inner: "tokenops_spend_tags", params: params("by", "since", "until", "include_sources")},
+				"claude_code": {inner: "tokenops_claude_code_org", params: params("days")},
 			},
 		},
 		{

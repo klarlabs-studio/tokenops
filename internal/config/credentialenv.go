@@ -43,6 +43,11 @@ func CredentialEnvVars() []CredentialEnv {
 			Describes: "Anthropic admin key (sk-ant-admin-*)",
 		},
 		{
+			Name:      "TOKENOPS_ANTHROPIC_ANALYTICS_KEY",
+			Field:     func(c *Config) *string { return &c.VendorUsage.Anthropic.AnalyticsKey },
+			Describes: "Claude Enterprise Analytics API key",
+		},
+		{
 			Name:      "TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY",
 			Field:     func(c *Config) *string { return &c.VendorUsage.ClaudeUsageMeter.SessionKey },
 			Describes: "claude.ai session cookie",
