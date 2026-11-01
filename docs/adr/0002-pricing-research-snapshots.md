@@ -1,6 +1,6 @@
 # ADR 0002 — Researched, effective-dated pricing snapshots
 
-- **Status:** Accepted; amended 2026-10-29: a model the card in force does not list takes the nearest card that does, see *Amendment: the nearest card that lists the model*
+- **Status:** Accepted; amended 2026-10-29: a model the card in force does not list takes the nearest card that does, see *Amendment: the nearest card that lists the model*; amended 2026-11-01: a local overlay of observed plan limits, see *Amendment: observed limits stay local*
 - **Date:** 2026-07-07
 - **Deciders:** TokenOps maintainers
 - **Related:** `internal/contexts/spend/spend` (pricing catalog + engine), ADR 0001, the "800:1 / The tool was guessing" honesty ethos
@@ -60,6 +60,37 @@ card, whose rate was in force when the model was last listed, else the
 earliest later card, which first listed it. A recorded turn used a model
 that existed, so the card nearest in time is better evidence of its price
 than none. A model no card lists stays unknown.
+
+#### Amendment: observed limits stay local (2026-11-01)
+
+The same rule covers the plan catalog: its tiers' allowances change by
+pull request, with a source, never at runtime. The catalog-drift finding
+(`tokenops checkup`, #838) measures when an operator's own windows put
+two tiers at a different ratio than the catalog states, and tells them to
+open an issue.
+
+Waiting for that pull request left plan advice on the operator's machine
+replaying against a figure their own readings contradict. So a drifted
+comparison, under exactly the finding's evidence thresholds, is now also
+kept in a local overlay (`~/.tokenops/observed-limits.json`), and plan
+advice on that machine replays with the observed figure in its place:
+
+- **Local only.** The overlay is never written into the shipped catalog,
+  never uploaded, and never used for anything but this machine's tier
+  projections (plan advice). Live window shares and paces come from the
+  vendor and do not use it.
+- **Labelled.** Every use names both figures, observed and catalog, in
+  the advice's `observed` list and a caveat.
+- **Conservative.** Readings measure a ratio between two tiers, not either
+  allowance, so the lower tier keeps its catalog figure and only the
+  higher one is scaled. A limit drops out on its own once the evidence no
+  longer drifts, or once the catalog changes the figure it was observed
+  against: the pull request supersedes it.
+- **Reversible.** `tokenops plan observed reset` empties the overlay and
+  keeps it off until `tokenops plan observed on`.
+
+The finding still asks for the issue: the overlay helps one machine, the
+pull request fixes the catalog for everyone.
 
 ### 3. A `pricing refresh` flow that DIFFS
 `tokenops pricing refresh` fetches the source → normalizes to the internal model →

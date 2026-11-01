@@ -3,6 +3,7 @@ package findings
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
@@ -91,6 +92,46 @@ func TestPresenceFindings(t *testing.T) {
 				if !strings.Contains(got[i].Title, w) {
 					t.Errorf("finding %d = %q, want %q in it", i, got[i].Title, w)
 				}
+			}
+		})
+	}
+}
+
+// An extra allowance in force is a finding naming what it lifts, until
+// when, who granted it and why, and how to end it.
+func TestExtraFindings(t *testing.T) {
+	at := time.Date(2026, 11, 1, 15, 30, 0, 0, time.Local)
+	tests := []struct {
+		name   string
+		extras []boundaries.ExtraView
+		want   []string
+	}{
+		{name: "none"},
+		{name: "with a reason", extras: []boundaries.ExtraView{{ID: "bnd-0123456789ab", Rules: []string{"headroom-pause"},
+			At: at, Until: at.Add(2*time.Hour + 30*time.Minute), Granter: "felix", Why: "release"}},
+			want: []string{"until 18:00", "headroom-pause", "felix", "release", "bnd-0123456789ab"}},
+		{name: "without one", extras: []boundaries.ExtraView{{ID: "bnd-0123456789ac", Rules: []string{"a", "b"},
+			At: at, Until: at.Add(time.Hour), Granter: "felix"}},
+			want: []string{"until 16:30", "a, b", "felix"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := extraFindings(tc.extras)
+			if len(got) != len(tc.extras) {
+				t.Fatalf("findings = %+v", got)
+			}
+			if len(got) == 0 {
+				return
+			}
+			f := got[0]
+			text := f.Title + " " + f.Evidence
+			for _, w := range tc.want {
+				if !strings.Contains(text, w) {
+					t.Errorf("%q lacks %q", text, w)
+				}
+			}
+			if f.Kind != KindBoundary || f.Level != LevelNotice || !strings.Contains(f.Action, "--end") {
+				t.Errorf("finding = %+v", f)
 			}
 		})
 	}

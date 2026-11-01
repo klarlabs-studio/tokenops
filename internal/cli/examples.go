@@ -156,6 +156,10 @@ tokenops boundaries promote headroom-pause`,
 	"boundaries loop-breaker": `tokenops boundaries loop-breaker
 tokenops boundaries promote loop-breaker`,
 	"boundaries demote": `tokenops boundaries demote session-spend`,
+	"boundaries extra": `tokenops boundaries extra 30m --why "finish the release"   # lift the headroom pause for 30 minutes
+tokenops boundaries extra --until 18:00
+tokenops boundaries extra 2h --rule session-spend
+tokenops boundaries extra --end`,
 	"boundaries presence enroll": `tokenops boundaries presence enroll             # one Touch ID or password dialog
 tokenops boundaries presence enroll --replace   # new Mac or lost key: approvals held 15 minutes`,
 	"boundaries presence enforce": `tokenops boundaries presence enforce            # boundary_approval: presence

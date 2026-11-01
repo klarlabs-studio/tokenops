@@ -184,7 +184,7 @@ add them.`,
 		Args: cobra.NoArgs,
 	}
 	cmd.AddCommand(newBoundariesStatusCmd(), newBoundariesStageCmd("promote"), newBoundariesStageCmd("demote"), newBoundariesHeadroomPauseCmd(),
-		newBoundariesLoopBreakerCmd(), newBoundariesPresenceCmd())
+		newBoundariesLoopBreakerCmd(), newBoundariesPresenceCmd(), newBoundariesExtraCmd())
 	return cmd
 }
 
@@ -249,6 +249,13 @@ func writeBoundariesStatus(w io.Writer, st bcap.Status) {
 	}
 	if st.Presence != nil {
 		fmt.Fprintf(w, "\napproval: %s\n", st.Presence.Note)
+	}
+	for _, e := range st.Extras {
+		fmt.Fprintf(w, "\nextra allowance until %s: %s lifted by %s", e.Until.Local().Format("15:04"), strings.Join(e.Rules, ", "), e.Granter)
+		if e.Why != "" {
+			fmt.Fprintf(w, " (%s)", e.Why)
+		}
+		fmt.Fprintln(w)
 	}
 	if len(st.Pending) > 0 {
 		fmt.Fprintln(w, "\nWaiting on you:")

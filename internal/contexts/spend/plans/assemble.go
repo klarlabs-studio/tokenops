@@ -130,6 +130,7 @@ func AssembleHeadroomInputs(ctx context.Context, reader EventReader, counts Sour
 	// reports them: a subscription the catalog does not know, a spend
 	// limit behind a gateway.
 	in.VendorWindows = VendorWindows(ctx, reader, providerOf(provider), now)
+	in.Allowances = VendorAllowances(ctx, reader, providerOf(provider), now)
 	if p.SpendDenominated {
 		in.SpendLimitUSD = lim.LimitUSD
 		in.RateFactor = lim.RateFactor

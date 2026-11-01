@@ -39,6 +39,9 @@ type Options struct {
 	Plans       map[string]string
 	PlanHistory plans.History
 	Price       plans.Pricer
+	// ObservedOff says the operator turned the local overlay of observed
+	// limits off, so the drift finding does not say it is in use.
+	ObservedOff bool
 }
 
 // Level orders findings.
@@ -75,6 +78,10 @@ type Report struct {
 	// Partial means the usage read stopped before every source was read,
 	// so Usage and Total undercount.
 	Partial bool `json:"partial,omitempty"`
+	// TierDrifts are the tier comparisons the catalog-drift finding read,
+	// by provider, for the caller to keep the overlay of observed limits
+	// with; nil when they could not be read.
+	TierDrifts map[string][]plans.TierDrift `json:"-"`
 }
 
 // Compute runs the checkup.
@@ -103,7 +110,8 @@ func Compute(ctx context.Context, o Options) Report {
 	r.Findings = append(r.Findings, standingContext(o.Home, turnsByCWD, r.Total)...)
 	r.Findings = append(r.Findings, startingContext(records, o.Home)...)
 	r.Findings = append(r.Findings, oversized(records, o.Installed["route-guard"])...)
-	r.Findings = append(r.Findings, catalogDrift(ctx, o)...)
+	r.TierDrifts = ProviderDrifts(ctx, o)
+	r.Findings = append(r.Findings, catalogDrift(r.TierDrifts, o.ObservedOff)...)
 	if f, ok := dxFinding(r.DX); ok {
 		r.Findings = append(r.Findings, f)
 	}

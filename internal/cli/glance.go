@@ -20,6 +20,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/infra/observedlimits"
 	"go.klarlabs.de/tokenops/internal/infra/planevidence"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -90,7 +91,7 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView
 			return nil
 		}
 		return planevidence.Accounts(home)
-	}, PlanFollows: actions.RecentPlanFollows, PlanHistory: planhistory.LoadDefault}
+	}, PlanFollows: actions.RecentPlanFollows, PlanHistory: planhistory.LoadDefault, Observed: observedlimits.Loader()}
 	eng, engErr := buildSpendEngine(cfg)
 	if engErr == nil {
 		deps.Price = eng.ComputeAt
