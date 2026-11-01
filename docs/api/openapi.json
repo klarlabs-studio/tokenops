@@ -100,6 +100,38 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "extras": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "granter": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "rules": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "until": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "note": {
                       "type": "string"
                     },

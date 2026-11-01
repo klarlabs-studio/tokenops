@@ -120,6 +120,9 @@ type Status struct {
 	// from a person present (ADR 0015), and what the shadow check found.
 	// Absent when no rule is configured, since nothing asks for approval.
 	Presence *PresenceStatus `json:"presence,omitempty"`
+	// Extras are the extra allowances in force now: boundaries the
+	// operator lifted for a while (`tokenops boundaries extra`).
+	Extras []ExtraView `json:"extras,omitempty"`
 }
 
 // Installed reports, per harness that can refuse, whether its boundary
@@ -189,6 +192,7 @@ func RuleStatuses(rules []domain.Rule, env Env, installed map[string]bool) (Stat
 		ps := Presence(env)
 		out.Presence = &ps
 	}
+	out.Extras = ActiveExtras(env)
 	switch {
 	case len(rules) == 0:
 		out.Note = "no boundaries configured; add a boundaries: section to config.yaml"

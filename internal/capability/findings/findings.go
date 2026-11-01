@@ -112,6 +112,9 @@ type Inputs struct {
 	Loop *boundaries.PauseSummary
 	// Presence is the presence check on approvals (ADR 0015), in shadow.
 	Presence *boundaries.PresenceStatus
+	// Extras are the extra allowances in force: boundaries the operator
+	// lifted for a while.
+	Extras []boundaries.ExtraView
 	// Context is the volatile-prefix lint of the user's always-loaded
 	// context files and hooks.
 	Context *prefixlint.Report
@@ -136,6 +139,7 @@ func Compute(in Inputs) Report {
 	out = append(out, headroomPause(in.Pause, in.Glance)...)
 	out = append(out, loopBreaker(in.Loop)...)
 	out = append(out, presenceFindings(in.Presence)...)
+	out = append(out, extraFindings(in.Extras)...)
 	out = append(out, volatileContext(in.Context)...)
 	uniqueKeys(out)
 	sort.SliceStable(out, func(i, j int) bool { return urgency[out[i].Level] < urgency[out[j].Level] })

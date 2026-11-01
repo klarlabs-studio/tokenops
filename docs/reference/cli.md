@@ -2568,7 +2568,7 @@ enrolled, `decide … approve` shows the Touch ID dialog and signs the
 approval; with `boundary_approval: presence` an upgrade approval counts only
 when signed, and an agent cannot approve one at all.
 
-### `tokenops boundaries {status|promote|demote|headroom-pause|loop-breaker}`
+### `tokenops boundaries {status|promote|demote|headroom-pause|loop-breaker|extra}`
 
 [Action boundaries](https://team.klarlabs.de/guide/boundaries) are limits you set in
 `config.yaml` before work starts: past $20 in a session, ask me; no
@@ -2647,6 +2647,29 @@ matched. The working directory is compared and dropped, never recorded.
 Organisation rules take both too: a condition only narrows the rule it is
 on, so it never loosens a local rule, and an approval sent to the team
 plane carries neither.
+
+**An extra allowance** lifts a boundary for a while, on your word, and
+puts it back on its own:
+
+```bash
+tokenops boundaries extra 30m --why "finish the release"  # the headroom pause, for 30 minutes
+tokenops boundaries extra --until 18:00                   # until 18:00 today (or tomorrow, once it is past)
+tokenops boundaries extra 2h --rule session-spend         # a named rule; --rule repeats
+tokenops boundaries extra --end                           # end every extra in force now
+```
+
+Without `--rule` it lifts every local rule that pauses on plan headroom.
+While it holds, the rules it names neither ask nor refuse; any other rule
+that matches still binds. It lasts at most 24 hours, and your organisation's
+rules are not lifted here. The grant is recorded as a decision with who
+granted it, why and until when (`tokenops explain <id>`), and each session
+it lets past a boundary records that it did. `status`, the glance's
+findings, the menu bar and `GET /api/boundaries` (`extras`) show it while it
+holds. It is your word only: there is no MCP tool or API route for it, the
+command refuses to run without a terminal, and it is refused under
+`boundary_approval: presence`, since a grant cannot be signed yet (approve
+each ask with `tokenops approve <id> --session` instead). `--end` only
+tightens and runs anywhere.
 
 ### `tokenops boundaries presence {enroll|enforce|status|rotate}`
 
