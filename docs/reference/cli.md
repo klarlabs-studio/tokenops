@@ -1788,13 +1788,20 @@ the agent is told how much of the plan is left, in one line with its
 prompt:
 
 ```text
-Plan headroom: 5h window 38% left (resets 14:20), week 61% left.
+Plan headroom: 5h window 38% left (runs out ~13:38 at this pace, resets 14:20), week 61% left.
 ```
 
 Only the binding window is named, the one with the least left, plus another
-within 25 points of it. The line is said at a session's first prompt and
-again only when a window crosses 50, 25 or 10% left, or the binding window
-changes; otherwise nothing is added.
+within 25 points of it. A window that will not last to its reset at the
+pace it has been used so far says when it runs out. The line is said at a
+session's first prompt and again only when a window crosses 50, 25 or 10%
+left, starts running out before its reset, or the binding window changes;
+otherwise nothing is added.
+
+The per-turn model advice reads the same pace: while the Claude plan runs
+short (a window forecast to run out well before its reset, or 25% or less
+left), an edit is advised a tier lower and deep work too, as subagent
+routing already does, and the advice says which window is short.
 
 It travels in the prompt hook's `additionalContext`, which Claude Code
 inserts where the hook fired, after the part of the conversation already
