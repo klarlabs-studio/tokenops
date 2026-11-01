@@ -237,6 +237,12 @@ Sessions: A  (1880 instructions; `tokenops dx` for the breakdown)
   - instruction files (`~/.claude/CLAUDE.md`, a repository's `CLAUDE.md`
     and `AGENTS.md`, and their parents') re-read on every turn, as a share
     of all input;
+  - what a Claude Code session carries before any work: the median
+    context of each fresh session's first turn (Claude Code's system
+    prompt, the tools of every MCP server and skill configured, the
+    instruction files and the first instruction), with how many MCP
+    servers and skills are configured. Every turn reads it again, so it
+    is worth acting on from 40k tokens;
   - lookups ("show me…", "list…") answered on a flagship model.
 
   A fix that is already installed says so instead of installing it again.

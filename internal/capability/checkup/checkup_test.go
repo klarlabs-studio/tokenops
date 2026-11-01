@@ -128,3 +128,50 @@ func TestTallyPricesCacheWrites(t *testing.T) {
 		t.Errorf("write premium = %v, want %v", got, want)
 	}
 }
+
+// What a Claude Code session carries before the operator's first word:
+// its first turn's context, against the instruction files and the MCP
+// servers and skills configured. Subagents start contexts of their own and
+// are left out.
+func TestStartingContext(t *testing.T) {
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte(`{"mcpServers":{"a":{},"b":{},"c":{}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"one", "two"} {
+		if err := os.MkdirAll(filepath.Join(home, ".claude", "skills", s), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	turn := func(session string, min int, ctx int64) agentdx.Record {
+		return agentdx.Record{SessionID: session, Kind: agentdx.KindAssistantTurn, InputTokens: ctx, At: at(min), Harness: agentdx.SourceClaudeCode}
+	}
+	prompt := func(session string, min int) agentdx.Record {
+		return agentdx.Record{SessionID: session, Kind: agentdx.KindPrompt, At: at(min), Harness: agentdx.SourceClaudeCode}
+	}
+	var recs []agentdx.Record
+	for i, ctx := range []int64{70_000, 75_000, 80_000, 74_000, 76_000} {
+		s := string(rune('a' + i))
+		recs = append(recs, prompt(s, i*10), turn(s, i*10+1, ctx), turn(s, i*10+2, ctx+50_000))
+	}
+	recs = append(recs,
+		prompt("a/agent1", 3), turn("a/agent1", 4, 9_000), // a subagent's own start
+		turn("resumed", 70, 500_000), prompt("resumed", 71), // opens mid-conversation
+	)
+	fs := startingContext(recs, home)
+	if len(fs) != 1 {
+		t.Fatalf("findings = %+v", fs)
+	}
+	f := fs[0]
+	if f.Kind != "starting_context" || f.Level != LevelNotice || !strings.Contains(f.Title, "75k") {
+		t.Errorf("finding = %+v", f)
+	}
+	for _, want := range []string{"5 sessions", "3 MCP servers", "2 skills"} {
+		if !strings.Contains(f.Evidence, want) {
+			t.Errorf("evidence %q lacks %q", f.Evidence, want)
+		}
+	}
+	if fs := startingContext(recs[:6], home); len(fs) != 0 {
+		t.Errorf("judged on 2 sessions: %+v", fs)
+	}
+}
