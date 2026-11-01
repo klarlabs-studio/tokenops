@@ -79,7 +79,7 @@ Coach · 5 findings
   ▲ Codex's weekly window runs out in 23h 32m at this pace
     44% left, 38 points ahead of an even pace; it resets in 5d 18h
     → Put the work that can move on Claude (75% left) until it resets.
-  ● Agents re-read 14 unchanged files in full
+  ● Agents re-read 14 unchanged files in full in the last 7 days
     about 225k tokens of context spent on files already read, across 63 sessions
     → tokenops coach set waste autonomous lets the read guard refuse them.
   · The coach is observing and says nothing

@@ -364,8 +364,8 @@ func waste(s *readguard.Stats, c *coach.Report) []Finding {
 			Key:      key(KindWaste, "rereads"),
 			Kind:     KindWaste,
 			Level:    LevelNotice,
-			Title:    fmt.Sprintf("Agents re-read %d unchanged files in full in the last %d days", s.WouldBlock, WindowDays),
-			Evidence: fmt.Sprintf("about %s tokens of context spent on files already read, across %d sessions", tokens(s.ReclaimableTok), s.DistinctSessions),
+			Title:    fmt.Sprintf("Agents re-read %d unchanged %s in full in the last %d days", s.WouldBlock, plural(s.WouldBlock, "file"), WindowDays),
+			Evidence: fmt.Sprintf("about %s tokens of context spent on files already read, across %d %s", tokens(s.ReclaimableTok), s.DistinctSessions, plural(s.DistinctSessions, "session")),
 			Action:   "`tokenops coach set waste autonomous` lets the read guard refuse them.",
 		})
 	}
@@ -374,7 +374,7 @@ func waste(s *readguard.Stats, c *coach.Report) []Finding {
 			Key:      key(KindWaste, "refused"),
 			Kind:     KindWaste,
 			Level:    LevelInfo,
-			Title:    fmt.Sprintf("The read guard refused %d re-reads in the last %d days", s.Blocked, WindowDays),
+			Title:    fmt.Sprintf("The read guard refused %d %s in the last %d days", s.Blocked, plural(s.Blocked, "re-read"), WindowDays),
 			Evidence: fmt.Sprintf("about %s tokens kept out of context", tokens(s.ReclaimedTok)),
 		})
 	}
@@ -390,11 +390,15 @@ func budget(s *coachhook.Stats) []Finding {
 	if over == 0 {
 		return nil
 	}
+	their := "their"
+	if s.DistinctSessions == 1 {
+		their = "its"
+	}
 	return []Finding{{
 		Key:      key(KindBudget, "over"),
 		Kind:     KindBudget,
 		Level:    LevelNotice,
-		Title:    fmt.Sprintf("%d of %d sessions ran past their budget in the last %d days", over, s.DistinctSessions, WindowDays),
+		Title:    fmt.Sprintf("%d of %d %s ran past %s budget in the last %d days", over, s.DistinctSessions, plural(s.DistinctSessions, "session"), their, WindowDays),
 		Evidence: fmt.Sprintf("the largest came to about %s at API prices", money(s.MaxCumulativeUSD)),
 		Action:   "`tokenops coach stats` shows how far past each one went.",
 	}}
@@ -574,4 +578,12 @@ func planAdvice(advice []plans.Advice) []Finding {
 		})
 	}
 	return out
+}
+
+// plural is noun, with an s unless n is one.
+func plural(n int, noun string) string {
+	if n == 1 {
+		return noun
+	}
+	return noun + "s"
 }
