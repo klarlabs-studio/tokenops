@@ -584,6 +584,16 @@ subagents included. Only what a client writes to its transcripts can be
 counted: calls a client makes on its own behalf and does not record are
 not in these figures.
 
+Each row's **CACHE READ** is the share of its input read from the prompt
+cache: the cache reads over all input, cache reads and writes included. A
+session or project that keeps a stable prefix reads most of its input from
+the cache; a low share is input paid at the full or cache-write rate,
+and `tokenops spend waste` says why its caches were rebuilt. A row with no
+input shows `—`, not 0%. Codex records cached reads but no cache writes,
+so its share counts only what it read. The JSON carries it as
+`CacheReadShare` (0 to 1) on each row, and `GET /api/spend/top` and the
+`tokenops_spend` MCP tool as `cache_read_share`.
+
 #### Cost per commit
 
 `tokenops spend --by commit` lists what each of your commits cost: the
@@ -790,12 +800,15 @@ your config:
 Spend by client since 8 Oct 09:00
   81% of the window's work carries a client
 
-  VALUE                    API EQUIV    BILLED  SESSIONS  TURNS    TOKENS
-  Acme Corp                   $41.20     $0.00         6    212      3.1M
-  globex                      $12.75     $2.10         2     58      880k
-  (untagged)                  $12.40     $0.00              97      1.2M
+  VALUE                    API EQUIV    BILLED  SESSIONS  TURNS    TOKENS CACHE READ
+  Acme Corp                   $41.20     $0.00         6    212      3.1M        91%
+  globex                      $12.75     $2.10         2     58      880k        64%
+  (untagged)                  $12.40     $0.00              97      1.2M        88%
     $3.80 of it from sessions whose directory no client recorded
 ```
+
+CACHE READ is the share of each value's input read from the prompt cache,
+as on `--by session` (`cache_read_share`, 0 to 1, in the JSON).
 
 Each session is matched by the directory and branch its client recorded,
 the repository that directory is in and the harness it ran in; work no

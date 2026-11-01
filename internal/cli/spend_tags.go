@@ -43,7 +43,7 @@ func writeTagReport(out io.Writer, r allocation.Report) {
 	}
 	fmt.Fprintf(out, "  %.0f%% of the window's work carries a %s\n\n", r.TaggedShare*100, r.Key)
 	if len(r.Groups) > 0 {
-		fmt.Fprintf(out, "  %-24s %9s %9s %9s %6s %9s\n", "VALUE", "API EQUIV", "BILLED", "SESSIONS", "TURNS", "TOKENS")
+		fmt.Fprintf(out, "  %-24s %9s %9s %9s %6s %9s %10s\n", "VALUE", "API EQUIV", "BILLED", "SESSIONS", "TURNS", "TOKENS", "CACHE READ")
 		for _, g := range r.Groups {
 			writeTagRow(out, clipText(g.Value, 24), g.Cost, fmt.Sprint(g.Sessions))
 		}
@@ -54,7 +54,7 @@ func writeTagReport(out io.Writer, r allocation.Report) {
 			fmt.Fprintf(out, "    %s of it from sessions whose directory no client recorded\n", usd(r.UnknownDirectory.APIEquivalentUSD))
 		}
 	}
-	fmt.Fprintf(out, "\nAt API prices; billed is what was charged beyond a plan. Tagged by rule: %s.\n", r.Method)
+	fmt.Fprintf(out, "\nAt API prices; billed is what was charged beyond a plan; cache read is the share of input read from the prompt cache. Tagged by rule: %s.\n", r.Method)
 }
 
 func writeTagRow(out io.Writer, label string, c commits.Cost, sessions string) {
@@ -62,7 +62,8 @@ func writeTagRow(out io.Writer, label string, c commits.Cost, sessions string) {
 	if c.UnpricedTurns > 0 {
 		equiv += "+"
 	}
-	fmt.Fprintf(out, "  %-24s %9s %9s %9s %6d %9s\n", label, equiv, usd(c.CostUSD), sessions, c.Turns, humanTokens(c.Tokens))
+	fmt.Fprintf(out, "  %-24s %9s %9s %9s %6d %9s %10s\n", label, equiv, usd(c.CostUSD), sessions, c.Turns, humanTokens(c.Tokens),
+		sharePct(c.CacheReadShare))
 }
 
 // allocationKey reads --by as an allocation key, when it is one.
