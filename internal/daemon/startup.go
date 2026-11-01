@@ -71,6 +71,8 @@ type startupStep func(ctx context.Context) error
 func (s *startup) steps() []startupStep {
 	return []startupStep{
 		s.recordBinary,
+		s.limitMemory,
+		s.startProfiler,
 		s.announce,
 		s.configureTLS,
 		s.listenEarly,

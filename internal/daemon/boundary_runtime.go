@@ -54,10 +54,12 @@ func startBoundaryFiguresRuntime(cfg config.Config, glance func() headroom.Deps,
 		}
 		used := budgets.UsedPctOf(readings)
 		fig := bcap.Figures(nil, used, now)
-		// Plan headroom is read only when a rule compares it.
+		// Plan headroom is read only when a rule compares it, and only the
+		// headroom: the full glance (session budgets, plan use, a month's
+		// plan advice) cost seconds and hundreds of MB a minute (#825).
 		if needs {
-			if g, err := headroom.ComputeGlance(ctx, glance(), now); err == nil {
-				fig = bcap.Figures(g.Headroom.Reports, used, now)
+			if head, err := headroom.Compute(ctx, glance(), now); err == nil {
+				fig = bcap.Figures(head.Reports, used, now)
 			} else if ctx.Err() == nil {
 				logger.Warn("boundary figures: plan headroom unreadable; plan rules see no figure", "err", err)
 			}
