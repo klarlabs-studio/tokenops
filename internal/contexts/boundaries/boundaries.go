@@ -10,7 +10,8 @@
 // boundary only ever tightens.
 //
 // Conditions read figures TokenOps already holds — session cost, plan
-// headroom, model tier, workflow and agent — and never prompt text. The
+// headroom, model tier, workflow and agent, the project folder and the time
+// of day — and never prompt text. The
 // package is pure: callers supply the figures, and nothing here reads a
 // file or a store, so the evaluation that runs before every tool call
 // stays in memory.
@@ -30,6 +31,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/policy"
 )
@@ -73,17 +75,19 @@ const (
 
 // fieldOrder fixes the order conditions are checked and reported in, so
 // an error or a reason reads the same on every run.
-var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldBudgetUsed, FieldModelTier, FieldDestination, FieldLoopCalls, FieldWorkflow, FieldAgent}
+var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldBudgetUsed, FieldModelTier, FieldDestination, FieldLoopCalls, FieldWorkflow, FieldAgent, FieldFolder, FieldHours}
 
 // fieldsFor are the figures each action can be judged by: the ones known
 // where the action is decided. A condition the decision point cannot read
-// is refused at load rather than never matching in silence.
+// is refused at load rather than never matching in silence. The time of
+// day is known everywhere; a session's folder only where a hook hands it
+// over, which the router and the senders have none of.
 var fieldsFor = map[Action][]Field{
-	ActionContinue:      {FieldSessionCost, FieldPlanLeft, FieldLoopCalls, FieldWorkflow, FieldAgent},
-	ActionSubagentModel: {FieldSessionCost, FieldPlanLeft, FieldModelTier, FieldWorkflow, FieldAgent},
-	ActionSpend:         {FieldSessionCost, FieldBudgetUsed, FieldWorkflow, FieldAgent},
-	ActionModelRoute:    {FieldPlanLeft, FieldModelTier, FieldWorkflow, FieldAgent},
-	ActionShare:         {FieldDestination},
+	ActionContinue:      {FieldSessionCost, FieldPlanLeft, FieldLoopCalls, FieldWorkflow, FieldAgent, FieldFolder, FieldHours},
+	ActionSubagentModel: {FieldSessionCost, FieldPlanLeft, FieldModelTier, FieldWorkflow, FieldAgent, FieldFolder, FieldHours},
+	ActionSpend:         {FieldSessionCost, FieldBudgetUsed, FieldWorkflow, FieldAgent, FieldFolder, FieldHours},
+	ActionModelRoute:    {FieldPlanLeft, FieldModelTier, FieldWorkflow, FieldAgent, FieldHours},
+	ActionShare:         {FieldDestination, FieldHours},
 }
 
 // Qualifiers narrow a condition; they are not conditions of their own.
@@ -204,6 +208,40 @@ type Condition struct {
 	Window Window
 	// Budget qualifies FieldBudgetUsed; empty takes the fullest budget.
 	Budget string
+	// Folders are FieldFolder's folders, absolute and cleaned; Text keeps
+	// them as written.
+	Folders []string
+	// Hours are FieldHours' windows; Text keeps them as written.
+	Hours []HoursWindow
+}
+
+// String renders the condition the way config.yaml reads, for a listing:
+// "session_cost_usd >= 20", "plan_left_pct <= 10 (week)", "folder ~/work",
+// "hours mon-fri 09:00-18:00".
+func (c Condition) String() string {
+	switch c.Field {
+	case FieldFolder:
+		return "folder " + c.Text
+	case FieldHours:
+		return "hours " + hoursString(c.Hours)
+	case FieldModelTier, FieldDestination, FieldWorkflow, FieldAgent:
+		return fmt.Sprintf("%s %s %s", c.Field, c.Op, c.Text)
+	}
+	out := fmt.Sprintf("%s %s %g", c.Field, c.Op, c.Number)
+	switch {
+	case c.Field == FieldPlanLeft && c.Window != WindowAny:
+		out += " (" + string(c.Window) + ")"
+	case c.Field == FieldBudgetUsed && c.Budget != "":
+		out += " (budget " + c.Budget + ")"
+	}
+	return out
+}
+
+// Holds reports whether the condition holds on f. An unknown figure never
+// holds.
+func (c Condition) Holds(f Facts) bool {
+	_, ok := c.holds(f)
+	return ok
 }
 
 // Source is where a rule was set.
@@ -441,6 +479,20 @@ func splitOp(raw string) (Op, string, bool) {
 
 func parseCondition(f Field, raw string) (Condition, error) {
 	op, value, ok := splitOp(raw)
+	switch f {
+	case FieldFolder:
+		folders, err := parseFolders(op, value)
+		if err != nil {
+			return Condition{}, err
+		}
+		return Condition{Field: f, Text: strings.TrimSpace(raw), Folders: folders}, nil
+	case FieldHours:
+		hours, err := parseHours(op, value)
+		if err != nil {
+			return Condition{}, err
+		}
+		return Condition{Field: f, Text: strings.TrimSpace(raw), Hours: hours}, nil
+	}
 	if !ok {
 		return Condition{}, fmt.Errorf("%q needs a comparator (<, <=, >, >=, ==), e.g. \">= 20\"", raw)
 	}
@@ -547,6 +599,12 @@ type Facts struct {
 	// Loop is the loop at the end of the session's tool calls; unknown
 	// when the harness did not say which tool ran with what input.
 	Loop LoopFigure
+	// Folder is the session's working directory; empty when the harness
+	// did not say.
+	Folder string
+	// Now is the moment of the action in the operator's time zone, which
+	// hours are read in; zero is unknown.
+	Now time.Time
 }
 
 // Crossing is one figure that crossed a condition, as numbers and
@@ -656,6 +714,17 @@ func (c Condition) holds(f Facts) (string, bool) {
 	case FieldAgent:
 		ok, _ := path.Match(c.Text, f.AgentID)
 		return "", ok && f.AgentID != ""
+	case FieldFolder:
+		folder, ok := matchFolder(c.Folders, f.Folder)
+		if !ok {
+			return "", false
+		}
+		return "working in " + folder, true
+	case FieldHours:
+		if _, ok := matchHours(c.Hours, f.Now); !ok {
+			return "", false
+		}
+		return fmt.Sprintf("at %s, within hours %s", f.Now.Format("Mon 15:04"), hoursString(c.Hours)), true
 	}
 	return "", false
 }

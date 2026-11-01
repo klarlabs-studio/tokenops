@@ -26,6 +26,8 @@ type agentToolInput struct {
 	TranscriptPath string         `json:"transcript_path"`
 	ToolUseID      string         `json:"tool_use_id"`
 	ToolInput      map[string]any `json:"tool_input"`
+	// Cwd is the session's working directory, for folder conditions.
+	Cwd string `json:"cwd"`
 }
 
 type subagentHookOutput struct {
@@ -260,7 +262,7 @@ func subagentBoundary(cmd *cobra.Command, cfg config.Config, in agentToolInput, 
 	}
 	call := bcap.Call{
 		Harness: bcap.HarnessClaudeCode, SessionID: in.SessionID, TranscriptPath: in.TranscriptPath,
-		ToolUseID: in.ToolUseID, Action: "subagent_model", Model: model,
+		ToolUseID: in.ToolUseID, Action: "subagent_model", Model: model, Folder: in.Cwd,
 	}
 	call.AgentID, call.WorkflowID = bcap.Attribution(bcap.HarnessClaudeCode, in.SessionID, bcap.TranscriptProject(in.TranscriptPath))
 	return guardWithTimeout(cmd.Context(), cfg, call, bcap.Env{Attended: sessionAttended(), Approval: cfg.ApprovalMode()}, bcap.Guard)

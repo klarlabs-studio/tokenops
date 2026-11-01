@@ -91,7 +91,7 @@ operator's instruction text and local file paths.
 | `GET /api/optimizations` | Optimization recommendations |
 | `GET /api/routing/proposals` | Model upgrades waiting on you |
 | `GET /api/decisions/{id}` | Why a decision was made |
-| `GET /api/boundaries` | Each [action boundary](https://team.klarlabs.de/guide/boundaries), how often it matched, where it is enforced, and what waits on you |
+| `GET /api/boundaries` | Each [action boundary](https://team.klarlabs.de/guide/boundaries), how often it matched, where it is enforced, and what waits on you; `when` lists a rule's conditions, with `holds_now` on each `hours` window |
 | `GET /api/rules/analyze` | Rule files analysed |
 | `GET /api/rules/compress` | Rule files compressed |
 | `GET /api/rules/conflicts` | Conflicts between rules |

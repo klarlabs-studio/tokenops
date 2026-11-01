@@ -21,9 +21,9 @@ type Advice struct {
 }
 
 // AdviceNow is every enforced continue and spend rule that holds on the
-// figures TokenOps has without a session: plan headroom and budgets. A
-// rule that needs the session's cost, or a workflow or agent, cannot be
-// judged here and is left out rather than guessed. Plan headroom is the
+// figures TokenOps has without a session: plan headroom, budgets and the
+// time of day. A rule that needs the session's cost, a workflow, an agent
+// or a folder cannot be judged here and is left out rather than guessed. Plan headroom is the
 // daemon's figure when fresh, otherwise the glance's own reports, and
 // either way the tightest plan known: the reader's provider is not.
 func AdviceNow(rules []domain.Rule, env Env, reports []plans.HeadroomReport) []Advice {
@@ -44,7 +44,7 @@ func AdviceNow(rules []domain.Rule, env Env, reports []plans.HeadroomReport) []A
 	if len(plan.PlanLeftPct) == 0 {
 		plan = Figures(reports, nil, now)
 	}
-	facts := domain.Facts{PlanLeftPct: figuresPlanLeft(plan, ""), BudgetUsedPct: fig.BudgetUsedPct}
+	facts := domain.Facts{PlanLeftPct: figuresPlanLeft(plan, ""), BudgetUsedPct: fig.BudgetUsedPct, Now: env.localNow()}
 	var out []Advice
 	for _, r := range judged {
 		m, ok := r.Match(r.Action, facts)
@@ -73,7 +73,7 @@ func GlanceAdvice(cfg *config.Config, reports []plans.HeadroomReport) []Advice {
 func sessionFree(r domain.Rule) bool {
 	for _, c := range r.When {
 		switch c.Field {
-		case domain.FieldPlanLeft, domain.FieldBudgetUsed:
+		case domain.FieldPlanLeft, domain.FieldBudgetUsed, domain.FieldHours:
 		default:
 			return false
 		}

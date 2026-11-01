@@ -84,6 +84,17 @@ type RuleStatus struct {
 	Note        string          `json:"note,omitempty"`
 	// Source is local (config.yaml) or organisation (the team plane).
 	Source string `json:"source"`
+	// When are the rule's conditions; all must hold for it to apply.
+	When []ConditionStatus `json:"when,omitempty"`
+}
+
+// ConditionStatus is one condition of a rule, as config.yaml reads, and
+// whether it holds now where that can be said without a session: the time
+// of day can, the session's folder or cost cannot.
+type ConditionStatus struct {
+	Condition string `json:"condition"`
+	// HoldsNow is set for hours conditions only.
+	HoldsNow *bool `json:"holds_now,omitempty"`
 }
 
 // PendingView is a decision waiting on an answer.
@@ -146,7 +157,7 @@ func RuleStatuses(rules []domain.Rule, env Env, installed map[string]bool) (Stat
 	for _, r := range rules {
 		rs := RuleStatus{
 			Name: r.Name, Action: string(r.Action), Require: r.Require.String(), Stage: string(r.Stage),
-			Harnesses: harnesses(r, installed), Source: sourceName(r.Source),
+			Harnesses: harnesses(r, installed), Source: sourceName(r.Source), When: conditionStatuses(r, env),
 		}
 		for _, s := range sessions {
 			n := s.Matches[r.Name]
@@ -235,6 +246,10 @@ func harnesses(r domain.Rule, installed map[string]bool) []HarnessStatus {
 			out = append(out, HarnessStatus{Harness: h, Enforcement: EnforcementNotEvaluated, Note: loopOnlyClaudeCode})
 			continue
 		}
+		if reads(r, domain.FieldFolder) {
+			out = append(out, HarnessStatus{Harness: h, Enforcement: EnforcementNotEvaluated, Note: folderOnlyHooks})
+			continue
+		}
 		out = append(out, HarnessStatus{
 			Harness: h, Enforcement: EnforcementAdviceOnly,
 			Note: "its hooks cannot refuse a call; the rule reaches the agent as advice through tokenops_glance",
@@ -246,14 +261,38 @@ func harnesses(r domain.Rule, installed map[string]bool) []HarnessStatus {
 // loopOnlyClaudeCode says why a loop rule is not evaluated in a harness.
 const loopOnlyClaudeCode = "loop_calls needs each tool call's input, which only Claude Code's hook sends"
 
+// folderOnlyHooks says why a folder rule is not evaluated in a harness.
+const folderOnlyHooks = "folder needs the session's working directory, which only Claude Code's and opencode's hooks send"
+
 // readsLoop reports whether a rule reads the loop figure.
-func readsLoop(r domain.Rule) bool {
+func readsLoop(r domain.Rule) bool { return reads(r, domain.FieldLoopCalls) }
+
+// reads reports whether a rule has a condition on f.
+func reads(r domain.Rule, f domain.Field) bool {
 	for _, c := range r.When {
-		if c.Field == domain.FieldLoopCalls {
+		if c.Field == f {
 			return true
 		}
 	}
 	return false
+}
+
+// conditionStatuses lists the rule's conditions, saying for hours whether
+// they hold now.
+func conditionStatuses(r domain.Rule, env Env) []ConditionStatus {
+	if len(r.When) == 0 {
+		return nil
+	}
+	now := domain.Facts{Now: env.localNow()}
+	out := make([]ConditionStatus, len(r.When))
+	for i, c := range r.When {
+		out[i] = ConditionStatus{Condition: c.String()}
+		if c.Field == domain.FieldHours {
+			holds := c.Holds(now)
+			out[i].HoldsNow = &holds
+		}
+	}
+	return out
 }
 
 // point is a decision point inside TokenOps: enforced or in shadow when

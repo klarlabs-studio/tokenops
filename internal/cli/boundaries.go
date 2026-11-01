@@ -26,15 +26,19 @@ import (
 const boundaryTimeout = 2 * time.Second
 
 // boundaryHookInput is what the pause point reads from a PreToolUse
-// payload: ids, the tool's name and its input. The input is only hashed,
-// here, for the loop breaker (bcap.HashToolInput), and dropped: no
-// prompt, path or command reaches the boundary engine or its files.
+// payload: ids, the tool's name, its input and the working directory. The
+// input is only hashed, here, for the loop breaker (bcap.HashToolInput),
+// and dropped; the working directory is compared with folder conditions
+// and dropped: no prompt, path or command reaches the boundary engine's
+// files.
 type boundaryHookInput struct {
 	SessionID      string          `json:"session_id"`
 	TranscriptPath string          `json:"transcript_path"`
 	ToolUseID      string          `json:"tool_use_id"`
 	ToolName       string          `json:"tool_name"`
 	ToolInput      json.RawMessage `json:"tool_input"`
+	// Cwd is the session's working directory, as Claude Code sends it.
+	Cwd string `json:"cwd"`
 	// Directory is the project the opencode plugin forwards, for the
 	// same attribution Claude Code's transcript path gives.
 	Directory string `json:"directory"`
@@ -93,8 +97,10 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 		call.Biller = attribution.ClaudeCodeSessionBiller(os.Getenv, in.TranscriptPath, "")
 	}
 	project := bcap.TranscriptProject(in.TranscriptPath)
+	call.Folder = in.Cwd
 	if in.Directory != "" {
 		project = filepath.Base(in.Directory)
+		call.Folder = in.Directory
 	}
 	call.AgentID, call.WorkflowID = bcap.Attribution(harness, in.SessionID, project)
 	// opencode's tool.execute.before refuses by throwing and has no
@@ -218,6 +224,9 @@ func writeBoundariesStatus(w io.Writer, st bcap.Status) {
 	}
 	for _, r := range st.Rules {
 		fmt.Fprintf(w, "\n%s  %s → %s  [%s]\n", r.Name, r.Action, r.Require, r.Stage)
+		if when := conditionsLine(r.When); when != "" {
+			fmt.Fprintf(w, "  when %s\n", when)
+		}
 		verb := "matched"
 		if r.Stage == "shadow" {
 			verb = "would have fired"
@@ -247,6 +256,23 @@ func writeBoundariesStatus(w io.Writer, st bcap.Status) {
 			fmt.Fprintf(w, "  %s  %s (%s): %s — %s\n", p.ID, p.Rule, p.Require, p.Crossed, p.Approve)
 		}
 	}
+}
+
+// conditionsLine joins a rule's conditions, saying of each time window
+// whether it holds now.
+func conditionsLine(when []bcap.ConditionStatus) string {
+	parts := make([]string, len(when))
+	for i, c := range when {
+		parts[i] = c.Condition
+		switch {
+		case c.HoldsNow == nil:
+		case *c.HoldsNow:
+			parts[i] += " (now: inside)"
+		default:
+			parts[i] += " (now: outside, so the rule does not apply)"
+		}
+	}
+	return strings.Join(parts, "; ")
 }
 
 // scopeNoun names what a rule's matches are counted across: sessions for

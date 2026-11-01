@@ -63,6 +63,9 @@ type Env struct {
 	// LimitsPath is the plan reading the status line keeps.
 	LimitsPath string
 	Now        func() time.Time
+	// Location is the operator's time zone, which hours conditions are
+	// read in; nil is the machine's.
+	Location *time.Location
 	// User is the local account answers and actors are recorded under.
 	User string
 	// Attended is whether someone can answer a permission prompt.
@@ -87,6 +90,14 @@ func (e Env) now() time.Time {
 		return e.Now().UTC()
 	}
 	return time.Now().UTC()
+}
+
+// localNow is now in the operator's time zone, for hours conditions.
+func (e Env) localNow() time.Time {
+	if e.Location != nil {
+		return e.now().In(e.Location)
+	}
+	return e.now().Local()
 }
 
 func (e Env) user() string {
@@ -138,6 +149,9 @@ type Call struct {
 	// does not say.
 	ToolName string
 	ArgsHash string
+	// Folder is the session's working directory, for folder conditions.
+	// It is compared and dropped: no decision or file keeps it.
+	Folder string
 }
 
 // Attribution derives the agent and workflow ids every other surface
@@ -276,7 +290,10 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 	now := env.now()
 	f := domain.Facts{
 		AgentID: call.AgentID, WorkflowID: call.WorkflowID, ModelTier: domain.TierOf(call.Model),
-		Destination: call.Destination,
+		Destination: call.Destination, Now: env.localNow(),
+	}
+	if needs(rules, domain.FieldFolder) {
+		f.Folder = call.Folder
 	}
 	var ev []eventschema.EvidenceRef
 	figs := lazyFigures{dir: env.Dir, now: now}
