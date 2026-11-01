@@ -1240,6 +1240,9 @@
                     "prompt_cache": {
                       "additionalProperties": false,
                       "properties": {
+                        "cached_tokens": {
+                          "type": "integer"
+                        },
                         "client": {
                           "type": "string"
                         },
@@ -1966,6 +1969,9 @@
                     "prompt_cache": {
                       "additionalProperties": false,
                       "properties": {
+                        "cached_tokens": {
+                          "type": "integer"
+                        },
                         "client": {
                           "type": "string"
                         },
@@ -2140,6 +2146,36 @@
                     },
                     "medium": {
                       "type": "integer"
+                    },
+                    "mid_session_changes": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "cache_read_share_after": {
+                            "type": "number"
+                          },
+                          "cache_read_share_before": {
+                            "type": "number"
+                          },
+                          "changes": {
+                            "type": "integer"
+                          },
+                          "explained": {
+                            "type": "integer"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "rebuilds": {
+                            "type": "integer"
+                          },
+                          "sessions": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "read": {
                       "items": {
@@ -3970,6 +4006,9 @@
                     "prompt_cache": {
                       "additionalProperties": false,
                       "properties": {
+                        "cached_tokens": {
+                          "type": "integer"
+                        },
                         "client": {
                           "type": "string"
                         },

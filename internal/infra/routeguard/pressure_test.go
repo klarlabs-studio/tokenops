@@ -27,6 +27,12 @@ func maintainerWeek() *Pressure {
 	return p
 }
 
+// maintainerPrice is the price of quota on that week: the rest of it wants
+// ~212% at the pace so far against 54% left, λ ≈ 0.74.
+func maintainerPrice() *QuotaPrice {
+	return PriceFromLimits(reading(window(10, 4*time.Hour), window(46, 5*24*time.Hour+18*time.Hour)), pressureNow)
+}
+
 func TestPressureFromLimits(t *testing.T) {
 	day := 24 * time.Hour
 	for name, tc := range map[string]struct {
@@ -162,17 +168,17 @@ func TestSubagentUnderPressure(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in := subagent(tc.prompt, tc.requested, tc.session)
-			if d := EvaluateSubagent(in); d.ToAlias != tc.calm || d.Pressure != nil {
-				t.Errorf("calm: moved to %q (pressure %v), want %q", d.ToAlias, d.Pressure, tc.calm)
+			if d := EvaluateSubagent(in); d.ToAlias != tc.calm || d.Price != nil {
+				t.Errorf("calm: moved to %q (price %v), want %q", d.ToAlias, d.Price, tc.calm)
 			}
-			in.Pressure = maintainerWeek()
+			in.Price = maintainerPrice()
 			d := EvaluateSubagent(in)
 			if d.ToAlias != tc.pressed {
 				t.Fatalf("pressed: moved to %q, want %q (%+v)", d.ToAlias, tc.pressed, d)
 			}
 			// The pressure is credited only where it changed the move.
-			if movedByPressure := tc.pressed != tc.calm; (d.Pressure != nil) != movedByPressure {
-				t.Errorf("pressure credited = %v, want %v", d.Pressure != nil, movedByPressure)
+			if movedByPressure := tc.pressed != tc.calm; (d.Price != nil) != movedByPressure {
+				t.Errorf("pressure credited = %v, want %v", d.Price != nil, movedByPressure)
 			}
 		})
 	}
@@ -181,9 +187,11 @@ func TestSubagentUnderPressure(t *testing.T) {
 // The reason says why the move happened, in the operator's words.
 func TestSubagentPressureReason(t *testing.T) {
 	in := subagent("add a test for the parser", "opus", "")
-	in.Pressure = maintainerWeek()
+	in.Price = maintainerPrice()
 	d := EvaluateSubagent(in)
-	if want := "Claude weekly runs out ~4d 6h before it resets at this pace (54% left); edit work moved from claude-opus-5 to claude-sonnet-5"; d.Reason != want {
+	// The reason names the price, the window it comes from, projected
+	// against remaining, and why the tier up was not worth it.
+	if want := "Claude weekly runs out ~4d 6h before it resets at this pace (54% left, ~212% wanted; quota price 0.74); edit work moved from claude-opus-5 to claude-sonnet-5, as claude-opus-5's 0.12 quality gain does not exceed its quota cost 0.45"; d.Reason != want {
 		t.Errorf("reason = %q", d.Reason)
 	}
 }
@@ -195,10 +203,10 @@ func TestSubagentPressureNeverPassesThePolicy(t *testing.T) {
 	in := subagent("add a test for the parser", "", "claude-fable-5-1")
 	in.Candidates = []string{"claude-haiku-4-5", "claude-opus-5", "claude-fable-5-1"}
 	calm := EvaluateSubagent(in)
-	in.Pressure = maintainerWeek()
+	in.Price = maintainerPrice()
 	d := EvaluateSubagent(in)
-	if d.To != calm.To || d.Pressure != nil || d.To == "claude-sonnet-5" {
-		t.Errorf("pressed to %q (pressure %v), calm to %q", d.To, d.Pressure, calm.To)
+	if d.To != calm.To || d.Price != nil || d.To == "claude-sonnet-5" {
+		t.Errorf("pressed to %q (pressure %v), calm to %q", d.To, d.Price, calm.To)
 	}
 }
 
@@ -222,7 +230,7 @@ func TestSubagentRetractedMoveIsNotMade(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			in := subagent(tc.prompt, tc.requested, tc.session)
 			if tc.pressed {
-				in.Pressure = maintainerWeek()
+				in.Price = maintainerPrice()
 			}
 			in.Retracted = retracted
 			d := EvaluateSubagent(in)

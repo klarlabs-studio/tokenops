@@ -97,10 +97,11 @@ type Input struct {
 	// NewID names a new piece of advice so its outcome can be recorded
 	// against it. Nil records nothing.
 	NewID func() string
-	// Pressure is the plan running short, nil when it is not or nothing
-	// is known. While it is, edits and deep work are advised a tier
-	// further down, as subagent routing does.
-	Pressure *Pressure
+	// Price is the price of quota on the plan the turn runs on, nil when
+	// nothing is known. Edits and deep work are advised a tier further
+	// down unless the tier they fit adds more quality than its
+	// price-weighted extra plan use, as subagent routing does.
+	Price *QuotaPrice
 	// Hold reports that advice of kind toward model to is held back by
 	// the coach's decision-point throttle: the session has had its tips
 	// for the hour, or the same advice was given within the cool-down.
@@ -128,6 +129,9 @@ type Decision struct {
 	// Resolved are earlier pieces of advice whose outcome this turn
 	// settled.
 	Resolved []Resolution
+	// Escalation is the weighing of the tier the work fits against the
+	// one below at the price of quota; nil when none was weighed.
+	Escalation *Escalation
 }
 
 // Resolution is the outcome of one earlier piece of advice.
@@ -224,16 +228,19 @@ func Evaluate(in Input) Decision {
 	if !ok {
 		return d
 	}
-	pressed := false
-	if in.Pressure != nil {
-		if t, ok := pressedTier(kind); ok {
-			wantTier, pressed = t, true
-		}
-	}
 	if cur.Tier == modeltier.TierUnknown {
 		// An unplaceable model is not an invitation to guess what it is
 		// worth replacing with.
 		return d
+	}
+	priced := false
+	if below, ok := pressedTier(kind); ok && in.Price != nil {
+		if esc, ok := weighTurn(cat, in, kind, cur.Tier, wantTier, below); ok {
+			d.Escalation = &esc
+			if !esc.Escalated {
+				wantTier, priced = below, true
+			}
+		}
 	}
 	if tierRank[wantTier] >= tierRank[cur.Tier] {
 		// Either the model fits, or the work wants more than it. Routing
@@ -255,8 +262,8 @@ func Evaluate(in Input) Decision {
 	d.To = target
 	d.Reason = fmt.Sprintf("this turn is %s work; %s is the %s tier and %s is on %s",
 		kind, target, wantTier, in.CurrentModel, cur.Tier)
-	if pressed {
-		d.Reason += "; " + in.Pressure.Why()
+	if priced {
+		d.Reason += "; " + in.Price.Why() + ", and " + d.Escalation.Why()
 	}
 
 	switch in.Verbosity {
@@ -281,6 +288,34 @@ func Evaluate(in Input) Decision {
 	}
 	d.Delegate = delegable(in, kind)
 	return d
+}
+
+// weighTurn weighs, at the turn's price of quota, the model the work fits
+// (or the turn's own, when that is cheaper) against the one a tier below
+// the fit. False when there is no cheaper model below to weigh.
+func weighTurn(cat *modeltier.Catalog, in Input, kind taskclass.Kind, cur, fits, below modeltier.Tier) (Escalation, bool) {
+	if tierRank[below] >= tierRank[cur] {
+		return Escalation{}, false
+	}
+	lower, ok := cat.Target(in.Provider, below)
+	if !ok {
+		// As the advice itself falls back below: the most capable model
+		// still cheaper than the turn's.
+		lower, ok = cat.TargetBelow(in.Provider, cur)
+	}
+	if !ok || lower == in.CurrentModel {
+		return Escalation{}, false
+	}
+	upper := in.CurrentModel
+	if tierRank[fits] < tierRank[cur] {
+		if t, ok := cat.Target(in.Provider, fits); ok {
+			upper = t
+		}
+	}
+	if upper == lower {
+		return Escalation{}, false
+	}
+	return weighEscalation(cat, in.Provider, kind, in.Price, upper, lower), true
 }
 
 // offer opens a piece of advice for kind and returns its ID. Advice that is

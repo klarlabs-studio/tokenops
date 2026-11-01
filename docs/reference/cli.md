@@ -1628,7 +1628,7 @@ exits non-zero on anomalies, so it can gate CI.
 
 ## Explain
 
-### `tokenops explain [term | decision-id]`
+### `tokenops explain [term | decision-id | moves | price]`
 
 What a figure means, in plain words: what it measures, how it is worked
 out, how to read it, and for `dx` figures the grade bands. Given a
@@ -1644,6 +1644,20 @@ tokenops explain decision:6f1c…  # why TokenOps decided what it did
 
 Agents get the same answers from the `tokenops_explain` and
 `tokenops_explain (decision_id)` MCP tools.
+
+`tokenops explain price` shows the price of quota on the Claude plan now
+(λ, 0 to 1; ADR 0017): the binding window it comes from, the share the
+rest of that window wants at the pace so far against the share left, and
+for edits and deep work whether the tier they fit is worth its extra plan
+use at that price or they go a tier down. `--json` gives the same.
+
+```text
+Price of quota (λ): 0.74, from the Claude weekly window (binding: the highest price of the plan's windows)
+  At the pace so far the rest of the window wants ~212% of the plan; 54% is left.
+  λ = 1 − left ÷ wanted: 0 while the window lasts to its reset, nearer 1 the longer it would stand empty.
+A tier up is taken only when its quality gain exceeds λ × its extra plan use:
+  edit work not escalated to claude-opus-5: its 0.12 quality gain over claude-sonnet-5 does not exceed its quota cost 0.45 (price 0.74 × 60% more plan use)
+```
 
 ## Status line
 
@@ -1662,11 +1676,15 @@ Opus 5.5 high · ▰▰▰▰▱▱ 5h 62% ↻12:49 · wk 41% ↻Mon · ctx 71% 
   setting), so it warns before compaction rather than at 100%;
 - the prompt cache hit ratio, or, when under two minutes are left before
   the cache expires, **cache cold in 1m**, and **cache cold** once it has:
-  the next prompt then writes the whole context to the cache again. The
-  cache lives five minutes after the last request, or an hour when the
-  session writes it with the extended lifetime; the line reads both from
-  the timestamps and token counts at the end of the session's transcript,
-  never its text;
+  the next prompt then writes the whole context to the cache again. In
+  brackets is how much that is, the prompt the cache holds (**cache cold
+  in 1m (182k)**), so you can tell whether it is worth sending the next
+  prompt before it expires. It never suggests `/compact`: Claude Code
+  compacts an idle session itself, and a warning is information, not a
+  reason to interrupt. The cache lives five minutes after the last
+  request, or an hour when the session writes it with the extended
+  lifetime; the line reads both from the timestamps and token counts at
+  the end of the session's transcript, never its text;
 - the session's cost in your currency — marked "value" when a plan
   covers it, since then it is what the work was worth, not what you paid;
 - the coach's open tip, unless the coach is quiet or off.
@@ -1960,10 +1978,12 @@ session's first prompt and again only when a window crosses 50, 25 or 10%
 left, starts running out before its reset, or the binding window changes;
 otherwise nothing is added.
 
-The per-turn model advice reads the same pace: while the Claude plan runs
-short (a window forecast to run out well before its reset, or 25% or less
-left), an edit is advised a tier lower and deep work too, as subagent
-routing already does, and the advice says which window is short.
+The per-turn model advice reads the same pace, as a price of quota (see
+[`tokenops explain price`](#explain)):
+an edit or deep work is advised a tier lower once the tier it fits is no
+longer worth its extra plan use at that price, as subagent routing does,
+and the advice names the price and the window it comes from. The note
+itself stays information for the agent, never a cap.
 
 It travels in the prompt hook's `additionalContext`, which Claude Code
 inserts where the hook fired, after the part of the conversation already
@@ -2052,11 +2072,35 @@ It reads only what the harness loads into every session:
 - What hooks printed: the newest Claude Code transcripts (20 by default)
   record each hook's output. A `SessionStart` hook whose output carries a
   timestamp, a UUID or a commit hash, or differs from one session to the
-  next, is reported even when its command is a script.
+  next, is reported even when its command is a script. When the outputs
+  differ only in the order of a JSON value's keys (or its spacing), the
+  finding says so: the hook prints the same facts from a hash map in
+  whatever order it iterates, and sorting the keys fixes it. Only what the
+  transcripts show is judged; a command that could print unordered JSON
+  but has not differed yet is not flagged, and a reordered JSON array is
+  reported as output that varies, since array order can be content.
+
+- What changed during a session: the same transcripts record when the
+  tool or MCP server set changed between turns and when an always-loaded
+  file (`CLAUDE.md`, `AGENTS.md`, or a file the session's instructions
+  listed, such as an auto-memory `MEMORY.md`) was edited, by you or by the
+  agent. Each change is measured: the cache-read share of the turn just
+  before it against the turn just after, under "Mid-session changes" (and
+  `mid_session_changes` in the JSON). A change whose next turn wrote most
+  of the cached prompt again, with no idle gap past the cache's lifetime,
+  model switch or compaction to explain it, is a medium finding; one that
+  met a cache already cold (a session resumed an hour later) is counted
+  apart and left out of the shares. Claude Code appends these changes after
+  the turns before them rather than rewriting the prompt, so on the
+  machine this was built on 163 tool set changes and 18 context edits over
+  150 transcripts rebuilt nothing (cache read 92% before, 89% after; 99%
+  and 99%); the measure is there to show it if a harness behaves
+  otherwise. A change to the tool definitions that Claude Code makes
+  without recording it is not seen.
 
 Hooks are never run: the command text is read (`date`, `uuidgen`,
-`git status`, `git log`, `$RANDOM`, `datetime.now` and the like, unless
-the output goes to a file). Each finding names its file and line or hook,
+`git status`, `git log`, `gh pr list`, `curl`, `ps`, `df`, `$RANDOM`,
+`datetime.now` and the like, unless the output goes to a file). Each finding names its file and line or hook,
 the matched token and nothing around it, why it breaks the cache and the
 fix. Nothing is sent anywhere.
 

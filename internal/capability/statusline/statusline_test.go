@@ -117,9 +117,14 @@ func TestRenderCacheCountdown(t *testing.T) {
 		name    string
 		left    time.Duration
 		unknown bool
+		tokens  int64
 		want    string
 		absent  []string
 	}{
+		{name: "with what it holds", left: 70 * time.Second, tokens: 182_400, want: "cache cold in 2m (182k)"},
+		{name: "cold, with what the next prompt rewrites", left: -time.Minute, tokens: 1_240_000, want: "cache cold (1.2M)"},
+		{name: "a small cache", left: -time.Minute, tokens: 950, want: "cache cold (950)"},
+		{name: "what it holds is not shown while warm", left: 4 * time.Minute, tokens: 182_400, want: "cache 95%", absent: []string{"182k"}},
 		{name: "unknown expiry", unknown: true, want: "cache 95%", absent: []string{"cold"}},
 		{name: "plenty left", left: 4 * time.Minute, want: "cache 95%", absent: []string{"cold"}},
 		{name: "exactly two minutes", left: 2 * time.Minute, want: "cache 95%", absent: []string{"cold"}},
@@ -131,6 +136,7 @@ func TestRenderCacheCountdown(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			in := full()
+			in.CacheTokens = c.tokens
 			if !c.unknown {
 				in.CacheExpiresAt = now.Add(c.left)
 			}

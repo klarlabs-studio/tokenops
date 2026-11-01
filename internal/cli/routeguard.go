@@ -205,8 +205,8 @@ func routeAdvice(cfg config.Config, in userPromptSubmitInput, mode routeguard.Mo
 		Hold:  adviceHold(cfg, ledger, in.SessionID, now),
 		NewID: coachcap.NewID,
 		// Only Claude's plan windows are read locally; another provider's
-		// turn is advised without pressure.
-		Pressure: claudePressure(prov, now),
+		// turn is advised without a price of quota.
+		Price: claudeQuotaPrice(prov, now),
 	})
 	coachcap.RecordResolutions(ledger, now, routeResolutions(dec.Resolved))
 	// A declined proposal interrupts the turn and the operator's next
@@ -357,11 +357,12 @@ func newRouteGuardHookCmd() *cobra.Command {
 	}
 }
 
-// claudePressure is the Claude plan running short, read as subagent
-// routing reads it, for a turn on Anthropic's models; nil otherwise.
-func claudePressure(prov eventschema.Provider, now time.Time) *routeguard.Pressure {
+// claudeQuotaPrice is the price of quota on the Claude plan, read as
+// subagent routing reads it, for a turn on Anthropic's models; nil
+// otherwise.
+func claudeQuotaPrice(prov eventschema.Provider, now time.Time) *routeguard.QuotaPrice {
 	if prov != eventschema.ProviderAnthropic {
 		return nil
 	}
-	return routeguard.ReadPressure("", boundaryledger.DefaultDir(), now)
+	return routeguard.ReadQuotaPrice("", boundaryledger.DefaultDir(), now)
 }

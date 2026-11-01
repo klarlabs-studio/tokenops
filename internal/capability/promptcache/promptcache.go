@@ -75,7 +75,16 @@ func Current(ctx context.Context, r Reader, now time.Time) *waste.CacheCountdown
 		return nil
 	}
 	c.Client = "claude-code"
+	c.CachedTokens = waste.CachedPrefix(turns)
 	return &c
+}
+
+// Expiry is when a session's prompt cache goes cold and how much it holds.
+type Expiry struct {
+	At time.Time
+	// Tokens is the prompt cached (waste.CachedPrefix): what the next
+	// prompt writes again once the cache is cold.
+	Tokens int64
 }
 
 // TranscriptExpiry is when the session whose transcript is at path has its
@@ -84,13 +93,13 @@ func Current(ctx context.Context, r Reader, now time.Time) *waste.CacheCountdown
 // last turn's request was sent or, when an entry such as a tool result
 // follows the last reply, when that entry was. Only the last tailBytes
 // are read. False when the transcript is not there or shows no cache use.
-func TranscriptExpiry(path string) (time.Time, bool) {
+func TranscriptExpiry(path string) (Expiry, bool) {
 	if path == "" {
-		return time.Time{}, false
+		return Expiry{}, false
 	}
 	turns, lastEntry, err := claudecodejsonl.ReadTail(path, tailBytes)
 	if err != nil || len(turns) == 0 {
-		return time.Time{}, false
+		return Expiry{}, false
 	}
 	ct := make([]waste.CacheTurn, 0, len(turns))
 	for _, t := range turns {
@@ -99,12 +108,12 @@ func TranscriptExpiry(path string) (time.Time, bool) {
 	}
 	last, ttl, ok := waste.ColdClock(ct)
 	if !ok {
-		return time.Time{}, false
+		return Expiry{}, false
 	}
 	if lastEntry.After(turns[len(turns)-1].Timestamp) && lastEntry.After(last) {
 		last = lastEntry
 	}
-	return last.Add(ttl), true
+	return Expiry{At: last.Add(ttl), Tokens: waste.CachedPrefix(ct)}, true
 }
 
 // tailBytes is how much of the end of a transcript TranscriptExpiry
