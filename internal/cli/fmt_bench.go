@@ -29,7 +29,7 @@ deterministic formatter set at each loss level and reports byte and
 estimated-token savings. Corpus files are named <command>.<label>.txt so the
 leading token selects the formatter (git.status.txt -> git formatter).
 
-  tokenops fmt bench --corpus internal/contexts/optimization/formatter/testdata/corpus`,
+  tokenops fmt bench --corpus internal/contexts/optimization/eval/testdata/fmtrecall`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if corpusDir == "" {

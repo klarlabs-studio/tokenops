@@ -401,12 +401,12 @@
       "vulnerability": "DATA-005",
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "formatter/testdata/corpus/terraform.plan.txt:26 — a captured `terraform plan` output used as a formatter fixture; 54.1.2.3 is an example public_ip inside that sample text, not configuration anything connects to.",
+      "impact_statement": "eval/testdata/fmtrecall/terraform.plan.txt:26 — a captured `terraform plan` output used as a formatter fixture and fmt recall eval case; 54.1.2.3 is an example public_ip inside that sample text, not configuration anything connects to.",
       "products": ["github.com/klarlabs-studio/tokenops"],
-      "_nox_fingerprint": "d498ba970010dc7dd5b2c50277898cef1a49d906d20ac63330f5b70181d95106",
+      "_nox_fingerprint": "569f04fcfbd546d02f508ceedb0e803089ce1986556f56da19042f6ca38d44bd",
       "_governance": {
         "classification": "False Positive",
-        "last_reviewed": "2026-10-22",
+        "last_reviewed": "2026-11-01",
         "reviewed_by": "tokenops-maintainers"
       }
     },

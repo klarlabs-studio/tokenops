@@ -1,0 +1,7 @@
+{"description":"playbook run with a failed and a fatal task on one host","evidence":[
+ {"kind":"error_message","text":"failed: [web2]"},
+ {"kind":"error_message","text":"Could not start nginx: port 80 in use"},
+ {"kind":"error_message","text":"fatal: [web2]: FAILED!"},
+ {"kind":"error_message","text":"health check timed out"},
+ {"kind":"exit_status","text":"web2 : ok=3 changed=2 unreachable=0 failed=2"},
+ {"kind":"count","text":"web1 : ok=6 changed=1 unreachable=0 failed=0"}]}

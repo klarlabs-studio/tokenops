@@ -1,0 +1,5 @@
+{"description":"bazel test with one failing target","evidence":[
+ {"kind":"failing_test","text":"//pkg/parser:lexer_test"},
+ {"kind":"error_message","text":"ERROR: //pkg/parser:lexer_test failed to build"},
+ {"kind":"exit_status","text":"FAILED: Build did NOT complete successfully"},
+ {"kind":"count","text":"Executed 9 out of 9 tests: 8 tests pass and 1 fails."}]}

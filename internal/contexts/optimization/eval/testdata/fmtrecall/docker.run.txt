@@ -1,0 +1,16 @@
+Unable to find image 'example/worker:1.4.2' locally
+1.4.2: Pulling from example/worker
+a2318d6c47ec: Pulling fs layer
+b1c2d3e4f5a6: Pulling fs layer
+a2318d6c47ec: Downloading [=====>                                             ]  3.1MB/29.1MB
+a2318d6c47ec: Downloading [=========================>                         ]  15.2MB/29.1MB
+a2318d6c47ec: Download complete
+a2318d6c47ec: Pull complete
+b1c2d3e4f5a6: Pull complete
+Digest: sha256:0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e
+Status: Downloaded newer image for example/worker:1.4.2
+2026-10-31T09:00:01Z INFO  starting worker queue=billing concurrency=4
+2026-10-31T09:00:01Z INFO  connecting to postgres host=db port=5432
+2026-10-31T09:00:06Z ERROR connect: dial tcp 10.0.0.12:5432: connect: connection refused
+2026-10-31T09:00:06Z FATAL worker exited: database unavailable
+docker: Error response from daemon: container exited with code 1.

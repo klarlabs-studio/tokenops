@@ -1,0 +1,5 @@
+{"description":"maven build with a compile error and failing tests","evidence":[
+ {"kind":"error_location","text":"/home/user/my-app/src/main/java/com/example/Main.java:[47,23]"},
+ {"kind":"error_message","text":"cannot find symbol"},
+ {"kind":"count","text":"Tests run: 128, Failures: 2, Errors: 0, Skipped: 3","critical":true},
+ {"kind":"exit_status","text":"BUILD FAILURE"}]}

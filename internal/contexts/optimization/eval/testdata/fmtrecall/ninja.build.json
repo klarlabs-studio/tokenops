@@ -1,0 +1,5 @@
+{"description":"ninja stopping on a failed object","evidence":[
+ {"kind":"failed_resource","text":"FAILED: obj/eval.o"},
+ {"kind":"error_location","text":"/home/user/proj/src/eval.cpp:88:12"},
+ {"kind":"error_message","text":"use of undeclared identifier 'ctx'"},
+ {"kind":"exit_status","text":"ninja: build stopped: subcommand failed."}]}

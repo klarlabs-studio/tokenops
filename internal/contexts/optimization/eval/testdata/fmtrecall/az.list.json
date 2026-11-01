@@ -1,0 +1,3 @@
+{"description":"az vm list with an authorization error","evidence":[
+ {"kind":"error_message","text":"ERROR: The client does not have authorization to perform action"},
+ {"kind":"match","text":"vm-db-1"}]}

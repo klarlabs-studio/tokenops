@@ -1,0 +1,6 @@
+{"description":"git log of three commits including a merge","evidence":[
+ {"kind":"changed_path","text":"9f8e7d6c5b4a39281706f5e4d3c2b1a098765432","critical":true},
+ {"kind":"match","text":"fix(billing): skip voided lines in the invoice total"},
+ {"kind":"match","text":"1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d"},
+ {"kind":"match","text":"feat(billing): add credit notes"},
+ {"kind":"match","text":"Merge pull request #412"}]}

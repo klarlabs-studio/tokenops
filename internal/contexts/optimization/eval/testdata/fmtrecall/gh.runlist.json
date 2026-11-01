@@ -1,0 +1,5 @@
+{"description":"gh run list with two failed runs","evidence":[
+ {"kind":"failed_resource","text":"fix(proxy): retry flake"},
+ {"kind":"failed_resource","text":"28621004512"},
+ {"kind":"failed_resource","text":"feat: broken build"},
+ {"kind":"failed_resource","text":"28619112774"}]}

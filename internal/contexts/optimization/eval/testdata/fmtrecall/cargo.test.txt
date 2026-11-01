@@ -1,0 +1,28 @@
+   Compiling shop v0.3.0 (/home/dev/shop)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.41s
+     Running unittests src/lib.rs (target/debug/deps/shop-1a2b3c4d5e6f7a8b)
+
+running 6 tests
+test cart::tests::adds_item ... ok
+test cart::tests::removes_item ... ok
+test invoice::tests::sums_lines ... ok
+test invoice::tests::skips_voided_lines ... FAILED
+test tax::tests::applies_rate ... ok
+test tax::tests::rounds_half_even ... ok
+
+failures:
+
+---- invoice::tests::skips_voided_lines stdout ----
+thread 'invoice::tests::skips_voided_lines' panicked at src/invoice.rs:88:9:
+assertion `left == right` failed
+  left: 150
+ right: 100
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    invoice::tests::skips_voided_lines
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--lib`

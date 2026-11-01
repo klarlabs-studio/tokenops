@@ -1,0 +1,23 @@
+
+> shop-web@1.2.0 test
+> vitest run
+
+ RUN  v2.1.4 /home/dev/shop-web
+
+ ✓ src/cart.test.ts (8 tests) 12ms
+ ❯ src/checkout.test.ts (3 tests | 1 failed) 18ms
+   × checkout > rejects an expired coupon 6ms
+     → expected [Function] to throw an error
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+FAIL src/checkout.test.ts > checkout > rejects an expired coupon
+AssertionError: expected [Function] to throw an error
+ ❯ src/checkout.test.ts:31:42
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 10 passed (11)
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /home/dev/shop-web
+npm error command failed
+npm error command sh -c vitest run

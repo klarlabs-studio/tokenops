@@ -1,0 +1,7 @@
+./internal/billing/invoice_test.go
+./internal/billing/credit_test.go
+./internal/catalog/catalog_test.go
+./internal/cart/cart_test.go
+./internal/checkout/flow_test.go
+find: './secrets': Permission denied
+./cmd/shop/main_test.go

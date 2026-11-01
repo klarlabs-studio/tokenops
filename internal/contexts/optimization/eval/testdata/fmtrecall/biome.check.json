@@ -1,0 +1,5 @@
+{"description":"biome check with two lint errors","evidence":[
+ {"kind":"error_location","text":"src/index.ts:12:5"},
+ {"kind":"error_location","text":"src/api.ts:44:1"},
+ {"kind":"error_message","text":"lint/suspicious/noExplicitAny"},
+ {"kind":"count","text":"Found 2 errors."}]}

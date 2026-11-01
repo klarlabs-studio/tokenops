@@ -1,0 +1,3 @@
+{"description":"flyway migrate applying one migration","evidence":[
+ {"kind":"changed_path","text":"Migrating schema \"public\" to version \"12 - add users table\""},
+ {"kind":"exit_status","text":"Successfully applied 1 migration"}]}

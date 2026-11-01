@@ -1,0 +1,2 @@
+{"description":"go test -v over passing packages","evidence":[
+ {"kind":"match","text":"go.klarlabs.de/tokenops/internal/contexts/optimization/replay"}]}

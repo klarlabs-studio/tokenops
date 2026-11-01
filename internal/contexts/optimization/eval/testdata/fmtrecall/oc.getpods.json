@@ -1,0 +1,3 @@
+{"command":"oc","description":"oc get pods with a crashing build pod","evidence":[
+ {"kind":"failed_resource","text":"build-app-3-ghi"},
+ {"kind":"failed_resource","text":"CrashLoopBackOff"}]}

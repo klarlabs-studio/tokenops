@@ -1,0 +1,2 @@
+{"description":"pip install fastapi","evidence":[
+ {"kind":"installed","text":"Successfully installed anyio-4.6.0 fastapi-0.115.0 pydantic-2.9.2 pydantic-core-2.23.4 starlette-0.38.6"}]}
