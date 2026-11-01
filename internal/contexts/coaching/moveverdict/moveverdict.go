@@ -90,6 +90,11 @@ type Observation struct {
 	Moved  bool   `json:"moved,omitempty"`
 	From   string `json:"from,omitempty"`
 	MoveID string `json:"move_id,omitempty"`
+	// Held marks a run the coach would have moved from From to HeldFor
+	// and held back at random instead, so the move can be compared with
+	// work chosen by chance rather than by whatever ran nearby.
+	Held    bool   `json:"held,omitempty"`
+	HeldFor string `json:"held_for,omitempty"`
 	// Trials is 1 for a subagent call, the units counted for a session;
 	// Bad how many of them had any signal.
 	Trials  int     `json:"trials"`
@@ -186,6 +191,9 @@ type Belief struct {
 	Why     string  `json:"why"`
 	// Scope says what was compared with what.
 	Scope string `json:"scope"`
+	// Randomized marks a belief judged against runs held back at random
+	// from this very move, rather than against comparable unmoved runs.
+	Randomized bool `json:"randomized,omitempty"`
 	// Since is the oldest moved run judged; AfterRetraction marks a
 	// belief judged only on runs since its retraction (new evidence).
 	Since           time.Time `json:"since,omitzero"`
@@ -230,6 +238,11 @@ func Judge(obs []Observation, retractions []Retraction, now time.Time) []Belief 
 
 func judgeKey(k Key, obs []Observation, retractedAt time.Time, retracted bool) Belief {
 	p := PolicyFor(k)
+	if !retracted {
+		if hold := heldFor(k, obs); len(hold) >= p.MinBaselineRuns {
+			return judgeRandomized(k, p, obs, hold)
+		}
+	}
 	b := Belief{Key: k, AfterRetraction: retracted}
 	b.Scope = fmt.Sprintf("%s runs on %s against unmoved %s runs on %s, same project, within %d days of each other",
 		kindLabel(k.Kind), k.To, kindLabel(k.Kind), k.From, int(p.Near.Hours()/24))
@@ -264,6 +277,13 @@ func judgeKey(k Key, obs []Observation, retractedAt time.Time, retracted bool) B
 		b.Baseline += u.Trials
 		b.BaselineBad += u.Bad
 	}
+	return verdictFor(b, k, p, judgedRuns, len(baseline))
+}
+
+// verdictFor completes b from its counts: the rates, how sure a drop is,
+// and the verdict the policy gives, judgedRuns and baselineRuns being
+// the distinct runs on each side.
+func verdictFor(b Belief, k Key, p Policy, judgedRuns, baselineRuns int) Belief {
 	if b.Judged > 0 {
 		b.Rate = float64(b.Bad) / float64(b.Judged)
 	}
@@ -273,10 +293,10 @@ func judgeKey(k Key, obs []Observation, retractedAt time.Time, retracted bool) B
 	b.Z = twoProportionZ(b.Bad, b.Judged, b.BaselineBad, b.Baseline)
 	b.Confidence = 0.5 * math.Erfc(-b.Z/math.Sqrt2)
 	switch {
-	case b.Judged < p.MinTreated || judgedRuns < p.MinTreatedRuns || b.Baseline < p.MinBaseline || len(baseline) < p.MinBaselineRuns:
+	case b.Judged < p.MinTreated || judgedRuns < p.MinTreatedRuns || b.Baseline < p.MinBaseline || baselineRuns < p.MinBaselineRuns:
 		b.Verdict = VerdictUnjudged
 		b.Why = fmt.Sprintf("%d of %d %s judged against %d comparable %s; a verdict needs at least %d %s with %d comparable %s",
-			judgedRuns, b.Moves, plural(b.Moves, runNoun(k)), len(baseline), plural(len(baseline), runNoun(k)),
+			judgedRuns, b.Moves, plural(b.Moves, runNoun(k)), baselineRuns, plural(baselineRuns, runNoun(k)),
 			p.MinTreatedRuns, plural(p.MinTreatedRuns, runNoun(k)), p.MinBaselineRuns, plural(p.MinBaselineRuns, runNoun(k)))
 		if k.Kind == KindDefaultModel {
 			b.Why += fmt.Sprintf(", and %d instructions a side", p.MinTreated)
@@ -292,6 +312,46 @@ func judgeKey(k Key, obs []Observation, retractedAt time.Time, retracted bool) B
 			trialNoun(k), pct(b.Rate), k.To, pct(b.BaselineRate), k.From, points(p.MinDrop), p.MinZ)
 	}
 	return b
+}
+
+// heldFor is the runs held back at random from the move k.
+func heldFor(k Key, obs []Observation) []Observation {
+	var out []Observation
+	for _, o := range obs {
+		if o.Held && o.Kind == k.Kind && o.From == k.From && o.HeldFor == k.To {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// judgeRandomized judges the move k's runs against the runs held back
+// from it at random. Chance decided which runs were moved, so the two
+// differ only in the model and the comparison needs no matching by
+// project or time.
+func judgeRandomized(k Key, p Policy, obs, hold []Observation) Belief {
+	b := Belief{Key: k, Randomized: true}
+	b.Scope = fmt.Sprintf("%s runs moved to %s against %s runs held back at random on %s",
+		kindLabel(k.Kind), k.To, kindLabel(k.Kind), k.From)
+	runs := 0
+	for _, t := range obs {
+		if !treated(t, k, time.Time{}, false) {
+			continue
+		}
+		runs++
+		b.Moves++
+		b.Judged += t.Trials
+		b.Bad += t.Bad
+		b.Signals = b.Signals.add(t.Signals)
+		if b.Since.IsZero() || t.At.Before(b.Since) {
+			b.Since = t.At
+		}
+	}
+	for _, u := range hold {
+		b.Baseline += u.Trials
+		b.BaselineBad += u.Bad
+	}
+	return verdictFor(b, k, p, runs, len(hold))
 }
 
 // treated reports whether o is a run of the move k: one the coach moved,

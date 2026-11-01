@@ -110,6 +110,11 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 	if !dec.Rewrite {
 		return nil
 	}
+	// A share of the moves is held back at random, so the moves made are
+	// measured against work chance left alone (coachcap.VerifyMoves).
+	if coachcap.HoldSubagentMove(ledger, now, cfg.CoachHoldoutPercent(), in.SessionID, in.ToolUseID, string(dec.Kind), dec.From, dec.To) {
+		return nil
+	}
 	updated := make(map[string]any, len(in.ToolInput))
 	for k, v := range in.ToolInput {
 		updated[k] = v

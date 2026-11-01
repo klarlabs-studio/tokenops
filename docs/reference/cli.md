@@ -1754,6 +1754,16 @@ spent. `tokenops coach holdout off` opts out, `on` restores 10%, and a
 number from 0 to 10 sets the share; a preset keeps your choice. The
 `tokenops_coach` MCP tool takes the same setting.
 
+The same share of the subagent moves the coach makes on its own
+(`coach.models: autonomous`) is held back: the subagent runs on the model
+the agent asked for, and the move it would have been is recorded. Each
+kind of move (task kind, from-model → to-model) is then judged against the
+runs chance held back rather than against whatever unmoved work happened
+nearby, once at least 8 have settled; until then it falls back to the
+nearby comparison. A kind that does worse than its holdout by 15 points or
+more, at z 1.645, is retracted as before. `tokenops explain moves` says
+which comparison each verdict rests on.
+
 `tokenops verify` and `tokenops coach stats` compare the sessions that got a
 tip with the ones it was held from: the spend after the tip, whether the
 context was compacted, and whether a commit landed in the session's

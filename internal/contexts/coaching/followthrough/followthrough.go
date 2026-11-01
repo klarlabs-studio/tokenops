@@ -89,6 +89,10 @@ const (
 	// EntrySeen records that an offer was shown somewhere the operator
 	// sees, such as the status line. It carries the offer's ID.
 	EntrySeen EntryType = "seen"
+	// EntryHoldout is a move the coach would have made and held back at
+	// random, to measure the moves it does make against. It is not an
+	// intervention, so it is never folded as one.
+	EntryHoldout EntryType = "holdout"
 )
 
 // Entry is one ledger line.
@@ -366,7 +370,7 @@ func Prune(entries []Entry, now time.Time, keep time.Duration) []Entry {
 		case e.Type == EntryResolve && kept[e.ID]:
 		case e.Type == EntrySeen && kept[e.ID]:
 		case e.Type == EntryFeedback && kept[e.ID]:
-		case e.Type == EntryLowered && now.Sub(e.At) <= keep:
+		case (e.Type == EntryLowered || e.Type == EntryHoldout) && now.Sub(e.At) <= keep:
 		default:
 			continue
 		}

@@ -86,6 +86,9 @@ type Timeline struct {
 // as the follow-through ledger has it, with model families.
 type Move struct {
 	ID, Kind, From, To string
+	// Held marks a move the coach held back at random: the call ran on
+	// From, and is the comparison for the move to To.
+	Held bool
 }
 
 // ObserveCalls turns a session's settled subagent calls into
@@ -113,7 +116,13 @@ func ObserveCalls(tl Timeline, moves map[string]Move, now time.Time) ([]Observat
 			Ref: c.Ref, Session: tl.Session, Scope: tl.Scope, Source: SourceClaudeTranscript,
 			At: c.At.UTC(), Kind: c.Kind, Model: c.Model, Trials: 1,
 		}
-		if moved {
+		switch {
+		case moved && m.Held:
+			o.Held, o.From, o.HeldFor = true, m.From, m.To
+			if m.Kind != "" {
+				o.Kind = m.Kind
+			}
+		case moved:
 			o.Moved, o.MoveID, o.From = true, m.ID, m.From
 			if m.Kind != "" {
 				o.Kind = m.Kind
