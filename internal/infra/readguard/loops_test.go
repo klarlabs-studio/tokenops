@@ -178,3 +178,76 @@ func TestLoopStateHoldsNoPaths(t *testing.T) {
 		}
 	}
 }
+
+// A loop tip is settled by what the agent does next: the loop recurring
+// within SettleAfter calls is ignoring it, with what it did instead; an
+// edit after a search loop, or SettleAfter calls without the loop, is
+// following it.
+func TestObserveSettlesTips(t *testing.T) {
+	speak := func(LoopTip) bool { return true }
+	ids := 0
+	newID := func() string { ids++; return "tip" + string(rune('0'+ids)) }
+	loop := func(c Call) []Call { return []Call{c, c, c} }
+	cases := []struct {
+		name     string
+		calls    []Call
+		after    []Call
+		followed bool
+		instead  string
+		settled  bool
+	}{
+		{"the same file read again is ignored", loop(read("/repo/a.go")), []Call{read("/repo/a.go")}, false, "read a.go again", true},
+		{"the same file in another range is still ignored", loop(read("/repo/a.go")),
+			[]Call{{Kind: CallRead, Path: "/repo/a.go", Range: "10:20"}}, false, "read a.go again", true},
+		{"no re-read in the next calls is followed", loop(read("/repo/a.go")),
+			[]Call{other(0), other(1), other(2), other(3), other(4)}, true, "", true},
+		{"fewer calls than the wait leave it open", loop(read("/repo/a.go")), []Call{other(0), other(1)}, false, "", false},
+		{"the same search again is ignored", loop(grep("Foo")), []Call{grep("Foo")}, false, "ran the same Grep again", true},
+		{"an edit after a search loop is followed", loop(grep("Foo")), []Call{edit()}, true, "", true},
+		{"another search is not the loop", loop(grep("Foo")), []Call{grep("Bar")}, false, "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			var given string
+			for _, call := range c.calls {
+				if o := Observe(dir, "s1", "", call, speak, newID); o.Spoke {
+					given = o.ID
+				}
+			}
+			if given == "" {
+				t.Fatal("no tip given")
+			}
+			var settled []TipOutcome
+			for _, call := range c.after {
+				settled = append(settled, Observe(dir, "s1", "", call, speak, newID).Settled...)
+			}
+			if !c.settled {
+				if len(settled) != 0 {
+					t.Fatalf("settled %+v; want it open", settled)
+				}
+				return
+			}
+			if len(settled) != 1 || settled[0].ID != given || settled[0].Followed != c.followed || settled[0].Instead != c.instead {
+				t.Fatalf("settled %+v; want %s followed=%v instead %q", settled, given, c.followed, c.instead)
+			}
+		})
+	}
+}
+
+func TestLoopTipObjectNamesOneThing(t *testing.T) {
+	dir := t.TempDir()
+	var tip LoopTip
+	for range 3 {
+		tip, _ = ObserveCall(dir, "s1", "", Call{Kind: CallRead, Path: "/repo/internal/cli/readguard.go", Range: "1:5"}, always)
+	}
+	if tip.Object() != "readguard.go" {
+		t.Fatalf("read object = %q", tip.Object())
+	}
+	for range 3 {
+		tip, _ = ObserveCall(dir, "s2", "", grep("needle"), always)
+	}
+	if tip.Object() != `Grep "needle"` {
+		t.Fatalf("search object = %q", tip.Object())
+	}
+}

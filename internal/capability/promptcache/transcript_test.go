@@ -50,8 +50,8 @@ func TestCacheExpiryFromTheTranscript(t *testing.T) {
 	}
 	for _, c := range cases {
 		got, ok := promptcache.TranscriptExpiry(c.path)
-		if !ok || !got.Equal(c.want) {
-			t.Errorf("%s: expiry = %v, %v; want %v", c.name, got, ok, c.want)
+		if !ok || !got.At.Equal(c.want) || got.Tokens != 1_000 {
+			t.Errorf("%s: expiry = %+v, %v; want %v with 1000 tokens cached", c.name, got, ok, c.want)
 		}
 	}
 	if _, ok := promptcache.TranscriptExpiry(""); ok {

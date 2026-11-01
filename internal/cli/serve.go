@@ -143,10 +143,11 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}
 
 	if err := mcp.RegisterTools(srv, mcp.Deps{
-		Store:      components.Store,
-		Aggregator: components.Aggregator,
-		Spend:      components.Spend,
-		Waste:      cfg.Coaching.WasteConfig(),
+		CoachLedger: coachLedger,
+		Store:       components.Store,
+		Aggregator:  components.Aggregator,
+		Spend:       components.Spend,
+		Waste:       cfg.Coaching.WasteConfig(),
 		WasteConfig: func() workflowtrace.WasteConfig {
 			if currentConfig != nil {
 				if c := currentConfig(); c != nil {
@@ -273,7 +274,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}
 	if err := mcp.RegisterRoutingAdviceTools(srv, mcp.RoutingAdviceDeps{
 		ConfigGetter: planDeps.ConfigGetter, Config: planDeps.Config, Store: planDeps.Store,
-		Spend: components.Spend,
+		Spend: components.Spend, CoachLedger: coachLedger,
 	}); err != nil {
 		return fmt.Errorf("register routing advice tools: %w", err)
 	}

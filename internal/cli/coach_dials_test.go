@@ -143,3 +143,28 @@ func TestRenderFollowThroughReportsUnseenTips(t *testing.T) {
 		}
 	}
 }
+
+// A retired kind says why and how to bring it back, and an ignored offer
+// says where it was given and what the agent did instead.
+func TestRenderFollowThroughReportsRetiredKindsAndOverrides(t *testing.T) {
+	var out bytes.Buffer
+	renderFollowThrough(&out, coachcap.Report{FollowThrough: []ft.Summary{
+		{Power: "inform", Channel: ft.ChannelTip, Kind: "reread_churn", Followed: 2, Ignored: 18, Quiet: true,
+			LastPoint: ft.PointToolCall, LastInstead: "read store.go again",
+			Retired: &ft.Retirement{Power: "inform", Kind: "reread_churn", Seen: 20, Ignored: 18}},
+		{Power: "inform", Channel: ft.ChannelTip, Kind: "subagent_model", Followed: 1, Ignored: 1,
+			LastPoint: ft.PointSubagent, LastInstead: "launched Explore on opus again"},
+	}})
+	got := out.String()
+	for _, want := range []string{
+		"inform tips on reread_churn: 2 followed, 18 ignored · last ignored at a tool call: read store.go again · retired: ignored 18 of the 20 times it was seen in the last 30 days (`tokenops coach reinstate reread_churn` brings it back)",
+		"inform tips on subagent_model: 1 followed, 1 ignored · last ignored at a subagent launch: launched Explore on opus again",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("follow-through missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "quiet now") {
+		t.Errorf("a retired kind is reported as retired, not quiet:\n%s", got)
+	}
+}

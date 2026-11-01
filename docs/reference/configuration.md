@@ -92,6 +92,24 @@ ignored. `tokenops coach stats` shows how many tips of each kind were given
 per day over the last 7 days, how many went unseen, and how often the coach
 stood down and for which vendor surface.
 
+#### Tips at decision points
+
+The tips the coach gives the agent at a decision point (a tool call, a
+subagent launch, the turn's model choice, `tokenops_prepare_work`) are
+throttled:
+
+```yaml
+coach:
+  tips:
+    per_hour: 6      # most decision-point tips one session hears in any hour (1-60)
+    cooldown: 1h     # before the same tip (kind and what it names) is given again in a session
+```
+
+Unset keys are the defaults shown. A kind ignored at least 80% of the 20 or
+more times it was seen in the last 30 days is retired until
+`tokenops coach reinstate <kind>`; see the
+[CLI reference](./cli.md#tips-at-decision-points).
+
 For **context**, `advise` is the compact tip (20 turns above the
 compaction line without compacting). `autonomous` sets where each agent
 compacts on its own, at the same line (600k on Claude Code, 150k on Codex,

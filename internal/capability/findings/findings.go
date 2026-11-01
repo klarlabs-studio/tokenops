@@ -559,6 +559,17 @@ func coaching(c *coach.Report, s *coachhook.Stats) []Finding {
 		if f, ok := snoozedMostly(sum); ok {
 			out = append(out, f)
 		}
+		if sum.Retired != nil {
+			out = append(out, Finding{
+				Key:      key(KindCoach, "retired", sum.Kind),
+				Kind:     KindCoach,
+				Level:    LevelInfo,
+				Title:    fmt.Sprintf("The coach retired %s", kindWords(sum.Kind)),
+				Evidence: sum.Retired.Why(),
+				Action:   fmt.Sprintf("`tokenops coach reinstate %s` brings it back.", sum.Kind),
+			})
+			continue
+		}
 		if !sum.Quiet {
 			continue
 		}
@@ -611,6 +622,10 @@ func kindWords(kind string) string {
 	switch {
 	case kind == "compact_now":
 		return "compact tips"
+	case kind == "reread_churn":
+		return "re-read tips"
+	case kind == "search_loop", kind == "subagent_model", kind == "window_fit", kind == "model_fit":
+		return strings.ReplaceAll(kind, "_", " ") + " tips"
 	case strings.HasPrefix(kind, "quota_"):
 		return "quota tips"
 	case strings.HasPrefix(kind, "budget_"):

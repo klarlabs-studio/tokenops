@@ -54,6 +54,11 @@ type hookRuns struct {
 	event, command string
 	// bySession is the first output's digest in each session.
 	bySession map[string][sha256.Size]byte
+	// canonical is the same output's digest with each JSON value in it
+	// rewritten with sorted keys and no spacing; json says some output
+	// held JSON.
+	canonical map[string][sha256.Size]byte
+	json      bool
 	// tokens are the volatile tokens seen in its output, first of each
 	// kind.
 	tokens []Match
@@ -65,8 +70,9 @@ type hookRuns struct {
 // is hashed and scanned; none of it is kept.
 func (l *linter) recorded() {
 	runs := map[string]*hookRuns{}
+	l.changes = newChangeBook()
 	for _, path := range newestTranscripts(l.src.TranscriptRoot, l.maxTranscripts()) {
-		if readHookRuns(path, runs) {
+		if readTranscript(path, runs, l.changes) {
 			l.transcripts++
 		}
 	}
@@ -96,6 +102,7 @@ func (l *linter) recorded() {
 	for _, r := range ordered {
 		l.findings = append(l.findings, l.recordedFindings(r)...)
 	}
+	l.findings = append(l.findings, l.changes.findings()...)
 }
 
 func (l *linter) maxTranscripts() int {
@@ -129,20 +136,68 @@ func (l *linter) recordedFindings(r *hookRuns) []Finding {
 		out = append(out, f)
 	}
 	if len(out) == 0 && r.event == EventSessionStart && len(r.bySession) > 1 {
-		distinct := map[[sha256.Size]byte]bool{}
-		for _, d := range r.bySession {
-			distinct[d] = true
-		}
-		if len(distinct) > 1 {
+		distinct := countDistinct(r.bySession)
+		if distinct > 1 && r.json && countDistinct(r.canonical) == 1 {
+			f := base
+			f.Severity, f.Kind = SeverityHigh, KindKeyOrder
+			f.Token = fmt.Sprintf("%d key orders in %d sessions", distinct, len(r.bySession))
+			f.Why = "Transcripts show this SessionStart hook printing the same JSON in different sessions with its keys in a different order or spacing. " +
+				"The model reads the same facts, but the bytes differ, so each session's prefix differs from here and none reuses another's cache past it."
+			f.Fix = "Print the JSON with a fixed key order: sorted keys (jq -S, json.dumps(sort_keys=True), Perl's JSON->canonical) or a struct, not a hash map's iteration order."
+			out = append(out, f)
+		} else if distinct > 1 {
 			f := base
 			f.Severity, f.Kind, f.Fix = SeverityHigh, KindOutputVaries, fix
-			f.Token = fmt.Sprintf("%d different outputs in %d sessions", len(distinct), len(r.bySession))
+			f.Token = fmt.Sprintf("%d different outputs in %d sessions", distinct, len(r.bySession))
 			f.Why = "Transcripts show this SessionStart hook printing different text in different sessions. Its output opens the context, " +
 				"so each session's prefix differs from here and none reuses another's cache past it."
 			out = append(out, f)
 		}
 	}
 	return out
+}
+
+func countDistinct(m map[string][sha256.Size]byte) int {
+	seen := map[[sha256.Size]byte]bool{}
+	for _, d := range m {
+		seen[d] = true
+	}
+	return len(seen)
+}
+
+// canonicalJSON rewrites the JSON in text with sorted keys and no
+// spacing: the whole text when it is one JSON object or array, else each
+// line that is. Other text is kept as it is. The bool says some JSON was
+// found. Array order is content and is kept.
+func canonicalJSON(text string) (string, bool) {
+	if c, ok := canonicalValue(strings.TrimSpace(text)); ok {
+		return c, true
+	}
+	lines := strings.Split(text, "\n")
+	found := false
+	for i, line := range lines {
+		if c, ok := canonicalValue(strings.TrimSpace(line)); ok {
+			lines[i], found = c, true
+		}
+	}
+	return strings.Join(lines, "\n"), found
+}
+
+func canonicalValue(s string) (string, bool) {
+	if s == "" || (s[0] != '{' && s[0] != '[') {
+		return "", false
+	}
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.UseNumber()
+	var v any
+	if dec.Decode(&v) != nil || dec.More() {
+		return "", false
+	}
+	b, err := json.Marshal(v) // map keys come out sorted
+	if err != nil {
+		return "", false
+	}
+	return string(b), true
 }
 
 func kindWords(kind string) string {
@@ -196,21 +251,34 @@ func newestTranscripts(root string, max int) []string {
 	return out
 }
 
-var hookSuccess = []byte(`"hook_success"`)
+var (
+	hookSuccess = []byte(`"hook_success"`)
+	assistant   = []byte(`"assistant"`)
+	usage       = []byte(`"usage"`)
+	// changeAttachments are the attachments a mid-session change is
+	// recorded in, and the one that lists the session's loaded files.
+	changeAttachments = [][]byte{[]byte(`"edited_text_file"`), []byte(`"deferred_tools_delta"`),
+		[]byte(`"mcp_instructions_delta"`), []byte(`"instructions"`)}
+)
 
-// readHookRuns adds one transcript's hook runs to runs; false when the
-// file could not be read.
-func readHookRuns(path string, runs map[string]*hookRuns) bool {
+// readTranscript adds one transcript's hook runs to runs and its
+// mid-session changes to changes; false when the file could not be read.
+// A line is parsed only when its bytes show it can matter.
+func readTranscript(path string, runs map[string]*hookRuns, changes *changeBook) bool {
 	f, err := os.Open(path) //nolint:gosec // transcripts under the client's projects directory
 	if err != nil {
 		return false
 	}
 	defer func() { _ = f.Close() }()
 	br := bufio.NewReaderSize(f, 64*1024)
+	sessions := map[string]*sessionTrack{}
 	for {
 		line, err := br.ReadBytes('\n')
-		if bytes.Contains(line, hookSuccess) {
+		switch {
+		case bytes.Contains(line, hookSuccess):
 			addRun(line, runs)
+		case bytes.Contains(line, assistant) && bytes.Contains(line, usage), mentionsAny(line, changeAttachments):
+			changes.line(line, sessions)
 		}
 		if err == io.EOF {
 			return true
@@ -219,6 +287,15 @@ func readHookRuns(path string, runs map[string]*hookRuns) bool {
 			return true
 		}
 	}
+}
+
+func mentionsAny(line []byte, words [][]byte) bool {
+	for _, w := range words {
+		if bytes.Contains(line, w) {
+			return true
+		}
+	}
+	return false
 }
 
 func addRun(line []byte, runs map[string]*hookRuns) {
@@ -233,12 +310,16 @@ func addRun(line []byte, runs map[string]*hookRuns) {
 	key := a.HookEvent + "\x00" + a.Command
 	r := runs[key]
 	if r == nil {
-		r = &hookRuns{event: a.HookEvent, command: a.Command, bySession: map[string][sha256.Size]byte{}}
+		r = &hookRuns{event: a.HookEvent, command: a.Command, bySession: map[string][sha256.Size]byte{},
+			canonical: map[string][sha256.Size]byte{}}
 		runs[key] = r
 	}
 	out := contextOf(a.Stdout)
 	if _, seen := r.bySession[rec.SessionID]; !seen {
 		r.bySession[rec.SessionID] = sha256.Sum256([]byte(out))
+		canon, hasJSON := canonicalJSON(out)
+		r.canonical[rec.SessionID] = sha256.Sum256([]byte(canon))
+		r.json = r.json || hasJSON
 	}
 	for _, m := range ScanText(out) {
 		if isMarker(m.Kind) || hasKind(r.tokens, m.Kind) {

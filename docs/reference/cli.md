@@ -1707,11 +1707,15 @@ Opus 5.5 high · ▰▰▰▰▱▱ 5h 62% ↻12:49 · wk 41% ↻Mon · ctx 71% 
   setting), so it warns before compaction rather than at 100%;
 - the prompt cache hit ratio, or, when under two minutes are left before
   the cache expires, **cache cold in 1m**, and **cache cold** once it has:
-  the next prompt then writes the whole context to the cache again. The
-  cache lives five minutes after the last request, or an hour when the
-  session writes it with the extended lifetime; the line reads both from
-  the timestamps and token counts at the end of the session's transcript,
-  never its text;
+  the next prompt then writes the whole context to the cache again. In
+  brackets is how much that is, the prompt the cache holds (**cache cold
+  in 1m (182k)**), so you can tell whether it is worth sending the next
+  prompt before it expires. It never suggests `/compact`: Claude Code
+  compacts an idle session itself, and a warning is information, not a
+  reason to interrupt. The cache lives five minutes after the last
+  request, or an hour when the session writes it with the extended
+  lifetime; the line reads both from the timestamps and token counts at
+  the end of the session's transcript, never its text;
 - the session's cost in your currency — marked "value" when a plan
   covers it, since then it is what the work was worth, not what you paid;
 - the coach's open tip, unless the coach is quiet or off.
@@ -1779,6 +1783,74 @@ step is yours to take. The 90% bar is ADR 0005's: a kind of advice above about
 a 10% effective false-positive rate is not worth more autonomy. While the
 coach only observes, the session-budget tips it would have given are recorded
 as shadow calls, which is the evidence for letting it speak.
+
+#### Tips at decision points
+
+The coach speaks to the agent where a choice is made, naming the one
+thing the tip is about, rather than in a line after the turn:
+
+| Decision point | Where it comes from | What it names |
+|---|---|---|
+| A tool call | the read guard on Claude Code (PreToolUse) | the file re-read or the search repeated ([loop tips](#loop-tips)) |
+| A subagent launch | the route guard on Claude Code's `Agent` tool (PreToolUse), while `models` is `advise` | the subagent type, and the cheaper model its work fits: `this Explore subagent runs on claude-opus-5; its work looks like lookup, which claude-haiku-4-5 fits. Pass model: "haiku" when you launch the next Explore subagent like it.` While the plan runs short it names the window too |
+| The turn's model choice | the route guard (UserPromptSubmit) | the model advised for the turn |
+| `tokenops_prepare_work` | the MCP tool's `coach_tips` | the plan window the task may not fit or that is nearly used or running out at its pace (`window_fit`, `window_low`), or the cheaper model the work fits (`model_fit`) |
+
+A tip at a tool call or a subagent launch is a note to the agent
+(`additionalContext`) with no permission decision: it never answers the
+operator's permission prompt and never changes the call. Tips follow the
+coach: none when `coach.powers.inform` is `off` or `coach.verbosity` is
+`quiet` (the model advice follows the `models` power and its own quiet
+rule).
+
+**Throttle.** A session hears at most `coach.tips.per_hour` decision-point
+tips in any hour (6 by default), and the same tip, its kind and the thing
+it names, not again within `coach.tips.cooldown` (1h by default). Tips
+from `tokenops_prepare_work` carry no session and share one budget.
+`verbose` still gives the model advice every applicable turn.
+
+**What the agent did instead.** What the agent does next settles a tip,
+and the follow-through ledger keeps the context, never contents or
+prompts: the same file read or the same search run again within 5 tool
+calls ignores a loop tip ("read store.go again"); the next launch of the
+same subagent type on the same model ignores a subagent tip ("launched
+Explore on opus again"), and on a cheaper one follows it; advice the
+session stays on the same tier through ignores it ("stayed on
+claude-opus-5"); `tokenops_review_work` settles the model tip from the
+models the workflow's steps ran on. `tokenops coach` shows, for each
+kind, the last ignored offer's decision point and what the agent did
+instead.
+
+**Retired kinds.** A kind of tip or advice that was seen and settled at
+least 20 times in the last 30 days, and ignored at least 80% of those
+times, is retired: the coach stops giving it, and `tokenops coach` and the
+glance's findings say so with the figures:
+
+```text
+  follow-through:
+    inform tips on reread_churn: 2 followed, 18 ignored · last ignored at a tool call: read store.go again · retired: ignored 18 of the 20 times it was seen in the last 30 days (`tokenops coach reinstate reread_churn` brings it back)
+```
+
+Only evidence of being seen counts. A tip at a decision point counts as
+seen once the agent acts after it; a Stop-hook tip only when it was shown
+on the status line, so a tip nobody saw is unseen, not ignored, and never
+retires anything. Tips about work about to stop (a window at 90% or
+forecast to run out) are never retired. Retirement is reversible:
+[`tokenops coach reinstate <kind>`](#tokenops-coach-reinstate-kind-all)
+brings a kind back, and only evidence after that counts again.
+
+### `tokenops coach reinstate <kind|all>`
+
+```bash
+tokenops coach reinstate reread_churn   # a retired tip kind
+tokenops coach reinstate edit           # a model move retracted for quality
+tokenops coach reinstate all
+```
+
+Brings back a tip or advice kind the coach [retired](#tips-at-decision-points)
+for being ignored, and a model move it retracted because work it moved did
+worse (`tokenops explain moves`). The evidence before it no longer counts
+toward retiring or quieting the kind again.
 
 ### `tokenops coach preset [observe|advise|guided|autopilot]`
 
@@ -2031,11 +2103,35 @@ It reads only what the harness loads into every session:
 - What hooks printed: the newest Claude Code transcripts (20 by default)
   record each hook's output. A `SessionStart` hook whose output carries a
   timestamp, a UUID or a commit hash, or differs from one session to the
-  next, is reported even when its command is a script.
+  next, is reported even when its command is a script. When the outputs
+  differ only in the order of a JSON value's keys (or its spacing), the
+  finding says so: the hook prints the same facts from a hash map in
+  whatever order it iterates, and sorting the keys fixes it. Only what the
+  transcripts show is judged; a command that could print unordered JSON
+  but has not differed yet is not flagged, and a reordered JSON array is
+  reported as output that varies, since array order can be content.
+
+- What changed during a session: the same transcripts record when the
+  tool or MCP server set changed between turns and when an always-loaded
+  file (`CLAUDE.md`, `AGENTS.md`, or a file the session's instructions
+  listed, such as an auto-memory `MEMORY.md`) was edited, by you or by the
+  agent. Each change is measured: the cache-read share of the turn just
+  before it against the turn just after, under "Mid-session changes" (and
+  `mid_session_changes` in the JSON). A change whose next turn wrote most
+  of the cached prompt again, with no idle gap past the cache's lifetime,
+  model switch or compaction to explain it, is a medium finding; one that
+  met a cache already cold (a session resumed an hour later) is counted
+  apart and left out of the shares. Claude Code appends these changes after
+  the turns before them rather than rewriting the prompt, so on the
+  machine this was built on 163 tool set changes and 18 context edits over
+  150 transcripts rebuilt nothing (cache read 92% before, 89% after; 99%
+  and 99%); the measure is there to show it if a harness behaves
+  otherwise. A change to the tool definitions that Claude Code makes
+  without recording it is not seen.
 
 Hooks are never run: the command text is read (`date`, `uuidgen`,
-`git status`, `git log`, `$RANDOM`, `datetime.now` and the like, unless
-the output goes to a file). Each finding names its file and line or hook,
+`git status`, `git log`, `gh pr list`, `curl`, `ps`, `df`, `$RANDOM`,
+`datetime.now` and the like, unless the output goes to a file). Each finding names its file and line or hook,
 the matched token and nothing around it, why it breaks the cache and the
 fix. Nothing is sent anywhere.
 
@@ -2365,11 +2461,15 @@ loop; the tip is a prompt to step back, not a verdict. Session length is
 not counted against anyone.
 
 Loop tips follow the coach: nothing is said when `coach.powers.inform` is
-`off` or `coach.verbosity` is `quiet`. Each tip is recorded in the coach's
-follow-through ledger as delivered to the agent, so it counts toward the
-coach's tips but never as seen or ignored by you. An install from before
-loop tips gains the second matcher when `tokenops init` or `tokenops hooks
-install --read-guard` runs again.
+`off` or `coach.verbosity` is `quiet`, and the [decision-point
+throttle](#tips-at-decision-points) bounds how many a session hears. Each
+tip is recorded in the coach's follow-through ledger as delivered to the
+agent at a tool call, with the file's base name or the search. The agent's
+next calls settle it: the same file read, or the same search run, again
+within 5 tool calls is ignoring it; an edit after a search loop, or 5
+calls without the loop, is following it. A session that ends first leaves
+it unseen. An install from before loop tips gains the second matcher when
+`tokenops init` or `tokenops hooks install --read-guard` runs again.
 
 ### `tokenops hooks install --client codex`
 

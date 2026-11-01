@@ -65,6 +65,9 @@ func TestPromptCacheCountdown(t *testing.T) {
 			if got == nil || got.State != c.state || got.RemainingSeconds != c.left || got.Client != "claude-code" {
 				t.Fatalf("countdown = %+v, want %s with %ds left", got, c.state, c.left)
 			}
+			if got.CachedTokens != 10_000 {
+				t.Errorf("cached tokens = %d, want the last turn's 9k read and 1k written", got.CachedTokens)
+			}
 		})
 	}
 	if promptcache.Current(context.Background(), nil, now) != nil {
