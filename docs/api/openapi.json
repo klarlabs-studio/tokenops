@@ -755,6 +755,12 @@
                           "kind": {
                             "type": "string"
                           },
+                          "last_instead": {
+                            "type": "string"
+                          },
+                          "last_point": {
+                            "type": "string"
+                          },
                           "open": {
                             "type": "integer"
                           },
@@ -763,6 +769,24 @@
                           },
                           "quiet": {
                             "type": "boolean"
+                          },
+                          "retired": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "ignored": {
+                                "type": "integer"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "power": {
+                                "type": "string"
+                              },
+                              "seen": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
                           },
                           "snoozed": {
                             "type": "integer"
@@ -1238,6 +1262,27 @@
                         }
                       },
                       "type": "object"
+                    },
+                    "retired": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "ignored": {
+                            "type": "integer"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "power": {
+                            "type": "string"
+                          },
+                          "seen": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "routers": {
                       "items": {
@@ -1436,6 +1481,12 @@
                           "kind": {
                             "type": "string"
                           },
+                          "last_instead": {
+                            "type": "string"
+                          },
+                          "last_point": {
+                            "type": "string"
+                          },
                           "open": {
                             "type": "integer"
                           },
@@ -1444,6 +1495,24 @@
                           },
                           "quiet": {
                             "type": "boolean"
+                          },
+                          "retired": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "ignored": {
+                                "type": "integer"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "power": {
+                                "type": "string"
+                              },
+                              "seen": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
                           },
                           "snoozed": {
                             "type": "integer"
@@ -1919,6 +1988,27 @@
                         }
                       },
                       "type": "object"
+                    },
+                    "retired": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "ignored": {
+                            "type": "integer"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "power": {
+                            "type": "string"
+                          },
+                          "seen": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "routers": {
                       "items": {
