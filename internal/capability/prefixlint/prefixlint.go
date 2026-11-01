@@ -17,6 +17,8 @@
 // and nothing is sent anywhere.
 package prefixlint
 
+import "fmt"
+
 // Severities, most urgent first.
 const (
 	// SeverityHigh is text that differs in every session: a SessionStart
@@ -116,4 +118,34 @@ func (r Report) HighFindings() []Finding {
 		}
 	}
 	return out
+}
+
+// Subject names an item without saying where it is: "SessionStart hook
+// running `date`".
+func (f Finding) Subject() string {
+	switch f.Source {
+	case SourceHook:
+		return fmt.Sprintf("%s hook running `%s`", f.Hook, f.Token)
+	case SourceHookOutput:
+		return fmt.Sprintf("%s hook `%s` printing a %s", f.Hook, f.Command, f.Kind)
+	}
+	return fmt.Sprintf("%s in a context file", f.Kind)
+}
+
+// InPrefix reports whether the item sits in the cached prefix, so a change
+// to it rebuilds the cache from there: a context file's line, or a
+// SessionStart hook's output. A UserPromptSubmit hook's output is
+// appended after the turns before it and leaves their cache alone.
+func (f Finding) InPrefix() bool {
+	return f.Source == SourceFile || f.Hook == EventSessionStart
+}
+
+// LoadedBy reports whether the harness client loads the item.
+func (f Finding) LoadedBy(client string) bool {
+	for _, c := range f.Clients {
+		if c == client {
+			return true
+		}
+	}
+	return false
 }

@@ -585,6 +585,16 @@ subagents included. Only what a client writes to its transcripts can be
 counted: calls a client makes on its own behalf and does not record are
 not in these figures.
 
+Each row's **CACHE READ** is the share of its input read from the prompt
+cache: the cache reads over all input, cache reads and writes included. A
+session or project that keeps a stable prefix reads most of its input from
+the cache; a low share is input paid at the full or cache-write rate,
+and `tokenops spend waste` says why its caches were rebuilt. A row with no
+input shows `—`, not 0%. Codex records cached reads but no cache writes,
+so its share counts only what it read. The JSON carries it as
+`CacheReadShare` (0 to 1) on each row, and `GET /api/spend/top` and the
+`tokenops_spend` MCP tool as `cache_read_share`.
+
 #### Cost per commit
 
 `tokenops spend --by commit` lists what each of your commits cost: the
@@ -762,6 +772,29 @@ Each class reads a source TokenOps already keeps:
   - *unexplained*: the turn before had no cache hits, or no times were
     recorded.
 
+  Under the prompt prefix changes, `likely:` names what the
+  [context lint](#tokenops-coach-lint-context) finds that could explain
+  them, with how many of the rebuilds it was joined to:
+
+  ```
+      prompt prefix changes                 3k     $0.02    0.1%      3
+        likely: SessionStart hook running `date` (3 of 3 rebuilds)
+  ```
+
+  The join is by place, not by proof. A rebuild is joined to an item when
+  the item sits in the prefix the rebuilt session loaded: a volatile line
+  in a context file (CLAUDE.md, AGENTS.md and what they import) or a
+  SessionStart hook that prints something changing, in your own files or
+  in the repository the session ran in, loaded by the harness the session
+  ran in. A UserPromptSubmit hook is left out: its output is appended
+  after the turns before it and does not rebuild their cache. The lint
+  reads the files as they are now, so an item added or fixed since the
+  rebuild can still be joined to it, and no record says which byte of the
+  prefix changed; that is why it says "likely". A session whose directory
+  no client recorded is joined to your own files only. The JSON carries
+  the items as `likely` on the prompt-prefix-change cause, with the method
+  as `likely_method`; each names the item, never its path.
+
   A turn whose context fell to under half of the turn before's is a
   compaction; its new cache is by design and not counted. Codex sessions
   record cached reads but no cache writes, so their misses are not counted
@@ -820,12 +853,15 @@ your config:
 Spend by client since 8 Oct 09:00
   81% of the window's work carries a client
 
-  VALUE                    API EQUIV    BILLED  SESSIONS  TURNS    TOKENS
-  Acme Corp                   $41.20     $0.00         6    212      3.1M
-  globex                      $12.75     $2.10         2     58      880k
-  (untagged)                  $12.40     $0.00              97      1.2M
+  VALUE                    API EQUIV    BILLED  SESSIONS  TURNS    TOKENS CACHE READ
+  Acme Corp                   $41.20     $0.00         6    212      3.1M        91%
+  globex                      $12.75     $2.10         2     58      880k        64%
+  (untagged)                  $12.40     $0.00              97      1.2M        88%
     $3.80 of it from sessions whose directory no client recorded
 ```
+
+CACHE READ is the share of each value's input read from the prompt cache,
+as on `--by session` (`cache_read_share`, 0 to 1, in the JSON).
 
 Each session is matched by the directory and branch its client recorded,
 the repository that directory is in and the harness it ran in; work no
@@ -2535,6 +2571,41 @@ first (`when: { loop_calls: ">= 4" }`, `require: ask`). It starts in
 shadow; `tokenops boundaries loop-breaker` adds it to an older config, and
 `tokenops boundaries promote loop-breaker` makes it pause. It keeps tool
 names and input hashes only, and is evaluated in Claude Code only.
+
+**Where and when.** Two conditions limit a rule to a project folder and a
+time of day; a rule with them applies only when they hold, together with its
+other conditions, and a rule without them applies everywhere and always:
+
+```yaml
+boundaries:
+  - name: acme-office-hours
+    action: continue
+    when:
+      folder: "~/clients/acme, ~/clients/globex/*"
+      hours: "mon-fri 09:00-18:00, 22:00-06:00"
+      session_cost_usd: ">= 10"
+    require: ask
+```
+
+`folder` is one or more absolute folders, separated by commas (`~` is your
+home): the session's working directory matches when it is one of them or
+inside one. Like an allocation rule's `dir`, a folder may be a glob
+(`~/clients/*`); case matters and symlinks are not resolved. Claude Code's
+hook and route-guard send the working directory, and opencode's plugin its
+own; Codex and Cursor do not, so `status` shows a folder rule as not
+evaluated there, and `model_route` and `share` rules do not take `folder`.
+`hours` is one or more windows, separated by commas, on a 24-hour clock in
+this machine's time zone: `09:00-18:00` (the end is not included),
+`22:00-06:00` across midnight, an optional weekday or range first
+(`mon-fri 09:00-18:00`, `sat`, `fri-mon`, `mon+wed 08:00-09:00`), or
+weekdays alone for whole days (`sat-sun`). A window across midnight
+belongs to the day it starts on: `fri 22:00-06:00` runs into Saturday
+morning. `status` lists each rule's conditions and says whether its hours
+hold now; a refusal and `tokenops explain` say which folder and time
+matched. The working directory is compared and dropped, never recorded.
+Organisation rules take both too: a condition only narrows the rule it is
+on, so it never loosens a local rule, and an approval sent to the team
+plane carries neither.
 
 ### `tokenops boundaries presence {enroll|enforce|status|rotate}`
 

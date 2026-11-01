@@ -54,7 +54,7 @@ func TestParseRefusesWithTheRuleNamed(t *testing.T) {
 		{"bad window", RuleSpec{Name: "r", Action: "continue", Require: "ask", When: map[string]string{"plan_left_pct": "< 5", "window": "month"}}, `window "month"`},
 		{"tier on continue", RuleSpec{Name: "r", Action: "continue", Require: "ask", When: map[string]string{"model_tier": "> sonnet"}}, "when.model_tier does not apply to continue rules"},
 		{"budget on continue", RuleSpec{Name: "r", Action: "continue", Require: "ask", When: map[string]string{"budget_used_pct": ">= 90"}}, "when.budget_used_pct does not apply to continue"},
-		{"cost on share", RuleSpec{Name: "r", Action: "share", Require: "ask", When: map[string]string{"session_cost_usd": ">= 1"}}, "does not apply to share rules (they take destination)"},
+		{"cost on share", RuleSpec{Name: "r", Action: "share", Require: "ask", When: map[string]string{"session_cost_usd": ">= 1"}}, "does not apply to share rules (they take destination, hours)"},
 		{"budget alone", RuleSpec{Name: "r", Action: "spend", Require: "ask", When: map[string]string{"budget": "monthly"}}, "budget qualifies budget_used_pct"},
 		{"empty budget", RuleSpec{Name: "r", Action: "spend", Require: "ask", When: map[string]string{"budget_used_pct": ">= 90", "budget": " "}}, "names no budget"},
 		{"budget pct out of range", RuleSpec{Name: "r", Action: "spend", Require: "ask", When: map[string]string{"budget_used_pct": ">= 150"}}, "between 0 and 100"},

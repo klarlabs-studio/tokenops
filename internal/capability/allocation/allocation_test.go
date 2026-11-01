@@ -112,3 +112,34 @@ func TestHarnessOf(t *testing.T) {
 		}
 	}
 }
+
+// Each project carries the share of its input read from the cache, over
+// all its sessions.
+func TestByKeyCarriesEachProjectsCacheReadShare(t *testing.T) {
+	cached := func(session string, input, read int64) analytics.SessionTurn {
+		tt := turn(session, "claude-code-jsonl", 0, 1)
+		tt.InputTokens, tt.CacheReadTokens = input, read
+		return tt
+	}
+	place := Place{
+		Dirs:   map[string]sessiondirs.Dir{"a1": {CWD: "/w/clients/acme"}, "a2": {CWD: "/w/clients/acme"}, "o": {CWD: "/w/other"}},
+		RootOf: map[string]string{"/w/clients/acme": "/w/clients/acme", "/w/other": "/w/other"},
+	}
+	projects := []Rule{
+		{Match: matchDir("/w/clients/acme"), Tags: Tags{Project: "storefront"}},
+		{Match: matchDir("/w/other"), Tags: Tags{Project: "empty"}},
+	}
+	r := ByKey(Project, Tag(projects, []analytics.SessionTurn{
+		cached("a1", 1000, 900), cached("a2", 1000, 100), cached("o", 0, 0),
+	}, place))
+	got := map[string]*float64{}
+	for _, g := range r.Groups {
+		got[g.Value] = g.CacheReadShare
+	}
+	if s := got["storefront"]; s == nil || math.Abs(*s-0.5) > 1e-9 {
+		t.Errorf("storefront share = %v, want 0.5", s)
+	}
+	if s, ok := got["empty"]; !ok || s != nil {
+		t.Errorf("empty project share = %v (listed %v), want absent", s, ok)
+	}
+}

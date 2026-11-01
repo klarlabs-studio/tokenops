@@ -319,3 +319,48 @@ func TestApproveHelpStatesItsLimits(t *testing.T) {
 		t.Error("deny --help carries approve's limits")
 	}
 }
+
+func TestBoundaryHookAppliesAFolderRuleOnlyInItsFolder(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SESSION_ATTENDED", "0")
+	home := boundaryHome(t, `boundaries:
+  - name: acme-only
+    action: continue
+    when: { folder: "~/work/acme" }
+    require: deny
+    stage: enforce
+`, 0)
+	hook := func(cwd string) hookDecision {
+		t.Helper()
+		body, _ := json.Marshal(map[string]any{
+			"session_id": "s1", "transcript_path": "/x/.claude/projects/-repo/s1.jsonl", "tool_use_id": "tu-1",
+			"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": map[string]any{"command": "ls"}, "cwd": cwd,
+		})
+		out, err := runCLI(t, body, "boundary-guard")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var d hookDecision
+		if out != "" {
+			if err := json.Unmarshal([]byte(out), &d); err != nil {
+				t.Fatalf("hook output %q: %v", out, err)
+			}
+		}
+		return d
+	}
+	if d := hook(filepath.Join(home, "work", "other")); d.HookSpecificOutput.PermissionDecision != "" {
+		t.Fatalf("outside the folder: %+v", d)
+	}
+	d := hook(filepath.Join(home, "work", "acme", "api", "secret-subdir"))
+	if d.HookSpecificOutput.PermissionDecision != "deny" || !strings.Contains(d.HookSpecificOutput.PermissionDecisionReason, "working in "+filepath.Join(home, "work", "acme")) {
+		t.Fatalf("inside the folder: %+v", d)
+	}
+	for _, e := range ledger(t, home) {
+		if b, _ := json.Marshal(e); strings.Contains(string(b), "secret-subdir") {
+			t.Fatal("the session's working directory reached the decision record")
+		}
+	}
+	status, err := runCLI(t, nil, "boundaries", "status")
+	if err != nil || !strings.Contains(status, "when folder ~/work/acme") {
+		t.Fatalf("status = %s, %v", status, err)
+	}
+}

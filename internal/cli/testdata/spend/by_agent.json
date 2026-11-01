@@ -18,6 +18,7 @@
       "InputTokens": 10600,
       "OutputTokens": 2500,
       "TotalTokens": 13100,
+      "CacheReadShare": 0,
       "CostUSD": 8.25,
       "APIEquivalentUSD": 8.25,
       "CostRecomputed": 0,

@@ -227,6 +227,21 @@
                           },
                           "stage": {
                             "type": "string"
+                          },
+                          "when": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "condition": {
+                                  "type": "string"
+                                },
+                                "holds_now": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
                           }
                         },
                         "type": "object"
@@ -6544,6 +6559,9 @@
                             "format": "date-time",
                             "type": "string"
                           },
+                          "CacheReadShare": {
+                            "type": "number"
+                          },
                           "Cost": {
                             "additionalProperties": false,
                             "properties": {},
@@ -6809,8 +6827,17 @@
                               "api_equivalent_usd": {
                                 "type": "number"
                               },
+                              "cache_read_share": {
+                                "type": "number"
+                              },
+                              "cache_read_tokens": {
+                                "type": "integer"
+                              },
                               "cost_usd": {
                                 "type": "number"
+                              },
+                              "input_tokens": {
+                                "type": "integer"
                               },
                               "tokens": {
                                 "type": "integer"
@@ -6872,8 +6899,17 @@
                         "api_equivalent_usd": {
                           "type": "number"
                         },
+                        "cache_read_share": {
+                          "type": "number"
+                        },
+                        "cache_read_tokens": {
+                          "type": "integer"
+                        },
                         "cost_usd": {
                           "type": "number"
+                        },
+                        "input_tokens": {
+                          "type": "integer"
                         },
                         "tokens": {
                           "type": "integer"
@@ -6893,8 +6929,17 @@
                         "api_equivalent_usd": {
                           "type": "number"
                         },
+                        "cache_read_share": {
+                          "type": "number"
+                        },
+                        "cache_read_tokens": {
+                          "type": "integer"
+                        },
                         "cost_usd": {
                           "type": "number"
+                        },
+                        "input_tokens": {
+                          "type": "integer"
                         },
                         "tokens": {
                           "type": "integer"
@@ -6921,8 +6966,17 @@
                         "api_equivalent_usd": {
                           "type": "number"
                         },
+                        "cache_read_share": {
+                          "type": "number"
+                        },
+                        "cache_read_tokens": {
+                          "type": "integer"
+                        },
                         "cost_usd": {
                           "type": "number"
+                        },
+                        "input_tokens": {
+                          "type": "integer"
                         },
                         "tokens": {
                           "type": "integer"
@@ -6942,8 +6996,17 @@
                         "api_equivalent_usd": {
                           "type": "number"
                         },
+                        "cache_read_share": {
+                          "type": "number"
+                        },
+                        "cache_read_tokens": {
+                          "type": "integer"
+                        },
                         "cost_usd": {
                           "type": "number"
+                        },
+                        "input_tokens": {
+                          "type": "integer"
                         },
                         "tokens": {
                           "type": "integer"
@@ -7215,8 +7278,17 @@
                               "api_equivalent_usd": {
                                 "type": "number"
                               },
+                              "cache_read_share": {
+                                "type": "number"
+                              },
+                              "cache_read_tokens": {
+                                "type": "integer"
+                              },
                               "cost_usd": {
                                 "type": "number"
+                              },
+                              "input_tokens": {
+                                "type": "integer"
                               },
                               "tokens": {
                                 "type": "integer"
@@ -7263,8 +7335,17 @@
                         "api_equivalent_usd": {
                           "type": "number"
                         },
+                        "cache_read_share": {
+                          "type": "number"
+                        },
+                        "cache_read_tokens": {
+                          "type": "integer"
+                        },
                         "cost_usd": {
                           "type": "number"
+                        },
+                        "input_tokens": {
+                          "type": "integer"
                         },
                         "tokens": {
                           "type": "integer"
@@ -7284,8 +7365,17 @@
                         "api_equivalent_usd": {
                           "type": "number"
                         },
+                        "cache_read_share": {
+                          "type": "number"
+                        },
+                        "cache_read_tokens": {
+                          "type": "integer"
+                        },
                         "cost_usd": {
                           "type": "number"
+                        },
+                        "input_tokens": {
+                          "type": "integer"
                         },
                         "tokens": {
                           "type": "integer"
@@ -7390,6 +7480,9 @@
                           "api_equivalent_usd": {
                             "type": "number"
                           },
+                          "cache_read_share": {
+                            "type": "number"
+                          },
                           "cost_usd": {
                             "type": "number"
                           },
@@ -7457,8 +7550,17 @@
                                 "api_equivalent_usd": {
                                   "type": "number"
                                 },
+                                "cache_read_share": {
+                                  "type": "number"
+                                },
+                                "cache_read_tokens": {
+                                  "type": "integer"
+                                },
                                 "cost_usd": {
                                   "type": "number"
+                                },
+                                "input_tokens": {
+                                  "type": "integer"
                                 },
                                 "tokens": {
                                   "type": "integer"
@@ -7493,8 +7595,17 @@
                                 "api_equivalent_usd": {
                                   "type": "number"
                                 },
+                                "cache_read_share": {
+                                  "type": "number"
+                                },
+                                "cache_read_tokens": {
+                                  "type": "integer"
+                                },
                                 "cost_usd": {
                                   "type": "number"
+                                },
+                                "input_tokens": {
+                                  "type": "integer"
                                 },
                                 "tokens": {
                                   "type": "integer"
@@ -7557,8 +7668,17 @@
                                   "api_equivalent_usd": {
                                     "type": "number"
                                   },
+                                  "cache_read_share": {
+                                    "type": "number"
+                                  },
+                                  "cache_read_tokens": {
+                                    "type": "integer"
+                                  },
                                   "cost_usd": {
                                     "type": "number"
+                                  },
+                                  "input_tokens": {
+                                    "type": "integer"
                                   },
                                   "tokens": {
                                     "type": "integer"
@@ -7627,8 +7747,17 @@
                                   "api_equivalent_usd": {
                                     "type": "number"
                                   },
+                                  "cache_read_share": {
+                                    "type": "number"
+                                  },
+                                  "cache_read_tokens": {
+                                    "type": "integer"
+                                  },
                                   "cost_usd": {
                                     "type": "number"
+                                  },
+                                  "input_tokens": {
+                                    "type": "integer"
                                   },
                                   "tokens": {
                                     "type": "integer"
@@ -7666,8 +7795,17 @@
                                   "api_equivalent_usd": {
                                     "type": "number"
                                   },
+                                  "cache_read_share": {
+                                    "type": "number"
+                                  },
+                                  "cache_read_tokens": {
+                                    "type": "integer"
+                                  },
                                   "cost_usd": {
                                     "type": "number"
+                                  },
+                                  "input_tokens": {
+                                    "type": "integer"
                                   },
                                   "tokens": {
                                     "type": "integer"
@@ -7707,8 +7845,17 @@
                                 "api_equivalent_usd": {
                                   "type": "number"
                                 },
+                                "cache_read_share": {
+                                  "type": "number"
+                                },
+                                "cache_read_tokens": {
+                                  "type": "integer"
+                                },
                                 "cost_usd": {
                                   "type": "number"
+                                },
+                                "input_tokens": {
+                                  "type": "integer"
                                 },
                                 "tokens": {
                                   "type": "integer"
@@ -7743,8 +7890,17 @@
                                 "api_equivalent_usd": {
                                   "type": "number"
                                 },
+                                "cache_read_share": {
+                                  "type": "number"
+                                },
+                                "cache_read_tokens": {
+                                  "type": "integer"
+                                },
                                 "cost_usd": {
                                   "type": "number"
+                                },
+                                "input_tokens": {
+                                  "type": "integer"
                                 },
                                 "tokens": {
                                   "type": "integer"
@@ -7807,8 +7963,17 @@
                                   "api_equivalent_usd": {
                                     "type": "number"
                                   },
+                                  "cache_read_share": {
+                                    "type": "number"
+                                  },
+                                  "cache_read_tokens": {
+                                    "type": "integer"
+                                  },
                                   "cost_usd": {
                                     "type": "number"
+                                  },
+                                  "input_tokens": {
+                                    "type": "integer"
                                   },
                                   "tokens": {
                                     "type": "integer"
@@ -7848,8 +8013,17 @@
                             "api_equivalent_usd": {
                               "type": "number"
                             },
+                            "cache_read_share": {
+                              "type": "number"
+                            },
+                            "cache_read_tokens": {
+                              "type": "integer"
+                            },
                             "cost_usd": {
                               "type": "number"
+                            },
+                            "input_tokens": {
+                              "type": "integer"
                             },
                             "tokens": {
                               "type": "integer"
@@ -7872,8 +8046,17 @@
                             "api_equivalent_usd": {
                               "type": "number"
                             },
+                            "cache_read_share": {
+                              "type": "number"
+                            },
+                            "cache_read_tokens": {
+                              "type": "integer"
+                            },
                             "cost_usd": {
                               "type": "number"
+                            },
+                            "input_tokens": {
+                              "type": "integer"
                             },
                             "tokens": {
                               "type": "integer"
@@ -7908,8 +8091,17 @@
                                 "api_equivalent_usd": {
                                   "type": "number"
                                 },
+                                "cache_read_share": {
+                                  "type": "number"
+                                },
+                                "cache_read_tokens": {
+                                  "type": "integer"
+                                },
                                 "cost_usd": {
                                   "type": "number"
+                                },
+                                "input_tokens": {
+                                  "type": "integer"
                                 },
                                 "tokens": {
                                   "type": "integer"
@@ -7944,8 +8136,17 @@
                                 "api_equivalent_usd": {
                                   "type": "number"
                                 },
+                                "cache_read_share": {
+                                  "type": "number"
+                                },
+                                "cache_read_tokens": {
+                                  "type": "integer"
+                                },
                                 "cost_usd": {
                                   "type": "number"
+                                },
+                                "input_tokens": {
+                                  "type": "integer"
                                 },
                                 "tokens": {
                                   "type": "integer"
@@ -8008,8 +8209,17 @@
                                   "api_equivalent_usd": {
                                     "type": "number"
                                   },
+                                  "cache_read_share": {
+                                    "type": "number"
+                                  },
+                                  "cache_read_tokens": {
+                                    "type": "integer"
+                                  },
                                   "cost_usd": {
                                     "type": "number"
+                                  },
+                                  "input_tokens": {
+                                    "type": "integer"
                                   },
                                   "tokens": {
                                     "type": "integer"
@@ -8049,8 +8259,17 @@
                                 "api_equivalent_usd": {
                                   "type": "number"
                                 },
+                                "cache_read_share": {
+                                  "type": "number"
+                                },
+                                "cache_read_tokens": {
+                                  "type": "integer"
+                                },
                                 "cost_usd": {
                                   "type": "number"
+                                },
+                                "input_tokens": {
+                                  "type": "integer"
                                 },
                                 "tokens": {
                                   "type": "integer"
@@ -8085,8 +8304,17 @@
                                 "api_equivalent_usd": {
                                   "type": "number"
                                 },
+                                "cache_read_share": {
+                                  "type": "number"
+                                },
+                                "cache_read_tokens": {
+                                  "type": "integer"
+                                },
                                 "cost_usd": {
                                   "type": "number"
+                                },
+                                "input_tokens": {
+                                  "type": "integer"
                                 },
                                 "tokens": {
                                   "type": "integer"
@@ -8149,8 +8377,17 @@
                                   "api_equivalent_usd": {
                                     "type": "number"
                                   },
+                                  "cache_read_share": {
+                                    "type": "number"
+                                  },
+                                  "cache_read_tokens": {
+                                    "type": "integer"
+                                  },
                                   "cost_usd": {
                                     "type": "number"
+                                  },
+                                  "input_tokens": {
+                                    "type": "integer"
                                   },
                                   "tokens": {
                                     "type": "integer"
@@ -8359,6 +8596,33 @@
                                   "type": "object"
                                 },
                                 "cause": {
+                                  "type": "string"
+                                },
+                                "likely": {
+                                  "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "finding": {
+                                        "type": "string"
+                                      },
+                                      "kind": {
+                                        "type": "string"
+                                      },
+                                      "rebuilds": {
+                                        "type": "integer"
+                                      },
+                                      "sessions": {
+                                        "type": "integer"
+                                      },
+                                      "severity": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "type": "array"
+                                },
+                                "likely_method": {
                                   "type": "string"
                                 },
                                 "name": {
