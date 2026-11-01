@@ -115,6 +115,7 @@ var moreMutations = []mutation{
 	{"tokenops_coach", "", map[string]any{"power": "models", "rung": "autonomous"}, "tokenops coach set models autonomous"},
 	{"tokenops_coach", "", map[string]any{"verbosity": "quiet"}, "tokenops coach verbosity quiet"},
 	{"tokenops_experiment", "", map[string]any{"action": "stop", "experiment_id": "exp-1"}, "tokenops experiment stop exp-1"},
+	{"tokenops_experiment", "", map[string]any{"action": "fmt", "fmt_share": "on"}, "tokenops fmt experiment on"},
 }
 
 // reading calls of mutating tools: they answer without asking anyone.

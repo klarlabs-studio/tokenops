@@ -390,11 +390,12 @@ type rulesIn struct {
 }
 
 type fmtIn struct {
-	View       string `json:"view,omitempty" jsonschema:"enum=learn,enum=analyze,description=learn (default): which command outputs to compress next, and any over-compression. analyze: how much command output in past sessions could be compressed."`
+	View       string `json:"view,omitempty" jsonschema:"enum=learn,enum=analyze,enum=experiment,description=learn (default): which command outputs to compress next, and any over-compression. analyze: how much command output in past sessions could be compressed. experiment: the fmt outcome experiment, sessions with raw and with compressed output compared on outcomes."`
+	Days       int    `json:"days,omitempty" jsonschema:"description=experiment: window in days (default 30)"`
 	Limit      int    `json:"limit,omitempty" jsonschema:"description=learn: most commands per list (default 20); the totals are always given"`
 	Root       string `json:"root,omitempty" jsonschema:"description=analyze: Claude Code projects directory (default ~/.claude/projects)"`
 	MaxFiles   int    `json:"max_files,omitempty" jsonschema:"description=analyze: most sessions to scan, newest first"`
-	RecoverDir string `json:"recover_dir,omitempty" jsonschema:"description=learn: recovery store (default ~/.tokenops/recovery)"`
+	RecoverDir string `json:"recover_dir,omitempty" jsonschema:"description=learn and experiment: recovery store (default ~/.tokenops/recovery)"`
 	NoJSONL    bool   `json:"no_jsonl,omitempty" jsonschema:"description=learn: skip the Claude Code logs"`
 }
 
@@ -535,9 +536,10 @@ type rulesOut struct {
 }
 
 type fmtOut struct {
-	View    string         `json:"view"`
-	Learn   map[string]any `json:"learn,omitempty"`
-	Analyze map[string]any `json:"analyze,omitempty"`
+	View       string         `json:"view"`
+	Learn      map[string]any `json:"learn,omitempty"`
+	Analyze    map[string]any `json:"analyze,omitempty"`
+	Experiment map[string]any `json:"experiment,omitempty"`
 }
 
 type outcomeOut struct {
@@ -669,11 +671,12 @@ func publicTools() []publicTool {
 		},
 		{
 			name: "tokenops_fmt", title: "Command output compression", kind: reads,
-			description: "How `tokenops fmt` is doing at compressing command output before the agent reads it: which commands to compress next and any over-compression, or how much output in past sessions could be compressed.",
+			description: "How `tokenops fmt` is doing at compressing command output before the agent reads it: which commands to compress next and any over-compression, how much output in past sessions could be compressed, or the outcome experiment comparing sessions given raw output with sessions given fmt's.",
 			selector:    "view", def: "learn", input: fmtIn{}, output: fmtOut{},
 			routes: map[string]route{
-				"learn":   {inner: "tokenops_fmt_learn", params: params("recover_dir", "no_jsonl", "limit")},
-				"analyze": {inner: "tokenops_fmt_analyze", params: params("root", "max_files")},
+				"learn":      {inner: "tokenops_fmt_learn", params: params("recover_dir", "no_jsonl", "limit")},
+				"analyze":    {inner: "tokenops_fmt_analyze", params: params("root", "max_files")},
+				"experiment": {inner: "tokenops_fmt_experiment", params: params("days", "recover_dir")},
 			},
 		},
 		{
@@ -742,10 +745,10 @@ func publicTools() []publicTool {
 			routes: map[string]route{"": {inner: "tokenops_coach", params: params("preset", "autonomy", "power", "rung", "verbosity", "holdout", "headroom_note", "tip", "tip_id", "snooze_minutes"), change: coachChange}},
 		},
 		{
-			name: "tokenops_experiment", title: "Routing experiment", kind: changes,
-			description: "Run a bounded, opt-in trial of a routing change: start it with its guardrails, check its state, or stop it. Evidence is kept when it stops.",
+			name: "tokenops_experiment", title: "Experiments", kind: changes,
+			description: "Run a bounded, opt-in trial of a routing change: start it with its guardrails, check its state, or stop it; evidence is kept when it stops. Or turn the fmt outcome experiment on or off (action fmt, fmt_share): a share of sessions get raw command output so fmt is judged on outcomes, which tokenops_fmt view experiment reports.",
 			input:       experimentInput{}, output: experimentResult{},
-			routes: map[string]route{"": {inner: "tokenops_experiment", params: params("action", "provider", "baseline_model", "variant_model", "duration_days", "experiment_id", "guardrails", "max_pairs", "objective_metric", "min_improvement_pct", "reason"), change: experimentChange}},
+			routes: map[string]route{"": {inner: "tokenops_experiment", params: params("action", "provider", "baseline_model", "variant_model", "duration_days", "experiment_id", "guardrails", "max_pairs", "objective_metric", "min_improvement_pct", "reason", "fmt_share"), change: experimentChange}},
 		},
 	}
 }

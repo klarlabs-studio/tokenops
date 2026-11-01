@@ -20,6 +20,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
+	"go.klarlabs.de/tokenops/internal/capability/fmtinsight"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/events"
@@ -304,7 +305,17 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}); err != nil {
 		return fmt.Errorf("register data sources tool: %w", err)
 	}
-	if err := mcp.RegisterFmtTools(srv, mcp.FmtDeps{ConfigGetter: currentConfig}); err != nil {
+	fmtDeps := mcp.FmtDeps{ConfigGetter: currentConfig}
+	if components.Store != nil {
+		fmtDeps.Outcomes = func(ctx context.Context, since time.Time) map[string]string {
+			events, err := components.Store.ReadEvents(ctx, eventschema.EventTypeOutcome, since)
+			if err != nil {
+				return nil
+			}
+			return fmtinsight.ExperimentOutcomes(events)
+		}
+	}
+	if err := mcp.RegisterFmtTools(srv, fmtDeps); err != nil {
 		return fmt.Errorf("register fmt tools: %w", err)
 	}
 	if err := mcp.RegisterGapTools(srv, serveGapDeps(currentConfig, gapCounts(components.Store))); err != nil {

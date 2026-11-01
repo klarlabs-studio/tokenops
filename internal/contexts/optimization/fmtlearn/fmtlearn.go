@@ -64,7 +64,20 @@ type Record struct {
 	GenericFallback bool         `json:"generic_fallback,omitempty"` // fell back to the generic scrub
 	CriticalKept    bool         `json:"critical_kept,omitempty"`
 	TS              time.Time    `json:"ts"`
+	// Session, Arm and RawPercent place a run in the outcome experiment:
+	// the session it ran in, the arm that session was drawn into, and the
+	// chance it had of being drawn raw. In the raw arm the output was
+	// passed through unchanged, so TokensSaved and CompactBytes are what
+	// fmt would have done, and Analyze counts the run as projected.
+	Session    string `json:"session,omitempty"`
+	Arm        string `json:"arm,omitempty"`
+	RawPercent int    `json:"raw_percent,omitempty"`
 }
+
+// projected reports whether a compress record describes formatting that
+// never reached the agent: a session-log projection, or a run in the
+// experiment's raw arm.
+func (r Record) projected() bool { return r.Source == SourceSessionProjection || r.Arm == ArmRaw }
 
 // CommandStat aggregates every record for one command token.
 type CommandStat struct {
@@ -159,7 +172,7 @@ func Analyze(records []Record, th Thresholds) Report {
 		s := get(r.Command)
 		s.Runs++
 		s.RawBytes += r.RawBytes
-		if r.Source == SourceSessionProjection {
+		if r.projected() {
 			s.ProjectedRuns++
 			s.ProjectedTokensSaved += r.TokensSaved
 			rep.ProjectedRuns++
@@ -172,7 +185,7 @@ func Analyze(records []Record, th Thresholds) Report {
 		}
 		if !r.Handled || r.GenericFallback {
 			s.GenericRuns++
-			if r.Source != SourceSessionProjection {
+			if !r.projected() {
 				s.ObservedGenericRuns++
 			}
 		}

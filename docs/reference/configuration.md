@@ -441,6 +441,7 @@ optimizer:
     overrides:                # per-command loss level
       kubectl: aggressive
     emit_events: false        # append command_fmt OptimizationEvents to the store
+    experiment: 0             # percent of sessions given raw output to judge fmt on outcomes (0-50, 0 = off)
     formatters:               # user-defined formatters (no recompile)
       - command: mytool
         critical: ["(?i)error", "FAILED"]
@@ -688,6 +689,11 @@ ansible, aws/gcloud/az, and more).
   up without loosening the global default).
 - `emit_events` — append a `command_fmt` OptimizationEvent per compressed
   run so telemetry and scorecard count the savings.
+- `experiment` — the share of sessions, in percent (0–50), whose command
+  output fmt passes through raw while recording what it would have saved,
+  so `tokenops fmt experiment` can compare the arms on outcomes rather
+  than bytes saved. The arm is drawn from the session id. 0, the default,
+  is off.
 
 Two invariants hold at **every** level, for built-in and user formatters
 alike: **determinism** (pure function of input + level) and
