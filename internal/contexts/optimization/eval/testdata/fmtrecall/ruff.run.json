@@ -1,0 +1,6 @@
+{"description":"ruff check with five findings","evidence":[
+ {"kind":"error_location","text":"app/main.py:12:1"},
+ {"kind":"error_location","text":"app/main.py:45:5"},
+ {"kind":"error_message","text":"E722 Do not use bare `except`"},
+ {"kind":"error_location","text":"app/api/routes.py:56:1"},
+ {"kind":"count","text":"Found 5 errors."}]}

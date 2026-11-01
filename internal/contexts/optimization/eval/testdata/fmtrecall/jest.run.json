@@ -1,0 +1,5 @@
+{"description":"jest with one failing test","evidence":[
+ {"kind":"failing_test","text":"FAIL src/models/user.test.js"},
+ {"kind":"failing_test","text":"User › validates email format"},
+ {"kind":"error_location","text":"src/models/user.test.js:43:20"},
+ {"kind":"count","text":"Tests:       1 failed, 47 passed, 48 total"}]}

@@ -1,0 +1,7 @@
+{"description":"git diff of a two-file change","evidence":[
+ {"kind":"changed_path","text":"internal/billing/invoice.go"},
+ {"kind":"changed_path","text":"internal/billing/invoice_test.go"},
+ {"kind":"match","text":"@@ -41,7 +41,9 @@"},
+ {"kind":"match","text":"+  if !line.Voided {"},
+ {"kind":"match","text":"-  sum = sum.Add(line.Amount)"},
+ {"kind":"match","text":"+func TestInvoiceTotalSkipsVoidedLines(t *testing.T) {"}]}

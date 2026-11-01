@@ -1,0 +1,7 @@
+{"description":"golangci-lint with four issues","evidence":[
+ {"kind":"error_location","text":"internal/cli/fmt.go:42:6"},
+ {"kind":"error_location","text":"internal/proxy/server.go:118:2"},
+ {"kind":"error_location","text":"internal/storage/sqlite/store.go:204:15"},
+ {"kind":"error_message","text":"Error return value is not checked (errcheck)"},
+ {"kind":"error_location","text":"internal/config/config.go:88:1"},
+ {"kind":"count","text":"4 issues:"}]}

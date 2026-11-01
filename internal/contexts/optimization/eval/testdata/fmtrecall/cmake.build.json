@@ -1,0 +1,4 @@
+{"description":"cmake --build failing in one translation unit","evidence":[
+ {"kind":"error_location","text":"/home/user/proj/src/parser.cpp:42:5"},
+ {"kind":"error_message","text":"'result' was not declared in this scope"},
+ {"kind":"exit_status","text":"[CMakeFiles/app.dir/build.make:90: parser.cpp.o] Error 1"}]}

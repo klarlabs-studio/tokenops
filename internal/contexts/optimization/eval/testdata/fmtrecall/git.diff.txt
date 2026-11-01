@@ -1,0 +1,32 @@
+diff --git a/internal/billing/invoice.go b/internal/billing/invoice.go
+index 3f2a1c9..8b7d4e0 100644
+--- a/internal/billing/invoice.go
++++ b/internal/billing/invoice.go
+@@ -41,7 +41,9 @@ func (i *Invoice) Total() Money {
+ 	var sum Money
+ 	for _, line := range i.Lines {
+-		sum = sum.Add(line.Amount)
++		if !line.Voided {
++			sum = sum.Add(line.Amount)
++		}
+ 	}
+ 	return sum
+ }
+diff --git a/internal/billing/invoice_test.go b/internal/billing/invoice_test.go
+index 1a2b3c4..5d6e7f8 100644
+--- a/internal/billing/invoice_test.go
++++ b/internal/billing/invoice_test.go
+@@ -88,3 +88,14 @@ func TestInvoiceTotal(t *testing.T) {
+ 	}
+ }
++
++func TestInvoiceTotalSkipsVoidedLines(t *testing.T) {
++	inv := Invoice{Lines: []Line{{Amount: 100}, {Amount: 50, Voided: true}}}
++	if got := inv.Total(); got != 100 {
++		t.Fatalf("Total() = %d, want 100", got)
++	}
++}
++
++
++
++

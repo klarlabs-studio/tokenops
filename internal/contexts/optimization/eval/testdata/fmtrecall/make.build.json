@@ -1,0 +1,5 @@
+{"description":"make failing on an undeclared identifier","evidence":[
+ {"kind":"error_location","text":"src/eval.c:142:9"},
+ {"kind":"error_message","text":"'result' undeclared (first use in this function)"},
+ {"kind":"exit_status","text":"make: *** [Makefile:12: all] Error 2"},
+ {"kind":"error_location","text":"src/lexer.c:88:12","critical":false}]}

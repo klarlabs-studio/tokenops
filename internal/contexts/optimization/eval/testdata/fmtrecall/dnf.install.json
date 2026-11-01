@@ -1,0 +1,4 @@
+{"description":"dnf install postgresql","evidence":[
+ {"kind":"installed","text":"postgresql.x86_64 16.4-1.fc40"},
+ {"kind":"installed","text":"libpq.x86_64 16.4-1.fc40"},
+ {"kind":"exit_status","text":"Complete!"}]}

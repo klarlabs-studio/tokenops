@@ -1,0 +1,6 @@
+{"description":"cargo build failing on a type error, with two warnings","evidence":[
+ {"kind":"error_message","text":"error[E0308]: mismatched types"},
+ {"kind":"error_location","text":"src/main.rs:22:18"},
+ {"kind":"exit_status","text":"error: could not compile `mycrate`"},
+ {"kind":"error_location","text":"src/main.rs:14:9","critical":false},
+ {"kind":"count","text":"1 previous error; 2 warnings emitted"}]}

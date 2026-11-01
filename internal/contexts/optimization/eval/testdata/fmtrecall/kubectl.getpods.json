@@ -1,0 +1,5 @@
+{"description":"kubectl get pods with two unhealthy pods","evidence":[
+ {"kind":"failed_resource","text":"auth-service-6c4b9d7f8-lm5rt"},
+ {"kind":"failed_resource","text":"CrashLoopBackOff"},
+ {"kind":"failed_resource","text":"frontend-9b8c7d6e5-tv4ab"},
+ {"kind":"failed_resource","text":"ImagePullBackOff"}]}

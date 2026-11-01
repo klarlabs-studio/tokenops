@@ -1,0 +1,4 @@
+{"description":"sbt compile with a type mismatch","evidence":[
+ {"kind":"error_location","text":"/home/user/proj/src/main/scala/Service.scala:22:15"},
+ {"kind":"error_message","text":"type mismatch;"},
+ {"kind":"exit_status","text":"Compilation failed"}]}

@@ -1,0 +1,4 @@
+{"description":"rspec with one failure","evidence":[
+ {"kind":"failing_test","text":"User#full_name concatenates first and last"},
+ {"kind":"error_location","text":"./spec/models/user_spec.rb:14"},
+ {"kind":"count","text":"20 examples, 1 failure"}]}

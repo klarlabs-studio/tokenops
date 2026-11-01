@@ -1,0 +1,4 @@
+{"description":"composer install","evidence":[
+ {"kind":"installed","text":"symfony/console (v6.4.0)"},
+ {"kind":"installed","text":"doctrine/orm (2.19.0)"},
+ {"kind":"count","text":"42 installs, 0 updates, 0 removals"}]}

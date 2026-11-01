@@ -1,0 +1,6 @@
+{"description":"tsc --extendedDiagnostics with three type errors","evidence":[
+ {"kind":"error_location","text":"src/api/client.ts(42,7)"},
+ {"kind":"error_message","text":"error TS2322"},
+ {"kind":"error_location","text":"src/api/client.ts(58,12)"},
+ {"kind":"error_location","text":"src/models/user.ts(15,3)"},
+ {"kind":"count","text":"Found 3 errors in 2 files."}]}

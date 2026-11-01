@@ -1,0 +1,5 @@
+{"description":"docker run pulling an image and the container crashing","evidence":[
+ {"kind":"error_message","text":"dial tcp 10.0.0.12:5432: connect: connection refused"},
+ {"kind":"error_message","text":"FATAL worker exited: database unavailable"},
+ {"kind":"exit_status","text":"container exited with code 1"},
+ {"kind":"match","text":"Downloaded newer image for example/worker:1.4.2"}]}

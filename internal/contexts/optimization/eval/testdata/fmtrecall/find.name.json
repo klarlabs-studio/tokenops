@@ -1,0 +1,5 @@
+{"description":"find -name with a permission error (no dedicated formatter)","evidence":[
+ {"kind":"error_message","text":"find: './secrets': Permission denied"},
+ {"kind":"match","text":"./internal/billing/credit_test.go"},
+ {"kind":"match","text":"./internal/checkout/flow_test.go"},
+ {"kind":"match","text":"./cmd/shop/main_test.go"}]}

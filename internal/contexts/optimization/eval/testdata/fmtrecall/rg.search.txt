@@ -1,0 +1,10 @@
+internal/billing/invoice.go
+41:func (i *Invoice) Total() Money {
+77:	return i.Total().Sub(i.Discount())
+
+internal/billing/report.go
+12:	totals := make(map[string]Money)
+58:		totals[inv.Customer] = totals[inv.Customer].Add(inv.Total())
+
+internal/checkout/flow.go
+102:	if order.Total() != invoice.Total() {
