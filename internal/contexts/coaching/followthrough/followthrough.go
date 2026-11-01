@@ -72,6 +72,10 @@ const (
 	// not interrupting: past the day's interruption budget, or a further
 	// step in an episode already told.
 	ViaAmbient = "ambient"
+	// ViaAgent is a note given to the agent in a tool hook's
+	// additionalContext, at the tool call it is about. The operator
+	// does not see it, so it is no evidence the tip was read.
+	ViaAgent = "agent"
 )
 
 // EntryType is what one ledger line records.

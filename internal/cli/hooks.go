@@ -118,6 +118,17 @@ func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget f
 			marker:  "read-guard",
 			args:    readGuardArgs(guardMode),
 		})
+		// The loop tips need the searches and, to tell a search
+		// repeated without progress from one checking a change, the
+		// edits. The same command handles them; an edit is only
+		// counted, never answered.
+		out = append(out, hookSpec{
+			name:    "read-guard (search loops)",
+			event:   "PreToolUse",
+			matcher: loopTipMatcher,
+			marker:  "read-guard",
+			args:    readGuardArgs(guardMode),
+		})
 	}
 	if routeGuard {
 		args := []string{"route-guard"}
@@ -157,6 +168,10 @@ func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget f
 	}
 	return out
 }
+
+// loopTipMatcher is the second matcher read-guard is installed on: the
+// searches a loop tip watches and the edits that reset one.
+const loopTipMatcher = "Grep|Glob|Edit|MultiEdit|Write|NotebookEdit"
 
 // readGuardArgs builds the installed command. No --mode means "follow
 // coaching.delivery", which is what we want in settings.json: one place

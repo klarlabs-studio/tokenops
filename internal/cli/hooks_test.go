@@ -148,7 +148,8 @@ func TestHooksInstall_PreservesUnrelatedHooksAndKeys(t *testing.T) {
 	if countMarker(hooks, "coach-hook") != 1 {
 		t.Fatalf("coach-hook not wired")
 	}
-	if countMarker(hooks, "read-guard") != 1 {
+	// Two groups: Read, and the searches and edits the loop tips watch.
+	if countMarker(hooks, "read-guard") != 2 {
 		t.Fatalf("read-guard not wired")
 	}
 	// The unrelated Bash hook must still be present.
@@ -204,7 +205,7 @@ func TestHooksUninstall_RemovesOnlyOurs(t *testing.T) {
 	if countMarker(hooks, "coach-hook") != 0 {
 		t.Fatalf("coach-hook should be removed")
 	}
-	if countMarker(hooks, "read-guard") != 1 {
+	if countMarker(hooks, "read-guard") != 2 {
 		t.Fatalf("read-guard should remain")
 	}
 }
