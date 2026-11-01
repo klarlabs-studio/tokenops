@@ -1,6 +1,3 @@
-# This legacy feature catalog includes discovery-era proposals. Current product
-# intent/phase status is in docs/adr/0004-ai-work-intelligence-and-control.md;
-# task completion state is in .roady/plan.json and .roady/state.json.
 id: tokenops
 title: TokenOps
 description: The operating system for AI work. TokenOps observes how humans, agents, models and tools perform work; understands what happened and why; measures resources, economics, quality and outcomes; explains inefficiencies; optimizes and safely controls execution; verifies whether interventions helped; and learns how future work should be performed. Local-first single binary. Begins with coding agents (Claude Code, Codex, Cursor, Gemini, OpenCode, Copilot) and is built to generalise to AI-mediated work.
@@ -60,6 +57,9 @@ features:
         - id: fmt-learning-evidence-provenance
           title: Separate observed formatter evidence from session projections
           description: Preserve provenance between actual tokenops fmt runs and offline session-log simulations. Report projected savings separately, keep re-access rates unknown without wrapped runs, and never recommend stronger compression from absence of a recovery read.
+          priority: ""
+          estimate: ""
+          depends_on: []
     - id: operator-wedge-kpi-scorecard
       title: Operator Wedge KPI Scorecard
       description: 'Define a product wedge scorecard tied to operator outcomes: first-value time, token efficiency uplift, and spend attribution completeness. Publish metric definitions, baseline capture workflow, and rollout thresholds in docs + CLI output.'
@@ -138,11 +138,11 @@ features:
       requirements: []
     - id: mcp-first-wedge:-session-budget-+-config-as-code
       title: 'MCP-First Wedge: Session Budget + Config-as-Code'
-      description: 'Historical MCP-first wedge proposal. Its session observer, configuration commands, headroom tool, structured hints, and help curation shipped. Browser-dashboard polish was not retained; native CLI/MCP/API surfaces are current.'
+      description: Historical MCP-first wedge proposal. Its session observer, configuration commands, headroom tool, structured hints, and help curation shipped. Browser-dashboard polish was not retained; native CLI/MCP/API surfaces are current.
       requirements: []
     - id: signal-quality-+-activation-honesty
       title: Signal Quality + Activation Honesty
-      description: 'Historical v0.8.1 review. Shipped signal-quality fields, honest empty-state scorecard guidance, config reload, and plan-alias migration. Demo-dominance banners and the time-bound outreach checklist are no longer current product requirements.'
+      description: Historical v0.8.1 review. Shipped signal-quality fields, honest empty-state scorecard guidance, config reload, and plan-alias migration. Demo-dominance banners and the time-bound outreach checklist are no longer current product requirements.
       requirements: []
     - id: plan-auto-detection
       title: Plan Auto-Detection
@@ -199,12 +199,22 @@ features:
         - id: collect-real-outcome-cohort
           title: Collect a real intervention/outcome cohort
           description: Use the current installed product on actual work, correlate an authorized intervention to measured executions, and capture only a human or recognized verifier outcome. Do not modify production data with fixtures, synthetic events, or guessed outcomes. Evaluate a causal comparison only when the evidence supports matched pairs; otherwise report the gap and remain observational.
+          priority: ""
+          estimate: ""
+          depends_on: []
     - id: surface-native-insights
       title: Surface-Native Insights
       description: Model evidence-backed insights before adapting them to CLI and MCP. Keep ambient information concise, recommendations actionable, and explanations available on demand.
       requirements:
         - id: shared-status-resource-work-insights
           title: Ship shared status, resource, and bounded work insights
-          description: Provide concise readiness/attention summaries across CLI and MCP, a resource glance composed from measured session budget and plan headroom, and bounded workflow insights based only on reconstructed traces and existing findings. Never infer task success or overall quality from absence of a finding. Delivered in PRs #383–#386; browser dashboard surfaces were removed in PR #387.
+          description: Provide concise readiness/attention summaries across CLI and MCP, a resource glance composed from measured session budget and plan headroom, and bounded workflow insights based only on reconstructed traces and existing findings. Never infer task success or overall quality from absence of a finding. Delivered in PRs
+          priority: ""
+          estimate: ""
+          depends_on: []
+    - id: research-roadmap-november-2026
+      title: Research roadmap, November 2026
+      description: Imported from docs/research-roadmap-2026-11.md (markdown).
+      requirements: []
 constraints: []
 version: 0.1.0

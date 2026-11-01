@@ -1,6 +1,6 @@
 {
   "project_id": "tokenops",
-  "version": 362,
+  "version": 363,
   "task_states": {
     "analytics-aggregator": {
       "status": "done",
@@ -1049,6 +1049,81 @@
       ],
       "started_at": "2026-09-20T11:49:08.876638+02:00",
       "completed_at": "2026-09-20T11:49:08.898314+02:00",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-autopilot-earns-its-moves-against-a-holdout": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-boundaries-by-folder-and-hour": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-cache-read-share-and-why-a-cache-was-rebuilt": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-catalog-drift": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-fmt-is-measured-on-outcomes": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-read-subagent-transcripts": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-reverts-count-against-the-work-they-undo": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-room-elsewhere-and-headroom-about-to-lapse": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-routing-reads-the-pace-per-turn": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-the-coach-speaks-on-loops-and-churn": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-the-competitive-landscape-refreshed": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-the-read-guard-covers-repeat-commands": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-the-read-guard-forgets-what-a-compaction-dropped": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-what-ate-my-week": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-research-roadmap-november-2026-what-the-starting-context-costs": {
+      "status": "pending",
+      "path": "",
       "elapsed_minutes": 0
     },
     "task-risk-based-test-coverage-uplift": {

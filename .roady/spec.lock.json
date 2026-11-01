@@ -284,6 +284,13 @@
         }
       ],
       "source": {}
+    },
+    {
+      "id": "research-roadmap-november-2026",
+      "title": "Research roadmap, November 2026",
+      "description": "Imported from docs/research-roadmap-2026-11.md (markdown).",
+      "requirements": [],
+      "source": {}
     }
   ],
   "constraints": [],
