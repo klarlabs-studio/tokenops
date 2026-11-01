@@ -72,7 +72,10 @@ func TestCatalogDrift(t *testing.T) {
 		return Options{Now: now, Events: r, Plans: map[string]string{"anthropic": "claude-max"}, PlanHistory: history, Price: price}
 	}
 
-	got := catalogDrift(context.Background(), opts(driftEvents(start, 2.5)))
+	driftFindings := func(ctx context.Context, o Options) []Finding {
+		return catalogDrift(ProviderDrifts(ctx, o), o.ObservedOff)
+	}
+	got := driftFindings(context.Background(), opts(driftEvents(start, 2.5)))
 	if len(got) != 1 {
 		t.Fatalf("findings = %+v", got)
 	}
@@ -81,19 +84,25 @@ func TestCatalogDrift(t *testing.T) {
 		!strings.Contains(f.Title, "put Claude Max at 2.5x Claude Pro; the catalog says 5x") ||
 		!strings.Contains(f.Evidence, "5 weekly windows on Claude Pro and 5 on Claude Max") ||
 		!strings.Contains(f.Evidence, "50% below") || !strings.Contains(f.Evidence, "sonnet") ||
-		!strings.Contains(f.Fix, "ADR 0002") {
+		!strings.Contains(f.Fix, "ADR 0002") || !strings.Contains(f.Fix, "tokenops plan observed reset") {
 		t.Errorf("finding = %+v", f)
 	}
-	if got := catalogDrift(context.Background(), opts(driftEvents(start, 3.5))); len(got) != 1 || got[0].Level != LevelInfo {
+	off := opts(driftEvents(start, 2.5))
+	off.ObservedOff = true
+	if got := driftFindings(context.Background(), off); len(got) != 1 || !strings.Contains(got[0].Fix, "uses the catalog") ||
+		!strings.Contains(got[0].Fix, "ADR 0002") {
+		t.Errorf("with the overlay off: %+v", got)
+	}
+	if got := driftFindings(context.Background(), opts(driftEvents(start, 3.5))); len(got) != 1 || got[0].Level != LevelInfo {
 		t.Errorf("a 30%% gap is info: %+v", got)
 	}
-	if got := catalogDrift(context.Background(), opts(driftEvents(start, 4))); got != nil {
+	if got := driftFindings(context.Background(), opts(driftEvents(start, 4))); got != nil {
 		t.Errorf("a 20%% gap is inside the threshold, yet %+v", got)
 	}
-	if got := catalogDrift(context.Background(), opts(driftEvents(start, 5))); got != nil {
+	if got := driftFindings(context.Background(), opts(driftEvents(start, 5))); got != nil {
 		t.Errorf("agreeing tiers raised %+v", got)
 	}
-	if got := catalogDrift(context.Background(), Options{Now: now, Plans: map[string]string{"anthropic": "claude-max"}}); got != nil {
+	if got := driftFindings(context.Background(), Options{Now: now, Plans: map[string]string{"anthropic": "claude-max"}}); got != nil {
 		t.Errorf("no store, yet %+v", got)
 	}
 }

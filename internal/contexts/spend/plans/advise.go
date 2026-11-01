@@ -150,6 +150,26 @@ func (t Tier) Allowance(d time.Duration) (factor float64, limited bool) {
 	return t.Factor, t.Factor > 0
 }
 
+// ObservedTiers gives each tier the allowances the overlay observed for
+// it, in place of the catalog's, and returns the limits it used.
+func ObservedTiers(tiers []Tier, o ObservedLimits) []ObservedLimit {
+	var used []ObservedLimit
+	for i := range tiers {
+		if l, ok := o.Factor(tiers[i].Name, week); ok {
+			tiers[i].Factor = l.ObservedFactor
+			used = append(used, l)
+		}
+		if tiers[i].NoSessionLimit {
+			continue
+		}
+		if l, ok := o.Factor(tiers[i].Name, 5*time.Hour); ok {
+			tiers[i].SessionFactor = l.ObservedFactor
+			used = append(used, l)
+		}
+	}
+	return used
+}
+
 // TierFamily is every tier one person can move between from plan, by
 // allowance, at list price. Per-seat plans are bought for a team with a
 // minimum of seats, so they are left out unless plan is one.
@@ -240,6 +260,10 @@ type Advice struct {
 	// EarlyResets is what the vendor's early resets did to the current
 	// plan's lockouts; nil when none ended one.
 	EarlyResets *EarlyResetCut `json:"early_resets,omitempty"`
+	// Observed are the limits the replay took from the local overlay of
+	// observed limits instead of the catalog, each with both figures; nil
+	// when it used the catalog throughout.
+	Observed []ObservedLimit `json:"observed,omitempty"`
 }
 
 // EarlyResetCut is the lockouts a vendor's early resets ended, and the
@@ -286,6 +310,10 @@ type ReplayInput struct {
 	// in the period (EarlyResetsIn). A lockout one ended is blocked only
 	// until it, not until the window's scheduled reset.
 	EarlyResets []EarlyReset
+	// Observed are the observed limits FactorAt and the candidates were
+	// given in place of the catalog's (ObservedTiers); the advice names
+	// them.
+	Observed []ObservedLimit
 }
 
 // QuotaReadingsFrom is every window reading of provider's plan in
@@ -512,7 +540,7 @@ func unionLength(spans [][2]time.Time) time.Duration {
 // metered overflow, and the API at list price, and recommends one.
 func Replay(in ReplayInput) Advice {
 	a := Advice{Provider: in.Provider, Plan: in.Current.Name, Display: in.Current.Display,
-		Since: in.Since, Until: in.Until, Confidence: ConfidenceLow}
+		Since: in.Since, Until: in.Until, Confidence: ConfidenceLow, Observed: in.Observed}
 	factorAt := in.FactorAt
 	if factorAt == nil {
 		factorAt = func(_ time.Time, d time.Duration) (float64, bool) { return in.Current.Allowance(d) }
@@ -587,6 +615,10 @@ func Replay(in ReplayInput) Advice {
 	}
 	a.Confidence = confidence(in, a.Days, ws)
 	a.Caveats = caveats(in, cur, candidates)
+	for _, l := range in.Observed {
+		a.Caveats = append(a.Caveats, "Uses the limit your own windows show, not the catalog's: "+l.Words()+
+			"; `tokenops plan observed reset` goes back to the catalog")
+	}
 	if cur != nil && len(sims[cur.Plan].cut) > 0 {
 		s := sims[cur.Plan]
 		a.EarlyResets = &EarlyResetCut{Count: len(s.cut), BlockedMinutes: int(s.cutBlocked.Round(time.Minute) / time.Minute),

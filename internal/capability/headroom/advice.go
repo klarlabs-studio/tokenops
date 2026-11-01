@@ -106,6 +106,10 @@ func Advise(ctx context.Context, d Deps, q AdviceQuery, now time.Time) (AdviceRe
 	if err != nil {
 		return AdviceResult{}, err
 	}
+	var observed plans.ObservedLimits
+	if d.Observed != nil {
+		observed = d.Observed()
+	}
 	providers := make([]string, 0, len(d.Config.Plans))
 	for p := range d.Config.Plans {
 		providers = append(providers, p)
@@ -113,7 +117,7 @@ func Advise(ctx context.Context, d Deps, q AdviceQuery, now time.Time) (AdviceRe
 	sort.Strings(providers)
 	for _, provider := range providers {
 		name, _ := plans.ResolveAlias(d.Config.Plans[provider])
-		in, note := replayInput(provider, name, history, envs, d.Price, since, now)
+		in, note := replayInput(provider, name, history, envs, d.Price, since, now, observed)
 		if note != "" {
 			res.Notes = append(res.Notes, note)
 			continue
@@ -125,13 +129,15 @@ func Advise(ctx context.Context, d Deps, q AdviceQuery, now time.Time) (AdviceRe
 
 // replayInput gathers what one provider's replay reads, or says why it
 // cannot be replayed.
-func replayInput(provider, name string, h plans.History, envs []*eventschema.Envelope, price plans.Pricer, since, now time.Time) (plans.ReplayInput, string) {
+func replayInput(provider, name string, h plans.History, envs []*eventschema.Envelope, price plans.Pricer, since, now time.Time,
+	observed plans.ObservedLimits) (plans.ReplayInput, string) {
 	base, _, ok := plans.TierOf(name)
 	if !ok {
 		return plans.ReplayInput{}, fmt.Sprintf("%s: %s has no stated usage multiple between tiers in the catalog, "+
 			"so it cannot be replayed against them", provider, name)
 	}
 	family := plans.TierFamily(name)
+	used := plans.ObservedTiers(family, observed)
 	var current plans.Tier
 	for i := range family {
 		if family[i].Name != name {
@@ -150,10 +156,14 @@ func replayInput(provider, name string, h plans.History, envs []*eventschema.Env
 		Provider: provider, Since: since, Until: now,
 		Readings: plans.QuotaReadingsFrom(envs, provider, since, now),
 		FactorAt: func(t time.Time, window time.Duration) (float64, bool) {
-			b, f, ok := plans.WindowFactor(h.At(provider, t, name), window)
+			plan := h.At(provider, t, name)
+			b, f, ok := plans.WindowFactor(plan, window)
+			if l, hit := observed.Factor(plan, window); hit && ok {
+				f = l.ObservedFactor
+			}
 			return f, ok && b == base
 		},
-		Current: current, Candidates: family,
+		Current: current, Candidates: family, Observed: used,
 	}
 	in.EarlyResets = plans.EarlyResetsIn(envs, eventschema.Provider(provider), since, now,
 		func(from, to time.Time) bool { return h.ChangedBetween(provider, from, to) })
@@ -199,6 +209,11 @@ func glanceAdvice(ctx context.Context, d Deps, now time.Time) []plans.Advice {
 		return nil
 	}
 	key := fmt.Sprint(d.Config.Plans)
+	if d.Observed != nil {
+		// A changed overlay is a different replay.
+		o := d.Observed()
+		key += fmt.Sprint(o.Off, o.UpdatedAt.UnixNano())
+	}
 	c := d.AdviceCache
 	if c == nil {
 		// No cache to fill: the replay fits the budget or is left out.

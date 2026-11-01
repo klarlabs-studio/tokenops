@@ -361,7 +361,7 @@ A bare API key is reported as metered usage with no plan to bind — binding
 a subscription against metered traffic would make every headroom figure
 wrong in a way that looks authoritative.
 
-### `tokenops plan {list|set|unset|catalog|headroom|advise}`
+### `tokenops plan {list|set|unset|catalog|headroom|advise|observed}`
 
 ```bash
 tokenops plan list              # configured bindings + headroom
@@ -371,6 +371,7 @@ tokenops plan unset cursor
 tokenops plan headroom          # live consumption + overage risk
 tokenops plan history           # every recorded switch, oldest first
 tokenops plan advise            # which tier would have fit the last 30 days
+tokenops plan observed          # limits your own windows show, beside the catalog's
 ```
 
 #### Which tier fits: `plan advise`
@@ -418,6 +419,33 @@ as an info finding. `--json`, `GET /api/plans/advice?days=` and
 `tokenops_glance (view=plan_advice)` give the same answer. Only Claude's
 tiers are replayed so far; ChatGPT's tiers are not modelled as multiples
 of each other, and `plan advise` says so.
+
+#### Limits your windows show: `plan observed`
+
+When `tokenops checkup`'s catalog-drift finding has enough evidence that
+your windows disagree with the catalog's ratio between two tiers (five
+windows on each, filled 10–99%, spent on one model family, a gap past 25%
+that the windows' quartiles do not cover), TokenOps keeps the measured
+ratio in a local overlay, `~/.tokenops/observed-limits.json`, and
+`plan advise` replays with it in place of the catalog's figure. The advice
+names every observed limit it used beside the catalog's (`observed` in
+`--json`, a caveat in text), and the glance's plan advice does the same.
+
+```bash
+tokenops plan observed          # "Claude Max weekly: observed 3.0x Claude Pro, catalog 5x (11 windows, sonnet)"
+tokenops plan observed reset    # back to the catalog, and stop observing
+tokenops plan observed on       # observe again, from your readings now
+```
+
+Readings measure the ratio between two tiers, not either tier's allowance,
+so the lower tier keeps its catalog figure and the higher one is scaled to
+the measured ratio. The overlay is this machine's only: the shipped catalog
+changes by pull request (ADR 0002), so the finding still asks you to open
+an issue. A limit drops out on its own once the catalog changes the figure
+it was observed against, or the evidence no longer drifts. `checkup` and
+the daemon (once a day) keep the overlay; while it is reset, neither puts
+anything in. Live window shares and paces come from the vendor and do not
+use it.
 
 #### Switching plans
 

@@ -3551,6 +3551,55 @@
                           "list_value_usd": {
                             "type": "number"
                           },
+                          "observed": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "anchor": {
+                                  "type": "string"
+                                },
+                                "anchor_display": {
+                                  "type": "string"
+                                },
+                                "catalog_factor": {
+                                  "type": "number"
+                                },
+                                "catalog_ratio": {
+                                  "type": "number"
+                                },
+                                "display": {
+                                  "type": "string"
+                                },
+                                "model_family": {
+                                  "type": "string"
+                                },
+                                "observed_at": {
+                                  "format": "date-time",
+                                  "type": "string"
+                                },
+                                "observed_factor": {
+                                  "type": "number"
+                                },
+                                "observed_ratio": {
+                                  "type": "number"
+                                },
+                                "plan": {
+                                  "type": "string"
+                                },
+                                "provider": {
+                                  "type": "string"
+                                },
+                                "window": {
+                                  "type": "string"
+                                },
+                                "windows": {
+                                  "type": "integer"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
                           "options": {
                             "items": {
                               "additionalProperties": false,
@@ -4656,6 +4705,55 @@
                           },
                           "list_value_usd": {
                             "type": "number"
+                          },
+                          "observed": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "anchor": {
+                                  "type": "string"
+                                },
+                                "anchor_display": {
+                                  "type": "string"
+                                },
+                                "catalog_factor": {
+                                  "type": "number"
+                                },
+                                "catalog_ratio": {
+                                  "type": "number"
+                                },
+                                "display": {
+                                  "type": "string"
+                                },
+                                "model_family": {
+                                  "type": "string"
+                                },
+                                "observed_at": {
+                                  "format": "date-time",
+                                  "type": "string"
+                                },
+                                "observed_factor": {
+                                  "type": "number"
+                                },
+                                "observed_ratio": {
+                                  "type": "number"
+                                },
+                                "plan": {
+                                  "type": "string"
+                                },
+                                "provider": {
+                                  "type": "string"
+                                },
+                                "window": {
+                                  "type": "string"
+                                },
+                                "windows": {
+                                  "type": "integer"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
                           },
                           "options": {
                             "items": {

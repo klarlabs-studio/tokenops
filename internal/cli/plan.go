@@ -34,7 +34,8 @@ store. Subcommands:
   tokenops plan headroom   — compute current consumption + risk
   tokenops plan advise     — which tier would have fit the last 30 days
   tokenops plan catalog    — list every plan TokenOps knows about
-  tokenops plan history    — list recorded plan switches`,
+  tokenops plan history    — list recorded plan switches
+  tokenops plan observed   — limits your own windows show, beside the catalog's`,
 	}
 	cmd.AddCommand(
 		newPlanListCmd(rf),
@@ -44,6 +45,7 @@ store. Subcommands:
 		newPlanSetCmd(),
 		newPlanUnsetCmd(),
 		newPlanHistoryCmd(),
+		newPlanObservedCmd(rf),
 	)
 	return cmd
 }
