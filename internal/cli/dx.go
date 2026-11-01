@@ -205,6 +205,10 @@ func writeDXText(w io.Writer, dx sessions.DX, bands []sessions.ContextBand, days
 	fmt.Fprintf(w, "  escalation rate:       %-10s %s  (instructions delegated to a subagent)\n",
 		fmt.Sprintf("%.1f%%", m.EscalationRatePct), badge(g.Escalation))
 	fmt.Fprintf(w, "  compactions/session:   %-10.1f %s\n", m.CompactionsPerSession, badge(g.Compaction))
+	if m.ReadOnlyCommands > 0 {
+		fmt.Fprintf(w, "  repeated commands:     %-10s     (%d of %d read-only commands run again with nothing changed since)\n",
+			fmt.Sprintf("%.1f%%", m.RepeatedCommandRatePct), m.RepeatedCommands, m.ReadOnlyCommands)
+	}
 
 	if g.Overall != "" {
 		overall := string(g.Overall)

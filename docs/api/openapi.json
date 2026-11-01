@@ -2917,6 +2917,15 @@
                         "prompts": {
                           "type": "integer"
                         },
+                        "read_only_commands": {
+                          "type": "integer"
+                        },
+                        "repeated_command_rate_pct": {
+                          "type": "number"
+                        },
+                        "repeated_commands": {
+                          "type": "integer"
+                        },
                         "rework_rate_pct": {
                           "type": "number"
                         },

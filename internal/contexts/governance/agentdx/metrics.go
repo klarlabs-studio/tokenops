@@ -67,6 +67,12 @@ type Record struct {
 	// "medium", "high", …), as the client names it.
 	Model  string
 	Effort string
+	// Command is a read-only shell command's normalised form, for
+	// recognising it run again; empty for anything else. Mutates marks a
+	// tool call that may change the working tree: an edit, or a shell
+	// command that is not read-only.
+	Command string
+	Mutates bool
 	// CallSignature identifies a tool call by name and arguments, so a
 	// call the agent has already made can be recognised. Empty when the
 	// client does not record arguments.
@@ -159,6 +165,13 @@ type Metrics struct {
 	// without reworking a file, being interrupted, or delegating. The
 	// closest single number to "it just worked".
 	FirstTryRatePct float64 `json:"first_try_rate_pct"`
+	// ReadOnlyCommands counts the shell commands that only read
+	// (git status, ls, grep, …); RepeatedCommands those run again in the
+	// same session with nothing changed since, whose answer was already
+	// in context; RepeatedCommandRatePct the share.
+	ReadOnlyCommands       int     `json:"read_only_commands,omitempty"`
+	RepeatedCommands       int     `json:"repeated_commands,omitempty"`
+	RepeatedCommandRatePct float64 `json:"repeated_command_rate_pct,omitempty"`
 	// TotalEdits is the denominator behind ReworkRatePct, exposed so a
 	// caller can tell "no rework" from "no edits".
 	TotalEdits int `json:"total_edits"`
@@ -309,6 +322,10 @@ func Compute(records []Record) Metrics {
 	}
 	if m.Sessions > 0 {
 		m.CompactionsPerSession = round1(float64(compactions) / float64(m.Sessions))
+	}
+	m.ReadOnlyCommands, m.RepeatedCommands = repeatedCommands(records)
+	if m.ReadOnlyCommands > 0 {
+		m.RepeatedCommandRatePct = round1(float64(m.RepeatedCommands) / float64(m.ReadOnlyCommands) * 100)
 	}
 	return m
 }

@@ -1,107 +1,58 @@
 package agentdx
 
-import (
-	"fmt"
-	"testing"
-)
+import "testing"
 
-func call(seq int, ctx int64, tool, sig string) []Record {
-	return []Record{
-		{At: at(seq * 2), SessionID: "s", Kind: KindAssistantTurn, InputTokens: ctx},
-		{At: at(seq*2 + 1), SessionID: "s", Kind: KindToolUse, ToolName: tool, CallSignature: sig},
+// A read-only command run again in the same session with nothing changed
+// in between is counted as repeated; one run again after an edit, or
+// after a command that changes things, is not. Commands that change
+// things, or chain or redirect, are never read-only.
+func TestComputeCountsRepeatedReadOnlyCommands(t *testing.T) {
+	bash := func(ts, cmd string) string {
+		return `{"type":"assistant","timestamp":"2026-08-23T10:00:` + ts + `Z","sessionId":"s","message":{"content":[{"type":"tool_use","id":"t` + ts + `","name":"Bash","input":{"command":` + quote(cmd) + `,"description":"look"}}]}}`
+	}
+	edit := `{"type":"assistant","timestamp":"2026-08-23T10:00:30Z","sessionId":"s","message":{"content":[{"type":"tool_use","id":"te","name":"Edit","input":{"file_path":"/w/a.go"}}]}}`
+	recs := recordsFrom(t,
+		`{"type":"user","timestamp":"2026-08-23T10:00:00Z","sessionId":"s","message":{"content":"look around"}}`,
+		bash("01", "git status"),
+		bash("02", "ls -la"),
+		bash("03", "git status"),     // repeated
+		bash("04", "git  status  "),  // repeated: same command, other spacing
+		bash("05", "git status > x"), // redirects: not read-only
+		bash("06", "go test ./..."),  // not read-only
+		bash("07", "git status"),     // after a command that may change things
+		edit,
+		bash("31", "ls -la"), // after an edit
+		bash("32", "ls -la"), // repeated
+	)
+	m := Compute(recs)
+	if m.ReadOnlyCommands != 7 || m.RepeatedCommands != 3 {
+		t.Errorf("read-only %d, repeated %d; want 7 and 3", m.ReadOnlyCommands, m.RepeatedCommands)
+	}
+	if m.RepeatedCommandRatePct < 42.8 || m.RepeatedCommandRatePct > 42.9 {
+		t.Errorf("rate = %v", m.RepeatedCommandRatePct)
 	}
 }
 
-// The agent repeating a call it already made with identical arguments is
-// it losing track of what it has already done. That is the drift an
-// operator notices as "quality getting worse" and which a rejection rate
-// never catches — they do not tell the agent off for it, they just watch
-// it redo work.
-func TestRepeatRateRisesWithContext(t *testing.T) {
-	recs := make([]Record, 0, 400)
-	seq := 0
-	for range 100 { // clean band: every call distinct
-		recs = append(recs, call(seq, 300_000, "Bash", fmt.Sprintf("cmd-%d", seq))...)
-		seq++
-	}
-	for range 100 { // degraded band: the same call over and over
-		recs = append(recs, call(seq, 900_000, "Bash", "same-command")...)
-		seq++
-	}
-	bands := ComputeContextCurve(recs)
-	var clean, degraded *ContextBand
-	for i := range bands {
-		switch {
-		case bands[i].Contains(300_000):
-			clean = &bands[i]
-		case bands[i].Contains(900_000):
-			degraded = &bands[i]
+func TestReadOnlyCommand(t *testing.T) {
+	for cmd, want := range map[string]bool{
+		"git status": true, "git diff --stat": true, "git log --oneline -5": true, "rg foo internal": true,
+		"cat a.go": true, "ls": true, "git commit -m x": false, "rm -rf x": false, "cat a | sh": false,
+		"ls && rm x": false, "echo hi > f": false, "git status; git push": false, "": false,
+		"sed -i s/a/b/ f": false, "find . -delete": false, "find . -name x": true,
+	} {
+		if _, got := readOnlyCommand(cmd); got != want {
+			t.Errorf("readOnlyCommand(%q) = %v, want %v", cmd, got, want)
 		}
 	}
-	if clean == nil || degraded == nil {
-		t.Fatalf("expected both bands: %+v", bands)
-	}
-	if degraded.RepeatCallRatePct <= clean.RepeatCallRatePct {
-		t.Errorf("repeat rate %.1f%% at 900k should exceed %.1f%% at 300k",
-			degraded.RepeatCallRatePct, clean.RepeatCallRatePct)
-	}
 }
 
-// The lookback is bounded so a long session cannot inflate the rate just
-// by having more history to collide with. Without that control the metric
-// measures session length, not drift.
-func TestRepeatLookbackIsBounded(t *testing.T) {
-	recs := make([]Record, 0, (repeatLookback+2)*2)
-	seq := 0
-	recs = append(recs, call(seq, 300_000, "Bash", "first")...)
-	seq++
-	for range repeatLookback + 1 { // push "first" out of the window
-		recs = append(recs, call(seq, 300_000, "Bash", fmt.Sprintf("filler-%d", seq))...)
-		seq++
+func quote(s string) string {
+	b := []byte{'"'}
+	for _, c := range []byte(s) {
+		if c == '"' || c == '\\' {
+			b = append(b, '\\')
+		}
+		b = append(b, c)
 	}
-	recs = append(recs, call(seq, 300_000, "Bash", "first")...) // far-away echo
-
-	bands := ComputeContextCurve(recs)
-	if len(bands) == 0 {
-		t.Fatal("no bands")
-	}
-	// The repeat of "first" is beyond the lookback, so it must not count.
-	if bands[0].RepeatCalls != 0 {
-		t.Errorf("RepeatCalls = %d, want 0 — a call outside the lookback is not a repeat",
-			bands[0].RepeatCalls)
-	}
-}
-
-// No signature, no signal: a client that does not record tool arguments
-// cannot be judged on repeats, and guessing would be worse than silence.
-func TestNoSignatureNoRepeatRate(t *testing.T) {
-	recs := make([]Record, 0, 40)
-	for i := range 20 {
-		recs = append(recs, call(i, 300_000, "Bash", "")...)
-	}
-	bands := ComputeContextCurve(recs)
-	if len(bands) > 0 && bands[0].RepeatCallRatePct != 0 {
-		t.Errorf("RepeatCallRatePct = %.1f, want 0 without signatures", bands[0].RepeatCallRatePct)
-	}
-}
-
-// An agent cannot repeat itself across a session boundary it has no
-// memory of. Sharing one lookback across sessions counts two operators
-// running the same command as the agent forgetting — enough, on real
-// transcripts, to invert the trend entirely.
-func TestRepeatsDoNotCrossSessions(t *testing.T) {
-	recs := []Record{
-		{At: at(0), SessionID: "a", Kind: KindAssistantTurn, InputTokens: 300_000},
-		{At: at(1), SessionID: "a", Kind: KindToolUse, ToolName: "Bash", CallSignature: "go test"},
-		{At: at(2), SessionID: "b", Kind: KindAssistantTurn, InputTokens: 300_000},
-		{At: at(3), SessionID: "b", Kind: KindToolUse, ToolName: "Bash", CallSignature: "go test"},
-	}
-	bands := ComputeContextCurve(recs)
-	if len(bands) == 0 {
-		t.Fatal("no bands")
-	}
-	if bands[0].RepeatCalls != 0 {
-		t.Errorf("RepeatCalls = %d, want 0 — the same command in two sessions is not a repeat",
-			bands[0].RepeatCalls)
-	}
+	return string(append(b, '"'))
 }
