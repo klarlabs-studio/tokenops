@@ -16,6 +16,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
 // Options say where to read and how far back.
@@ -30,6 +31,14 @@ type Options struct {
 	// ("read-guard", "route-guard", "coach-hook"), so a finding does not
 	// tell the operator to install what is on.
 	Installed map[string]bool
+	// Events, Plans, PlanHistory and Price feed the catalog-drift finding:
+	// the event store's window readings and requests, the plan bound per
+	// provider, the plan history and the list-price rate card. Without the
+	// store (nil Events) the finding is left out and the rest still runs.
+	Events      plans.EventReader
+	Plans       map[string]string
+	PlanHistory plans.History
+	Price       plans.Pricer
 }
 
 // Level orders findings.
@@ -94,6 +103,7 @@ func Compute(ctx context.Context, o Options) Report {
 	r.Findings = append(r.Findings, standingContext(o.Home, turnsByCWD, r.Total)...)
 	r.Findings = append(r.Findings, startingContext(records, o.Home)...)
 	r.Findings = append(r.Findings, oversized(records, o.Installed["route-guard"])...)
+	r.Findings = append(r.Findings, catalogDrift(ctx, o)...)
 	if f, ok := dxFinding(r.DX); ok {
 		r.Findings = append(r.Findings, f)
 	}
