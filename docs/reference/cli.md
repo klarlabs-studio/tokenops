@@ -1984,11 +1984,17 @@ It reads only what the harness loads into every session:
 - What hooks printed: the newest Claude Code transcripts (20 by default)
   record each hook's output. A `SessionStart` hook whose output carries a
   timestamp, a UUID or a commit hash, or differs from one session to the
-  next, is reported even when its command is a script.
+  next, is reported even when its command is a script. When the outputs
+  differ only in the order of a JSON value's keys (or its spacing), the
+  finding says so: the hook prints the same facts from a hash map in
+  whatever order it iterates, and sorting the keys fixes it. Only what the
+  transcripts show is judged; a command that could print unordered JSON
+  but has not differed yet is not flagged, and a reordered JSON array is
+  reported as output that varies, since array order can be content.
 
 Hooks are never run: the command text is read (`date`, `uuidgen`,
-`git status`, `git log`, `$RANDOM`, `datetime.now` and the like, unless
-the output goes to a file). Each finding names its file and line or hook,
+`git status`, `git log`, `gh pr list`, `curl`, `ps`, `df`, `$RANDOM`,
+`datetime.now` and the like, unless the output goes to a file). Each finding names its file and line or hook,
 the matched token and nothing around it, why it breaks the cache and the
 fix. Nothing is sent anywhere.
 

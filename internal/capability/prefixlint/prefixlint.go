@@ -60,9 +60,24 @@ const (
 	KindRandom = "random-command"
 	// KindGit is a hook command that prints repository state.
 	KindGit = "git-command"
+	// KindRemote is a hook command that prints what it fetched over the
+	// network: curl, wget, gh pr list.
+	KindRemote = "remote-command"
+	// KindSystem is a hook command that prints the machine's moment-to-
+	// moment state: ps, df.
+	KindSystem = "system-command"
 	// KindOutputVaries is a hook whose recorded output differs between
 	// sessions, though no single token in it gives the reason.
 	KindOutputVaries = "output-varies"
+	// KindKeyOrder is a hook whose recorded output is the same JSON in
+	// different sessions with its keys in a different order or spacing.
+	KindKeyOrder = "unstable-json"
+	// KindToolSetChange is a session whose tool or MCP server set changed
+	// between turns, followed by a rebuild of the cached prefix.
+	KindToolSetChange = "tool-set-change"
+	// KindContextEdit is a context file edited during a session, followed
+	// by a rebuild of the cached prefix.
+	KindContextEdit = "context-edit"
 )
 
 // Hook events the lint reads.
@@ -127,6 +142,9 @@ func (f Finding) Subject() string {
 	case SourceHook:
 		return fmt.Sprintf("%s hook running `%s`", f.Hook, f.Token)
 	case SourceHookOutput:
+		if f.Kind == KindKeyOrder {
+			return fmt.Sprintf("%s hook `%s` printing JSON whose key order changes", f.Hook, f.Command)
+		}
 		return fmt.Sprintf("%s hook `%s` printing a %s", f.Hook, f.Command, f.Kind)
 	}
 	return fmt.Sprintf("%s in a context file", f.Kind)

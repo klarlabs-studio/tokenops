@@ -107,6 +107,25 @@ var stdoutRedirect = regexp.MustCompile(`(?:^|[^0-9&>])>{1,2}\s*[^\s&]|\b1>{1,2}
 // gitState are git subcommands that print what changes between sessions.
 var gitState = map[string]bool{"log": true, "status": true, "rev-parse": true, "branch": true, "describe": true, "show": true, "diff": true, "shortlog": true, "reflog": true}
 
+// ghRemote are gh subcommands that print what is on the forge now: open
+// pull requests, issues, runs.
+var ghRemote = map[string]bool{"pr": true, "issue": true, "run": true, "api": true, "search": true, "release": true, "status": true, "workflow": true}
+
+// ghSubcommand skips gh's global options ("-R owner/repo").
+func ghSubcommand(args []string) string {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-R" || a == "--repo" || a == "--hostname":
+			i++
+		case strings.HasPrefix(a, "-"):
+		default:
+			return a
+		}
+	}
+	return ""
+}
+
 // clockCode are inline snippets that read the clock or make an id.
 var clockCode = []volatile{
 	{KindClock, "datetime.now"}, {KindClock, "datetime.utcnow"}, {KindClock, "time.time()"},
@@ -146,6 +165,14 @@ func volatileCommands(command string) []volatile {
 			if sub := gitSubcommand(words[1:]); gitState[sub] {
 				out = append(out, volatile{KindGit, "git " + sub})
 			}
+		case "curl", "wget", "http", "https", "xh":
+			out = append(out, volatile{KindRemote, filepath.Base(words[0])})
+		case "gh":
+			if sub := ghSubcommand(words[1:]); ghRemote[sub] {
+				out = append(out, volatile{KindRemote, "gh " + sub})
+			}
+		case "ps", "df", "free", "who", "vm_stat", "iostat":
+			out = append(out, volatile{KindSystem, filepath.Base(words[0])})
 		}
 	}
 	for _, c := range clockCode {
@@ -224,7 +251,7 @@ func hookFinding(site hookSite, prog string, v volatile) Finding {
 	switch v.kind {
 	case KindClock:
 		f.Fix = "Drop it from " + site.hook + "; let the agent run `date` when it needs the date or time."
-	case KindGit:
+	case KindGit, KindRemote, KindSystem:
 		f.Fix = "Drop it from " + site.hook + "; let the agent run `" + v.token + "` when it needs it."
 	default:
 		f.Fix = "Drop the generated value from " + site.hook + "'s output; if the agent needs an id, let it make one when it needs it."
