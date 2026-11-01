@@ -1,7 +1,8 @@
 # Competitive landscape, gaps, and plan
 
 Checked 2026-10-22 against each product's own site, repository, changelog or
-release notes (previous full check 2026-10-03, partial 2026-10-06). Items
+release notes (previous full check 2026-10-03, partial 2026-10-06), with the
+changes found on 2026-11-01 under "Update 2026-11-01". Items
 marked **[U]** came from a third-party page or search snippet and are
 unverified. Re-check before quoting any of it externally; this field moves
 weekly now, not monthly. The positioning direction of 2026-10-25 is recorded
@@ -82,7 +83,7 @@ locally and the same way across harnesses.**
 | [governor](https://github.com/0xhimanshu/governor) | Compacts tool output, compresses memory files, scope-drift contracts | **Yes** | CC (hooks) + rules files | 131★, v0.2.5 (09-06), no pushes since | Rules-file fallback everywhere |
 | [ccflare](https://github.com/snipeship/ccflare) | Proxy that load-balances accounts | **Yes** | Anthropic, OpenAI APIs | 1.05k★, stalled since 2026-04 | Routes around limits |
 | [Pushary](https://pushary.com/blog/limit-ai-agent-token-usage) (new here) | Cost guard reads session cost from the transcript and kills the session at a daily budget; approval gate routed to phone or Mac, audit log | **Yes** | Claude Code, Qwen Code, Droid, Devin CLI; says Codex, Gemini CLI, Cursor "work the same way" | Paid; post updated 10-04; local vs hosted not stated | **Nearest to "set what's allowed"** for a solo developer; phone approvals |
-| Peras (new) [U] | Pauses Claude Code and Codex at 90% of the weekly limit, notifies at 75% | **Yes** [U] | CC, Codex [U] | Launched 2026-10-21 [U] | Headroom-triggered pause, one feature, one line |
+| [Peras](https://peras.vertias.eu/) | Rules that warn, ask (approvable from a phone) or pause, by pace, per prompt, per folder, by hour, or a daily allowance with a reserve; alerts before unused quota expires | **Yes** | CC, Codex | Free and MIT; €4.99 Mac menu bar app (confirmed at its own site 2026-11-01) | Headroom-triggered pause, per-folder and per-hour rules, phone approvals |
 | [Tokenade](https://tokenade.net/en/solutions/software-teams/engineering-managers) (new) | Compresses agent input on each machine; claims 39% lower cost on its own benchmark | **Yes** | 10+ agents | Team page 10-15; no team console | Direct overlap with fmt |
 | Hook-sized enforcers (cc-cost, agentwatchdog, terse, claudepace, coding-agent-guardrails) | Per-project budgets with warn/block hooks, budget circuit breakers, destructive-command blocks | **Yes** | Mostly CC | 0–2★ each, 09–10 | Signal, not threat: the idea is obvious |
 | Menu-bar long tail (ai-usagebar, brow, codex-usage-badge, Developer-Island, Usagebar, TokenBar [U]) | 5h and weekly bars, per-account notch, Windows and Linux widgets | No | 1–4 vendors | ai-usagebar 715★ v1.41.0 (10-18); brow 57★ v0.5.0 (10-21) | Linux and Windows presence we lack |
@@ -108,11 +109,13 @@ locally and the same way across harnesses.**
 | Quesma (early access "soon") | Leadership, finance | No ("No proxy") | Encrypted on the laptop, stored "in your cloud" | Seat cut/upgrade advice; now lists Copilot |
 | Jellyfish, Swarmia, DX, LinearB | Eng management | No | SaaS | Jellyfish "AI spend-to-work attribution" (10-07); Swarmia token use by investment (10-09), Claude Code backfill (10-14) |
 | LiteLLM, Portkey, Cloudflare AI Gateway, OpenRouter | Platform teams | **Yes**: dollar caps, allow-lists; LiteLLM `agent_access_default_deny` (rc, 10-18); Portkey MCP guardrails | Self-host or SaaS | Central enforcement, now extending to agent and MCP access |
-| Langfuse, CloudWatch Coding Agent Insights | Platform, cloud | No | Cloud or self-host / AWS | No change since 10-03 |
+| Langfuse, CloudWatch Coding Agent Insights | Platform, cloud | No | Cloud or self-host / AWS | ClickHouse acquired Langfuse (2026-01-16) [U]; MIT self-hosting reported unchanged |
 | Promptster | Hiring, then AI enablement | Coaches | Its cloud | **Changed:** homepage leads with hiring again; "the TokenOps platform" wording is gone from homepage and /teams; blog still tags posts TokenOps; `cc-audit` last released 0.9.0 (08-18) |
 | Codensics | Spend governance | **Yes**: credit-pool budgets [U] | [U] | No product change found |
 
-Helicone is in maintenance mode after Mintlify acquired it (2026-03).
+Helicone's homepage now says it "is no longer part of Mintlify. Details to
+come soon" (seen 2026-11-01); the maintenance-mode line from 10-22 no longer
+holds.
 
 ## Gaps
 
@@ -412,6 +415,71 @@ The tables above already carry these; this is the log.
 | Claude Code `/usage` is "plan bars" and reports (10-03) | It applies fixes on request and auto mode is the default. |
 | Gap G4, cost per commit (10-03) | Shipped in TokenOps; others now have it by date range or org. |
 
+## Update 2026-11-01
+
+From the November research review (papers, competitors and practitioner
+reports); the roadmap it led to is `docs/research-roadmap-2026-11.md`.
+
+**A tier this document did not track: token savers.** Three open-source
+tools, far larger than any usage meter, grew in October from output
+compressors into cost engines that also route models and keep the cache:
+[RTK](https://github.com/rtk-ai/rtk) (about 85k★; compresses every tool's
+output, sends large reads to a cheaper model, shared rule files),
+[Caveman](https://github.com/JuliusBrussee/caveman) (about 117k★ in seven
+months; 4.0 adds a local proxy, automatic model and effort picking, cache
+keep-warm and a hosted cloud) and
+[Headroom](https://github.com/headroomlabs-ai/headroom) (78.5k★ by the GitHub
+API, 24.9k on its own site; MCP server, reversible compression, a warning
+when content would break the prompt cache, a daily budget). All Apache-2.0.
+They overlap fmt, routing and the prefix lint; none refuses a redundant
+re-read or measures outcomes. The star counts are odd enough to re-check.
+
+**Pause guards are now a crowd.** Peras (row updated above) and
+[limitcast](https://limitcast.dev/guide/) (forecasts each window's run-out,
+blocks new subagents near the limit and moves them to Sonnet, advises a
+smaller plan, names the harness with room; its pricing page and homepage
+disagree) lead agent-usage-guard, spare10 and agent-quota-guard. All cover
+Claude Code and Codex only. A daily allowance now ships in Peras, limitcast
+and CodexBar.
+
+**CodexBar** v0.80–v0.83 (110 providers): reminders before an unused weekly
+quota or banked reset expires, session search, LiteLLM team budgets. Still no
+budgets that block.
+
+**Quesma** has an installable collector,
+[quesma-shipper](https://github.com/QuesmaOrg/quesma-shipper) (Apache-2.0); its
+founder says it is free for individuals; company early access is still not
+open.
+
+**Claude Code** 2.1.308–2.1.316: idle compaction, `/usage` shows large cache
+misses, "session limit" renamed "5-hour limit", pooled group budgets on the
+gateway. **Codex**: Pro and Business limits doubled on 10-29, and those plans
+now include monthly API credits; headroom there is volatile, not scarce.
+
+**Vendor team analytics reach further, for Enterprise only.** Anthropic's
+[Analytics API](https://platform.claude.com/docs/en/manage-claude/analytics-api)
+returns named users with cost and seat use (Enterprise, not Team or Pro), and
+the Claude Code Value view shows cost per commit; OpenAI Codex Enterprise has
+a dashboard and an Analytics API; Cursor's per-member spend limits and
+Analytics API are Enterprise-only [U]. Every one of them returns named people.
+
+**A competitor class for seat right-sizing:** SaaS managers (Torii,
+CloudEagle, Spendflo, Corma) reclaim and downgrade AI seats from logins or
+admin APIs, with full identities; Spendflo markets an "AI seat rightsizing
+agent" [U]. None reads plan-window use.
+
+**AI FinOps:** Vantage ingests Anthropic, OpenAI and Cursor; CloudZero splits
+Anthropic spend by developer; Revenium prices outcomes and joined the FinOps
+Foundation [U]. FOCUS 1.5 is reported for December 2026 with AI token
+tracking, and a Tokenomics Foundation was announced on 06-03 [U]; neither was
+checked against its primary source.
+
+**What still sets TokenOps apart:** plan windows across Claude Code, Codex,
+Cursor and opencode; one explainable policy that moves per capability from
+shadow to acting and now verifies its moves against a randomized holdout;
+the read guard; the prefix lint; and a team plane that uploads derived
+figures only and shows no one by name.
+
 ## Update 2026-10-25
 
 Positioning direction recorded (see "Direction (2026-10-25)"): single-vendor
@@ -436,5 +504,8 @@ item: Claude's weekly pace banner, seen in the Claude desktop app on
   Faros is heading on-device.
 - **Quesma:** when early access opens and what it charges.
 - **Tokenade:** local input compression across 10+ agents, against fmt.
+- **RTK, Caveman, Headroom:** the token savers adding routing and cache
+  control; if one adds outcome checks or plan windows, it is a direct rival.
+- **limitcast and Peras:** the pause guards; watch for Cursor or opencode.
 - **Promptster:** check whether the coding-cost line survives the move back
   to hiring.
