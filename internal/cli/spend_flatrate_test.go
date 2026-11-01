@@ -104,3 +104,16 @@ func TestSpendTextBurnRateDropsTheMeaninglessZero(t *testing.T) {
 		t.Errorf("want the tokens that are the actual burn:\n%s", out)
 	}
 }
+
+// Grouped by subagent, the empty key is the session's own turns.
+func TestSpendBySubagentNamesTheSessionItself(t *testing.T) {
+	if got := groupKeyLabel("subagent", ""); got != "(the session itself)" {
+		t.Errorf("label = %q", got)
+	}
+	if got := groupKeyLabel("model", ""); got != "(unknown)" {
+		t.Errorf("label = %q", got)
+	}
+	if got := groupKeyLabel("subagent", "Explore"); got != "Explore" {
+		t.Errorf("label = %q", got)
+	}
+}

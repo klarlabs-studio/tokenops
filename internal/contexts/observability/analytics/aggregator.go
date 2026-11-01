@@ -48,6 +48,12 @@ const (
 	GroupModel    Group = "model"
 	GroupWorkflow Group = "workflow"
 	GroupAgent    Group = "agent"
+	// GroupSession groups by the client's session.
+	GroupSession Group = "session"
+	// GroupSubagent groups by who in a session made the turn: the
+	// session itself (an empty key) or a subagent, keyed by its type
+	// ("subagent" when the type is not known).
+	GroupSubagent Group = "subagent"
 	// GroupProviderModel groups by provider and model together, keyed by
 	// ProviderModelKey. It is not a user-facing grouping: DailyCharges
 	// reads through it.

@@ -81,6 +81,17 @@ func seedUsageMix(t *testing.T, s *Store, n int, seed int64) {
 		if rng.Intn(8) == 0 {
 			env.Attributes = map[string]string{"cache_read_input": fmt.Sprint(p.InputTokens / 3), "cache_creation_input": "7"}
 		}
+		if rng.Intn(3) == 0 {
+			p.SessionID = fmt.Sprintf("sess-%d", rng.Intn(3))
+		}
+		// Subagent turns: typed, untyped (no meta file), and the
+		// session's own.
+		switch rng.Intn(5) {
+		case 0:
+			env.Attributes = mergeAttrs(env.Attributes, map[string]string{"subagent_id": "a1", "subagent_type": []string{"Explore", "general-purpose"}[rng.Intn(2)]})
+		case 1:
+			env.Attributes = mergeAttrs(env.Attributes, map[string]string{"subagent_id": "a2", "subagent_type": ""})
+		}
 		envs = append(envs, env)
 	}
 	// A burst at one instant whose costs cancel around a huge pair: the
@@ -149,7 +160,18 @@ func singleReadFilters() map[string]analytics.Filter {
 	}
 }
 
-var singleReadGroups = []analytics.Group{analytics.GroupNone, analytics.GroupProvider, analytics.GroupModel, analytics.GroupWorkflow, analytics.GroupAgent}
+var singleReadGroups = []analytics.Group{analytics.GroupNone, analytics.GroupProvider, analytics.GroupModel, analytics.GroupWorkflow, analytics.GroupAgent, analytics.GroupSession, analytics.GroupSubagent}
+
+func mergeAttrs(a, b map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range a {
+		out[k] = v
+	}
+	for k, v := range b {
+		out[k] = v
+	}
+	return out
+}
 
 // sameBytes fails unless got and want are equal and encode to the same
 // JSON: a float off in its last bit encodes differently.
