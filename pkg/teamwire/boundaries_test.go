@@ -155,3 +155,21 @@ func TestALoopCrossingIsAFigure(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestOrganisationRulesMayNameAFolderAndHours(t *testing.T) {
+	rules := []BoundaryRule{{
+		Name: "client-hours", Action: "continue", Require: "deny", Stage: "enforce",
+		When: map[string]string{"folder": "/srv/clients/acme", "hours": "mon-fri 09:00-18:00"},
+	}}
+	if err := ValidateBoundaries(rules); err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := OrgBoundaries{Version: 1, Rules: rules}.Parsed()
+	if err != nil || len(parsed) != 1 || len(parsed[0].When) != 2 {
+		t.Fatalf("parsed = %+v, %v", parsed, err)
+	}
+	bad := []BoundaryRule{{Name: "x", Action: "continue", Require: "ask", When: map[string]string{"folder": "clients/acme"}}}
+	if err := ValidateBoundaries(bad); err == nil {
+		t.Fatal("a relative folder was accepted")
+	}
+}

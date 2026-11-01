@@ -227,6 +227,21 @@
                           },
                           "stage": {
                             "type": "string"
+                          },
+                          "when": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "condition": {
+                                  "type": "string"
+                                },
+                                "holds_now": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
                           }
                         },
                         "type": "object"
