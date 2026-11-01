@@ -6669,6 +6669,9 @@
                           "repo": {
                             "type": "string"
                           },
+                          "reverted": {
+                            "type": "boolean"
+                          },
                           "sessions": {
                             "type": "integer"
                           },
@@ -7664,6 +7667,66 @@
                             "type": "object"
                           },
                           "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "failures": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "method": {
+                          "type": "string"
+                        },
+                        "not_achieved": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "api_equivalent_usd": {
+                              "type": "number"
+                            },
+                            "cost_usd": {
+                              "type": "number"
+                            },
+                            "tokens": {
+                              "type": "integer"
+                            },
+                            "turns": {
+                              "type": "integer"
+                            },
+                            "unpriced_turns": {
+                              "type": "integer"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "not_achieved_outcomes": {
+                          "type": "integer"
+                        },
+                        "reverted": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "api_equivalent_usd": {
+                              "type": "number"
+                            },
+                            "cost_usd": {
+                              "type": "number"
+                            },
+                            "tokens": {
+                              "type": "integer"
+                            },
+                            "turns": {
+                              "type": "integer"
+                            },
+                            "unpriced_turns": {
+                              "type": "integer"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "reverted_commits": {
+                          "type": "integer"
+                        },
+                        "share": {
+                          "type": "number"
                         }
                       },
                       "type": "object"
