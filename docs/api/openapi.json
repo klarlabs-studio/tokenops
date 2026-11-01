@@ -7854,8 +7854,17 @@
                             "api_equivalent_usd": {
                               "type": "number"
                             },
+                            "cache_read_share": {
+                              "type": "number"
+                            },
+                            "cache_read_tokens": {
+                              "type": "integer"
+                            },
                             "cost_usd": {
                               "type": "number"
+                            },
+                            "input_tokens": {
+                              "type": "integer"
                             },
                             "tokens": {
                               "type": "integer"
@@ -7878,8 +7887,17 @@
                             "api_equivalent_usd": {
                               "type": "number"
                             },
+                            "cache_read_share": {
+                              "type": "number"
+                            },
+                            "cache_read_tokens": {
+                              "type": "integer"
+                            },
                             "cost_usd": {
                               "type": "number"
+                            },
+                            "input_tokens": {
+                              "type": "integer"
                             },
                             "tokens": {
                               "type": "integer"
