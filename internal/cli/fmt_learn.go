@@ -26,9 +26,14 @@ func readLearnRecords(recoverDir string) ([]fmtinsight.LearnRecord, error) {
 // recordCompressRun appends a compress record for a completed fmt run. Called
 // from the fmt RunE after the wrapped command finishes. now is injected so
 // the caller controls the timestamp (and tests stay deterministic).
-func recordCompressRun(recoverDir, command, level string, res *fmtResult, now time.Time) error {
+func recordCompressRun(recoverDir, command, level string, res *fmtResult, exp fmtExperimentRun, now time.Time) error {
 	if res.RecoveryID == "" {
 		return nil // recovery disabled -> nothing to correlate against
+	}
+	compact := res.BytesAfter
+	if res.Raw {
+		// What fmt would have forwarded: the raw arm's would-be saving.
+		compact = res.CompactBytes
 	}
 	return appendLearnRecord(recoverDir, fmtinsight.LearnRecord{
 		Type:            fmtinsight.RecordCompress,
@@ -37,12 +42,15 @@ func recordCompressRun(recoverDir, command, level string, res *fmtResult, now ti
 		Command:         command,
 		Level:           level,
 		RawBytes:        int64(res.BytesBefore),
-		CompactBytes:    int64(res.BytesAfter),
-		TokensSaved:     int64(estTokens(res.BytesBefore - res.BytesAfter)),
+		CompactBytes:    int64(compact),
+		TokensSaved:     int64(estTokens(res.BytesBefore - compact)),
 		Handled:         res.Handled,
 		GenericFallback: !res.Handled,
 		CriticalKept:    res.CriticalKept,
 		TS:              now.UTC(),
+		Session:         exp.Session,
+		Arm:             exp.Arm,
+		RawPercent:      exp.RawPercent,
 	})
 }
 

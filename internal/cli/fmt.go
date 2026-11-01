@@ -81,10 +81,14 @@ Examples:
 			}
 			reg := fmtinsight.NewRegistry(policy, formatters...)
 
+			// With the outcome experiment on, the session's arm decides
+			// whether the agent gets fmt's output or the raw output.
+			exp := fmtExperiment(cfg.Optimizer.CommandFmt.Experiment, os.Getenv)
 			res, err := runFmt(cmd.Context(), reg, args, fmtOptions{
 				RecoverDir: recoverDir,
 				NoRecover:  noRecover,
 				RawOnError: rawOnError,
+				Raw:        exp.Arm == fmtinsight.ArmRaw,
 			})
 			if err != nil {
 				return err
@@ -105,9 +109,11 @@ Examples:
 			// Append a learn record (best-effort) so `tokenops fmt learn`
 			// can mine next-formatter priorities + over-compression.
 			command := firstArgvToken(args)
-			_ = recordCompressRun(recoverDir, command, policy.LevelFor(command).String(), res, time.Now())
+			_ = recordCompressRun(recoverDir, command, policy.LevelFor(command).String(), res, exp, time.Now())
 
-			if !quiet {
+			// The raw arm adds nothing to what the command printed, not
+			// even the stats line: the agent sees what it would without fmt.
+			if !quiet && !res.Raw {
 				printFmtStats(cmd, res, statsJSON)
 			}
 
@@ -131,6 +137,7 @@ Examples:
 	cmd.AddCommand(newFmtRecoverCmd())
 	cmd.AddCommand(newFmtLearnCmd(rf))
 	cmd.AddCommand(newFmtAnalyzeCmd(rf))
+	cmd.AddCommand(newFmtExperimentCmd(rf))
 	return cmd
 }
 
@@ -232,6 +239,44 @@ type fmtOptions struct {
 	RecoverDir string
 	NoRecover  bool
 	RawOnError bool
+	// Raw passes stdout through unchanged, as the outcome experiment's
+	// raw arm does, while still running the formatter to learn what it
+	// would have saved.
+	Raw bool
+}
+
+// fmtExperimentRun is a run's place in the outcome experiment: the
+// session, the arm it was drawn into and the raw share it was drawn
+// with. The zero value is a run outside the experiment.
+type fmtExperimentRun struct {
+	Session    string
+	Arm        string
+	RawPercent int
+}
+
+// fmtSessionEnv names the variables a run's session id is read from, in
+// order: an explicit one any harness can set, then the one Claude Code
+// sets for every command its agent runs.
+var fmtSessionEnv = []string{"TOKENOPS_SESSION_ID", "CLAUDE_CODE_SESSION_ID"}
+
+// fmtExperiment draws the run's arm when the experiment is on. A run
+// with no session id is left out: its output could not be joined to how
+// the session went, so it is compressed as usual.
+func fmtExperiment(rawPercent int, getenv func(string) string) fmtExperimentRun {
+	if rawPercent <= 0 {
+		return fmtExperimentRun{}
+	}
+	var session string
+	for _, name := range fmtSessionEnv {
+		if session = strings.TrimSpace(getenv(name)); session != "" {
+			break
+		}
+	}
+	arm := fmtinsight.ExperimentArm(session, rawPercent)
+	if arm == "" {
+		return fmtExperimentRun{}
+	}
+	return fmtExperimentRun{Session: session, Arm: arm, RawPercent: rawPercent}
 }
 
 // fmtResult is the outcome of a wrapped run.
@@ -245,6 +290,11 @@ type fmtResult struct {
 	Compressed   bool // net reduction achieved by a command formatter
 	Handled      bool // a dedicated command formatter ran (not the generic fallback)
 	CriticalKept bool
+	// Raw marks a run whose stdout went through unchanged for the
+	// experiment's raw arm; CompactBytes is then the size of what the fmt
+	// arm would have forwarded, and Compressed stays false.
+	Raw          bool
+	CompactBytes int
 	RecoveryPath string
 	RecoveryID   string // basename of RecoveryPath without extension; links learn records
 	Notes        string
@@ -283,6 +333,10 @@ func runFmt(ctx context.Context, reg *fmtinsight.Registry, argv []string, opt fm
 		BytesBefore: len(rawStdout),
 		BytesAfter:  len(rawStdout),
 		Stdout:      rawStdout,
+		// The raw arm forwards stdout as written whatever happens below,
+		// and adds nothing to it.
+		Raw:          opt.Raw,
+		CompactBytes: len(rawStdout),
 	}
 
 	// Recovery: persist the full raw output first, so it exists before we
@@ -303,6 +357,15 @@ func runFmt(ctx context.Context, reg *fmtinsight.Registry, argv []string, opt fm
 	}
 
 	fr, handled := reg.Format(argv, rawStdout)
+	if opt.Raw {
+		// The formatter runs so the saving can be recorded; its output
+		// is discarded and the agent gets stdout as the command wrote it.
+		res.Handled = handled
+		res.CriticalKept = fr.CriticalKept
+		res.CompactBytes = fr.BytesAfter
+		res.Notes = "raw arm of the fmt experiment"
+		return res, nil
+	}
 	res.Stdout = ensureTrailingNewline(fr.Compact)
 	res.BytesAfter = fr.BytesAfter
 	res.LinesDropped = fr.LinesDropped

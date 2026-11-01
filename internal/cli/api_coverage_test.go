@@ -85,6 +85,7 @@ var apiExempt = map[string]string{
 	"tokenops_verify":         "experiment analysis run on demand by the operator's agent",
 	"tokenops_experiment":     "experiment enrolment through the agent",
 	"tokenops_fmt_analyze":    "operates on the agent's command output",
+	"tokenops_fmt_experiment": "operates on the agent's command output",
 	"tokenops_fmt_learn":      "operates on the agent's command output",
 	"tokenops_vendor_usage_setup": "connects a vendor login through the operator's browser and OS consent, " +
 		"which belongs in the terminal or an agent conversation, not a background daemon",

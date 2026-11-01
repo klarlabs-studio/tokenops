@@ -2793,6 +2793,41 @@ paste-ready stub. The `tokenops_fmt (view=learn)` MCP tool returns the same
 report to agents. The formatters stay deterministic — learning proposes,
 it never mutates runtime behaviour.
 
+### `tokenops fmt experiment [off|on|<percent>]`
+
+Judges fmt on outcomes rather than bytes saved. With the experiment on, a
+share of sessions, drawn at random from the session id, get their command
+output raw: fmt forwards stdout unchanged, prints no stats line, and
+records what it would have saved. The rest get fmt's output as usual. The
+session id is read from `TOKENOPS_SESSION_ID`, else Claude Code's
+`CLAUDE_CODE_SESSION_ID`; a command run without one is compressed and left
+out. Each run's arm and the share it was drawn with are recorded in the
+recovery index.
+
+```bash
+tokenops fmt experiment on        # half the sessions get raw output
+tokenops fmt experiment 25        # a quarter
+tokenops fmt experiment           # the setting and the comparison
+tokenops fmt experiment off
+```
+
+With no argument it compares the arms over the last `--days` (30) on what
+the sessions' transcripts show: first-try instructions, reworked
+instructions, repeated tool calls (a call the session had already made
+with the same arguments, such as a command run again), tokens per
+instruction, and outcomes recorded with `tokenops outcome` under the
+session id as the execution id. Each measure is computed per session and
+compared over sessions, since the session is what was randomized: counts
+per arm, the difference, and a rough 95% interval. Until each arm has 4
+sessions and 20 instructions it says "not enough sessions yet" and
+compares nothing; an interval that crosses zero reads "no difference
+shown", and one that excludes zero is reported as a lead to check, not a
+finding, since several measures are compared at once. `--json` emits the
+report. Off by default; the setting is `optimizer.command_fmt.experiment`.
+Agents read the report with `tokenops_fmt (view=experiment)`, and
+`tokenops_experiment (action=fmt)` changes the share only after the
+operator confirms it.
+
 ## Outcomes and verification
 
 ### `tokenops outcome {record|detect|check-json}`
