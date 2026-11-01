@@ -191,3 +191,36 @@ func TestExtractAllReadsPastAnUnreadableStore(t *testing.T) {
 		t.Fatalf("err = %v, want both stores named", err)
 	}
 }
+
+// A subagent's entries are in its own transcript beside the session's,
+// and its prompt is read as the subagent's.
+func TestExtractReadsSubagentTranscripts(t *testing.T) {
+	root := t.TempDir()
+	sub := filepath.Join(root, "proj", "s", "subagents")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "proj", "s.jsonl"),
+		[]byte(`{"type":"user","timestamp":"2026-08-23T10:00:00Z","sessionId":"s","message":{"content":"fix the bug"}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "agent-a1.jsonl"),
+		[]byte(`{"type":"user","isSidechain":true,"timestamp":"2026-08-23T10:00:05Z","sessionId":"s","message":{"content":"find the loader"}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Extract(ExtractOptions{Root: root, IncludeScratch: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := map[string]string{}
+	for _, r := range got {
+		if r.Kind == KindPrompt {
+			sessions[r.SessionID] = r.Role
+		}
+	}
+	// The subagent's prompt is a unit of its own and does not cut the
+	// operator's in two.
+	if len(sessions) != 2 || sessions["s/a1"] != RoleSubagent || sessions["s"] == RoleSubagent {
+		t.Errorf("prompt sessions = %v, want s and s/a1 (subagent)", sessions)
+	}
+}

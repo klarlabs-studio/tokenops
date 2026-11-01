@@ -30,7 +30,7 @@ func ReadTail(path string, maxBytes int64) ([]Turn, time.Time, error) {
 	var turns []Turn
 	seen := map[string]bool{}
 	st := &readState{}
-	_, err = readLines(f, projectFromPath(path), st, true, func(t Turn) error {
+	_, err = readLines(f, sourceOf(path), st, true, func(t Turn) error {
 		if !seen[t.MessageID] {
 			seen[t.MessageID] = true
 			turns = append(turns, t)

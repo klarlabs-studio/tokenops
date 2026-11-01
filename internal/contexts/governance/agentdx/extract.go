@@ -92,6 +92,13 @@ func Extract(opts ExtractOptions) ([]Record, error) {
 	if err != nil {
 		return nil, fmt.Errorf("agentdx: glob transcripts: %w", err)
 	}
+	// A subagent's entries are in its own transcript beside the
+	// session's: <project>/<session>/subagents/agent-<id>.jsonl.
+	subagents, err := filepath.Glob(filepath.Join(root, "*", "*", "subagents", "agent-*.jsonl"))
+	if err != nil {
+		return nil, fmt.Errorf("agentdx: glob subagent transcripts: %w", err)
+	}
+	files = append(files, subagents...)
 	if !opts.IncludeScratch {
 		files = scanscope.Keep(files)
 	}
@@ -105,20 +112,40 @@ func Extract(opts ExtractOptions) ([]Record, error) {
 		}
 		if cache != nil {
 			kept[path] = true
-			out = append(out, cache.claudeCode(path, info, opts.Since)...)
+			out = append(out, asSubagent(path, cache.claudeCode(path, info, opts.Since))...)
 			continue
 		}
 		f, err := os.Open(path) //nolint:gosec // operator's own transcript dir
 		if err != nil {
 			continue
 		}
-		out = append(out, readTranscript(f, opts.Since, opts.WithPromptText)...)
+		out = append(out, asSubagent(path, readTranscript(f, opts.Since, opts.WithPromptText))...)
 		_ = f.Close()
 	}
 	if cache != nil {
 		cache.retain(sourceClaudeCode, kept)
 	}
 	return out, nil
+}
+
+// asSubagent keys a subagent's records as a session of their own,
+// <session>/<agent id>, as Codex keeps a delegated thread in its own
+// rollout: they carry the parent's session id, and read under it a
+// subagent's prompt would cut the operator's unit in two. Records from
+// a session's own transcript are returned as they are. The records are
+// copied, so a cached slice is never rewritten.
+func asSubagent(path string, recs []Record) []Record {
+	if filepath.Base(filepath.Dir(path)) != "subagents" || len(recs) == 0 {
+		return recs
+	}
+	id := strings.TrimPrefix(strings.TrimSuffix(filepath.Base(path), ".jsonl"), "agent-")
+	out := make([]Record, len(recs))
+	for i, r := range recs {
+		r.SessionID += "/" + id
+		r.Role = RoleSubagent
+		out[i] = r
+	}
+	return out
 }
 
 // rawEntry is the subset of a transcript line these metrics need.

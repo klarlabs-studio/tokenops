@@ -1,6 +1,8 @@
 // Package claudecodejsonl reads Claude Code's per-session conversation
 // JSONL files (~/.claude/projects/<project>/<session>.jsonl) and emits
-// one PromptEvent per assistant turn. The JSONLs are the canonical
+// one PromptEvent per assistant turn, together with the transcripts of
+// the session's subagents
+// (~/.claude/projects/<project>/<session>/subagents/agent-<id>.jsonl). The JSONLs are the canonical
 // live record of every prompt/response Claude Code makes — the file is
 // updated on every turn, so a poll catches activity within seconds.
 //
@@ -77,6 +79,18 @@ type Turn struct {
 	// carries this — it is what lets the plan window meter count the
 	// vendor's "messages" unit from a per-turn event stream.
 	StartsUserMessage bool
+	// Subagent is set on a turn a subagent made, read from the
+	// subagent's own transcript.
+	Subagent Subagent
+}
+
+// Subagent is the subagent a turn belongs to: its id, and what its
+// .meta.json says started it. Every field is empty on the session's own
+// turns; Type and ToolUseID are empty when the meta file is missing.
+type Subagent struct {
+	ID        string
+	Type      string
+	ToolUseID string
 }
 
 // rawLine is the minimal subset of a Claude Code JSONL row we care
@@ -112,15 +126,20 @@ func DefaultRoot() (string, error) {
 	return claudehome.Join("projects"), nil
 }
 
-// FindSessionFiles globs every *.jsonl under root (recursive, one
-// level deep — matches Claude Code's actual layout). Returns paths
-// sorted lexicographically for deterministic iteration in tests.
+// FindSessionFiles lists every session transcript under root
+// (<project>/<session>.jsonl) and every subagent transcript
+// (<project>/<session>/subagents/agent-<id>.jsonl), sorted
+// lexicographically for deterministic iteration in tests.
 func FindSessionFiles(root string) ([]string, error) {
 	matches, err := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
 	if err != nil {
 		return nil, fmt.Errorf("glob session files: %w", err)
 	}
-	return matches, nil
+	subagents, err := filepath.Glob(filepath.Join(root, "*", "*", subagentsDir, "agent-*.jsonl"))
+	if err != nil {
+		return nil, fmt.Errorf("glob subagent files: %w", err)
+	}
+	return append(matches, subagents...), nil
 }
 
 // ReadFile parses one JSONL file and yields every assistant turn with
@@ -135,17 +154,77 @@ func ReadFile(path string, visit func(Turn) error) error {
 		return err
 	}
 	defer func() { _ = f.Close() }()
-	project := projectFromPath(path)
-	return readReader(f, project, visit)
+	return readReader(f, sourceOf(path), visit)
+}
+
+// subagentsDir is the directory beside a session's transcript that holds
+// its subagents' transcripts.
+const subagentsDir = "subagents"
+
+// source is what a transcript's path says about every turn in it.
+type source struct {
+	project  string
+	subagent Subagent
+}
+
+// sourceOf reads a transcript's project and, for a subagent's
+// transcript, which subagent it is.
+func sourceOf(path string) source {
+	src := source{project: projectFromPath(path)}
+	if id, ok := subagentID(path); ok {
+		src.subagent = readSubagentMeta(path, id)
+	}
+	return src
 }
 
 // projectFromPath returns the project directory name for a JSONL
 // path. Claude Code lays out files as
 // ~/.claude/projects/<project>/<session>.jsonl where <project> is
-// the filesystem-encoded project root (slashes → dashes). The name
-// is returned verbatim — operators recognise their own encoding.
+// the filesystem-encoded project root (slashes → dashes), and a
+// subagent's as <project>/<session>/subagents/agent-<id>.jsonl. The
+// name is returned verbatim — operators recognise their own encoding.
 func projectFromPath(path string) string {
-	return filepath.Base(filepath.Dir(path))
+	dir := filepath.Dir(path)
+	if _, ok := subagentID(path); ok {
+		dir = filepath.Dir(filepath.Dir(dir))
+	}
+	return filepath.Base(dir)
+}
+
+// IsSubagentTranscript reports whether path is a subagent's transcript
+// rather than a session's own.
+func IsSubagentTranscript(path string) bool {
+	_, ok := subagentID(path)
+	return ok
+}
+
+// subagentID is the subagent a transcript path belongs to, when it is a
+// subagent's.
+func subagentID(path string) (string, bool) {
+	if filepath.Base(filepath.Dir(path)) != subagentsDir {
+		return "", false
+	}
+	name := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	id, ok := strings.CutPrefix(name, "agent-")
+	return id, ok && id != ""
+}
+
+// readSubagentMeta reads what started subagent id from the .meta.json
+// beside its transcript. A missing or unreadable file leaves only the id.
+func readSubagentMeta(path, id string) Subagent {
+	sa := Subagent{ID: id}
+	b, err := os.ReadFile(strings.TrimSuffix(path, ".jsonl") + ".meta.json")
+	if err != nil {
+		return sa
+	}
+	var meta struct {
+		AgentType string `json:"agentType"`
+		ToolUseID string `json:"toolUseId"`
+	}
+	if json.Unmarshal(b, &meta) == nil {
+		sa.Type, sa.ToolUseID = meta.AgentType, meta.ToolUseID
+	}
+	return sa
 }
 
 // readState is what one transcript line depends on from the lines before
@@ -160,22 +239,22 @@ type readState struct {
 	prevAt time.Time
 }
 
-func readReader(r io.Reader, project string, visit func(Turn) error) error {
-	_, err := readLines(r, project, &readState{}, true, visit)
+func readReader(r io.Reader, src source, visit func(Turn) error) error {
+	_, err := readLines(r, src, &readState{}, true, visit)
 	return err
 }
 
 // readLines reads r's complete lines through st; see jsonltail.ReadLines
 // for what final and the returned byte count mean.
-func readLines(r io.Reader, project string, st *readState, final bool, visit func(Turn) error) (int64, error) {
+func readLines(r io.Reader, src source, st *readState, final bool, visit func(Turn) error) (int64, error) {
 	return jsonltail.ReadLines(r, final, func(line []byte) error {
-		return st.visitLine(line, project, visit)
+		return st.visitLine(line, src, visit)
 	})
 }
 
 // visitLine parses one transcript line and hands an assistant turn with
 // usage to visit. Anything else only advances st.
-func (st *readState) visitLine(line []byte, project string, visit func(Turn) error) error {
+func (st *readState) visitLine(line []byte, src source, visit func(Turn) error) error {
 	var raw rawLine
 	if err := json.Unmarshal(line, &raw); err != nil {
 		return nil
@@ -188,8 +267,9 @@ func (st *readState) visitLine(line []byte, project string, visit func(Turn) err
 		}
 		// Claude Code writes tool results back as type:"user" rows;
 		// in real sessions they outnumber typed prompts by roughly
-		// 44:1. Only a genuine prompt opens a new vendor "message".
-		if isOperatorPrompt(raw.Message.Content) {
+		// 44:1. Only a genuine prompt opens a new vendor "message",
+		// and a subagent's prompt is the agent's, not the operator's.
+		if src.subagent.ID == "" && isOperatorPrompt(raw.Message.Content) {
 			st.pendingUserMessage = true
 		}
 		return nil
@@ -219,7 +299,8 @@ func (st *readState) visitLine(line []byte, project string, visit func(Turn) err
 		StartsUserMessage:          startsMessage,
 		Timestamp:                  ts.UTC(),
 		SessionID:                  raw.SessionID,
-		Project:                    project,
+		Project:                    src.project,
+		Subagent:                   src.subagent,
 		Model:                      raw.Message.Model,
 		MessageID:                  raw.Message.ID,
 		InputTokens:                u.InputTokens,

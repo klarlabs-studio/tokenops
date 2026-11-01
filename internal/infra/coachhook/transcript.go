@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -147,7 +148,37 @@ func accumulate(path string, st *sessionState, cfg Config, now time.Time) (model
 		}
 	}
 	st.LastCountedTS = newMarker
+	accumulateSubagents(path, st, cfg, now)
 	return model, contextTokens, unpriced
+}
+
+// accumulateSubagents adds what the session's subagents spent, read from
+// their own transcripts beside the session's
+// (<session>/subagents/agent-<id>.jsonl), to the session's cumulative
+// spend. Each file keeps its own marker. A subagent's context is its own
+// window, not the session's, so only its cost is counted.
+func accumulateSubagents(path string, st *sessionState, cfg Config, now time.Time) {
+	files, _ := filepath.Glob(filepath.Join(strings.TrimSuffix(path, ".jsonl"), "subagents", "agent-*.jsonl"))
+	for _, f := range files {
+		name := filepath.Base(f)
+		marker := st.SubagentCountedTS[name]
+		newMarker := marker
+		for _, t := range readTurns(f, cfg, now) {
+			if t.Timestamp == "" || t.Timestamp <= marker || t.Compaction != "" {
+				continue
+			}
+			st.CumulativeUSD += t.CostUSD
+			if t.Timestamp > newMarker {
+				newMarker = t.Timestamp
+			}
+		}
+		if newMarker != marker {
+			if st.SubagentCountedTS == nil {
+				st.SubagentCountedTS = map[string]string{}
+			}
+			st.SubagentCountedTS[name] = newMarker
+		}
+	}
 }
 
 // parseTurnTime reads a transcript timestamp for rate selection. An

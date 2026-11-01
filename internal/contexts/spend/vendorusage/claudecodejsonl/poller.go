@@ -83,8 +83,25 @@ type Poller struct {
 	now       func() time.Time
 	publishes int64
 
-	// tail belongs to the scan goroutine alone.
+	// tail and sources belong to the scan goroutine alone.
 	tail jsonltail.Tail[readState]
+	// sources keeps what each transcript's path says, so a subagent's
+	// meta file is read once rather than on every scan that finds the
+	// transcript grown.
+	sources map[string]source
+}
+
+// sourceOf is sourceOf(path), read once per transcript.
+func (p *Poller) sourceOf(path string) source {
+	if src, ok := p.sources[path]; ok {
+		return src
+	}
+	if p.sources == nil {
+		p.sources = map[string]source{}
+	}
+	src := sourceOf(path)
+	p.sources[path] = src
+	return src
 }
 
 // NewPoller binds the bus + options. Bus may be nil — Snapshot() then
@@ -149,7 +166,7 @@ func (p *Poller) scan(ctx context.Context, root string) {
 	}
 	visit := p.visitor(ctx)
 	p.tail.Scan(ctx, files, func(path string, r io.Reader, st *readState) (int64, error) {
-		return readLines(r, projectFromPath(path), st, false, visit)
+		return readLines(r, p.sourceOf(path), st, false, visit)
 	}, func(path string, err error) {
 		p.opts.Logger.Warn("claude-code jsonl read failed", "path", path, "err", err)
 	})
@@ -229,7 +246,7 @@ func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eve
 	// JSONL on poller restart never double-counts because the store
 	// dedups on this ID.
 	h := sha256.Sum256([]byte("claudecode-jsonl|" + t.MessageID))
-	return &eventschema.Envelope{
+	env := &eventschema.Envelope{
 		ID:            "ccj-" + hex.EncodeToString(h[:8]),
 		SchemaVersion: eventschema.SchemaVersion,
 		Type:          eventschema.EventTypePrompt,
@@ -282,6 +299,14 @@ func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eve
 			CostSource: costSource,
 		},
 	}
+	// A subagent's turn stays the session's (same agent, workflow and
+	// session) and says which subagent made it.
+	if sa := t.Subagent; sa.ID != "" {
+		env.Attributes["subagent_id"] = sa.ID
+		env.Attributes["subagent_type"] = sa.Type
+		env.Attributes["subagent_tool_use_id"] = sa.ToolUseID
+	}
+	return env
 }
 
 // claudeCodeAgentID is the canonical agent_id stamp used across
