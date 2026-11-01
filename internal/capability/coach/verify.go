@@ -183,8 +183,9 @@ func revertRetractedLever(e VerifyEnv, r mv.Retraction) bool {
 	return true
 }
 
-// subagentMoves are the subagent moves the coach made or put to the
-// operator, by the Agent call's tool_use_id, with model families.
+// subagentMoves are the subagent moves the coach made, put to the
+// operator, or held back at random, by the Agent call's tool_use_id, with
+// model families.
 func subagentMoves(l Ledger) map[string]mv.Move {
 	out := map[string]mv.Move{}
 	if l == nil {
@@ -195,11 +196,14 @@ func subagentMoves(l Ledger) map[string]mv.Move {
 		return out
 	}
 	for _, en := range entries {
-		if en.Type != ft.EntryOffer || en.Ref == "" || en.Power != config.PowerModels ||
-			(en.Channel != ft.ChannelMove && en.Channel != ft.ChannelApproval) {
+		if en.Ref == "" || en.Power != config.PowerModels {
 			continue
 		}
-		out[en.Ref] = mv.Move{ID: en.ID, Kind: en.Kind, From: routeguard.AliasFor(en.From), To: routeguard.AliasFor(en.To)}
+		held := en.Type == ft.EntryHoldout
+		if !held && (en.Type != ft.EntryOffer || (en.Channel != ft.ChannelMove && en.Channel != ft.ChannelApproval)) {
+			continue
+		}
+		out[en.Ref] = mv.Move{ID: en.ID, Kind: en.Kind, From: routeguard.AliasFor(en.From), To: routeguard.AliasFor(en.To), Held: held}
 	}
 	return out
 }

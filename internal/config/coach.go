@@ -21,7 +21,10 @@ type CoachConfig struct {
 	Powers map[string]string `yaml:"powers,omitempty"`
 	// Holdout is the percent of sessions whose cost and drift tips are
 	// held back and logged as shadow, so the realized saving of a tip can
-	// be measured against sessions that did not get it (#656). Unset is
+	// be measured against sessions that did not get it (#656), and the
+	// percent of the subagent moves the coach would make on its own that
+	// it holds back, so each kind of move is judged against work chance
+	// left on the model it came from. Unset is
 	// DefaultHoldoutPercent; 0 opts out; at most MaxHoldoutPercent. Tips
 	// about work about to stop are never held. A preset keeps it.
 	Holdout *int `yaml:"holdout,omitempty"`
