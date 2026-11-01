@@ -200,3 +200,68 @@ func (r *countingReader) ReadEvents(ctx context.Context, t eventschema.EventType
 	}
 	return r.eventsReader.ReadEvents(ctx, t, since)
 }
+
+// slowReader takes delay for each read reaching back further than three
+// weeks, or until the caller gives up.
+type slowReader struct {
+	countingReader
+	delay time.Duration
+}
+
+func (r *slowReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
+	envs, err := r.countingReader.ReadEvents(ctx, t, since)
+	if len(r.envs) > 0 && since.Before(r.envs[len(r.envs)-1].Timestamp.Add(-21*24*time.Hour)) {
+		select {
+		case <-time.After(r.delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return envs, err
+}
+
+// A replay longer than the glance's budget is not thrown away: it goes on
+// in the background, once, and the glances after it carry its advice
+// without reading the month again (#825: every minute, the daemon read a
+// month of events for four seconds and discarded it).
+func TestGlanceAdviceOutlivesTheGlancesBudget(t *testing.T) {
+	defer headroom.SetGlanceAdviceBudget(20 * time.Millisecond)()
+	now := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	reader := &slowReader{countingReader: countingReader{eventsReader: eventsReader{envs: adviceEvents(now, "15")}}, delay: 200 * time.Millisecond}
+	cache := headroom.NewAdviceCache()
+	deps := headroom.Deps{Config: cfgWith(map[string]string{"anthropic": "claude-max"}), Reader: reader, Price: tenDollars, AdviceCache: cache}
+	g, err := headroom.ComputeGlance(context.Background(), deps, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(g.PlanAdvice) != 0 {
+		t.Fatalf("advice inside a budget too short for it: %+v", g.PlanAdvice)
+	}
+	// Glances while it runs do not start another.
+	for i := 0; i < 3; i++ {
+		if _, err := headroom.ComputeGlance(context.Background(), deps, now.Add(time.Duration(i+1)*time.Second)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	headroom.WaitAdviceRefresh(cache)
+	reads := reader.long
+	if reads != 2 {
+		t.Errorf("month-long reads = %d, want 2 (the glance's, then the one background refresh)", reads)
+	}
+	g, err = headroom.ComputeGlance(context.Background(), deps, now.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(g.PlanAdvice) != 1 || reader.long != reads {
+		t.Errorf("after the refresh: advice %+v, month-long reads %d -> %d", g.PlanAdvice, reads, reader.long)
+	}
+	// Past the hour the old advice is served while the next refresh runs.
+	g, err = headroom.ComputeGlance(context.Background(), deps, now.Add(headroom.AdviceCacheTTL+time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(g.PlanAdvice) != 1 {
+		t.Errorf("an expired advice was dropped instead of served while refreshing: %+v", g.PlanAdvice)
+	}
+	headroom.WaitAdviceRefresh(cache)
+}

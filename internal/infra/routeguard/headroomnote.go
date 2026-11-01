@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 )
@@ -43,6 +44,19 @@ type NoteWindow struct {
 	LeftPct float64
 	// ResetsAt is zero when unknown.
 	ResetsAt time.Time
+	// Duration is the window's length, zero when unknown; with ResetsAt
+	// it gives the pace.
+	Duration time.Duration
+}
+
+// runsOutAt is when w runs out at the pace so far, zero when it lasts to
+// its reset or its pace is unknown.
+func (w NoteWindow) runsOutAt(now time.Time) time.Time {
+	p := plans.VendorWindow{UsedPct: 100 - w.LeftPct, Duration: w.Duration, ResetsAt: w.ResetsAt}.PaceAt(now)
+	if p == nil || p.LastsToReset || p.RunsOutIn <= 0 {
+		return time.Time{}
+	}
+	return now.Add(p.RunsOutIn)
 }
 
 // ReadHeadroom reads the provider's plan windows from what is already on
@@ -56,12 +70,13 @@ func ReadHeadroom(limitsPath string, figures boundaryledger.Dir, provider string
 			for _, w := range []struct {
 				name string
 				win  *claudelimits.Window
-			}{{"5h", r.FiveHour}, {"week", r.SevenDay}} {
+				dur  time.Duration
+			}{{"5h", r.FiveHour, 5 * time.Hour}, {"week", r.SevenDay, 7 * 24 * time.Hour}} {
 				// A window that has reset since says nothing now.
 				if w.win == nil || (w.win.ResetsAt > 0 && !time.Unix(w.win.ResetsAt, 0).After(now)) {
 					continue
 				}
-				nw := NoteWindow{Name: w.name, LeftPct: math.Max(0, 100-w.win.UsedPct)}
+				nw := NoteWindow{Name: w.name, LeftPct: math.Max(0, 100-w.win.UsedPct), Duration: w.dur}
 				if w.win.ResetsAt > 0 {
 					nw.ResetsAt = time.Unix(w.win.ResetsAt, 0).UTC()
 				}
@@ -116,12 +131,11 @@ func HeadroomNote(ws []NoteWindow, now time.Time, loc *time.Location) string {
 		}
 		p := fmt.Sprintf("%s %.0f%% left", label, math.Round(w.LeftPct))
 		if !w.ResetsAt.IsZero() && w.ResetsAt.After(now) {
-			at := w.ResetsAt.In(loc)
-			if w.ResetsAt.Sub(now) < 24*time.Hour {
-				p += " (resets " + at.Format("15:04") + ")"
-			} else {
-				p += " (resets " + at.Format("Mon 15:04") + ")"
+			resets := "resets " + clockAt(w.ResetsAt, now, loc)
+			if out := w.runsOutAt(now); !out.IsZero() {
+				resets = "runs out ~" + clockAt(out, now, loc) + " at this pace, " + resets
 			}
+			p += " (" + resets + ")"
 		}
 		parts = append(parts, p)
 	}
@@ -131,6 +145,15 @@ func HeadroomNote(ws []NoteWindow, now time.Time, loc *time.Location) string {
 		note = "Plan headroom: " + parts[0] + "."
 	}
 	return note
+}
+
+// clockAt is t as a clock time in loc: the time within a day of now, else
+// the weekday and time.
+func clockAt(t, now time.Time, loc *time.Location) string {
+	if t.Sub(now) < 24*time.Hour {
+		return t.In(loc).Format("15:04")
+	}
+	return t.In(loc).Format("Mon 15:04")
 }
 
 // step is the band a share left falls in: 0 above 50%, then one more for
@@ -170,6 +193,11 @@ func DecideHeadroomNote(dir, session string, ws []NoteWindow, now time.Time, loc
 	cur := noteState{Steps: map[string]int{}}
 	for _, w := range binding(ws) {
 		cur.Steps[w.Name] = step(w.LeftPct)
+		// A window starting to run out before its reset is news, even
+		// within a step.
+		if !w.runsOutAt(now).IsZero() {
+			cur.Steps[w.Name+":runs_out"] = 1
+		}
 	}
 	if dir == "" {
 		return note, true

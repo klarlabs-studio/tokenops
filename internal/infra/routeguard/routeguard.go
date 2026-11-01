@@ -97,6 +97,10 @@ type Input struct {
 	// NewID names a new piece of advice so its outcome can be recorded
 	// against it. Nil records nothing.
 	NewID func() string
+	// Pressure is the plan running short, nil when it is not or nothing
+	// is known. While it is, edits and deep work are advised a tier
+	// further down, as subagent routing does.
+	Pressure *Pressure
 }
 
 // Decision is what the guard concluded.
@@ -209,6 +213,12 @@ func Evaluate(in Input) Decision {
 	if !ok {
 		return d
 	}
+	pressed := false
+	if in.Pressure != nil {
+		if t, ok := pressedTier(kind); ok {
+			wantTier, pressed = t, true
+		}
+	}
 	if cur.Tier == modeltier.TierUnknown {
 		// An unplaceable model is not an invitation to guess what it is
 		// worth replacing with.
@@ -234,6 +244,9 @@ func Evaluate(in Input) Decision {
 	d.To = target
 	d.Reason = fmt.Sprintf("this turn is %s work; %s is the %s tier and %s is on %s",
 		kind, target, wantTier, in.CurrentModel, cur.Tier)
+	if pressed {
+		d.Reason += "; " + in.Pressure.Why()
+	}
 
 	switch in.Verbosity {
 	case "quiet":
