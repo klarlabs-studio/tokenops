@@ -90,6 +90,10 @@ func (q QueryParams) ResolveGroup() Group {
 		return GroupWorkflow
 	case "agent":
 		return GroupAgent
+	case "session":
+		return GroupSession
+	case "subagent":
+		return GroupSubagent
 	case "model":
 		return GroupModel
 	default:
