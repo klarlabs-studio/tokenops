@@ -6,6 +6,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
+	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/config"
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
@@ -36,6 +37,7 @@ func DepsFor(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, 
 		Turns:   commits.TurnsIn(agg, analytics.Filter{}),
 		Repos:   gitlog.NewRepos(),
 		Waste:   cfg.Coaching.WasteConfig(),
+		Lint:    contextLint,
 		Rereads: readGuardLedger,
 		Routes:  modelAdvice,
 		Savings: periodSavings,
@@ -64,6 +66,16 @@ func DepsFor(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, 
 		}
 	}
 	return d
+}
+
+// contextLint lints the context every session loads in the repository
+// at root, or the user's own files when root is empty. Transcripts are
+// not read: the join needs what is loaded, not what hooks printed.
+func contextLint(root string) []prefixlint.Finding {
+	if root == "" {
+		return prefixlint.Lint(prefixlint.UserSources()).Findings
+	}
+	return prefixlint.Lint(prefixlint.ProjectSources(root, "-")).Findings
 }
 
 // readGuardLedger reads the guard's re-reads: those that went ahead and

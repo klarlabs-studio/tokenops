@@ -294,6 +294,15 @@ func groupKeyLabel(by, key string) string {
 	return "(unknown)"
 }
 
+// sharePct is a 0-to-1 share as a whole percentage, or a dash when it is
+// absent.
+func sharePct(s *float64) string {
+	if s == nil {
+		return "—"
+	}
+	return fmt.Sprintf("%.0f%%", 100**s)
+}
+
 // sparklineFromRows renders a unicode block-bar sparkline scaled to the
 // row series' max cost. Empty series renders an empty string.
 func sparklineFromRows(rows []spending.Row) string {
@@ -404,15 +413,17 @@ func writeSpendText(w io.Writer, v spendView) error {
 		// is the list-price equivalent. Shown only when it differs, so a
 		// metered deployment does not get a duplicate column.
 		showEquiv := groupRowsHaveEquivalent(v.GroupRows)
-		header := "RANK\tKEY\tREQS\tIN TOK\tOUT TOK\tCOST"
+		// CACHE READ is the share of the row's input read from the
+		// prompt cache: low where a session or project keeps rebuilding it.
+		header := "RANK\tKEY\tREQS\tIN TOK\tCACHE READ\tOUT TOK\tCOST"
 		if showEquiv {
 			header += "\tAPI EQUIV"
 		}
 		fmt.Fprintln(tw, header)
 		for i, r := range v.GroupRows {
 			key := groupKeyLabel(v.GroupBy, r.GroupKey)
-			line := fmt.Sprintf("%d\t%s\t%d\t%d\t%d\t%s",
-				i+1, truncate(key, 32), r.Requests, r.InputTokens, r.OutputTokens,
+			line := fmt.Sprintf("%d\t%s\t%d\t%d\t%s\t%d\t%s",
+				i+1, truncate(key, 32), r.Requests, r.InputTokens, sharePct(r.CacheReadShare), r.OutputTokens,
 				v.money(r.CostUSD),
 			)
 			if showEquiv {

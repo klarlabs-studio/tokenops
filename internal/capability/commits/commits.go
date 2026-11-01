@@ -36,12 +36,22 @@ type Cost struct {
 	// UnpricedTurns used models with no list price; the money leaves them
 	// out.
 	UnpricedTurns int `json:"unpriced_turns,omitempty"`
+	// InputTokens is the turns' input, cache reads and writes included;
+	// CacheReadTokens the part read from the prompt cache.
+	InputTokens     int64 `json:"input_tokens,omitempty"`
+	CacheReadTokens int64 `json:"cache_read_tokens,omitempty"`
+	// CacheReadShare is CacheReadTokens of InputTokens, 0 to 1; absent
+	// when the turns had no input.
+	CacheReadShare *float64 `json:"cache_read_share,omitempty"`
 }
 
 // Add counts one turn into c.
 func (c *Cost) Add(t analytics.SessionTurn) {
 	c.Turns++
 	c.Tokens += t.Tokens
+	c.InputTokens += t.InputTokens
+	c.CacheReadTokens += t.CacheReadTokens
+	c.CacheReadShare = analytics.CacheReadShare(c.InputTokens, c.CacheReadTokens)
 	c.APIEquivalentUSD += t.APIEquivalentUSD
 	c.CostUSD += t.CostUSD
 	if !t.Priced {

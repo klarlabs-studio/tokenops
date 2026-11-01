@@ -49,6 +49,9 @@ type Consumer struct {
 	// is the only dollar figure that tells the groups apart, and the one
 	// the list is ranked on.
 	APIEquivalentUSD float64 `json:"api_equivalent_usd"`
+	// CacheReadShare is the share of the group's input read from the
+	// prompt cache, 0 to 1; absent when it had no input.
+	CacheReadShare *float64 `json:"cache_read_share,omitempty"`
 }
 
 // TopConsumers is the ranked answer.
@@ -105,6 +108,7 @@ func rank(rows []analytics.Row) []Consumer {
 			Tokens:           r.TotalTokens,
 			CostUSD:          r.CostUSD,
 			APIEquivalentUSD: r.APIEquivalentUSD,
+			CacheReadShare:   r.CacheReadShare,
 		})
 	}
 	return out

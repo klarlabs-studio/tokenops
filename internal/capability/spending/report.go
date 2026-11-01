@@ -54,7 +54,8 @@ func IsExcludedByDefault(source string) bool {
 // RollUp folds per-bucket rows into one row per group key, ranked on the
 // API equivalent, then tokens, then the key, and keeps the first n (all
 // when n is not positive). Each folded row keeps the first bucket's
-// provenance; the counts and dollar figures are summed.
+// provenance; the counts and dollar figures are summed, and each row's
+// cache-read share is taken from its summed tokens.
 //
 // Ranked on the API equivalent rather than the real cost: on a flat-rate
 // plan every row's cost is $0 by design, so a cost-keyed ranking put
@@ -71,6 +72,9 @@ func RollUp(rows []Row, n int) []Row {
 			cur.InputTokens += r.InputTokens
 			cur.OutputTokens += r.OutputTokens
 			cur.TotalTokens += r.TotalTokens
+			cur.CacheReadTokens += r.CacheReadTokens
+			cur.CacheWriteTokens += r.CacheWriteTokens
+			cur.CacheWrite1hTokens += r.CacheWrite1hTokens
 			cur.CostUSD += r.CostUSD
 			cur.APIEquivalentUSD += r.APIEquivalentUSD
 			continue
@@ -79,6 +83,7 @@ func RollUp(rows []Row, n int) []Row {
 	}
 	out := make([]Row, 0, len(totals))
 	for _, r := range totals {
+		r.CacheReadShare = analytics.CacheReadShare(r.InputTokens, r.CacheReadTokens)
 		out = append(out, *r)
 	}
 	sort.Slice(out, func(i, j int) bool {

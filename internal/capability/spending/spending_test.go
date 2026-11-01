@@ -90,3 +90,32 @@ func TestCostOf(t *testing.T) {
 		t.Error("empty or billed usage misread")
 	}
 }
+
+// Grouped by session, each consumer carries the share of its input read
+// from the cache, summed over the days it spans; a session with no input
+// has none rather than 0%.
+func TestTopCarriesEachSessionsCacheReadShare(t *testing.T) {
+	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+	agg := &fakeAgg{rows: []analytics.Row{
+		{GroupKey: "s-warm", InputTokens: 600, CacheReadTokens: 500, CacheWriteTokens: 50, TotalTokens: 700, APIEquivalentUSD: 3},
+		{GroupKey: "s-warm", InputTokens: 400, CacheReadTokens: 400, TotalTokens: 450, APIEquivalentUSD: 2},
+		{GroupKey: "s-cold", InputTokens: 1000, CacheWriteTokens: 1000, TotalTokens: 1100, APIEquivalentUSD: 4},
+		{GroupKey: "s-empty", TotalTokens: 10, APIEquivalentUSD: 0.1},
+	}}
+	got, err := Top(context.Background(), agg, TopQuery{By: "session", Top: 10}, "USD", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]*float64{"s-warm": ptr(0.9), "s-cold": ptr(0), "s-empty": nil}
+	for _, c := range got.Top {
+		w := want[c.Key]
+		switch {
+		case w == nil && c.CacheReadShare != nil:
+			t.Errorf("%s share = %v, want absent", c.Key, *c.CacheReadShare)
+		case w != nil && (c.CacheReadShare == nil || *c.CacheReadShare != *w):
+			t.Errorf("%s share = %v, want %v", c.Key, c.CacheReadShare, *w)
+		}
+	}
+}
+
+func ptr(v float64) *float64 { return &v }

@@ -127,3 +127,47 @@ func TestWriteWasteReportSplitsRebuildsByCause(t *testing.T) {
 		}
 	}
 }
+
+// A prompt prefix change names the context-lint item it was joined to,
+// and says how the join is made; without one nothing is named.
+func TestWriteWasteReportNamesTheLikelyLintFinding(t *testing.T) {
+	t0 := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
+	report := func(likely []avoidable.LikelyCause) string {
+		prefix := avoidable.CauseCost{Cause: waste.CausePrefixChanged, Name: waste.RebuildCauseName(waste.CausePrefixChanged), Turns: 3,
+			Amount: avoidable.Amount{Tokens: 3_000, APIEquivalentUSD: 3}, Likely: likely}
+		if likely != nil {
+			prefix.LikelyMethod = avoidable.LikelyMethod
+		}
+		r := avoidable.Report{Since: t0, Until: t0.Add(7 * 24 * time.Hour), Attribution: avoidable.Attribution,
+			Classes: []avoidable.ClassCost{{Class: waste.ClassCacheRebuild, Name: waste.ClassName(waste.ClassCacheRebuild), Turns: 3,
+				Amount: avoidable.Amount{Tokens: 3_000, APIEquivalentUSD: 3}, Causes: []avoidable.CauseCost{prefix}}}}
+		var b bytes.Buffer
+		writeWasteReport(&b, r)
+		return b.String()
+	}
+	tests := []struct {
+		name   string
+		likely []avoidable.LikelyCause
+		want   []string
+		absent []string
+	}{
+		{name: "joined", likely: []avoidable.LikelyCause{{Finding: "SessionStart hook running `date`", Rebuilds: 3, Sessions: 2}},
+			want: []string{"likely: SessionStart hook running `date` (3 of 3 rebuilds)", "likely: a rebuild is joined"}},
+		{name: "none joined", absent: []string{"likely:"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := report(tt.likely)
+			for _, w := range tt.want {
+				if !strings.Contains(out, w) {
+					t.Errorf("missing %q in:\n%s", w, out)
+				}
+			}
+			for _, a := range tt.absent {
+				if strings.Contains(out, a) {
+					t.Errorf("unexpected %q in:\n%s", a, out)
+				}
+			}
+		})
+	}
+}

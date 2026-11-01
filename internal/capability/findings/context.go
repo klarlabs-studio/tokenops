@@ -28,7 +28,7 @@ func volatileContext(r *prefixlint.Report) []Finding {
 	}
 	title := fmt.Sprintf("%d things in every session's context change each session, so its cache is rebuilt", len(high))
 	if len(high) == 1 {
-		title = "A " + subject(high[0]) + " changes every session's context, so its cache is rebuilt"
+		title = "A " + high[0].Subject() + " changes every session's context, so its cache is rebuilt"
 	}
 	var where []string
 	for i, f := range high {
@@ -36,7 +36,7 @@ func volatileContext(r *prefixlint.Report) []Finding {
 			where = append(where, fmt.Sprintf("and %d more", len(high)-3))
 			break
 		}
-		where = append(where, subject(f)+" ("+site(f)+")")
+		where = append(where, f.Subject()+" ("+site(f)+")")
 	}
 	return []Finding{{
 		Key: key(KindContext, "volatile-prefix"), Kind: KindContext, Level: LevelNotice,
@@ -44,17 +44,6 @@ func volatileContext(r *prefixlint.Report) []Finding {
 		Evidence: strings.Join(where, "; "),
 		Action:   high[0].Fix + " `tokenops coach lint-context` lists each item with its fix.",
 	}}
-}
-
-// subject names an item: "SessionStart hook running `date`".
-func subject(f prefixlint.Finding) string {
-	switch f.Source {
-	case prefixlint.SourceHook:
-		return fmt.Sprintf("%s hook running `%s`", f.Hook, f.Token)
-	case prefixlint.SourceHookOutput:
-		return fmt.Sprintf("%s hook `%s` printing a %s", f.Hook, f.Command, f.Kind)
-	}
-	return fmt.Sprintf("%s in a context file", f.Kind)
 }
 
 // site is where an item is, with the home directory as ~.

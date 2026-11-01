@@ -109,6 +109,7 @@ func writeWasteReport(out io.Writer, r avoidable.Report) {
 			}
 			fmt.Fprintf(out, "    %-30s %8s %9s %7s %6d\n", name, humanCount(k.Tokens), usd(k.APIEquivalentUSD),
 				windowPct(k.WindowShare), k.Turns)
+			writeLikely(out, k)
 		}
 	}
 
@@ -169,11 +170,31 @@ func writeWasteReport(out io.Writer, r avoidable.Report) {
 			fmt.Fprintf(out, "  %s: %s\n", c.Name, c.Method)
 		}
 	}
+	for _, c := range r.Classes {
+		for _, k := range c.Causes {
+			if k.LikelyMethod != "" {
+				fmt.Fprintf(out, "  likely: %s\n", k.LikelyMethod)
+			}
+		}
+	}
 	if r.ShareMethod != "" {
 		fmt.Fprintf(out, "  plan share: %s\n", r.ShareMethod)
 	}
 	for _, n := range r.Notes {
 		fmt.Fprintf(out, "  note: %s\n", n)
+	}
+}
+
+// writeLikely names, under a prompt-prefix-change row, the context-lint
+// items that plausibly explain its rebuilds: at most three, most rebuilds
+// first.
+func writeLikely(out io.Writer, k avoidable.CauseCost) {
+	for i, l := range k.Likely {
+		if i == 3 {
+			fmt.Fprintf(out, "      likely: and %d more (`tokenops coach lint-context`)\n", len(k.Likely)-3)
+			return
+		}
+		fmt.Fprintf(out, "      likely: %s (%d of %d rebuilds)\n", l.Finding, l.Rebuilds, k.Turns)
 	}
 }
 
