@@ -2,6 +2,7 @@ package headroom
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -172,10 +173,21 @@ type AdviceCache struct {
 	key string
 	res []plans.Advice
 	ok  bool
+	// refreshing is open while a background replay runs; failedAt is
+	// when the last one failed.
+	refreshing chan struct{}
+	failedAt   time.Time
 }
 
-// glanceAdviceBudget bounds the glance's replay.
-const glanceAdviceBudget = 4 * time.Second
+// glanceAdviceBudget bounds the glance's own replay. A replay that does
+// not fit goes on in the background with adviceRefreshBudget, and a
+// failed one is not tried again for adviceRetryAfter.
+var glanceAdviceBudget = 4 * time.Second
+
+const (
+	adviceRefreshBudget = 5 * time.Minute
+	adviceRetryAfter    = 10 * time.Minute
+)
 
 // NewAdviceCache is an empty cache.
 func NewAdviceCache() *AdviceCache { return &AdviceCache{} }
@@ -188,23 +200,65 @@ func glanceAdvice(ctx context.Context, d Deps, now time.Time) []plans.Advice {
 	}
 	key := fmt.Sprint(d.Config.Plans)
 	c := d.AdviceCache
-	if c != nil {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		if c.ok && c.key == key && !now.Before(c.at) && now.Sub(c.at) < AdviceCacheTTL {
-			return c.res
+	if c == nil {
+		// No cache to fill: the replay fits the budget or is left out.
+		ctx, cancel := context.WithTimeout(ctx, glanceAdviceBudget)
+		defer cancel()
+		res, err := Advise(ctx, d, AdviceQuery{}, now)
+		if err != nil {
+			return nil
+		}
+		return res.Providers
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	held := c.ok && c.key == key
+	if held && !now.Before(c.at) && now.Sub(c.at) < AdviceCacheTTL {
+		return c.res
+	}
+	if c.refreshing != nil || (!c.failedAt.IsZero() && now.Sub(c.failedAt) < adviceRetryAfter && !now.Before(c.failedAt)) {
+		return c.stale(held)
+	}
+	if !held {
+		// Nothing to serve yet: try within the glance's budget first. A
+		// month of events is the heaviest read in the glance.
+		bctx, cancel := context.WithTimeout(ctx, glanceAdviceBudget)
+		res, err := Advise(bctx, d, AdviceQuery{}, now)
+		cancel()
+		if err == nil {
+			c.at, c.key, c.res, c.ok = now, key, res.Providers, true
+			return res.Providers
+		}
+		if ctx.Err() != nil || !errors.Is(err, context.DeadlineExceeded) {
+			c.failedAt = now
+			return nil
 		}
 	}
-	// A month of events is the heaviest read in the glance; on a busy
-	// machine the glance goes out without the advice rather than wait.
-	ctx, cancel := context.WithTimeout(ctx, glanceAdviceBudget)
-	defer cancel()
-	res, err := Advise(ctx, d, AdviceQuery{}, now)
-	if err != nil {
+	// The replay does not fit the glance: run it in the background, once,
+	// rather than read the month every glance and throw it away.
+	done := make(chan struct{})
+	c.refreshing = done
+	go func() {
+		defer close(done)
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), adviceRefreshBudget)
+		defer cancel()
+		res, err := Advise(rctx, d, AdviceQuery{}, now)
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.refreshing = nil
+		if err != nil {
+			c.failedAt = now
+			return
+		}
+		c.at, c.key, c.res, c.ok, c.failedAt = now, key, res.Providers, true, time.Time{}
+	}()
+	return c.stale(held)
+}
+
+// stale is the advice held, served while a refresh runs. c.mu is held.
+func (c *AdviceCache) stale(held bool) []plans.Advice {
+	if !held {
 		return nil
 	}
-	if c != nil {
-		c.at, c.key, c.res, c.ok = now, key, res.Providers, true
-	}
-	return res.Providers
+	return c.res
 }
