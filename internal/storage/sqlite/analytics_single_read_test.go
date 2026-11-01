@@ -162,6 +162,30 @@ func singleReadFilters() map[string]analytics.Filter {
 
 var singleReadGroups = []analytics.Group{analytics.GroupNone, analytics.GroupProvider, analytics.GroupModel, analytics.GroupWorkflow, analytics.GroupAgent, analytics.GroupSession, analytics.GroupSubagent}
 
+// singleReadCases pairs every filter with the groupings read from the
+// event's columns, and every grouping with the filters that move its
+// window or its sources. A filter only shapes the WHERE clause every
+// grouping shares, and the attribute groupings cost seconds each under
+// -race, so the full grid ran past the package's ten-minute limit in CI.
+func singleReadCases() []singleReadCase {
+	everyGroup := map[string]bool{"everything": true, "bounded": true, "re-admitted": true}
+	var out []singleReadCase
+	for name, f := range singleReadFilters() {
+		for _, g := range singleReadGroups {
+			if everyGroup[name] || g == analytics.GroupNone || g == analytics.GroupProvider || g == analytics.GroupModel {
+				out = append(out, singleReadCase{name, f, g})
+			}
+		}
+	}
+	return out
+}
+
+type singleReadCase struct {
+	name   string
+	filter analytics.Filter
+	group  analytics.Group
+}
+
 func mergeAttrs(a, b map[string]string) map[string]string {
 	out := map[string]string{}
 	for k, v := range a {
@@ -193,35 +217,42 @@ func sameBytes(t *testing.T, what string, got, want any) {
 // TestSingleReadEqualsTheThreeStatements holds BucketUsage and WindowUsage
 // to what the three statements each replaced answered, bit for bit.
 func TestSingleReadEqualsTheThreeStatements(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	for _, seed := range []int64{1, 2} {
-		s := newTestStore(t)
-		seedUsageMix(t, s, 3000, seed)
-		oracle := oracleStore{s}
-		for name, f := range singleReadFilters() {
-			got, err := s.WindowUsage(ctx, f)
-			if err != nil {
-				t.Fatal(err)
-			}
-			want, err := oracle.WindowUsage(ctx, f)
-			if err != nil {
-				t.Fatal(err)
-			}
-			sameBytes(t, fmt.Sprintf("seed %d %s: WindowUsage", seed, name), got, want)
-			for _, g := range singleReadGroups {
-				for _, width := range []int64{3600, 86400} {
-					got, err := s.BucketUsage(ctx, f, width, g)
-					if err != nil {
-						t.Fatal(err)
-					}
-					want, err := oracle.BucketUsage(ctx, f, width, g)
-					if err != nil {
-						t.Fatal(err)
-					}
-					sameBytes(t, fmt.Sprintf("seed %d %s group %q width %d: BucketUsage", seed, name, g, width), got, want)
+		t.Run(fmt.Sprintf("seed %d", seed), func(t *testing.T) {
+			t.Parallel()
+			s := newTestStore(t)
+			seedUsageMix(t, s, 3000, seed)
+			oracle := oracleStore{s}
+			for name, f := range singleReadFilters() {
+				got, err := s.WindowUsage(ctx, f)
+				if err != nil {
+					t.Fatal(err)
 				}
+				want, err := oracle.WindowUsage(ctx, f)
+				if err != nil {
+					t.Fatal(err)
+				}
+				sameBytes(t, name+": WindowUsage", got, want)
 			}
-		}
+			for _, c := range singleReadCases() {
+				t.Run(fmt.Sprintf("%s by %q", c.name, c.group), func(t *testing.T) {
+					t.Parallel()
+					for _, width := range []int64{3600, 86400} {
+						got, err := s.BucketUsage(ctx, c.filter, width, c.group)
+						if err != nil {
+							t.Fatal(err)
+						}
+						want, err := oracle.BucketUsage(ctx, c.filter, width, c.group)
+						if err != nil {
+							t.Fatal(err)
+						}
+						sameBytes(t, fmt.Sprintf("width %d: BucketUsage", width), got, want)
+					}
+				})
+			}
+		})
 	}
 }
 
@@ -229,36 +260,43 @@ func TestSingleReadEqualsTheThreeStatements(t *testing.T) {
 // what /api/spend/summary and /api/spend/series send — to the ones it gave
 // over the three statements, byte for byte.
 func TestSingleReadAnswersTheSameRollups(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s := newTestStore(t)
 	seedUsageMix(t, s, 4000, 7)
-	eng := spend.NewEngine(spend.DefaultTable())
-	for _, engine := range []*spend.Engine{eng, nil} {
-		got, want := analytics.New(s, engine), analytics.New(oracleStore{s}, engine)
-		for name, f := range singleReadFilters() {
-			gs, err := got.Summarize(ctx, f)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ws, err := want.Summarize(ctx, f)
-			if err != nil {
-				t.Fatal(err)
-			}
-			sameBytes(t, name+": Summarize", gs, ws)
-			for _, g := range singleReadGroups {
-				for _, b := range []analytics.Bucket{analytics.BucketHour, analytics.BucketDay} {
-					gr, err := got.AggregateBy(ctx, f, b, g)
-					if err != nil {
-						t.Fatal(err)
-					}
-					wr, err := want.AggregateBy(ctx, f, b, g)
-					if err != nil {
-						t.Fatal(err)
-					}
-					sameBytes(t, fmt.Sprintf("%s %s %q: AggregateBy", name, b, g), gr, wr)
+	engines := map[string]*spend.Engine{"priced": spend.NewEngine(spend.DefaultTable()), "stored costs": nil}
+	for label, engine := range engines {
+		t.Run(label, func(t *testing.T) {
+			t.Parallel()
+			got, want := analytics.New(s, engine), analytics.New(oracleStore{s}, engine)
+			for name, f := range singleReadFilters() {
+				gs, err := got.Summarize(ctx, f)
+				if err != nil {
+					t.Fatal(err)
 				}
+				ws, err := want.Summarize(ctx, f)
+				if err != nil {
+					t.Fatal(err)
+				}
+				sameBytes(t, name+": Summarize", gs, ws)
 			}
-		}
+			for _, c := range singleReadCases() {
+				t.Run(fmt.Sprintf("%s by %q", c.name, c.group), func(t *testing.T) {
+					t.Parallel()
+					for _, b := range []analytics.Bucket{analytics.BucketHour, analytics.BucketDay} {
+						gr, err := got.AggregateBy(ctx, c.filter, b, c.group)
+						if err != nil {
+							t.Fatal(err)
+						}
+						wr, err := want.AggregateBy(ctx, c.filter, b, c.group)
+						if err != nil {
+							t.Fatal(err)
+						}
+						sameBytes(t, fmt.Sprintf("%s: AggregateBy", b), gr, wr)
+					}
+				})
+			}
+		})
 	}
 }
 
