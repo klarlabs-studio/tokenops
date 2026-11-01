@@ -1662,11 +1662,15 @@ Opus 5.5 high · ▰▰▰▰▱▱ 5h 62% ↻12:49 · wk 41% ↻Mon · ctx 71% 
   setting), so it warns before compaction rather than at 100%;
 - the prompt cache hit ratio, or, when under two minutes are left before
   the cache expires, **cache cold in 1m**, and **cache cold** once it has:
-  the next prompt then writes the whole context to the cache again. The
-  cache lives five minutes after the last request, or an hour when the
-  session writes it with the extended lifetime; the line reads both from
-  the timestamps and token counts at the end of the session's transcript,
-  never its text;
+  the next prompt then writes the whole context to the cache again. In
+  brackets is how much that is, the prompt the cache holds (**cache cold
+  in 1m (182k)**), so you can tell whether it is worth sending the next
+  prompt before it expires. It never suggests `/compact`: Claude Code
+  compacts an idle session itself, and a warning is information, not a
+  reason to interrupt. The cache lives five minutes after the last
+  request, or an hour when the session writes it with the extended
+  lifetime; the line reads both from the timestamps and token counts at
+  the end of the session's transcript, never its text;
 - the session's cost in your currency — marked "value" when a plan
   covers it, since then it is what the work was worth, not what you paid;
 - the coach's open tip, unless the coach is quiet or off.
