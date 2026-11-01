@@ -547,6 +547,8 @@ connection was refused; see
 ```bash
 tokenops spend                                   # last 7 days, top 5 by model
 tokenops spend --by provider --top 3 --since 24h
+tokenops spend --by subagent                     # the session itself vs each kind of subagent
+tokenops spend --by session --top 10             # the sessions that used the most
 tokenops spend --forecast --forecast-days 14
 tokenops spend --include-source=mcp-session     # include MCP activity pings
 tokenops spend --json
@@ -565,6 +567,16 @@ them and a line naming the rate used:
 Usage is priced in dollars because vendors publish rate cards in dollars,
 so a converted figure moves with the exchange rate even when usage does
 not. Plans are prorated by day across switches.
+
+#### Who used it
+
+`tokenops spend --by subagent` splits the week between the sessions' own
+turns and their subagents, by subagent type (Claude Code's `Explore`,
+`general-purpose`, `Plan` and your own agents), so a week that went to
+delegated work says so. `--by session` ranks the sessions themselves,
+subagents included. Only what a client writes to its transcripts can be
+counted: calls a client makes on its own behalf and does not record are
+not in these figures.
 
 #### Cost per commit
 

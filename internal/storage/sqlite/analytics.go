@@ -57,6 +57,12 @@ const costSourcePlanCovered = `COALESCE(json_extract(payload, '$.cost_source'), 
 const usageOnly = `(COALESCE(total_tokens, 0) > 0 OR COALESCE(input_tokens, 0) > 0
 		OR COALESCE(output_tokens, 0) > 0 OR COALESCE(model, '') <> '')`
 
+// subagentExpr is who in a session made a turn, as the Claude Code reader
+// stamps it: empty for the session itself, else the subagent's type, and
+// "subagent" for one whose type is not known.
+const subagentExpr = `CASE WHEN json_extract(attributes, '$.subagent_id') IS NULL THEN ''
+		ELSE COALESCE(NULLIF(json_extract(attributes, '$.subagent_type'), ''), 'subagent') END`
+
 // groupColumn resolves an analytics.Group to the events-table column it
 // maps to, "" for none.
 func groupColumn(g analytics.Group) string {
@@ -69,6 +75,10 @@ func groupColumn(g analytics.Group) string {
 		return "workflow_id"
 	case analytics.GroupAgent:
 		return "agent_id"
+	case analytics.GroupSession:
+		return "session_id"
+	case analytics.GroupSubagent:
+		return subagentExpr
 	default:
 		return ""
 	}
@@ -97,7 +107,8 @@ const (
 func usageScanQuery(f analytics.Filter, group analytics.Group) (string, []any) {
 	conds, args := analyticsConditions(f)
 	key := "''"
-	if group == analytics.GroupWorkflow || group == analytics.GroupAgent {
+	switch group {
+	case analytics.GroupWorkflow, analytics.GroupAgent, analytics.GroupSession, analytics.GroupSubagent:
 		key = "COALESCE(" + groupColumn(group) + ", '')"
 	}
 	q := `SELECT timestamp_ns, provider, model, ` + key + `,

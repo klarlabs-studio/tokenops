@@ -22,6 +22,8 @@ var groups = map[string]analytics.Group{
 	"provider": analytics.GroupProvider,
 	"workflow": analytics.GroupWorkflow,
 	"agent":    analytics.GroupAgent,
+	"session":  analytics.GroupSession,
+	"subagent": analytics.GroupSubagent,
 }
 
 // TopQuery asks for the top consumers.

@@ -179,7 +179,7 @@ spend within the selected window. It surfaces:
 	}
 	cmd.Flags().StringVar(&svgFile, "svg", "", "also write an input-vs-output ratio chart (ratio.svg) to this file")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to config.storage.path)")
-	cmd.Flags().StringVar(&groupBy, "by", "model", "group top consumers by: model | provider | workflow | agent | commit (the work that led to each of your commits) | project | client | cost_center (your allocation rules)")
+	cmd.Flags().StringVar(&groupBy, "by", "model", "group top consumers by: model | provider | workflow | agent | session | subagent (the session itself, or each kind of subagent) | commit (the work that led to each of your commits) | project | client | cost_center (your allocation rules)")
 	cmd.Flags().IntVar(&topN, "top", 5, "number of top consumers to print")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "lower bound (RFC3339 or duration; default 7d)")
 	cmd.Flags().StringVar(&untilFlag, "until", "", "upper bound (RFC3339 timestamp)")
@@ -278,7 +278,19 @@ func parseGroup(s string) (spending.Group, error) {
 	if g, ok := spending.GroupOf(strings.ToLower(s)); ok {
 		return g, nil
 	}
-	return "", fmt.Errorf("unknown --by value %q (use model|provider|workflow|agent)", s)
+	return "", fmt.Errorf("unknown --by value %q (use model|provider|workflow|agent|session|subagent)", s)
+}
+
+// groupKeyLabel is how a top-consumer key reads. Grouped by subagent, an
+// empty key is the session's own turns rather than an unknown one.
+func groupKeyLabel(by, key string) string {
+	switch {
+	case key != "":
+		return key
+	case strings.EqualFold(by, "subagent"):
+		return "(the session itself)"
+	}
+	return "(unknown)"
 }
 
 // sparklineFromRows renders a unicode block-bar sparkline scaled to the
@@ -397,10 +409,7 @@ func writeSpendText(w io.Writer, v spendView) error {
 		}
 		fmt.Fprintln(tw, header)
 		for i, r := range v.GroupRows {
-			key := r.GroupKey
-			if key == "" {
-				key = "(unknown)"
-			}
+			key := groupKeyLabel(v.GroupBy, r.GroupKey)
 			line := fmt.Sprintf("%d\t%s\t%d\t%d\t%d\t%s",
 				i+1, truncate(key, 32), r.Requests, r.InputTokens, r.OutputTokens,
 				v.money(r.CostUSD),

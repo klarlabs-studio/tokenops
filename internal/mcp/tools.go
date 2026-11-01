@@ -67,7 +67,7 @@ type spendSummaryInput struct {
 }
 
 type topConsumersInput struct {
-	By             string   `json:"by,omitempty" jsonschema:"enum=model,enum=provider,enum=workflow,enum=agent"`
+	By             string   `json:"by,omitempty" jsonschema:"enum=model,enum=provider,enum=workflow,enum=agent,enum=session,enum=subagent"`
 	Top            int      `json:"top,omitempty" jsonschema:"minimum=1,maximum=50"`
 	Since          string   `json:"since,omitempty"`
 	Until          string   `json:"until,omitempty"`
@@ -217,7 +217,7 @@ func RegisterTools(s *Server, d Deps) error {
 		})
 
 	s.Tool("tokenops_top_consumers").
-		Description("List top N consumers grouped by model, provider, workflow, or agent (default by=model, top=5), ranked by API-equivalent value — what the traffic would bill at list prices — then by tokens. On a flat-rate plan real cost_usd is $0 for every group, so api_equivalent_usd is the figure that ranks them.").
+		Description("List top N consumers grouped by model, provider, workflow, agent, session, or subagent (default by=model, top=5; by=subagent puts the session's own turns under an empty key and each subagent under its type), ranked by API-equivalent value — what the traffic would bill at list prices — then by tokens. On a flat-rate plan real cost_usd is $0 for every group, so api_equivalent_usd is the figure that ranks them.").
 		OutputSchema(topConsumersResult{}).
 		Handler(func(ctx context.Context, in topConsumersInput) (*topConsumersResult, error) {
 			return topConsumers(ctx, d, in)
