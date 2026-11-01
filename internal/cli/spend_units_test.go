@@ -29,6 +29,7 @@ func TestWriteUnitReport(t *testing.T) {
 		CommitsOf: map[string][]gitlog.Commit{"/w/app": {
 			{SHA: "0000000000", At: t0.Add(-10*24*time.Hour + time.Minute), Subject: "fix: old"},
 			{SHA: "1111111111", At: t0.Add(time.Hour), Subject: "fix: new"},
+			{SHA: "2222222222", At: t0.Add(48 * time.Hour), Subject: `Revert "fix: new"`, Reverts: "1111111111"},
 		}},
 		PRsOf: map[string][]gitlog.PR{"/w/app": {{Number: 2, MergedAt: t0.Add(2 * time.Hour)}}},
 		Turns: []analytics.SessionTurn{turn(-10*24*time.Hour, 10), turn(0, 5), turn(3*time.Hour, 1)},
@@ -44,6 +45,8 @@ func TestWriteUnitReport(t *testing.T) {
 		"By change class, per commit", "bugfix",
 		"no pull request merged yet $1.00",
 		"How work was joined", "merged PR: time window",
+		"Work that did not stand: 83% of the period", "reverted within 14 days  $5.00 on 1 commit",
+		"did not stand: work placed on a commit",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
