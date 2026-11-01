@@ -9,6 +9,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
+	"go.klarlabs.de/tokenops/internal/capability/claudecodeorg"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
@@ -77,6 +78,10 @@ type topConsumersInput struct {
 type costPerCommitInput struct {
 	Since string `json:"since,omitempty" jsonschema:"description=RFC3339 timestamp or duration like '7d'; default 7d"`
 	Limit int    `json:"limit,omitempty" jsonschema:"description=Most recent commits to list (default 20); the totals cover them all"`
+}
+
+type claudeCodeOrgInput struct {
+	Days int `json:"days,omitempty" jsonschema:"minimum=1,maximum=90,description=UTC days up to and including today (default 7)"`
 }
 
 type wasteInput struct {
@@ -316,6 +321,29 @@ func RegisterTools(s *Server, d Deps) error {
 			deps := avoidable.DepsFor(cfg, d.Aggregator, d.Store, d.Spend)
 			deps.Waste = d.wasteConfig()
 			r, err := avoidable.Compute(ctx, deps, since, time.Now())
+			if err != nil {
+				return nil, err
+			}
+			return &r, nil
+		})
+
+	s.Tool("tokenops_claude_code_org").
+		Description("The organisation's Claude Code use as Anthropic reports it, per UTC day, summed over its users with no names: users, sessions, commits and pull requests Claude Code made, lines added and removed, accepted and rejected edits, tokens and Anthropic's estimated cost by model. Needs a Claude Console admin key (vendor_usage.anthropic.admin_key). Covers Claude Code billed through the Console organisation; subscription sign-ins are not in it.").
+		OutputSchema(claudecodeorg.Report{}).
+		Handler(func(ctx context.Context, in claudeCodeOrgInput) (*claudecodeorg.Report, error) {
+			cfg := config.Config{}
+			if d.Config != nil {
+				cfg = d.Config()
+			}
+			key := cfg.VendorUsage.Anthropic.AdminKey
+			if key == "" {
+				return nil, inputError(errors.New("no Anthropic admin key: the operator sets vendor_usage.anthropic.admin_key or TOKENOPS_ANTHROPIC_ADMIN_KEY"))
+			}
+			days := in.Days
+			if days == 0 {
+				days = 7
+			}
+			r, err := claudecodeorg.Read(ctx, claudecodeorg.Reporter(key), time.Now(), days)
 			if err != nil {
 				return nil, err
 			}
