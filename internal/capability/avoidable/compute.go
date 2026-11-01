@@ -35,6 +35,9 @@ type Deps struct {
 	Trace func(ctx context.Context, workflowID string) (*workflow.Trace, error)
 	Waste waste.Config
 	Price Pricer
+	// Lint reads the context lint for the prompt prefix changes' likely
+	// causes; nil names none.
+	Lint Linter
 	// Rereads are the read guard's redundant re-reads that went ahead and
 	// those it refused.
 	Rereads func() (wentAhead, refused []Reread)
@@ -112,7 +115,7 @@ func gather(ctx context.Context, d Deps, since, until time.Time) (Inputs, error)
 		return Inputs{}, err
 	}
 	in := Inputs{Since: since, Until: until, Dirs: w.Dirs, RootOf: w.RootOf, CommitsOf: w.CommitsOf,
-		Waste: d.Waste, Price: d.Price, Traces: map[string]*workflow.Trace{}, Windows: map[string][]plans.QuotaWindow{},
+		Waste: d.Waste, Price: d.Price, Lint: d.Lint, Traces: map[string]*workflow.Trace{}, Windows: map[string][]plans.QuotaWindow{},
 		Savings: savings.Report{RealizedUSD: measurement.Unknown("the savings ledger was not read")}}
 	for _, t := range w.Turns {
 		if t.At.Before(until) {

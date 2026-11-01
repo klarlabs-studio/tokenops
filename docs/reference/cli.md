@@ -742,6 +742,29 @@ Each class reads a source TokenOps already keeps:
   - *unexplained*: the turn before had no cache hits, or no times were
     recorded.
 
+  Under the prompt prefix changes, `likely:` names what the
+  [context lint](#tokenops-coach-lint-context) finds that could explain
+  them, with how many of the rebuilds it was joined to:
+
+  ```
+      prompt prefix changes                 3k     $0.02    0.1%      3
+        likely: SessionStart hook running `date` (3 of 3 rebuilds)
+  ```
+
+  The join is by place, not by proof. A rebuild is joined to an item when
+  the item sits in the prefix the rebuilt session loaded: a volatile line
+  in a context file (CLAUDE.md, AGENTS.md and what they import) or a
+  SessionStart hook that prints something changing, in your own files or
+  in the repository the session ran in, loaded by the harness the session
+  ran in. A UserPromptSubmit hook is left out: its output is appended
+  after the turns before it and does not rebuild their cache. The lint
+  reads the files as they are now, so an item added or fixed since the
+  rebuild can still be joined to it, and no record says which byte of the
+  prefix changed; that is why it says "likely". A session whose directory
+  no client recorded is joined to your own files only. The JSON carries
+  the items as `likely` on the prompt-prefix-change cause, with the method
+  as `likely_method`; each names the item, never its path.
+
   A turn whose context fell to under half of the turn before's is a
   compaction; its new cache is by design and not counted. Codex sessions
   record cached reads but no cache writes, so their misses are not counted

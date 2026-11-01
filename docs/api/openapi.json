@@ -8421,6 +8421,33 @@
                                 "cause": {
                                   "type": "string"
                                 },
+                                "likely": {
+                                  "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "finding": {
+                                        "type": "string"
+                                      },
+                                      "kind": {
+                                        "type": "string"
+                                      },
+                                      "rebuilds": {
+                                        "type": "integer"
+                                      },
+                                      "sessions": {
+                                        "type": "integer"
+                                      },
+                                      "severity": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "type": "array"
+                                },
+                                "likely_method": {
+                                  "type": "string"
+                                },
                                 "name": {
                                   "type": "string"
                                 },
