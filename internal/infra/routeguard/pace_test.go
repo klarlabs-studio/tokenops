@@ -6,27 +6,27 @@ import (
 	"time"
 )
 
-// With the plan running short, the per-turn advice moves edits and deep
-// work a tier further down, as subagent routing already does, and says
-// why.
+// With the plan's price of quota high, the per-turn advice moves edits
+// and deep work a tier further down, as subagent routing already does,
+// and says why.
 func TestEvaluateReadsPlanPressure(t *testing.T) {
-	pressed := &Pressure{Vendor: "Claude", Window: "weekly", LeftPct: 12, RunsOutBeforeReset: 30 * time.Hour}
+	pressed := &QuotaPrice{Vendor: "Claude", Window: "weekly", Lambda: 0.6, LeftPct: 12, WantedPct: 30, Basis: "pace", RunsOutBeforeReset: 30 * time.Hour}
 	in := input(t, "fix the typo in the README", "claude-opus-5", ModeAdvise)
 	if got := Evaluate(in); got.Advise {
 		t.Fatalf("an edit on the default tier advised without pressure: %+v", got)
 	}
 	in = input(t, "fix the typo in the README", "claude-opus-5", ModeAdvise)
-	in.Pressure = pressed
+	in.Price = pressed
 	got := Evaluate(in)
 	if !got.Advise || got.To != "claude-sonnet-5" {
 		t.Fatalf("pressed edit: %+v", got)
 	}
-	if !strings.Contains(got.Reason, "runs out") {
+	if !strings.Contains(got.Reason, "runs out") || !strings.Contains(got.Reason, "quota price 0.60") || !strings.Contains(got.Reason, "not escalated to claude-opus-5") {
 		t.Errorf("reason = %q", got.Reason)
 	}
 	// Lookups already sit where they need to; pressure changes nothing.
 	in = input(t, "show me the retention config", "claude-opus-5", ModeAdvise)
-	in.Pressure = pressed
+	in.Price = pressed
 	if got := Evaluate(in); got.To != "claude-haiku-4-5" {
 		t.Errorf("pressed lookup: %+v", got)
 	}
