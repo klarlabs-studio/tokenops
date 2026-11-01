@@ -38,7 +38,9 @@ tokenops spend export --since 2026-09-01T00:00:00Z --until 2026-10-01T00:00:00Z 
 	"routing rule set":    `tokenops routing rule set anthropic claude-opus-5 claude-sonnet-5 --quality 0.9`,
 	"fmt": `tokenops fmt -- go test ./...
 tokenops fmt --level aggressive -- git log`,
-	"fmt bench":   `tokenops fmt bench --corpus ./captured`,
+	"fmt bench": `tokenops fmt bench --corpus ./captured`,
+	"fmt eval": `tokenops fmt eval                    # what fmt never drops, recall and savings per formatter
+tokenops fmt eval --corpus ./labeled # your own labeled captures; fails on a lost critical item`,
 	"fmt hook":    `tokenops fmt hook --shell zsh`,
 	"fmt recover": `tokenops fmt recover 01J9Z…`,
 	"fmt learn":   `tokenops fmt learn --apply`,

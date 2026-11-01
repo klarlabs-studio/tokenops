@@ -2740,7 +2740,7 @@ files, detects conflicts, compresses, injects, benchmarks.
 
 Deterministic per-command output compression — shrink a command's stdout
 before it enters an agent's context, keeping every critical line (errors,
-failures, changed state) and dropping noise. 46 commands ship built in;
+failures, changed state) and dropping noise. 51 formatters ship built in;
 loss level and extra formatters are configured under
 [`optimizer.command_fmt`](./configuration.md#command-output-compression-command_fmt).
 
@@ -2760,12 +2760,71 @@ Flags: `--level` (override loss level for this run), `--raw-on-error`
 (forward raw stdout on non-zero exit, default on), `--emit` (record an
 OptimizationEvent), `--no-recover`, `--quiet`.
 
+### `tokenops fmt eval [--corpus <dir>] [--json]`
+
+Judges fmt by what an agent can still find in the compact output, in
+three parts.
+
+**What fmt never drops.** Every line a formatter marks critical (errors,
+failures, changed state) survives verbatim at every loss level. The
+engine checks this on every run, for built-in and config formatters
+alike: a formatter that would drop a critical line forwards the raw
+output instead.
+
+**Evidence recall.** A corpus of 64 command outputs, at least one for
+every built-in formatter and three (`rg`, `find`, `ls`) for the generic
+scrub, has the evidence an agent needs from each labeled by hand:
+failing tests, file:line of errors, error messages, changed paths, exit
+status, failed resources, counts. Recall is the share of those items
+still found in the compact output, verbatim or after collapsing
+whitespace. The labels are independent of the formatters, so they also
+catch a line an agent needs that a formatter never called critical.
+Losing any critical item fails the command; counts, matches and
+installed-package lists may be summarized, and the report lists each one
+a level gives up.
+
+**Savings.** Bytes and estimated tokens saved at each level.
+
+On the bundled corpus every one of the 157 critical items is recovered at
+every level; overall recall is 100% / 97% / 94% (conservative /
+balanced / aggressive) for 0% / 50% / 59% of the bytes saved.
+
+```bash
+tokenops fmt eval                    # the bundled corpus
+tokenops fmt eval --json             # every case, item and miss
+tokenops fmt eval --corpus ./labeled # your own captures
+```
+
+`--corpus` reads `<id>.txt` outputs, each beside an `<id>.json` label:
+
+```json
+{"evidence": [
+  {"kind": "failing_test", "text": "TestLogin"},
+  {"kind": "error_location", "text": "login_test.go:9"},
+  {"kind": "count", "text": "1 failed"}
+]}
+```
+
+The id's first dot-separated token picks the formatter (`go.fail.txt` →
+`go`); `"command"` in the label overrides it. Kinds `failing_test`,
+`error_location`, `error_message`, `changed_path`, `exit_status` and
+`failed_resource` are critical; `count`, `match` and `installed` are not,
+and `"critical": true|false` overrides an item. A label whose text is not
+in its own output is rejected. The exit status is non-zero when a
+critical item is lost, so the command can gate your captures in CI. Only
+the built-in formatters are judged, not those in your config.
+
+Recall says what the agent can still find, not whether its work went
+better; `tokenops fmt experiment` (below)
+compares sessions with and without fmt on outcomes.
+
 ### `tokenops fmt bench --corpus <dir>`
 
 Measures per-file and aggregate byte / estimated-token savings at each
 loss level over a directory of captured command outputs
 (`<command>.<label>.txt`). Use it to quote real numbers for your own
-command mix.
+command mix. The bundled captures live in
+`internal/contexts/optimization/eval/testdata/fmtrecall`.
 
 ### `tokenops fmt hook [--shell zsh|bash]`
 
