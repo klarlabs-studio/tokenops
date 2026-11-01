@@ -98,7 +98,8 @@ currency and the coach's open tip, in Klarlabs colours. Claude Code runs
 it on every turn with its session JSON on stdin. When under two minutes
 are left before the prompt cache expires it shows "cache cold in 1m", and
 "cache cold" once it has: the next prompt then writes the whole context
-to the cache again.
+to the cache again. In brackets is how much that is: "cache cold in 1m
+(182k)".
 
 It reads only what Claude Code hands it (for the cache, the timestamps
 and token counts at the end of the session's transcript, never its text)
@@ -165,8 +166,8 @@ func statusLines(raw []byte) []string {
 	if s.PromptCache != nil && s.PromptCache.HitRatio != nil {
 		in.CacheHit = *s.PromptCache.HitRatio
 	}
-	if at, ok := promptcache.TranscriptExpiry(s.TranscriptPath); ok {
-		in.CacheExpiresAt = at
+	if e, ok := promptcache.TranscriptExpiry(s.TranscriptPath); ok {
+		in.CacheExpiresAt, in.CacheTokens = e.At, e.Tokens
 	}
 	for _, w := range []struct {
 		label string

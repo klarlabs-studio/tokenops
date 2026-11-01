@@ -35,7 +35,10 @@ parents' up to the repository root, and the files they @import, one level),
 the SessionStart and UserPromptSubmit hooks in its settings, and the
 AGENTS.md files Codex and opencode load. Hooks are never run: their
 command text is read, and the output the newest transcripts recorded for
-them. Each finding carries the matched token only, never the text around
+them. The same transcripts show when the tool set changed or an
+always-loaded file was edited mid-session; each change is measured by the
+cache-read share of the turn before against the turn after, and is a
+finding only when the turn after rebuilt the cached prompt. Each finding carries the matched token only, never the text around
 it, with why it breaks the cache and the fix. Nothing is sent anywhere.
 
 Severity: high is in every session's prefix and differs each time (a
@@ -80,6 +83,7 @@ func renderLintContext(cmd *cobra.Command, r prefixlint.Report) {
 		fmt.Fprintf(out, " and %d transcripts", r.Transcripts)
 	}
 	fmt.Fprintln(out)
+	defer renderChanges(cmd, r.Changes)
 	if len(r.Findings) == 0 {
 		fmt.Fprintln(out, "  nothing in the always-loaded context changes between sessions")
 		return
@@ -98,8 +102,37 @@ func renderLintContext(cmd *cobra.Command, r prefixlint.Report) {
 	}
 }
 
+// renderChanges says how the mid-session changes the transcripts recorded
+// went for the cache: the turn before each against the turn after.
+func renderChanges(cmd *cobra.Command, changes []prefixlint.ChangeImpact) {
+	if len(changes) == 0 {
+		return
+	}
+	out := cmd.OutOrStdout()
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Mid-session changes (the turn before each against the turn after)")
+	for _, c := range changes {
+		what := "tool set changed"
+		if c.Kind == prefixlint.KindContextEdit {
+			what = "context file edited"
+		}
+		line := fmt.Sprintf("  %s %d time%s in %d session%s: %d followed by a rebuild", what, c.Changes, plural(c.Changes),
+			c.Sessions, plural(c.Sessions), c.Rebuilds)
+		if c.Explained > 0 {
+			line += fmt.Sprintf(" (%d met a cache already cold)", c.Explained)
+		}
+		if c.CacheReadShareBefore != nil && c.CacheReadShareAfter != nil {
+			line += fmt.Sprintf("; cache read %.0f%% before, %.0f%% after", *c.CacheReadShareBefore*100, *c.CacheReadShareAfter*100)
+		}
+		fmt.Fprintln(out, line)
+	}
+}
+
 func lintWhere(f prefixlint.Finding) string {
 	where := f.Path
+	if f.Source == prefixlint.SourceSession && where == "" {
+		where = "(recorded in transcripts)"
+	}
 	if where == "" {
 		where = "(hook no longer configured)"
 	} else if f.Line > 0 {
@@ -117,6 +150,8 @@ func lintWhat(f prefixlint.Finding) string {
 		return fmt.Sprintf("runs `%s` (%s)", f.Token, f.Kind)
 	case prefixlint.SourceHookOutput:
 		return fmt.Sprintf("`%s` printed %s: %s", f.Command, f.Kind, f.Token)
+	case prefixlint.SourceSession:
+		return fmt.Sprintf("%s: %s", f.Subject(), f.Token)
 	}
 	return fmt.Sprintf("%s: %s", f.Kind, f.Token)
 }

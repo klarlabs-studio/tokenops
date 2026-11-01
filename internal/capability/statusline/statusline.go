@@ -45,6 +45,9 @@ type Input struct {
 	// CacheExpiresAt is when the session's prompt cache goes cold: its
 	// last request plus the cache's lifetime. Zero when unknown.
 	CacheExpiresAt time.Time
+	// CacheTokens is the prompt the cache holds: what the next prompt
+	// writes again once it is cold. Zero when unknown.
+	CacheTokens int64
 	// CostUSD is the session's cost at list price, as the agent reports
 	// it. On a subscription it is value, not money spent.
 	CostUSD float64
@@ -146,7 +149,7 @@ func Render(in Input) []string {
 		}
 		parts = append(parts, s)
 	}
-	if warn := cacheWarning(in.CacheExpiresAt, in.Now); warn != "" {
+	if warn := cacheWarning(in.CacheExpiresAt, in.CacheTokens, in.Now); warn != "" {
 		// About to go cold, or gone: what the next prompt costs matters
 		// more than how well the cache did.
 		parts = append(parts, p.paint(warnFg, warn))
@@ -177,19 +180,39 @@ func Render(in Input) []string {
 
 // cacheWarning is "cache cold in Nm" while under
 // waste.CacheExpiringWithin is left, "cache cold" once it has expired, and
-// "" otherwise.
-func cacheWarning(expires, now time.Time) string {
+// "" otherwise, with the prompt the next turn writes again once it is
+// cold: "cache cold in 1m (180k)". It is information, not a nudge: it
+// never suggests /compact, since Claude Code compacts an idle session
+// itself and a short context is not worth interrupting for.
+func cacheWarning(expires time.Time, tokens int64, now time.Time) string {
 	if expires.IsZero() {
 		return ""
 	}
 	left := expires.Sub(now)
+	var warn string
 	switch {
 	case left <= 0:
-		return "cache cold"
+		warn = "cache cold"
 	case left < waste.CacheExpiringWithin:
-		return fmt.Sprintf("cache cold in %dm", int((left+time.Minute-1)/time.Minute))
+		warn = fmt.Sprintf("cache cold in %dm", int((left+time.Minute-1)/time.Minute))
+	default:
+		return ""
 	}
-	return ""
+	if tokens > 0 {
+		warn += " (" + shortTokens(tokens) + ")"
+	}
+	return warn
+}
+
+// shortTokens is a token count in a few characters: 950, 180k, 1.2M.
+func shortTokens(n int64) string {
+	switch {
+	case n < 1_000:
+		return fmt.Sprintf("%d", n)
+	case n < 999_500:
+		return fmt.Sprintf("%.0fk", float64(n)/1_000)
+	}
+	return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
 }
 
 // contextLevel is the context fill measured against where the session

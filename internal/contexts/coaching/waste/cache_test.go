@@ -118,6 +118,26 @@ func TestColdClock(t *testing.T) {
 	}
 }
 
+// What a cold cache costs the next prompt is the prompt the last turn that
+// used the cache left cached: what it read plus what it wrote.
+func TestCachedPrefix(t *testing.T) {
+	cases := []struct {
+		name  string
+		turns []CacheTurn
+		want  int64
+	}{
+		{"none", nil, 0},
+		{"never cached", []CacheTurn{{At: t0, Input: 10}}, 0},
+		{"the last cached turn", []CacheTurn{{At: t0, CacheWrite: 5_000}, {At: t0.Add(time.Minute), CacheRead: 5_000, CacheWrite: 700}}, 5_700},
+		{"a later uncached turn changes nothing", []CacheTurn{{At: t0, CacheRead: 9_000, CacheWrite: 1_000}, {At: t0.Add(time.Minute), Input: 3}}, 10_000},
+	}
+	for _, c := range cases {
+		if got := CachedPrefix(c.turns); got != c.want {
+			t.Errorf("%s: CachedPrefix = %d, want %d", c.name, got, c.want)
+		}
+	}
+}
+
 func TestCountdownBoundaries(t *testing.T) {
 	last := t0
 	cases := []struct {

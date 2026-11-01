@@ -168,6 +168,18 @@ func ColdClock(turns []CacheTurn) (time.Time, time.Duration, bool) {
 	return last, ttl, used && !last.IsZero()
 }
 
+// CachedPrefix is the prompt the last turn that used the cache left
+// cached, what it read plus what it wrote: what the next prompt writes to
+// the cache again once it has gone cold. Zero when no turn used it.
+func CachedPrefix(turns []CacheTurn) int64 {
+	for i := len(turns) - 1; i >= 0; i-- {
+		if t := turns[i]; t.CacheRead > 0 || t.CacheWrite > 0 {
+			return t.CacheRead + t.CacheWrite
+		}
+	}
+	return 0
+}
+
 // CacheState is where a session's cache stands.
 type CacheState string
 
@@ -188,6 +200,10 @@ type CacheCountdown struct {
 	// RemainingSeconds is zero once the cache is cold.
 	RemainingSeconds int64      `json:"remaining_seconds"`
 	State            CacheState `json:"state"`
+	// CachedTokens is the prompt the session has cached (CachedPrefix):
+	// what its next prompt writes to the cache again once it is cold, at
+	// the write price instead of the read price. Zero when unknown.
+	CachedTokens int64 `json:"cached_tokens,omitempty"`
 }
 
 // Countdown is the cache's countdown at now: warm, expiring with under
