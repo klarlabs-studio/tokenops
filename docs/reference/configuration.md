@@ -130,24 +130,38 @@ session's own model is advised, never changed. It needs the route guard's
 subagent hook: `tokenops hooks install --route-guard` adds it, and
 `tokenops coach` says when it is missing.
 
-**Under plan pressure** the move goes one tier further, for `ask` and
-`autonomous` alike. The plan counts as pressed when its tightest window
-(the 5-hour or the weekly one) is on course, at the pace so far, to run
-out at least a tenth of its length before it resets (30 minutes of a
-5-hour window, about 17 hours of a week), judged only once a tenth of the
-window has gone by; or, while its pace cannot be judged yet, when it is
-down to 25% left. Once the pace can be judged it decides: a low window
-that lasts to its reset is not pressed. Edit work then moves from the default tier (Opus)
-to the balanced one (Sonnet), and deep work from the deep tier to the
-default one. Lookups and research never go below what they need, nothing
-moves up, and the model policy filters the models first, so a pressed move
-never lands on a model it rules out. The reason says why ("Claude weekly
-runs out ~4d 6h before it resets at this pace (54% left); edit work moved
-from claude-opus-5 to claude-sonnet-5"), and the follow-through record
-keeps the pressure as the move's evidence. The reading comes from local
-files only: the status line's plan limits (refreshed every turn, counted
-for 30 minutes), or the daemon's figures (share left only, so only the
-25% floor applies). With no fresh reading, routing goes by the work alone.
+**Priced by the plan's quota** (ADR 0017), the move can go one tier
+further, for `ask` and `autonomous` alike. The plan's windows (the 5-hour
+and the weekly one) each get a price of quota, λ from 0 to 1, and the
+highest binds:
+
+- once a tenth of the window has gone by, λ = 1 − left ÷ wanted, where
+  *wanted* is the share the rest of the window uses at the pace so far.
+  It is 0 while the window lasts to its reset and nearer 1 the longer it
+  would stand empty before it resets;
+- earlier, or with no reset known (the daemon's figures), λ = 1 − left ÷
+  33%: 0 at a third left or more;
+- a used-up window is 1.
+
+Edit work then weighs the default tier (Opus) against the balanced one
+(Sonnet), and deep work the deep tier against the default one. The tier
+the work fits is kept only while its quality gain (0.12 of the work's
+value for an edit, 0.20 for deep work) exceeds λ × its extra plan use (the
+share of its plan use the tier below saves, from the rate card: 60% for
+Opus over Sonnet). With Claude's prices an edit steps down past λ 0.2 and
+deep work past λ 0.4. Lookups and research never go below what they
+need, nothing moves up, and the model policy filters the models first, so
+a priced move never lands on a model it rules out. The reason says why
+("Claude weekly runs out ~4d 6h before it resets at this pace (54% left,
+~212% wanted; quota price 0.74); edit work moved from claude-opus-5 to
+claude-sonnet-5, as claude-opus-5's 0.12 quality gain does not exceed its
+quota cost 0.45"), the follow-through record keeps the price and the
+weighing as the move's evidence, and `tokenops explain price` shows the
+price now and which way each kind of work goes. The randomized holdout is
+drawn the same way for a priced move as for any other. The reading comes
+from local files only: the status line's plan limits (refreshed every
+turn, counted for 30 minutes), or the daemon's figures. With no fresh
+reading, routing goes by the work alone.
 
 **New sessions under plan pressure.** A hook cannot change a running
 session's model, but Claude Code reads the `model` key of

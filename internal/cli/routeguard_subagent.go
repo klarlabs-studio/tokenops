@@ -94,14 +94,15 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 	if rung != config.AutonomyAsk && rung != config.AutonomyAutonomous {
 		return nil
 	}
-	// The plan running short moves edit and deep work a tier further
-	// down. Read from local files only, so the hook stays fast and a
-	// missing or stale reading is simply no pressure.
+	// The price of quota on the plan moves edit and deep work a tier
+	// further down when the tier they fit is not worth its extra plan
+	// use. Read from local files only, so the hook stays fast and a
+	// missing or stale reading is simply no price.
 	sub := routeguard.SubagentInput{
 		Description: description, Prompt: prompt, Requested: requested,
 		SessionModel: latestTranscriptModel(in.TranscriptPath),
 		Provider:     eventschema.ProviderAnthropic, Catalog: catalog, Candidates: candidates,
-		Pressure: routeguard.ReadPressure("", boundaryledger.DefaultDir(), now),
+		Price: routeguard.ReadQuotaPrice("", boundaryledger.DefaultDir(), now),
 		// A move kind whose quality dropped is held (coachcap.VerifyMoves).
 		Retracted: coachcap.MoveStore().Retracted(),
 	}
@@ -135,11 +136,11 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 			dec.From, dec.To, dec.Reason)
 	default:
 		out.SystemMessage = fmt.Sprintf("tokenops: moved a subagent from %s to %s (%s work).", dec.From, dec.To, dec.Kind)
-		if dec.Pressure != nil {
-			out.SystemMessage = fmt.Sprintf("tokenops: moved a subagent from %s to %s (%s work; %s).", dec.From, dec.To, dec.Kind, dec.Pressure.Why())
+		if dec.Price != nil {
+			out.SystemMessage = fmt.Sprintf("tokenops: moved a subagent from %s to %s (%s work; %s).", dec.From, dec.To, dec.Kind, dec.Price.Why())
 		}
 	}
-	coachcap.RecordSubagentMove(ledger, now, coachcap.NewID(), in.SessionID, in.ToolUseID, string(dec.Kind), dec.From, dec.To, dec.Pressure.Evidence())
+	coachcap.RecordSubagentMove(ledger, now, coachcap.NewID(), in.SessionID, in.ToolUseID, string(dec.Kind), dec.From, dec.To, dec.Evidence())
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 }
 
@@ -219,8 +220,8 @@ func askSubagentMove(cmd *cobra.Command, in agentToolInput, report coachcap.Repo
 	// call itself only by its description, so the reason carries the
 	// proposal (verified in 2.1.284).
 	why := fmt.Sprintf("Its work looks like %s.", dec.Kind)
-	if dec.Pressure != nil {
-		why = fmt.Sprintf("Its work looks like %s, and %s.", dec.Kind, dec.Pressure.Why())
+	if dec.Price != nil {
+		why = fmt.Sprintf("Its work looks like %s, and %s.", dec.Kind, dec.Price.Why())
 	}
 	out.HookSpecificOutput.PermissionDecisionReason = fmt.Sprintf(
 		"tokenops: run this subagent on %s instead of %s? %s No pauses the agent; tell it to continue and it runs as planned.",
@@ -236,7 +237,7 @@ func askSubagentMove(cmd *cobra.Command, in agentToolInput, report coachcap.Repo
 	routeguard.Propose(dir, in.SessionID, routeguard.Proposal{
 		ID: id, ToolUseID: in.ToolUseID, Call: call, Kind: string(dec.Kind), From: dec.From, To: dec.To,
 	})
-	coachcap.RecordSubagentApproval(ledger, now, id, in.SessionID, in.ToolUseID, string(dec.Kind), dec.From, dec.To, dec.Pressure.Evidence())
+	coachcap.RecordSubagentApproval(ledger, now, id, in.SessionID, in.ToolUseID, string(dec.Kind), dec.From, dec.To, dec.Evidence())
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 }
 
