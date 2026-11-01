@@ -265,3 +265,64 @@ func TestGlanceAdviceOutlivesTheGlancesBudget(t *testing.T) {
 	}
 	headroom.WaitAdviceRefresh(cache)
 }
+
+// With an observed limit in the overlay, the replay scales the tier by it
+// in place of the catalog's figure, names both figures, and says how to go
+// back; without one, or with the overlay off, it uses the catalog.
+func TestAdviseUsesTheObservedOverlay(t *testing.T) {
+	now := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	_, catalog, _ := plans.WindowFactor("claude-max", 7*24*time.Hour)
+	// Max holding 8x Pro: its 15% weeks would have been 120% of Pro's.
+	observed := plans.ObservedLimits{Limits: []plans.ObservedLimit{{
+		Provider: "anthropic", Plan: "claude-max", Display: "Max 5x", Window: "weekly", ModelFamily: "sonnet",
+		Anchor: "claude-pro", AnchorDisplay: "Pro", CatalogFactor: catalog, ObservedFactor: 8,
+		CatalogRatio: catalog, ObservedRatio: 8, Windows: 12, ObservedAt: now,
+	}}}
+	tests := []struct {
+		name       string
+		overlay    *plans.ObservedLimits
+		wantPro    bool
+		wantLimits int
+	}{
+		{name: "catalog only", wantPro: true},
+		{name: "observed", overlay: &observed, wantLimits: 1},
+		{name: "overlay off", overlay: &plans.ObservedLimits{Off: true, Limits: observed.Limits}, wantPro: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			deps := headroom.Deps{
+				Config: cfgWith(map[string]string{"anthropic": "claude-max"}),
+				Reader: &eventsReader{envs: adviceEvents(now, "15")},
+				Price:  tenDollars,
+			}
+			if tc.overlay != nil {
+				o := *tc.overlay
+				deps.Observed = func() plans.ObservedLimits { return o }
+			}
+			res, err := headroom.Advise(context.Background(), deps, headroom.AdviceQuery{}, now)
+			if err != nil || len(res.Providers) != 1 {
+				t.Fatalf("result = %+v, %v", res, err)
+			}
+			a := res.Providers[0]
+			var pro plans.Option
+			for _, o := range a.Options {
+				if o.Plan == "claude-pro" && o.Kind == plans.OptionPlan {
+					pro = o
+				}
+			}
+			if fits := pro.Lockouts == 0; fits != tc.wantPro {
+				t.Errorf("Pro lockouts = %d, want it to fit = %v", pro.Lockouts, tc.wantPro)
+			}
+			if len(a.Observed) != tc.wantLimits {
+				t.Fatalf("observed = %+v", a.Observed)
+			}
+			if tc.wantLimits > 0 {
+				joined := strings.Join(a.Caveats, " ")
+				if !strings.Contains(joined, "observed 8.0x Pro") || !strings.Contains(joined, "catalog") ||
+					!strings.Contains(joined, "tokenops plan observed reset") {
+					t.Errorf("caveats = %q", a.Caveats)
+				}
+			}
+		})
+	}
+}

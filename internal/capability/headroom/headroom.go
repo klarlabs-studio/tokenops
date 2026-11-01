@@ -71,6 +71,10 @@ type Deps struct {
 	// AdviceCache keeps the glance's plan advice between asks; nil
 	// replays it on every glance.
 	AdviceCache *AdviceCache
+	// Observed reads this machine's overlay of plan limits observed from
+	// its own window readings, which the plan advice uses in place of the
+	// catalog's where it holds one. nil uses the catalog throughout.
+	Observed func() plans.ObservedLimits
 }
 
 // Report is one plan's headroom: its windows, consumption and risk.

@@ -100,6 +100,38 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "extras": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "granter": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "rules": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "until": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "note": {
                       "type": "string"
                     },
@@ -3645,6 +3677,55 @@
                           "list_value_usd": {
                             "type": "number"
                           },
+                          "observed": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "anchor": {
+                                  "type": "string"
+                                },
+                                "anchor_display": {
+                                  "type": "string"
+                                },
+                                "catalog_factor": {
+                                  "type": "number"
+                                },
+                                "catalog_ratio": {
+                                  "type": "number"
+                                },
+                                "display": {
+                                  "type": "string"
+                                },
+                                "model_family": {
+                                  "type": "string"
+                                },
+                                "observed_at": {
+                                  "format": "date-time",
+                                  "type": "string"
+                                },
+                                "observed_factor": {
+                                  "type": "number"
+                                },
+                                "observed_ratio": {
+                                  "type": "number"
+                                },
+                                "plan": {
+                                  "type": "string"
+                                },
+                                "provider": {
+                                  "type": "string"
+                                },
+                                "window": {
+                                  "type": "string"
+                                },
+                                "windows": {
+                                  "type": "integer"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
                           "options": {
                             "items": {
                               "additionalProperties": false,
@@ -3761,6 +3842,51 @@
                           "items": {
                             "additionalProperties": false,
                             "properties": {
+                              "allowances": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "available": {
+                                    "type": "integer"
+                                  },
+                                  "items": {
+                                    "items": {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "expires_at": {
+                                          "format": "date-time",
+                                          "type": "string"
+                                        },
+                                        "granted_at": {
+                                          "format": "date-time",
+                                          "type": "string"
+                                        },
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "kind": {
+                                          "type": "string"
+                                        },
+                                        "observed_at": {
+                                          "format": "date-time",
+                                          "type": "string"
+                                        },
+                                        "source": {
+                                          "type": "string"
+                                        },
+                                        "title": {
+                                          "type": "string"
+                                        },
+                                        "used_pct": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "type": "object"
+                                    },
+                                    "type": "array"
+                                  }
+                                },
+                                "type": "object"
+                              },
                               "balance_usd": {
                                 "type": "number"
                               },
@@ -4709,6 +4835,55 @@
                           "list_value_usd": {
                             "type": "number"
                           },
+                          "observed": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "anchor": {
+                                  "type": "string"
+                                },
+                                "anchor_display": {
+                                  "type": "string"
+                                },
+                                "catalog_factor": {
+                                  "type": "number"
+                                },
+                                "catalog_ratio": {
+                                  "type": "number"
+                                },
+                                "display": {
+                                  "type": "string"
+                                },
+                                "model_family": {
+                                  "type": "string"
+                                },
+                                "observed_at": {
+                                  "format": "date-time",
+                                  "type": "string"
+                                },
+                                "observed_factor": {
+                                  "type": "number"
+                                },
+                                "observed_ratio": {
+                                  "type": "number"
+                                },
+                                "plan": {
+                                  "type": "string"
+                                },
+                                "provider": {
+                                  "type": "string"
+                                },
+                                "window": {
+                                  "type": "string"
+                                },
+                                "windows": {
+                                  "type": "integer"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
                           "options": {
                             "items": {
                               "additionalProperties": false,
@@ -4857,6 +5032,51 @@
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "allowances": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "available": {
+                                "type": "integer"
+                              },
+                              "items": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "expires_at": {
+                                      "format": "date-time",
+                                      "type": "string"
+                                    },
+                                    "granted_at": {
+                                      "format": "date-time",
+                                      "type": "string"
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "kind": {
+                                      "type": "string"
+                                    },
+                                    "observed_at": {
+                                      "format": "date-time",
+                                      "type": "string"
+                                    },
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    },
+                                    "used_pct": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
+                          },
                           "balance_usd": {
                             "type": "number"
                           },

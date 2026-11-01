@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
+	"go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
@@ -142,6 +143,9 @@ func ledgerStats(hookDir, guardDir string, since time.Time) (*coachhook.Stats, *
 // out.
 func Gather(g *headroom.Glance, c *coach.Report, cfg *config.Config, cacheDir string) Inputs {
 	in := Inputs{Glance: g, Coach: c, Pause: pauseSummary(cfg), Loop: loopSummary(cfg), Presence: presenceStatus(cfg)}
+	if cfg != nil {
+		in.Extras = boundaries.ActiveExtras(boundaries.Env{})
+	}
 	in.CoachHook, in.ReadGuard = ledgerStats("", "", time.Now().AddDate(0, 0, -WindowDays))
 	if s, err := ReadSnapshot(cacheDir); err == nil {
 		in.Sessions = s

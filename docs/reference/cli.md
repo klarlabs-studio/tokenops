@@ -89,7 +89,10 @@ Coach · 5 findings
 
 They cover a quota window that runs out before it resets (and a plan with
 room to take the work), a weekly window that resets within a day with 40%
-or more unused (it does not carry over), files the agent re-reads unchanged, sessions past
+or more unused (it does not carry over), a banked allowance that expires
+within a day unused (Codex's rate-limit reset credits, read from its app
+server; said in the same lapse finding as the week, never as a second
+alert), files the agent re-reads unchanged, sessions past
 their budget, the one change that would most improve how sessions go,
 session sources that cannot be read, kinds of advice the coach stopped
 giving because they were ignored, and what the coach would have said while
@@ -358,7 +361,7 @@ A bare API key is reported as metered usage with no plan to bind — binding
 a subscription against metered traffic would make every headroom figure
 wrong in a way that looks authoritative.
 
-### `tokenops plan {list|set|unset|catalog|headroom|advise}`
+### `tokenops plan {list|set|unset|catalog|headroom|advise|observed}`
 
 ```bash
 tokenops plan list              # configured bindings + headroom
@@ -368,6 +371,7 @@ tokenops plan unset cursor
 tokenops plan headroom          # live consumption + overage risk
 tokenops plan history           # every recorded switch, oldest first
 tokenops plan advise            # which tier would have fit the last 30 days
+tokenops plan observed          # limits your own windows show, beside the catalog's
 ```
 
 #### Which tier fits: `plan advise`
@@ -415,6 +419,33 @@ as an info finding. `--json`, `GET /api/plans/advice?days=` and
 `tokenops_glance (view=plan_advice)` give the same answer. Only Claude's
 tiers are replayed so far; ChatGPT's tiers are not modelled as multiples
 of each other, and `plan advise` says so.
+
+#### Limits your windows show: `plan observed`
+
+When `tokenops checkup`'s catalog-drift finding has enough evidence that
+your windows disagree with the catalog's ratio between two tiers (five
+windows on each, filled 10–99%, spent on one model family, a gap past 25%
+that the windows' quartiles do not cover), TokenOps keeps the measured
+ratio in a local overlay, `~/.tokenops/observed-limits.json`, and
+`plan advise` replays with it in place of the catalog's figure. The advice
+names every observed limit it used beside the catalog's (`observed` in
+`--json`, a caveat in text), and the glance's plan advice does the same.
+
+```bash
+tokenops plan observed          # "Claude Max weekly: observed 3.0x Claude Pro, catalog 5x (11 windows, sonnet)"
+tokenops plan observed reset    # back to the catalog, and stop observing
+tokenops plan observed on       # observe again, from your readings now
+```
+
+Readings measure the ratio between two tiers, not either tier's allowance,
+so the lower tier keeps its catalog figure and the higher one is scaled to
+the measured ratio. The overlay is this machine's only: the shipped catalog
+changes by pull request (ADR 0002), so the finding still asks you to open
+an issue. A limit drops out on its own once the catalog changes the figure
+it was observed against, or the evidence no longer drifts. `checkup` and
+the daemon (once a day) keep the overlay; while it is reset, neither puts
+anything in. Live window shares and paces come from the vendor and do not
+use it.
 
 #### Switching plans
 
@@ -2665,7 +2696,7 @@ enrolled, `decide … approve` shows the Touch ID dialog and signs the
 approval; with `boundary_approval: presence` an upgrade approval counts only
 when signed, and an agent cannot approve one at all.
 
-### `tokenops boundaries {status|promote|demote|headroom-pause|loop-breaker}`
+### `tokenops boundaries {status|promote|demote|headroom-pause|loop-breaker|extra}`
 
 [Action boundaries](https://team.klarlabs.de/guide/boundaries) are limits you set in
 `config.yaml` before work starts: past $20 in a session, ask me; no
@@ -2744,6 +2775,29 @@ matched. The working directory is compared and dropped, never recorded.
 Organisation rules take both too: a condition only narrows the rule it is
 on, so it never loosens a local rule, and an approval sent to the team
 plane carries neither.
+
+**An extra allowance** lifts a boundary for a while, on your word, and
+puts it back on its own:
+
+```bash
+tokenops boundaries extra 30m --why "finish the release"  # the headroom pause, for 30 minutes
+tokenops boundaries extra --until 18:00                   # until 18:00 today (or tomorrow, once it is past)
+tokenops boundaries extra 2h --rule session-spend         # a named rule; --rule repeats
+tokenops boundaries extra --end                           # end every extra in force now
+```
+
+Without `--rule` it lifts every local rule that pauses on plan headroom.
+While it holds, the rules it names neither ask nor refuse; any other rule
+that matches still binds. It lasts at most 24 hours, and your organisation's
+rules are not lifted here. The grant is recorded as a decision with who
+granted it, why and until when (`tokenops explain <id>`), and each session
+it lets past a boundary records that it did. `status`, the glance's
+findings, the menu bar and `GET /api/boundaries` (`extras`) show it while it
+holds. It is your word only: there is no MCP tool or API route for it, the
+command refuses to run without a terminal, and it is refused under
+`boundary_approval: presence`, since a grant cannot be signed yet (approve
+each ask with `tokenops approve <id> --session` instead). `--end` only
+tightens and runs anywhere.
 
 ### `tokenops boundaries presence {enroll|enforce|status|rotate}`
 

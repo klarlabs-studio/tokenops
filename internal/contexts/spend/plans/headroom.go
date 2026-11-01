@@ -80,6 +80,10 @@ type HeadroomReport struct {
 	// as shares used: Claude's 5-hour, weekly and model-scoped weekly,
 	// Codex's primary and secondary.
 	Windows []VendorWindow `json:"windows,omitempty"`
+	// Allowances is what the vendor reports banked on top of the windows
+	// that expires on its own, such as Codex's reset credits; absent when
+	// no reader reports any for the plan's provider.
+	Allowances *Allowances `json:"allowances,omitempty"`
 	// BalanceUSD is prepaid credit the vendor reports as left, when it
 	// reports one (DeepSeek, Moonshot).
 	BalanceUSD *float64 `json:"balance_usd,omitempty"`
@@ -105,6 +109,8 @@ const (
 type HeadroomInputs struct {
 	// VendorWindows is every window in the vendor's latest reading.
 	VendorWindows []VendorWindow
+	// Allowances is what the vendor's newest reading says is banked.
+	Allowances *Allowances
 
 	// ConsumedTokens is the total tokens spent against the plan since
 	// the start of the current billing month.
@@ -178,9 +184,12 @@ func ComputeHeadroom(planName string, in HeadroomInputs) (HeadroomReport, error)
 // the public catalog.
 func computeHeadroomFor(p Plan, in HeadroomInputs) HeadroomReport {
 	if p.SpendDenominated {
-		return computeSpendHeadroom(p, in)
+		report := computeSpendHeadroom(p, in)
+		report.Allowances = in.Allowances
+		return report
 	}
 	report := computeWindowHeadroom(p, in)
+	report.Allowances = in.Allowances
 	// The busiest window the vendor reports decides the risk: a weekly
 	// limit can block while the 5-hour window is nearly empty.
 	if len(in.VendorWindows) > 0 {

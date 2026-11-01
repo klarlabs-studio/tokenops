@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/checkup"
+	"go.klarlabs.de/tokenops/internal/capability/planoverlay"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -38,7 +39,10 @@ and each leak it finds with the one command that fixes it:
                  ratio between them (read from the event store, when there is one)
 
 It needs no config, no daemon and no store, and sends nothing anywhere.
-Instruction text is read in memory to classify it and never written.`,
+Instruction text is read in memory to classify it and never written. A
+drifted catalog ratio is also kept in this machine's overlay of observed
+limits, which plan advice uses labelled as observed ('tokenops plan
+observed'; the catalog itself changes only by pull request).`,
 		Example: `  tokenops checkup
   tokenops checkup --days 30
   tokenops checkup --json`,
@@ -56,6 +60,9 @@ Instruction text is read in memory to classify it and never written.`,
 			closeStore := withDriftSources(cmd.Context(), rf, &opts)
 			defer closeStore()
 			r := checkup.Compute(cmd.Context(), opts)
+			if _, err := planoverlay.Keep(r.TierDrifts, opts.Now); err != nil {
+				r.Warnings = append(r.Warnings, "observed limits not kept: "+err.Error())
+			}
 			if progress != nil {
 				progress.success("read")
 			}
@@ -101,6 +108,7 @@ func withDriftSources(ctx context.Context, rf *rootFlags, o *checkup.Options) fu
 		history = nil
 	}
 	o.Events, o.Plans, o.PlanHistory, o.Price = storeReader{store: store}, cfg.Plans, history, eng.ComputeAt
+	o.ObservedOff = planoverlay.Off()
 	return func() { _ = store.Close() }
 }
 

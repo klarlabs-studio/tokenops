@@ -23,6 +23,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/domainmigration"
 	"go.klarlabs.de/tokenops/internal/infra/followthrough"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
+	"go.klarlabs.de/tokenops/internal/infra/observedlimits"
 	"go.klarlabs.de/tokenops/internal/infra/planevidence"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
@@ -240,7 +241,7 @@ func plansDeps(cfg config.Config, events *sqlite.EventCache, engine *spending.En
 	advice := headroom.NewAdviceCache()
 	return func() headroom.Deps {
 		deps := headroom.Deps{Config: &cfg, Accounts: signedInAccounts, PlanFollows: actions.RecentPlanFollows,
-			PlanHistory: planhistory.LoadDefault, AdviceCache: advice}
+			PlanHistory: planhistory.LoadDefault, AdviceCache: advice, Observed: observedlimits.Loader()}
 		if events != nil {
 			deps.Reader = events
 		}

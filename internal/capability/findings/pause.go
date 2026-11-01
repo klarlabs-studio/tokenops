@@ -2,6 +2,7 @@ package findings
 
 import (
 	"fmt"
+	"strings"
 
 	"go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
@@ -172,4 +173,25 @@ func loopSummary(cfg *config.Config) *boundaries.PauseSummary {
 		return nil
 	}
 	return &p
+}
+
+// extraFindings says, while an extra allowance holds, which boundaries
+// it lifts and until when, so the lift is never forgotten.
+func extraFindings(extras []boundaries.ExtraView) []Finding {
+	out := make([]Finding, 0, len(extras))
+	for _, e := range extras {
+		evidence := fmt.Sprintf("Granted by %s at %s; they bind again on their own at %s (`tokenops explain %s`)",
+			e.Granter, clock(e.At), clock(e.Until), e.ID)
+		if e.Why != "" {
+			evidence = fmt.Sprintf("Granted by %s at %s: %s. They bind again on their own at %s (`tokenops explain %s`)",
+				e.Granter, clock(e.At), e.Why, clock(e.Until), e.ID)
+		}
+		out = append(out, Finding{
+			Key: key(KindBoundary, "extra", e.ID), Kind: KindBoundary, Level: LevelNotice,
+			Title:    fmt.Sprintf("Extra allowance until %s: %s will not ask or refuse", e.Until.Local().Format("15:04"), strings.Join(e.Rules, ", ")),
+			Evidence: evidence,
+			Action:   "`tokenops boundaries extra --end` ends it sooner.",
+		})
+	}
+	return out
 }

@@ -56,9 +56,9 @@ operator's instruction text and local file paths.
 |---|---|
 | `GET /api/glance` | Session budgets, plan headroom and one ranked insight; `boundaries` lists the [boundaries](https://team.klarlabs.de/guide/boundaries) that hold now, as advice; `plan_use` gives each provider's plan utilization and coverage over the last 7 days; `early_resets` lists windows that reset early within the last day; a window with `not_started: true` has no `resets_at` yet; `prompt_cache` is the countdown to the current Claude Code session's prompt cache going cold (`last_request_at`, `ttl_seconds`, `expires_at`, `remaining_seconds`, `state`: `warm`, `expiring` with under two minutes left, or `cold`, and `cached_tokens`, the prompt the session has cached, which its next prompt writes again once the cache is cold), absent when no session's cache went cold within the last hour |
 | `GET /api/findings` | What the coach and the session analysis observed, ranked, with what to do. Each finding has a stable `key` (its kind and subject, such as `quota:openai:week`); a quota finding also names its `provider` and `window` as the plan headroom names them, so it can be shown beside that window. Where an operation exists for it, it has `actions` to run with `POST /api/findings/act`. `hidden` counts the findings you dismissed that are still hidden |
-| `GET /api/plans/headroom` | Each plan: usage, the vendor's windows, spend against the limit, risk |
+| `GET /api/plans/headroom` | Each plan: usage, the vendor's windows, spend against the limit, risk; `allowances` is what the vendor reports banked that expires on its own (Codex's reset credits), with each one's `expires_at` |
 | `GET /api/plans/session-budget` | Each plan window: share used, pace, what to do |
-| `GET /api/plans/advice` | Plan right-sizing over `days` (30 by default, up to 90): each plan's windows replayed against its other tiers, metered overflow and the API at list price. Advice only |
+| `GET /api/plans/advice` | Plan right-sizing over `days` (30 by default, up to 90): each plan's windows replayed against its other tiers, metered overflow and the API at list price. Advice only. `observed` lists each limit taken from this machine's overlay of observed limits instead of the catalog, with `catalog_factor` and `observed_factor` side by side |
 | `GET /api/status` | Readiness, blockers, warnings, next actions |
 | `GET /api/mode` | Operating mode and what each subsystem may do |
 | `GET /api/coach` | The coach's dials and each power's autonomy; `activity` is what it did on its own `today` (since local midnight) and over the last `7d`: subagents moved to a cheaper model, new sessions started on one, re-reads the read guard refused, with a one-line `summary` that is empty when it did nothing; `presets` names each preset with what it does; `prompt_cache` is the current Claude Code session's cache countdown, as on the glance |
@@ -91,7 +91,7 @@ operator's instruction text and local file paths.
 | `GET /api/optimizations` | Optimization recommendations |
 | `GET /api/routing/proposals` | Model upgrades waiting on you |
 | `GET /api/decisions/{id}` | Why a decision was made |
-| `GET /api/boundaries` | Each [action boundary](https://team.klarlabs.de/guide/boundaries), how often it matched, where it is enforced, and what waits on you; `when` lists a rule's conditions, with `holds_now` on each `hours` window |
+| `GET /api/boundaries` | Each [action boundary](https://team.klarlabs.de/guide/boundaries), how often it matched, where it is enforced, and what waits on you; `when` lists a rule's conditions, with `holds_now` on each `hours` window; `extras` are the extra allowances in force (`tokenops boundaries extra`): `rules` lifted until `until`, with `granter` and `why` |
 | `GET /api/rules/analyze` | Rule files analysed |
 | `GET /api/rules/compress` | Rule files compressed |
 | `GET /api/rules/conflicts` | Conflicts between rules |

@@ -243,8 +243,14 @@ func Guard(rules []domain.Rule, call Call, env Env) (Result, error) {
 	if len(v.Matches) == 0 {
 		return Result{}, nil
 	}
+	lifted := liftExtras(&v, relevant, call.Action, facts, env)
 	g := &guard{call: call, env: env, evidence: evidence, now: env.now()}
 	g.load()
+	for _, l := range lifted {
+		if err := g.recordLifted(l); err != nil {
+			return Result{}, err
+		}
+	}
 	matched := make([]string, 0, len(v.Matches))
 	for _, m := range v.Matches {
 		matched = append(matched, m.Rule.Name)
