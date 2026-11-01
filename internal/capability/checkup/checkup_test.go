@@ -149,7 +149,7 @@ func TestStartingContext(t *testing.T) {
 	prompt := func(session string, min int) agentdx.Record {
 		return agentdx.Record{SessionID: session, Kind: agentdx.KindPrompt, At: at(min), Harness: agentdx.SourceClaudeCode}
 	}
-	var recs []agentdx.Record
+	recs := make([]agentdx.Record, 0, 19)
 	for i, ctx := range []int64{70_000, 75_000, 80_000, 74_000, 76_000} {
 		s := string(rune('a' + i))
 		recs = append(recs, prompt(s, i*10), turn(s, i*10+1, ctx), turn(s, i*10+2, ctx+50_000))
