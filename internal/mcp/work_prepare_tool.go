@@ -8,7 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/workestimate"
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 const workflowIDHeader = "X-Tokenops-Workflow-Id"
@@ -55,12 +57,17 @@ type prepareWorkResult struct {
 	Recommendation    routingAdviceResult  `json:"recommendation"`
 	PlanHeadroom      planHeadroomResult   `json:"plan_headroom"`
 	WindowShare       *windowShareEstimate `json:"window_share,omitempty"`
+	// CoachTips are the coach's tips for the work about to start, each
+	// naming one object (a window, a model): given here, at the decision,
+	// rather than after the turn. The coach's dials, its throttle and
+	// the kinds it retired decide which are given; empty when none is.
+	CoachTips []coachcap.DecisionTip `json:"coach_tips,omitempty"`
 }
 
 func registerWorkPreparationTool(s *Server, d RoutingAdviceDeps) error {
 	planDeps := PlanDeps{Config: d.Config, ConfigGetter: d.ConfigGetter, Store: d.Store, Spend: d.Spend}
 	s.Tool("tokenops_prepare_work").
-		Description("Before starting a task, get one evidence-backed view of subscription headroom, the model recommendation for the supplied instruction, and the task's expected share of the plan window (a range from earlier tasks of the same kind in the same repository, suppressed until there are enough of them, plus the p50 and p90 of those runs with their count, since runs of one task vary widely; read only from measured outcomes, never from an agent's own guess; with a suggestion to proceed, use a lighter model tier, or defer). The result includes a stable workflow_id: propagate it as X-Tokenops-Workflow-Id when the execution path supports request headers, then pass it unchanged to tokenops_review_work, which records the actual share against the estimate. TokenOps issues correlation here but does not claim that execution started. The tool includes measurement caveats and never changes the caller's model. Pass provider when several plans are configured; pass the current model to compare alternatives; pass repository to scope the estimate.").
+		Description("Before starting a task, get one evidence-backed view of subscription headroom, the model recommendation for the supplied instruction, and the task's expected share of the plan window (a range from earlier tasks of the same kind in the same repository, suppressed until there are enough of them, plus the p50 and p90 of those runs with their count, since runs of one task vary widely; read only from measured outcomes, never from an agent's own guess; with a suggestion to proceed, use a lighter model tier, or defer). The result includes a stable workflow_id: propagate it as X-Tokenops-Workflow-Id when the execution path supports request headers, then pass it unchanged to tokenops_review_work, which records the actual share against the estimate. TokenOps issues correlation here but does not claim that execution started. The tool includes measurement caveats and never changes the caller's model. It also returns coach_tips: the coach's tips for the work about to start, each naming one window or model, given at most a few an hour and never the same twice in a row. Pass provider when several plans are configured; pass the current model to compare alternatives; pass repository to scope the estimate.").
 		OutputSchema(prepareWorkResult{}).
 		Handler(func(ctx context.Context, in prepareWorkInput) (*prepareWorkResult, error) {
 			if strings.TrimSpace(in.Instruction) == "" {
@@ -85,6 +92,7 @@ func registerWorkPreparationTool(s *Server, d RoutingAdviceDeps) error {
 			if err != nil {
 				return nil, err
 			}
+			tips := prepareTips(d, in, workflowID, recommendation, headroom, share)
 			return &prepareWorkResult{
 				WorkflowID:        workflowID,
 				AttributionHeader: workflowIDHeader,
@@ -95,6 +103,7 @@ func registerWorkPreparationTool(s *Server, d RoutingAdviceDeps) error {
 				Recommendation: *recommendation,
 				PlanHeadroom:   *headroom,
 				WindowShare:    share,
+				CoachTips:      tips,
 			}, nil
 		})
 	return nil
@@ -115,4 +124,47 @@ func windowShare(ctx context.Context, d RoutingAdviceDeps, in prepareWorkInput, 
 		req.SwitchTo = rec.Model
 	}
 	return workestimate.Prepare(ctx, deps, req, time.Now().UTC())
+}
+
+// prepareTips are the coach's tips for the work about to start, given
+// through the decision-point gate and recorded against the workflow, so
+// tokenops_review_work can settle the model tip from what the work ran
+// on. An MCP call carries no session, so these tips share one hourly
+// budget.
+func prepareTips(d RoutingAdviceDeps, in prepareWorkInput, workflowID string, rec *routingAdviceResult, headroom *planHeadroomResult, share *windowShareEstimate) []coachcap.DecisionTip {
+	tin := coachcap.PrepareTipInput{CurrentModel: strings.TrimSpace(in.Model)}
+	if rec != nil {
+		tin.Recommendation, tin.Model, tin.Reason = rec.Recommendation, rec.Model, rec.Reason
+	}
+	if share != nil && share.Provider != "" && share.Window != "" {
+		tin.ShareAction, tin.ShareReason = string(share.Suggestion.Action), share.Suggestion.Reason
+		tin.ShareWindow = share.Provider + " " + share.Window + " window"
+	}
+	if headroom != nil {
+		for _, r := range headroom.Reports {
+			for _, w := range r.Windows {
+				if w.Stale || w.NotStarted {
+					continue
+				}
+				pw := coachcap.PrepareWindow{Name: r.Provider + " " + w.Name + " window", UsedPct: w.UsedPct, ResetsIn: w.ResetsIn}
+				if w.Pace != nil && !w.Pace.LastsToReset {
+					pw.RunsOutIn = w.Pace.RunsOutIn
+				}
+				tin.Windows = append(tin.Windows, pw)
+			}
+		}
+	}
+	candidates := coachcap.PrepareWorkTips(tin)
+	if len(candidates) == 0 {
+		return nil
+	}
+	cfg := config.Default()
+	if c := d.activeConfig(); c != nil {
+		cfg = *c
+	}
+	var ledger coachcap.Ledger
+	if d.CoachLedger != nil {
+		ledger = d.CoachLedger()
+	}
+	return coachcap.NewTipGate(cfg, ledger, time.Now()).Deliver("", workflowID, candidates)
 }

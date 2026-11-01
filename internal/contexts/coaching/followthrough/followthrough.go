@@ -125,8 +125,20 @@ type Entry struct {
 	Until time.Time `json:"until,omitzero"`
 	// Ref is, on a subagent move or approval, the Agent call's
 	// tool_use_id, so the call's outcome can be read back from the
-	// transcript and judged (moveverdict).
+	// transcript and judged (moveverdict); on a tip given by
+	// tokenops_prepare_work, the workflow_id it was given for.
 	Ref string `json:"ref,omitempty"`
+	// Point is, on an offer, the decision point it was given at
+	// (PointToolCall, PointSubagent, …); empty for the Stop hook's and
+	// status line's tips, which are given after the turn.
+	Point string `json:"point,omitempty"`
+	// Object is, on an offer given at a decision point, the one thing it
+	// names: a file's base name, a search, a subagent type, a model or a
+	// window. Never file contents or a prompt.
+	Object string `json:"object,omitempty"`
+	// Instead is, on a resolve, what the agent did instead of following
+	// the offer ("read store.go again"), empty when it followed it.
+	Instead string `json:"instead,omitempty"`
 }
 
 // UndoWindow is how long after an autonomous move lowering the power
@@ -144,6 +156,8 @@ type Record struct {
 	Outcome    Outcome   `json:"outcome"`
 	ResolvedAt time.Time `json:"resolved_at,omitzero"`
 	Evidence   string    `json:"evidence,omitempty"`
+	// Instead is what the agent did instead, from the resolve.
+	Instead string `json:"instead,omitempty"`
 	// Seen reports evidence the operator saw the offer. Only tips need
 	// it; advice and approvals are answered in the agent's own turn.
 	Seen bool `json:"seen,omitempty"`
@@ -187,7 +201,7 @@ func Fold(entries []Entry, now time.Time) []Record {
 		res, ok := resolved[e.ID]
 		switch {
 		case ok:
-			r.Outcome, r.ResolvedAt, r.Evidence = res.Outcome, res.At, res.Evidence
+			r.Outcome, r.ResolvedAt, r.Evidence, r.Instead = res.Outcome, res.At, res.Evidence, res.Instead
 		case e.Channel == ChannelMove:
 			r.Outcome, r.ResolvedAt, r.Evidence = moveOutcome(e, lowered, now)
 		case now.Sub(e.At) < OpenFor:
@@ -259,6 +273,14 @@ type Summary struct {
 	// Quiet reports that the coach has stopped offering this kind because
 	// it keeps being ignored (see Quieted).
 	Quiet bool `json:"quiet,omitempty"`
+	// Retired is set when the coach retired the kind: seen and ignored
+	// most of the time over enough offers (see Retired). SummarizeLedger
+	// sets it.
+	Retired *Retirement `json:"retired,omitempty"`
+	// LastPoint and LastInstead are the newest ignored offer's decision
+	// point and what the agent did instead, when it was recorded.
+	LastPoint   string `json:"last_point,omitempty"`
+	LastInstead string `json:"last_instead,omitempty"`
 }
 
 // Resolved is how many offers of the kind have a known outcome.
@@ -287,6 +309,9 @@ func Summarize(records []Record, now time.Time) []Summary {
 			s.Followed++
 		case OutcomeIgnored:
 			s.Ignored++
+			if r.Instead != "" {
+				s.LastPoint, s.LastInstead = r.Offer.Point, r.Instead
+			}
 		case OutcomeStood:
 			s.Stood++
 		case OutcomeUndone:
@@ -374,7 +399,7 @@ func Prune(entries []Entry, now time.Time, keep time.Duration) []Entry {
 		case e.Type == EntryResolve && kept[e.ID]:
 		case e.Type == EntrySeen && kept[e.ID]:
 		case e.Type == EntryFeedback && kept[e.ID]:
-		case (e.Type == EntryLowered || e.Type == EntryHoldout) && now.Sub(e.At) <= keep:
+		case (e.Type == EntryLowered || e.Type == EntryHoldout || e.Type == EntryReinstated) && now.Sub(e.At) <= keep:
 		default:
 			continue
 		}

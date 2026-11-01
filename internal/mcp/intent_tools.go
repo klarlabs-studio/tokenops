@@ -9,6 +9,7 @@ import (
 
 	mcpgo "go.klarlabs.de/mcp"
 
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/workestimate"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/presentation"
@@ -88,6 +89,11 @@ func registerIntentTools(s *Server, d Deps) error {
 					MaxContextTokens:  trace.Trace.MaxContextSize,
 					ContextGrowth:     trace.Trace.ContextGrowthTotal,
 					Models:            trace.Trace.Models,
+				}
+				if d.CoachLedger != nil {
+					// The models the work ran on settle the model tip
+					// prepare gave for it.
+					coachcap.SettleWorkflowTips(d.CoachLedger(), time.Now(), in.WorkflowID, trace.Trace.Models)
 				}
 			}
 			if d.Store != nil {

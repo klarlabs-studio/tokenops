@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // CoachConfig is the coach's two dials (ADR 0006): who decides when it sees
@@ -34,6 +35,43 @@ type CoachConfig struct {
 	// is on; false turns it off. It never enters a session's cached
 	// prefix. The inform power being off also silences it.
 	HeadroomNote *bool `yaml:"headroom_note,omitempty"`
+	// Tips bounds the tips the coach gives the agent at decision points:
+	// a tool call, a subagent launch, the per-turn model advice and
+	// tokenops_prepare_work.
+	Tips CoachTipsConfig `yaml:"tips,omitempty"`
+}
+
+// CoachTipsConfig is the decision-point tip throttle.
+type CoachTipsConfig struct {
+	// PerHour is the most decision-point tips one session is given in
+	// any hour. Unset is DefaultCoachTipsPerHour; 1 to MaxCoachTipsPerHour.
+	PerHour *int `yaml:"per_hour,omitempty"`
+	// Cooldown is how long the same tip (its kind and the one thing it
+	// names) waits before it is given again in a session, as a Go
+	// duration ("1h", "30m"). Unset is DefaultCoachTipCooldown; at least
+	// a minute.
+	Cooldown string `yaml:"cooldown,omitempty"`
+}
+
+// The decision-point tip throttle's defaults and bounds.
+const (
+	DefaultCoachTipsPerHour = 6
+	MaxCoachTipsPerHour     = 60
+	DefaultCoachTipCooldown = time.Hour
+)
+
+// CoachTipThrottle is the decision-point tip throttle in effect: tips per
+// session per hour and the cool-down before the same tip is said again.
+// An invalid value reads as its default; Validate rejects it on write.
+func (c Config) CoachTipThrottle() (perHour int, cooldown time.Duration) {
+	perHour, cooldown = DefaultCoachTipsPerHour, DefaultCoachTipCooldown
+	if p := c.Coach.Tips.PerHour; p != nil && *p >= 1 && *p <= MaxCoachTipsPerHour {
+		perHour = *p
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.Coach.Tips.Cooldown)); err == nil && d >= time.Minute {
+		cooldown = d
+	}
+	return perHour, cooldown
 }
 
 // CoachHeadroomNote reports whether the headroom note is on.
@@ -114,6 +152,14 @@ func (c CoachConfig) Validate() error {
 	}
 	if c.Holdout != nil && (*c.Holdout < 0 || *c.Holdout > MaxHoldoutPercent) {
 		return fmt.Errorf("coach.holdout must be 0 (off) to %d percent, got %d", MaxHoldoutPercent, *c.Holdout)
+	}
+	if p := c.Tips.PerHour; p != nil && (*p < 1 || *p > MaxCoachTipsPerHour) {
+		return fmt.Errorf("coach.tips.per_hour must be 1 to %d, got %d", MaxCoachTipsPerHour, *p)
+	}
+	if cd := strings.TrimSpace(c.Tips.Cooldown); cd != "" {
+		if d, err := time.ParseDuration(cd); err != nil || d < time.Minute {
+			return fmt.Errorf("coach.tips.cooldown must be a duration of at least 1m, such as 30m or 2h, got %q", c.Tips.Cooldown)
+		}
 	}
 	keys := make([]string, 0, len(c.Powers))
 	for k := range c.Powers {

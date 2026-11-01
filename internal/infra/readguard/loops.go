@@ -96,6 +96,45 @@ type loopEntry struct {
 type loopState struct {
 	Recent []loopEntry     `json:"recent"`
 	Told   map[string]bool `json:"told,omitempty"`
+	// Pending are tips given and not yet settled by what the agent did
+	// next.
+	Pending []pendingTip `json:"pending,omitempty"`
+}
+
+// SettleAfter is how many further tool calls in the agent's context a
+// loop tip waits for the loop to recur. None that repeat it is following
+// the tip.
+const SettleAfter = 5
+
+// pendingTip is a loop tip waiting to be settled. Key is hashed, like the
+// window; the tip's ID is the ledger's.
+type pendingTip struct {
+	ID    string `json:"id"`
+	Kind  string `json:"kind"`
+	Key   string `json:"key"`
+	Calls int    `json:"calls,omitempty"`
+}
+
+// TipOutcome is what became of a loop tip given earlier: followed, or
+// ignored with what the agent did instead. Instead names the file or the
+// tool from the call in hand, never contents.
+type TipOutcome struct {
+	ID       string
+	Kind     string
+	Followed bool
+	Instead  string
+	Evidence string
+}
+
+// Observation is what one tool call told the loop detector.
+type Observation struct {
+	// Tip is the loop the call completes, and Spoke whether it was given
+	// (with ID, the ledger's name for it).
+	Tip   LoopTip
+	Spoke bool
+	ID    string
+	// Settled are earlier tips this call settled.
+	Settled []TipOutcome
 }
 
 // ObserveCall records one tool call in the agent context's window and
@@ -105,10 +144,28 @@ type loopState struct {
 // never speaks. Like the guard itself it fails open: unreadable state is
 // an empty window.
 func ObserveCall(dir, sessionID, agentID string, c Call, speak func(kind string) bool) (LoopTip, bool) {
+	var gate func(LoopTip) bool
+	if speak != nil {
+		gate = func(t LoopTip) bool { return speak(t.Kind) }
+	}
+	o := Observe(dir, sessionID, agentID, c, gate, nil)
+	return o.Tip, o.Spoke
+}
+
+// Observe is ObserveCall that also settles the tips given earlier: a tip
+// is ignored when the loop it named recurs within SettleAfter calls (the
+// same file read again, the same search run again with no edit between)
+// and followed when it does not, or when an edit ends a search loop.
+// speak is asked with the tip, so it can weigh the object the tip names.
+// newID names a tip given, to be settled later; nil settles nothing.
+func Observe(dir, sessionID, agentID string, c Call, speak func(LoopTip) bool, newID func() string) Observation {
 	dir = resolveDir(dir)
 	_ = os.MkdirAll(dir, 0o755)
 	path := loopFile(dir, scopeKey(sessionID, agentID))
 	st := loadLoops(path)
+
+	var o Observation
+	o.Settled, st.Pending = settle(st.Pending, c)
 
 	st.Recent = append(st.Recent, loopEntry{Kind: c.Kind, Key: c.countKey()})
 	if len(st.Recent) > LoopWindow {
@@ -116,17 +173,66 @@ func ObserveCall(dir, sessionID, agentID string, c Call, speak func(kind string)
 	}
 
 	tip, due := detectLoop(st.Recent, c)
+	o.Tip = tip
 	told := c.toldKey()
-	spoke := false
-	if due && !st.Told[told] && speak != nil && speak(tip.Kind) {
+	if due && !st.Told[told] && speak != nil && speak(tip) {
 		if st.Told == nil {
 			st.Told = map[string]bool{}
 		}
 		st.Told[told] = true
-		spoke = true
+		o.Spoke = true
+		if newID != nil {
+			o.ID = newID()
+			st.Pending = append(st.Pending, pendingTip{ID: o.ID, Kind: tip.Kind, Key: tip.settleKey()})
+		}
 	}
 	saveLoops(path, st)
-	return tip, spoke
+	return o
+}
+
+// settle weighs the pending tips against the call in hand and returns
+// those it settled and those still waiting.
+func settle(pending []pendingTip, c Call) ([]TipOutcome, []pendingTip) {
+	var out []TipOutcome
+	var still []pendingTip
+	for _, p := range pending {
+		switch {
+		case p.Kind == TipRereadChurn && c.Kind == CallRead && c.toldKey() == p.Key:
+			out = append(out, TipOutcome{ID: p.ID, Kind: p.Kind, Instead: "read " + filepath.Base(c.Path) + " again"})
+		case p.Kind == TipSearchLoop && c.Kind == CallSearch && c.countKey() == p.Key:
+			out = append(out, TipOutcome{ID: p.ID, Kind: p.Kind, Instead: "ran the same " + c.Tool + " again"})
+		case p.Kind == TipSearchLoop && c.Kind == CallEdit:
+			out = append(out, TipOutcome{ID: p.ID, Kind: p.Kind, Followed: true, Evidence: "an edit followed"})
+		case p.Calls+1 >= SettleAfter:
+			out = append(out, TipOutcome{ID: p.ID, Kind: p.Kind, Followed: true,
+				Evidence: fmt.Sprintf("not repeated in the next %d tool calls", SettleAfter)})
+		default:
+			p.Calls++
+			still = append(still, p)
+		}
+	}
+	return out, still
+}
+
+// settleKey is what a later call must match to repeat the loop the tip
+// named: the file whatever its range, or the same search.
+func (t LoopTip) settleKey() string {
+	if t.Kind == TipRereadChurn {
+		return t.call.toldKey()
+	}
+	return t.call.countKey()
+}
+
+// Object is the one thing the tip names, for the coach's ledger: a file's
+// base name, or the search's tool and a bounded slice of its pattern.
+func (t LoopTip) Object() string {
+	switch t.Kind {
+	case TipRereadChurn:
+		return filepath.Base(t.call.Path)
+	case TipSearchLoop:
+		return t.call.Tool + " " + quotePattern(t.call.Pattern)
+	}
+	return ""
 }
 
 // detectLoop reports whether the newest call, already in recent, closes

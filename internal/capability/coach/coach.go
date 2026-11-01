@@ -36,6 +36,11 @@ type Report struct {
 	// FollowThrough is what became of the coach's interventions, per
 	// kind (ADR 0006, decision 6). Only Status fills it.
 	FollowThrough []ft.Summary `json:"follow_through,omitempty"`
+	// Retired are the tip and advice kinds the coach stopped offering
+	// because, when they were seen, they were ignored (ft.Retired), with
+	// what each rests on. `tokenops coach reinstate <kind>` brings one
+	// back. Only Status fills it.
+	Retired []Retirement `json:"retired,omitempty"`
 	// Compaction is where each agent compacts on its own, as the context
 	// power has set it. Filled by Status and by changes to the coach.
 	Compaction []LeverResult `json:"compaction,omitempty"`

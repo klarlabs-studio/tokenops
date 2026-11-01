@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/routers"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 
@@ -26,6 +27,10 @@ type RoutingAdviceDeps struct {
 	// card, so "what the pricing table currently calls cheapest" was the
 	// binary's opinion, not the table's.
 	Spend *spending.Engine
+	// CoachLedger is the coach's follow-through ledger, where the tips
+	// tokenops_prepare_work gives are recorded and throttled. Nil gives
+	// tips by the coach's dials alone and records none.
+	CoachLedger func() coachcap.Ledger
 }
 
 func (d RoutingAdviceDeps) activeConfig() *config.Config {

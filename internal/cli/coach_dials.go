@@ -230,7 +230,16 @@ func renderFollowThrough(out io.Writer, r coachcap.Report) {
 			line += fmt.Sprintf(", %d acknowledged, %d expected, %d snoozed (%d%% snoozed)",
 				s.Acknowledged, s.Expected, s.Snoozed, int(s.SnoozeRate()*100+0.5))
 		}
-		if s.Quiet {
+		if s.LastInstead != "" {
+			// What the agent did instead, the last time it passed the
+			// offer over: the context that tells a bad tip from a bad
+			// moment.
+			line += fmt.Sprintf(" · last ignored%s: %s", pointWords(s.LastPoint), s.LastInstead)
+		}
+		switch {
+		case s.Retired != nil:
+			line += fmt.Sprintf(" · retired: %s (`tokenops coach reinstate %s` brings it back)", s.Retired.Why(), s.Kind)
+		case s.Quiet:
 			line += " · quiet now (turned down repeatedly; `verbosity verbose` still shows it)"
 		}
 		lines = append(lines, line)
@@ -242,6 +251,21 @@ func renderFollowThrough(out io.Writer, r coachcap.Report) {
 	for _, l := range lines {
 		fmt.Fprintf(out, "    %s\n", l)
 	}
+}
+
+// pointWords names a decision point for the follow-through line.
+func pointWords(point string) string {
+	switch point {
+	case coachcap.PointToolCall:
+		return " at a tool call"
+	case coachcap.PointPrepareWork:
+		return " at tokenops_prepare_work"
+	case coachcap.PointSubagent:
+		return " at a subagent launch"
+	case coachcap.PointModelChoice:
+		return " at the turn's model choice"
+	}
+	return ""
 }
 
 func newCoachAutonomyCmd() *cobra.Command {
