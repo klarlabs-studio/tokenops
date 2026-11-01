@@ -55,6 +55,18 @@ func TestEphemeralPathReadsTheProjectNotTheRoot(t *testing.T) {
 	}
 }
 
+// A subagent's transcript sits two directories below its project.
+func TestEphemeralPathReadsASubagentsProject(t *testing.T) {
+	scratch := filepath.Join(t.TempDir(), "-private-var-folders-x-T-worksim-1", "s1", "subagents", "agent-a1.jsonl")
+	if !EphemeralPath(scratch) {
+		t.Errorf("EphemeralPath(%q) = false — the subagent's project says scratch", scratch)
+	}
+	real := filepath.Join(t.TempDir(), "proj", "s1", "subagents", "agent-a1.jsonl")
+	if EphemeralPath(real) {
+		t.Errorf("EphemeralPath(%q) = true", real)
+	}
+}
+
 func TestKeepPreservesOrderAndDropsScratch(t *testing.T) {
 	in := []string{
 		"/r/-Users-me-src-a/1.jsonl",

@@ -74,7 +74,12 @@ func Ephemeral(projectDir string) bool {
 // EphemeralPath is Ephemeral for a transcript file, whose parent
 // directory carries the project name.
 func EphemeralPath(transcriptPath string) bool {
-	return Ephemeral(filepath.Base(filepath.Dir(transcriptPath)))
+	dir := filepath.Dir(transcriptPath)
+	// A subagent's transcript is <project>/<session>/subagents/agent-<id>.jsonl.
+	if filepath.Base(dir) == "subagents" {
+		dir = filepath.Dir(filepath.Dir(dir))
+	}
+	return Ephemeral(filepath.Base(dir))
 }
 
 // Keep filters transcript paths down to the ones describing real work.
