@@ -63,7 +63,7 @@ func TestValidateSpend(t *testing.T) {
 		"vendor day not covered":   func(u *Upload) { u.VendorCosts[0].Day = "2026-10-06" },
 		"too many vendor costs":    func(u *Upload) { u.VendorCosts = make([]VendorCost, MaxVendorCosts+1) },
 		"too many spend rows":      func(u *Upload) { u.Spend = make([]SpendBucket, MaxSpend+1) },
-		"schema beyond the newest": func(u *Upload) { u.Schema = SchemaSpend + 1 },
+		"schema beyond the newest": func(u *Upload) { u.Schema = SchemaVersion + 1 },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
