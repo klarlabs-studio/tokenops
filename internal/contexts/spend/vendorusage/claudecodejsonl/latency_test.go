@@ -9,7 +9,7 @@ import (
 func turnsFrom(t *testing.T, lines ...string) []Turn {
 	t.Helper()
 	var got []Turn
-	if err := readReader(strings.NewReader(strings.Join(lines, "\n")), "proj", func(tn Turn) error {
+	if err := readReader(strings.NewReader(strings.Join(lines, "\n")), source{project: "proj"}, func(tn Turn) error {
 		got = append(got, tn)
 		return nil
 	}); err != nil {

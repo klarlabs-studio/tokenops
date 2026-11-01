@@ -44,6 +44,10 @@ func Find(roots Roots, since time.Time) map[string]Dir {
 	if root := orDefault(roots.Claude, claudecodejsonl.DefaultRoot); root != "" {
 		if files, err := claudecodejsonl.FindSessionFiles(root); err == nil {
 			for _, f := range changedSince(files, since) {
+				// A subagent runs in its session's directory.
+				if claudecodejsonl.IsSubagentTranscript(f) {
+					continue
+				}
 				if id, d, ok := claudeDir(f); ok {
 					out[id] = d
 				}

@@ -19,7 +19,7 @@ func TestFirstTurnAfterUserPromptIsMarked(t *testing.T) {
 		`{"type":"assistant","timestamp":"2026-08-23T10:01:01Z","sessionId":"s","message":{"id":"a3","model":"claude-opus-4-8","usage":{"output_tokens":10}}}`,
 	}
 	var got []Turn
-	if err := readReader(strings.NewReader(strings.Join(lines, "\n")), "proj", func(tn Turn) error {
+	if err := readReader(strings.NewReader(strings.Join(lines, "\n")), source{project: "proj"}, func(tn Turn) error {
 		got = append(got, tn)
 		return nil
 	}); err != nil {
@@ -49,7 +49,7 @@ func TestToolResultEchoesDoNotOpenAMessage(t *testing.T) {
 		`{"type":"assistant","timestamp":"2026-08-23T10:00:03Z","sessionId":"s","message":{"id":"a2","model":"m","usage":{"output_tokens":5}}}`,
 	}
 	var got []Turn
-	if err := readReader(strings.NewReader(strings.Join(lines, "\n")), "proj", func(tn Turn) error {
+	if err := readReader(strings.NewReader(strings.Join(lines, "\n")), source{project: "proj"}, func(tn Turn) error {
 		got = append(got, tn)
 		return nil
 	}); err != nil {
@@ -73,7 +73,7 @@ func TestMixedContentPromptOpensAMessage(t *testing.T) {
 		`{"type":"assistant","timestamp":"2026-08-23T10:00:01Z","sessionId":"s","message":{"id":"a1","model":"m","usage":{"output_tokens":5}}}`,
 	}
 	var got []Turn
-	if err := readReader(strings.NewReader(strings.Join(lines, "\n")), "proj", func(tn Turn) error {
+	if err := readReader(strings.NewReader(strings.Join(lines, "\n")), source{project: "proj"}, func(tn Turn) error {
 		got = append(got, tn)
 		return nil
 	}); err != nil {
@@ -93,7 +93,7 @@ func TestBoundarySurvivesZeroUsageTurn(t *testing.T) {
 		`{"type":"assistant","timestamp":"2026-08-23T10:00:02Z","sessionId":"s","message":{"id":"a1","model":"m","usage":{"output_tokens":7}}}`,
 	}
 	var got []Turn
-	if err := readReader(strings.NewReader(strings.Join(lines, "\n")), "proj", func(tn Turn) error {
+	if err := readReader(strings.NewReader(strings.Join(lines, "\n")), source{project: "proj"}, func(tn Turn) error {
 		got = append(got, tn)
 		return nil
 	}); err != nil {

@@ -18,6 +18,10 @@ type sessionState struct {
 	CumulativeUSD    float64 `json:"cumulative_usd"`
 	MaxFiredFraction float64 `json:"max_fired_fraction"`
 	LastCountedTS    string  `json:"last_counted_ts"`
+	// SubagentCountedTS is LastCountedTS for each of the session's
+	// subagent transcripts, by file name: a subagent's turns interleave
+	// with the session's in time, so one marker would skip them.
+	SubagentCountedTS map[string]string `json:"subagent_counted_ts,omitempty"`
 	// LastNudgeAt and Nudges are what the quiet policy is measured
 	// against: when the coach last spoke in this session, and how often.
 	// Absent on state written before the policy existed, which reads as
