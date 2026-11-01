@@ -169,3 +169,35 @@ func TestSyncSendsVendorCostByTheServersRole(t *testing.T) {
 		t.Errorf("state = %+v", st)
 	}
 }
+
+// A commit a revert undid counts among the commits and again among the
+// reverted ones, sent only to a server that reads schema 4.
+func TestUnitRowsCountRevertedCommits(t *testing.T) {
+	d := spendDeps()
+	placed := d.Schema3.Placed
+	d.Schema3.Placed = func(ctx context.Context, r TurnReader, since, until time.Time) ([]uniteconomics.Placed, error) {
+		p, err := placed(ctx, r, since, until)
+		p[0].Reverted = true
+		return p, err
+	}
+	api := func(u teamwire.Upload) teamwire.UnitBucket {
+		for _, r := range u.Units {
+			if r.Repo == "acme/api" {
+				return r
+			}
+		}
+		t.Fatalf("no acme/api row: %+v", u.Units)
+		return teamwire.UnitBucket{}
+	}
+	u, _ := Build(context.Background(), d, Options{Days: 14, RepoNames: RepoRemote, Schema: teamwire.SchemaReverts}, now)
+	if r := api(u); u.Schema != teamwire.SchemaReverts || r.Commits != 1 || r.RevertedCommits != 1 || r.RevertedCommitUSD != 0.5 {
+		t.Errorf("schema %d, units = %+v", u.Schema, r)
+	}
+	if err := u.Validate(); err != nil {
+		t.Errorf("schema 4 upload does not validate: %v", err)
+	}
+	u, _ = Build(context.Background(), d, Options{Days: 14, RepoNames: RepoRemote, Schema: teamwire.SchemaSpend}, now)
+	if r := api(u); u.Schema != teamwire.SchemaSpend || r.Commits != 1 || r.RevertedCommits != 0 || r.RevertedCommitUSD != 0 {
+		t.Errorf("schema 3 server: schema %d, units = %+v", u.Schema, r)
+	}
+}

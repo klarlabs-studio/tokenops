@@ -23,6 +23,9 @@ type Placed struct {
 	Root string
 	At   time.Time
 	commits.Cost
+	// Reverted is set on a commit a revert of the operator's undid within
+	// commits.RevertWindow.
+	Reverted bool
 }
 
 // PlacedUnits are the commits and merged pull requests landed in
@@ -33,7 +36,7 @@ func (in Inputs) PlacedUnits() []Placed {
 	var out []Placed
 	for _, c := range commits.Attribute(BaselineSince(in.Since), in.Turns, in.Dirs, in.RootOf, in.CommitsOf).Commits {
 		if in.period(c.At) == 1 {
-			out = append(out, Placed{Unit: UnitCommit, Root: c.Root, At: c.At, Cost: c.Cost})
+			out = append(out, Placed{Unit: UnitCommit, Root: c.Root, At: c.At, Cost: c.Cost, Reverted: c.Reverted})
 		}
 	}
 	byPR, _, _, _, _ := in.placePRs()

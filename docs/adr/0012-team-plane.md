@@ -1,6 +1,6 @@
 # ADR 0012 — The team plane: hosted, derived figures only, aggregate by default
 
-- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*.
+- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*.
 - **Date:** 2026-10-08
 - **Deciders:** TokenOps maintainers
 - **Related:** issue #250, ADR 0004 (local-first; no BI product), ADR 0010 §5 (the API's privacy line)
@@ -240,6 +240,22 @@ registry. Every figure is a non-negative sum or a bounded amount, and a
 unit's value is never placed on no unit. `TestUploadHasNoFreeText`
 covers the new types. Day replacement and negotiation are as for schema
 2: below 3 the client sends schema 2 (or 1) exactly as before.
+
+## Upload schema 4 (amended 2026-11-01)
+
+Units of work alone reward volume: more commits look like more done,
+even when the work did not stand. Schema 4 adds the counterweight to each
+`units` row: **`reverted_commits`**, the row's commits that a later
+revert of the member's undid within 14 days (`This reverts commit <sha>`,
+as `tokenops spend units` reads it), and **`reverted_commit_usd`**, the
+value placed on them. A reverted commit still counts among `commits`; it
+is counted again here, never more often than the commits and never with
+more value than theirs. A revert that lands after a day was uploaded
+counts once the day is uploaded again, within the upload's window.
+
+No new string crosses. A server whose `max_schema` is below 4 gets
+schema 3 with the two fields left out (they are omitted when zero), so
+it sees no key it does not know.
 
 
 

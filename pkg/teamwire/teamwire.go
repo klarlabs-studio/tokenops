@@ -6,7 +6,8 @@
 // counts, token totals, costs, durations — keyed by a UTC day, a repository
 // label and a kind of work; schema 2 adds plan use, waste, savings and plan
 // advice keyed by the same and by catalog names (finops.go); schema 3 adds
-// spend by provider, units of work and vendor cost (spend.go). It has no
+// spend by provider, units of work and vendor cost (spend.go); schema 4
+// adds the reverted commits to the units. It has no
 // field that can hold a prompt, a file
 // path, a transcript, a commit message or a model output: every string in
 // it is either an enumeration or a label matched against a pattern that
@@ -26,7 +27,8 @@ import (
 
 // Upload formats. Schema 1 is the work buckets alone; schema 2 adds the
 // FinOps sections (plan days, waste, savings, plan advice); schema 3 adds
-// spend by provider, units of work and vendor cost. A client sends a
+// spend by provider, units of work and vendor cost; schema 4 adds the
+// commits a revert undid to each unit row. A client sends a
 // schema only to a server whose Me advertises a MaxSchema at least as
 // high, and otherwise the newest it reads, byte for byte as before: the
 // newer sections are omitted when empty, so an upload has no key an older
@@ -35,8 +37,9 @@ const (
 	SchemaBuckets = 1
 	SchemaFinOps  = 2
 	SchemaSpend   = 3
+	SchemaReverts = 4
 	// SchemaVersion is the newest upload format this package describes.
-	SchemaVersion = SchemaSpend
+	SchemaVersion = SchemaReverts
 )
 
 // Limits a server enforces on an upload.
@@ -157,10 +160,21 @@ type Upload struct {
 }
 
 // ForServer is u as a server that reads formats up to maxSchema accepts
-// it: without the schema 3 sections when maxSchema is below 3, and schema
-// 1, without the FinOps sections either, when it is below 2 (an older
-// server, or one that does not say). The rows are shared, not copied.
+// it: without the units' reverted commits when maxSchema is below 4,
+// without the schema 3 sections when it is below 3, and schema 1, without
+// the FinOps sections either, when it is below 2 (an older server, or one
+// that does not say). The rows are shared, not copied, except the units
+// when their reverted commits are dropped.
 func (u Upload) ForServer(maxSchema int) Upload {
+	if maxSchema < SchemaReverts && u.Schema > SchemaSpend {
+		u.Schema = SchemaSpend
+		units := make([]UnitBucket, len(u.Units))
+		for i, r := range u.Units {
+			r.RevertedCommits, r.RevertedCommitUSD = 0, 0
+			units[i] = r
+		}
+		u.Units = units
+	}
 	if maxSchema < SchemaSpend && u.Schema > SchemaFinOps {
 		u.Schema = SchemaFinOps
 		u.Spend, u.Units, u.VendorCosts = nil, nil, nil
