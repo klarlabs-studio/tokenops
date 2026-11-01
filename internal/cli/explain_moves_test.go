@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/moveverdict"
+	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 	"go.klarlabs.de/tokenops/internal/infra/moveverify"
 )
 
@@ -57,5 +59,32 @@ func TestExplainMovesAndReinstate(t *testing.T) {
 	}
 	if out := runRoot(t, "coach", "reinstate", "deep"); !strings.Contains(out, "No retracted move") {
 		t.Fatalf("reinstate of nothing = %q", out)
+	}
+}
+
+// `tokenops explain price` names λ, the window it comes from, projected
+// against remaining, and why each kind of work was or was not escalated.
+func TestExplainPrice(t *testing.T) {
+	_ = os.Remove(claudelimits.DefaultPath())
+	if out := runRoot(t, "explain", "price"); !strings.Contains(out, "No price of quota") {
+		t.Fatalf("no reading = %q", out)
+	}
+	writeCoachConfig(t, fourTiers)
+	writePressedWeek(t)
+	out := runRoot(t, "explain", "price")
+	for _, want := range []string{
+		"Price of quota (λ): 0.74, from the Claude weekly window",
+		"wants ~212% of the plan; 54% is left",
+		"edit work not escalated to claude-opus-5",
+		"deep work not escalated to claude-fable-5",
+		"never a cap",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("explain price lacks %q:\n%s", want, out)
+		}
+	}
+	var v quotaPriceView
+	if err := json.Unmarshal([]byte(runRoot(t, "explain", "price", "--json")), &v); err != nil || v.Price == nil || v.Price.Lambda < 0.7 || len(v.Escalations) != 2 {
+		t.Fatalf("json = %+v %v", v, err)
 	}
 }
