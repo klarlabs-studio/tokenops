@@ -2,6 +2,7 @@ package coach
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"crypto/rand"
@@ -13,6 +14,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
+	"go.klarlabs.de/tokenops/internal/contexts/learning"
 )
 
 // Ledger is where the coach's follow-through is kept.
@@ -132,6 +134,32 @@ func RecordSubagentMove(l Ledger, now time.Time, id, session, toolUseID, kind, f
 	}
 	_ = l.Append(ft.Entry{
 		Type: ft.EntryOffer, ID: id, At: now.UTC(), Session: session, Power: config.PowerModels,
+		Channel: ft.ChannelMove, Kind: kind, From: from, To: to, Evidence: evidence, Ref: toolUseID,
+	})
+}
+
+// HoldSubagentMove draws whether the subagent move the coach is about to
+// make is held back at random (percent of moves), and records it as a
+// holdout when it is. A held move is not made.
+func HoldSubagentMove(l Ledger, now time.Time, percent int, session, toolUseID, kind, from, to string) bool {
+	if !learning.InMoveHoldout(toolUseID, percent) {
+		return false
+	}
+	RecordSubagentHoldout(l, now, NewID(), session, toolUseID, kind, from, to,
+		fmt.Sprintf("held back at random, %d%% of moves", min(percent, learning.MaxHoldoutPercent)))
+	return true
+}
+
+// RecordSubagentHoldout records a subagent move the coach would have made
+// and held back at random, by the Agent call's tool_use_id, with the
+// chance it had of being held (evidence), so the move can be judged
+// against it.
+func RecordSubagentHoldout(l Ledger, now time.Time, id, session, toolUseID, kind, from, to, evidence string) {
+	if l == nil || id == "" {
+		return
+	}
+	_ = l.Append(ft.Entry{
+		Type: ft.EntryHoldout, ID: id, At: now.UTC(), Session: session, Power: config.PowerModels,
 		Channel: ft.ChannelMove, Kind: kind, From: from, To: to, Evidence: evidence, Ref: toolUseID,
 	})
 }

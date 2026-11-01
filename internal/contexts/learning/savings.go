@@ -149,6 +149,22 @@ func InHoldout(session, kind string, percent int) bool {
 	return int(h.Sum32()%100) < percent
 }
 
+// InMoveHoldout assigns one move the coach would make on its own, named
+// by ref (the call it would change), to the holdout with probability
+// percent/100 (clamped to MaxHoldoutPercent). Held moves are not made;
+// they are what the moves that are made are measured against. The
+// assignment hashes ref alone, so it is independent of the work, the
+// model and anything the outcome could depend on.
+func InMoveHoldout(ref string, percent int) bool {
+	if ref == "" || percent <= 0 {
+		return false
+	}
+	percent = min(percent, MaxHoldoutPercent)
+	h := fnv.New32a()
+	_, _ = h.Write([]byte("move-holdout|" + ref))
+	return int(h.Sum32()%100) < percent
+}
+
 // Implicit carries the outcomes observed outside the ledger.
 type Implicit struct {
 	// SessionPeakUSD is each session's API-equivalent spend when last
