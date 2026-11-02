@@ -144,7 +144,7 @@ func ledgerStats(hookDir, guardDir string, since time.Time) (*coachhook.Stats, *
 func Gather(g *headroom.Glance, c *coach.Report, cfg *config.Config, cacheDir string) Inputs {
 	in := Inputs{Glance: g, Coach: c, Pause: pauseSummary(cfg), Loop: loopSummary(cfg), Presence: presenceStatus(cfg)}
 	if cfg != nil {
-		in.Extras = boundaries.ActiveExtras(boundaries.Env{})
+		in.Extras = boundaries.ActiveExtras(boundaries.Env{Approval: cfg.ApprovalMode()})
 	}
 	in.CoachHook, in.ReadGuard = ledgerStats("", "", time.Now().AddDate(0, 0, -WindowDays))
 	if s, err := ReadSnapshot(cacheDir); err == nil {

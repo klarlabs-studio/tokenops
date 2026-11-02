@@ -175,6 +175,13 @@ func loopSummary(cfg *config.Config) *boundaries.PauseSummary {
 	return &p
 }
 
+func stillBind(n int) string {
+	if n == 1 {
+		return "still binds"
+	}
+	return "still bind"
+}
+
 // extraFindings says, while an extra allowance holds, which boundaries
 // it lifts and until when, so the lift is never forgotten.
 func extraFindings(extras []boundaries.ExtraView) []Finding {
@@ -185,6 +192,19 @@ func extraFindings(extras []boundaries.ExtraView) []Finding {
 		if e.Why != "" {
 			evidence = fmt.Sprintf("Granted by %s at %s: %s. They bind again on their own at %s (`tokenops explain %s`)",
 				e.Granter, clock(e.At), e.Why, clock(e.Until), e.ID)
+		}
+		if !e.Lifts() {
+			out = append(out, Finding{
+				Key: key(KindBoundary, "extra", e.ID), Kind: KindBoundary, Level: LevelWarn,
+				Title: fmt.Sprintf("Extra allowance %s is not honoured: %s %s", e.ID, strings.Join(e.Rules, ", "), stillBind(len(e.Rules))),
+				Evidence: fmt.Sprintf("boundary_approval needs a presence-signed grant, and this one is not (%s). "+
+					"Something other than `tokenops boundaries extra` wrote or edited it", e.Ignored),
+				Action: "`tokenops boundaries extra --end` clears it; grant again from your terminal to sign it.",
+			})
+			continue
+		}
+		if e.Presence == boundaries.PresenceSigned {
+			evidence += "; presence-signed with key " + e.PresenceKey
 		}
 		out = append(out, Finding{
 			Key: key(KindBoundary, "extra", e.ID), Kind: KindBoundary, Level: LevelNotice,

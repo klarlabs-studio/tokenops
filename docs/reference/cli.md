@@ -2818,11 +2818,22 @@ rules are not lifted here. The grant is recorded as a decision with who
 granted it, why and until when (`tokenops explain <id>`), and each session
 it lets past a boundary records that it did. `status`, the glance's
 findings, the menu bar and `GET /api/boundaries` (`extras`) show it while it
-holds. It is your word only: there is no MCP tool or API route for it, the
-command refuses to run without a terminal, and it is refused under
-`boundary_approval: presence`, since a grant cannot be signed yet (approve
-each ask with `tokenops approve <id> --session` instead). `--end` only
-tightens and runs anywhere.
+holds. It is your word only: there is no MCP tool or API route for it, and
+the command refuses to run without a terminal.
+
+Under `boundary_approval: presence` (or `presence-strict`) the grant is
+signed with this Mac's presence key, like an approval: one Touch ID, Apple
+Watch or password dialog names what it lifts, until when and why. The
+signature covers the rules, the start and end, who granted it, the reason
+and the grant's id, and is stored with the grant in
+`~/.tokenops/boundaries/extras.json`. The pause point honours a grant under
+presence only while that signature verifies against the enrolled key, so a
+grant written or edited by hand lifts nothing; `status` and the glance then
+say it is not honoured and why, and show a valid one as presence-signed.
+With no enrolled key, no `tokenops-presence` helper or nobody at the screen
+the grant is refused and nothing is recorded. Under `channel` nothing is
+signed and nothing changes. `--end` only tightens: it runs anywhere and
+needs no presence.
 
 ### `tokenops boundaries presence {enroll|enforce|status|rotate}`
 

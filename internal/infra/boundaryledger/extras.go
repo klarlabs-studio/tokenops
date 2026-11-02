@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"slices"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 )
 
 // Extra is a temporary extra allowance the operator granted themselves:
@@ -28,6 +30,10 @@ type Extra struct {
 	Why     string `json:"why,omitempty"`
 	// EndedAt is set when the operator ended it before Until.
 	EndedAt *time.Time `json:"ended_at,omitempty"`
+	// Grant is the presence-key signature over the grant (ADR 0015,
+	// "Extra allowances"). Under boundary_approval: presence an extra
+	// lifts nothing unless it verifies against the fields above.
+	Grant *presence.Grant `json:"presence_grant,omitempty"`
 }
 
 // Active reports whether the extra lifts its boundaries at now.
