@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.117.1 - 2026-11-02
+
 ### Fixed
 
 - **team:** `tokenops team status` said "accepts upload schema 3" to a server that accepts schema 4, and gave the team totals' retention (400 days) as how long the server keeps your own rows. It now names schema 4 and its reverted commits, and, from a server that says so (team plane 0.3.1), how long your own rows are kept after their week is released beside how long the team totals are (`teamwire.Me.PersonalRetentionDays`).
