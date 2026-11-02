@@ -234,6 +234,10 @@ func crossingsText(cs []teamwire.Crossing) string {
 			parts = append(parts, fmt.Sprintf("session $%.2f %s $%.2f", c.Value, c.Op, c.Threshold))
 		case "loop_calls":
 			parts = append(parts, fmt.Sprintf("%.0f calls round a loop %s %g", c.Value, c.Op, c.Threshold))
+		case "session_subagents":
+			parts = append(parts, fmt.Sprintf("subagent %.0f in the session %s %g", c.Value, c.Op, c.Threshold))
+		case "prompt_subagents":
+			parts = append(parts, fmt.Sprintf("subagent %.0f since the last prompt %s %g", c.Value, c.Op, c.Threshold))
 		case "plan_left_pct":
 			parts = append(parts, fmt.Sprintf("plan left %.1f%% %s %g%% (%s)", c.Value, c.Op, c.Threshold, cmp.Or(c.Window, "tightest")))
 		case "plan_runs_out_early_min":

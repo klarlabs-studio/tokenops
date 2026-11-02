@@ -2792,6 +2792,27 @@ not hold. It comes from Claude Code's status line, or else the daemon's
 figures, takes the same cross-agent reading as `plan_left_pct`, and applies
 to `continue`, `subagent_model` and `model_route` rules.
 
+**Subagent fan-out.** `prompt_subagents` counts the subagents started
+since your last prompt and `session_subagents` those started in the whole
+session, both counting the one about to start, so a single prompt cannot
+send out twenty agents without you hearing of it:
+
+```yaml
+boundaries:
+  - name: fan-out
+    action: subagent_model
+    when: { prompt_subagents: "> 5" }
+    require: ask
+```
+
+They are read from the Claude Code session's transcript when a subagent is
+about to start, and apply to `subagent_model` rules, which Claude Code's
+route-guard hook evaluates (`tokenops hooks install --route-guard`). A
+launch you declined, Claude Code stopped or a boundary refused never
+started and does not count. Slash commands, reminders and interrupts are
+not prompts; with no prompt in the transcript `prompt_subagents` is unknown
+and the rule does not hold. Only the count is kept.
+
 **The loop breaker** is the other boundary init writes: once the agent's
 latest tool calls go round a loop with no file changed (the same call four
 times, or the same two or three calls three times), the next call asks
