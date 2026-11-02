@@ -241,7 +241,7 @@ func TestHooksInstallBoundary(t *testing.T) {
 }
 
 func TestHooksInstallBoundaryRefusesClientsThatCannotRefuse(t *testing.T) {
-	for _, client := range []string{"codex", "cursor"} {
+	for _, client := range []string{"cursor"} {
 		_, err := runCLI(t, nil, "hooks", "install", "--boundary", "--client", client, "--settings", filepath.Join(t.TempDir(), "hooks.json"))
 		if err == nil || !strings.Contains(err.Error(), "advice only") {
 			t.Errorf("%s: err = %v", client, err)
@@ -410,5 +410,57 @@ func TestBoundaryHookReadsThePlanACrossAgentCallSpends(t *testing.T) {
 	b, _ := json.Marshal(ledger(t, home))
 	if strings.Contains(string(b), "secret prompt-like text") || strings.Contains(string(b), "codex exec") {
 		t.Fatal("the command reached the decision record")
+	}
+}
+
+// Codex's PreToolUse hook can refuse a call but not ask: an ask comes back
+// as a refusal with the way out, the plan read is Codex's, and the
+// project is the working directory Codex sends.
+func TestBoundaryHookOnCodex(t *testing.T) {
+	home := boundaryHome(t, `boundaries:
+  - name: headroom-pause
+    action: continue
+    when: { plan_left_pct: "<= 10" }
+    require: ask
+    stage: enforce
+`, 0)
+	dir := boundaryledger.Dir(filepath.Join(home, ".tokenops", "boundaries"))
+	if err := dir.PutFigures(boundaryledger.Figures{ObservedAt: time.Now(),
+		PlanLeftPct: map[string]map[string]float64{"anthropic": {"week": 3}, "openai": {"week": 50}}}); err != nil {
+		t.Fatal(err)
+	}
+	hook := func(session, command string) hookDecision {
+		t.Helper()
+		body, _ := json.Marshal(map[string]any{
+			"session_id": session, "transcript_path": filepath.Join(home, ".codex", "sessions", "rollout-x.jsonl"),
+			"tool_use_id": "call_1", "hook_event_name": "PreToolUse", "cwd": "/work/api", "model": "gpt-6.1",
+			"permission_mode": "default", "tool_name": "Bash", "tool_input": map[string]any{"command": command},
+		})
+		out, err := runCLI(t, body, "boundary-guard", "--client", "codex")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var d hookDecision
+		if out != "" {
+			if err := json.Unmarshal([]byte(out), &d); err != nil {
+				t.Fatalf("hook output %q: %v", out, err)
+			}
+		}
+		return d
+	}
+	// Codex has room: its own plan is read, not Claude's.
+	if d := hook("c1", "go test ./..."); d.HookSpecificOutput.PermissionDecision != "" {
+		t.Fatalf("Codex with room was stopped on Claude's plan: %+v", d)
+	}
+	// Starting Claude Code from Codex spends the Claude plan.
+	d := hook("c2", `claude -p "review this"`)
+	h := d.HookSpecificOutput
+	if h.PermissionDecision != "deny" || !strings.Contains(h.PermissionDecisionReason, "Claude plan left 3.0%") ||
+		!strings.Contains(h.PermissionDecisionReason, "tokenops approve bnd-") {
+		t.Fatalf("an ask on Codex = %+v; want a refusal with the way out", h)
+	}
+	p := ledger(t, home)[0].Payload.(*eventschema.DecisionEvent)
+	if p.Actor.AgentID != "codex:api" {
+		t.Fatalf("attribution = %q", p.Actor.AgentID)
 	}
 }

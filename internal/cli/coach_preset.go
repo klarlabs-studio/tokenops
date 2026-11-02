@@ -145,7 +145,7 @@ var presetClients = []struct {
 // installed here. Hooks follow the coach block at run time, so the same
 // set serves every preset: observe records through them without speaking.
 // boundary adds the pause point where a harness can refuse a call
-// (Claude Code, opencode), for a config whose boundaries need it.
+// (Claude Code, opencode, Codex), for a config whose boundaries need it.
 func wirePresetHooks(boundary bool) []coachcap.HookInstall {
 	var out []coachcap.HookInstall
 	for _, c := range presetClients {
@@ -169,7 +169,7 @@ func wirePresetHooks(boundary bool) []coachcap.HookInstall {
 // pausesCalls reports whether a client's hooks can refuse a tool call,
 // which the boundary pause point needs.
 func pausesCalls(client string) bool {
-	return client == hookClientClaudeCode || client == hookClientOpencode
+	return client == hookClientClaudeCode || client == hookClientOpencode || client == hookClientCodex
 }
 
 // clientInstalled reports whether an agent has its configuration

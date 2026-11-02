@@ -70,7 +70,7 @@ Install it with 'tokenops hooks install --boundary'.`,
 			return runBoundaryGuard(cmd, rf, client)
 		},
 	}
-	cmd.Flags().StringVar(&client, "client", bcap.HarnessClaudeCode, "client that runs the hook: claude-code | opencode")
+	cmd.Flags().StringVar(&client, "client", bcap.HarnessClaudeCode, "client that runs the hook: claude-code | opencode | codex")
 	return cmd
 }
 
@@ -84,8 +84,11 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 		return nil
 	}
 	harness := bcap.HarnessClaudeCode
-	if strings.EqualFold(client, bcap.HarnessOpencode) {
+	switch {
+	case strings.EqualFold(client, bcap.HarnessOpencode):
 		harness = bcap.HarnessOpencode
+	case strings.EqualFold(client, bcap.HarnessCodex):
+		harness = bcap.HarnessCodex
 	}
 	call := bcap.Call{
 		Harness: harness, SessionID: in.SessionID, TranscriptPath: in.TranscriptPath,
@@ -103,19 +106,28 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 			}
 		}
 	}
-	if harness == bcap.HarnessClaudeCode {
+	switch harness {
+	case bcap.HarnessClaudeCode:
 		// A budget on another provider's bill is not this session's.
 		call.Biller = attribution.ClaudeCodeSessionBiller(os.Getenv, in.TranscriptPath, "")
+	case bcap.HarnessCodex:
+		// Codex runs on the OpenAI plan; its transcripts sit by date,
+		// not by project, so the project is the working directory.
+		call.Provider, call.Biller = "openai", "openai"
 	}
 	project := bcap.TranscriptProject(in.TranscriptPath)
 	call.Folder = in.Cwd
-	if in.Directory != "" {
+	switch {
+	case in.Directory != "":
 		project = filepath.Base(in.Directory)
 		call.Folder = in.Directory
+	case harness == bcap.HarnessCodex:
+		project = filepath.Base(in.Cwd)
 	}
 	call.AgentID, call.WorkflowID = bcap.Attribution(harness, in.SessionID, project)
-	// opencode's tool.execute.before refuses by throwing and has no
-	// prompt to answer, so an ask there is a refusal with the way out.
+	// opencode's tool.execute.before refuses by throwing, and Codex's
+	// PreToolUse takes deny but not ask: neither has a prompt to answer,
+	// so an ask there is a refusal with the way out.
 	env := bcap.Env{Attended: harness == bcap.HarnessClaudeCode && sessionAttended()}
 	cfg, err := loadConfig(rf)
 	if err != nil {
@@ -124,6 +136,11 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 	}
 	env.Approval = cfg.ApprovalMode()
 	res := guardWithTimeout(cmd.Context(), cfg, call, env, bcap.Pause)
+	if harness == bcap.HarnessCodex && res.Verdict == bcap.VerdictAsk {
+		// Codex rejects permissionDecision "ask" as unsupported and runs
+		// the call: an ask that reached here would let it through.
+		res.Verdict = bcap.VerdictDeny
+	}
 	return writeBoundaryVerdict(cmd.OutOrStdout(), res)
 }
 
@@ -331,7 +348,7 @@ Once the tightest plan window TokenOps knows is down to 10% left, the
 agent's next tool call asks first. It starts in shadow: it records each session it would
 have paused and binds nothing until 'tokenops boundaries promote
 headroom-pause'. It also installs the pause point (the boundary hook) in
-Claude Code and opencode where they are installed. A config that already
+Claude Code, opencode and Codex where they are installed. A config that already
 has a continue rule on plan_left_pct is left as it is.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -344,7 +361,7 @@ has a continue rule on plan_left_pct is left as it is.`,
 				return err
 			}
 			var hooks []string
-			for _, client := range []string{hookClientClaudeCode, hookClientOpencode} {
+			for _, client := range []string{hookClientClaudeCode, hookClientOpencode, hookClientCodex} {
 				if !clientInstalled(client) {
 					continue
 				}

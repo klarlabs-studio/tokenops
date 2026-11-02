@@ -2740,8 +2740,8 @@ tokenops boundaries loop-breaker    # add the loop breaker to an older config, i
 Every rule starts in **shadow**: it records what it would have done and
 changes nothing. `status` shows how often each rule matched — for a
 shadow rule, how often it would have fired — and, per client, whether it
-is enforced, in shadow, advice only (Codex and Cursor, whose hooks cannot
-refuse a call), or waiting on its hook; for `model_route` and `share`
+is enforced, in shadow, advice only (Cursor, whose hooks cannot refuse a
+call), or waiting on its hook; for `model_route` and `share`
 rules, whether the router, the team upload and the OTel export enforce
 them or are idle. `promote` writes `stage: enforce`
 to the rule in `config.yaml`; `demote` puts it back in shadow. Neither
@@ -2754,9 +2754,19 @@ glance's findings say how many sessions it would have paused this week;
 `tokenops boundaries promote headroom-pause` makes it pause. A config
 written before init did this is not changed: the findings suggest
 `tokenops boundaries headroom-pause`, which adds the rule in shadow and
-installs the pause point in Claude Code and opencode. A config that already
-has a `continue` rule on `plan_left_pct` is left as it is. Like `promote`,
-it has no MCP equivalent.
+installs the pause point in Claude Code, opencode and Codex. A config that
+already has a `continue` rule on `plan_left_pct` is left as it is. Like
+`promote`, it has no MCP equivalent.
+
+**Codex.** `tokenops hooks install --boundary --client codex` writes the
+pause point to `~/.codex/hooks.json` as a `PreToolUse` hook on every tool.
+Codex's hook can refuse a call but not ask, so a rule that asks refuses
+there with the `tokenops approve` command that lets the session go on,
+as in opencode. It reads the Codex plan, the loop breaker and folder
+rules work as in Claude Code, and `subagent_model` rules stay advice.
+Codex runs a hook only once you trust it (`/hooks` in Codex), and skips
+it silently until then: `status` reports a hook that is written but not
+trusted as not installed, with that step, and never as enforced.
 
 **Calls that start another agent.** In Claude Code, a shell call that
 starts another agent's CLI (`codex`, `gemini`, `cursor-agent`, `copilot`)
