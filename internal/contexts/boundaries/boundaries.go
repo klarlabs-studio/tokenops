@@ -586,6 +586,10 @@ type Facts struct {
 	// PlanVendor names whose plan PlanLeftPct reads ("Claude"); empty
 	// when it is the tightest across every plan.
 	PlanVendor string
+	// PlanVendors names whose plan each window reads when they differ: a
+	// call that starts another agent reads that agent's plan too, and
+	// each window keeps the tighter. A window absent here is PlanVendor's.
+	PlanVendors map[Window]string
 	// BudgetUsedPct is the share of each configured budget used in its
 	// current window, by budget name. A budget absent is unknown.
 	BudgetUsedPct map[string]float64
@@ -685,7 +689,11 @@ func (c Condition) holds(f Facts) (string, bool) {
 		if !ok || !compare(left, c.Op, c.Number) {
 			return "", false
 		}
-		return strings.TrimSpace(fmt.Sprintf("%s plan left %.1f%% %s %g%% (%s)", f.PlanVendor, left, c.Op, c.Number, window)), true
+		vendor := f.PlanVendor
+		if v := f.PlanVendors[window]; v != "" {
+			vendor = v
+		}
+		return strings.TrimSpace(fmt.Sprintf("%s plan left %.1f%% %s %g%% (%s)", vendor, left, c.Op, c.Number, window)), true
 	case FieldBudgetUsed:
 		used, name, ok := budgetUsed(f.BudgetUsedPct, c.Budget)
 		if !ok || !compare(used, c.Op, c.Number) {

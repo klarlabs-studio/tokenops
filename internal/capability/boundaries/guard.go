@@ -6,6 +6,7 @@ package boundaries
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -152,6 +153,10 @@ type Call struct {
 	// Folder is the session's working directory, for folder conditions.
 	// It is compared and dropped: no decision or file keeps it.
 	Folder string
+	// Spends names the providers whose agent the call starts, other than
+	// the harness's own (PlansStartedBy): `codex exec` from Claude Code
+	// spends the Codex plan, and a headroom rule reads it too.
+	Spends []string
 }
 
 // Attribution derives the agent and workflow ids every other surface
@@ -340,6 +345,22 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 			}
 		}
 	}
+	if needs(rules, domain.FieldPlanLeft) && len(call.Spends) > 0 {
+		if fig, ok := figs.get(); ok {
+			for _, provider := range call.Spends {
+				left := figuresPlanLeft(fig, provider)
+				if len(left) == 0 {
+					continue
+				}
+				f.PlanLeftPct, f.PlanVendors = tighterPlan(f.PlanLeftPct, f.PlanVendors, f.PlanVendor, left, planVendor(provider))
+				ev = append(ev, eventschema.EvidenceRef{
+					Kind: "plan_headroom", Source: "daemon_glance", ObservedAt: fig.ObservedAt,
+					FreshUntil: fig.ObservedAt.Add(figuresFreshFor), Confidence: 1, Scope: provider,
+					Caveat: "the tool call starts " + planVendor(provider) + ", which spends that plan",
+				})
+			}
+		}
+	}
 	if needs(rules, domain.FieldLoopCalls) {
 		if loop, ok := readLoop(call, env); ok {
 			f.Loop = loop
@@ -447,6 +468,29 @@ func figuresPlanLeft(fig boundaryledger.Figures, provider string) map[domain.Win
 		add(windows)
 	}
 	return out
+}
+
+// tighterPlan keeps, for each window, the smaller share left of the
+// session's plan and another plan the call spends, and whose each one is.
+func tighterPlan(left map[domain.Window]float64, vendors map[domain.Window]string, vendor string,
+	other map[domain.Window]float64, otherVendor string) (map[domain.Window]float64, map[domain.Window]string) {
+	merged := maps.Clone(left)
+	if merged == nil {
+		merged = map[domain.Window]float64{}
+	}
+	byWindow := map[domain.Window]string{}
+	for w := range merged {
+		byWindow[w] = vendor
+		if v := vendors[w]; v != "" {
+			byWindow[w] = v
+		}
+	}
+	for w, v := range other {
+		if cur, ok := merged[w]; !ok || v < cur {
+			merged[w], byWindow[w] = v, otherVendor
+		}
+	}
+	return merged, byWindow
 }
 
 // planLeft is the share of each Claude plan window left, from the

@@ -28,9 +28,10 @@ const boundaryTimeout = 2 * time.Second
 // boundaryHookInput is what the pause point reads from a PreToolUse
 // payload: ids, the tool's name, its input and the working directory. The
 // input is only hashed, here, for the loop breaker (bcap.HashToolInput),
-// and dropped; the working directory is compared with folder conditions
-// and dropped: no prompt, path or command reaches the boundary engine's
-// files.
+// and a shell command is read for the agents it starts
+// (bcap.PlansStartedBy), then dropped; the working directory is compared
+// with folder conditions and dropped: no prompt, path or command reaches
+// the boundary engine's files.
 type boundaryHookInput struct {
 	SessionID      string          `json:"session_id"`
 	TranscriptPath string          `json:"transcript_path"`
@@ -59,7 +60,8 @@ otherwise refuses with the rule and the tokenops approve command; an
 enforced deny rule refuses.
 
 It reads ids and the tool's name; the tool's input is hashed for the loop
-breaker and never kept. It fails open: any error or timeout lets the call
+breaker and never kept. A shell command that starts another agent (codex,
+gemini, cursor-agent, copilot) also reads that agent's plan headroom. It fails open: any error or timeout lets the call
 through and is recorded.
 
 Install it with 'tokenops hooks install --boundary'.`,
@@ -91,6 +93,15 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 	}
 	if in.ToolInput != nil {
 		call.ArgsHash = bcap.HashToolInput(in.ToolInput)
+		if strings.EqualFold(in.ToolName, "Bash") {
+			// A shell call that starts another agent spends its plan.
+			var bash struct {
+				Command string `json:"command"`
+			}
+			if json.Unmarshal(in.ToolInput, &bash) == nil {
+				call.Spends = bcap.PlansStartedBy(bash.Command, harness)
+			}
+		}
 	}
 	if harness == bcap.HarnessClaudeCode {
 		// A budget on another provider's bill is not this session's.
