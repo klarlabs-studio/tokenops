@@ -44,7 +44,8 @@ func AdviceNow(rules []domain.Rule, env Env, reports []plans.HeadroomReport) []A
 	if len(plan.PlanLeftPct) == 0 {
 		plan = Figures(reports, nil, now)
 	}
-	facts := domain.Facts{PlanLeftPct: figuresPlanLeft(plan, ""), BudgetUsedPct: fig.BudgetUsedPct, Now: env.localNow()}
+	facts := domain.Facts{PlanLeftPct: figuresPlanLeft(plan, ""), PlanEarlyMin: figuresPlanEarly(plan, ""),
+		BudgetUsedPct: fig.BudgetUsedPct, Now: env.localNow()}
 	var out []Advice
 	for _, r := range judged {
 		m, ok := r.Match(r.Action, facts)
@@ -73,7 +74,7 @@ func GlanceAdvice(cfg *config.Config, reports []plans.HeadroomReport) []Advice {
 func sessionFree(r domain.Rule) bool {
 	for _, c := range r.When {
 		switch c.Field {
-		case domain.FieldPlanLeft, domain.FieldBudgetUsed, domain.FieldHours:
+		case domain.FieldPlanLeft, domain.FieldPlanEarly, domain.FieldBudgetUsed, domain.FieldHours:
 		default:
 			return false
 		}

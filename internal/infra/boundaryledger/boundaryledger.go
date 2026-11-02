@@ -548,6 +548,10 @@ type Figures struct {
 	ObservedAt time.Time `json:"observed_at"`
 	// PlanLeftPct is each provider's share left, by window ("5h", "week").
 	PlanLeftPct map[string]map[string]float64 `json:"plan_left_pct,omitempty"`
+	// PlanEarlyMin is how many minutes before its reset each provider's
+	// window runs out at the pace so far, by window; 0 while it lasts. A
+	// window too early to judge is absent.
+	PlanEarlyMin map[string]map[string]float64 `json:"plan_early_min,omitempty"`
 	// BudgetUsedPct is each configured budget's share used in its current
 	// window, by budget name. A budget with several windows has one entry
 	// per window ("name:daily") and one by its name, its fullest window.

@@ -2769,6 +2769,19 @@ command. The other plan is read from the daemon's figures; with the daemon
 stopped it is unknown and the call goes ahead. opencode already compares
 the tightest plan of every provider.
 
+**Pause on pace.** `plan_runs_out_early_min` compares how many minutes
+before its reset a plan window runs out at the pace so far (0 while it
+lasts to the reset), so a rule can pause on the pace instead of a share
+left: a 5-hour window 75% used half way through runs out 1h 40m early, and
+`when: { plan_runs_out_early_min: ">= 60" }` holds there while `plan_left_pct:
+"<= 10"` does not yet. `window: 5h` or `week` names one window; without it
+the one running out furthest ahead counts. The pace is judged only once a
+tenth of the window has gone by, so a burst in its first minutes is not
+read as the rest of it; before that the figure is unknown and the rule does
+not hold. It comes from Claude Code's status line, or else the daemon's
+figures, takes the same cross-agent reading as `plan_left_pct`, and applies
+to `continue`, `subagent_model` and `model_route` rules.
+
 **The loop breaker** is the other boundary init writes: once the agent's
 latest tool calls go round a loop with no file changed (the same call four
 times, or the same two or three calls three times), the next call asks
