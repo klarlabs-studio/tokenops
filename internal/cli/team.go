@@ -239,10 +239,20 @@ func newTeamStatusCmd(rf *rootFlags) *cobra.Command {
 }
 
 func writeMe(out io.Writer, me teamwire.Me) {
-	fmt.Fprintf(out, "\nThe server holds %d rows over %d days about you (%s, %s), kept %d days.\n",
-		me.Buckets, me.Days, me.DisplayName, me.Role, me.RetentionDays)
+	if me.PersonalRetentionDays > 0 {
+		fmt.Fprintf(out, "\nThe server holds %d rows over %d days about you (%s, %s), kept %d days after their week is released; team totals are kept %d days.\n",
+			me.Buckets, me.Days, me.DisplayName, me.Role, me.PersonalRetentionDays, me.RetentionDays)
+	} else {
+		fmt.Fprintf(out, "\nThe server holds %d rows over %d days about you (%s, %s), kept %d days.\n",
+			me.Buckets, me.Days, me.DisplayName, me.Role, me.RetentionDays)
+	}
 	fmt.Fprintf(out, "Team, repository and kind-of-work totals withhold groups under %d people.\n", me.MinGroupSize)
 	switch {
+	case me.MaxSchema >= teamwire.SchemaReverts:
+		fmt.Fprintln(out, "The server accepts upload schema 4: plan use, waste, realized savings, plan advice, spend by provider and units of work, with their reverted commits, are sent with the work figures.")
+		if slices.Contains(teamwire.VendorCostRoles, me.Role) {
+			fmt.Fprintln(out, "As an owner or admin, this machine also sends the vendor's daily bill when an admin key is configured; the key stays here.")
+		}
 	case me.MaxSchema >= teamwire.SchemaSpend:
 		fmt.Fprintln(out, "The server accepts upload schema 3: plan use, waste, realized savings, plan advice, spend by provider and units of work are sent with the work figures.")
 		if slices.Contains(teamwire.VendorCostRoles, me.Role) {
