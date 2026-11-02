@@ -6,6 +6,10 @@
 
 - **boundaries:** a call that starts another agent reads that agent's plan. A Claude Code session with room that ran `codex exec …` while the Codex plan was used up went ahead, because the headroom pause read only the Claude plan, so an agent could carry on by handing its work to another one. The pause point now reads which agent a shell call starts (`codex`, `gemini`, `cursor-agent`, `copilot`, by its command word, so `brew upgrade codex` or `cat codex.md` start nothing) and compares the tighter of the session's plan and that agent's, window by window; the reason names whose plan it read ("Codex plan left 4.0% <= 10% (week)"). Only the provider's name is kept, never the command. The other plan is read from the daemon's figures, so with the daemon stopped it is unknown and the call goes ahead. opencode already compared the tightest plan of every provider.
 
+### Fixed
+
+- **plans:** a model's own weekly limit could stand in for the account's week. Anthropic can send a model's weekly window as a top-level block (`seven_day_opus`, `seven_day_sonnet`, and on Ultra the separate Fable week) with no scope of its own, and TokenOps read each one as the plain weekly window. They then collided with the account-wide week, and whichever came first in map order became the week the glance showed and the headroom pause compared against: an Ultra account near its Fable limit could pause every session, and one near its account week could look fine. Each is now its own window, `week (Fable)`, `week (Opus)`, `week (OAuth apps)`, beside the account's `week`, and boundaries keep reading only the account's.
+
 ## 0.117.1 - 2026-11-02
 
 ### Fixed
