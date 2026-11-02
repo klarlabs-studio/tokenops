@@ -168,3 +168,33 @@ func TestVendorWindowsCarryTheirReading(t *testing.T) {
 		t.Errorf("idle status line marked stale: %+v", got)
 	}
 }
+
+// A model's own weekly limit sent as a top-level block (seven_day_opus,
+// and Ultra's Fable week) is that model's week, never the account's: read
+// as plain "week" it collided with the account-wide week, and whichever
+// map order came first set the headroom a boundary pauses on.
+func TestTopLevelModelWeekIsScoped(t *testing.T) {
+	now := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
+	meter := &eventschema.Envelope{Source: "claude-usage-meter", Timestamp: now.Add(-time.Minute), Attributes: map[string]string{
+		"seven_day_used_pct": "20.00", "seven_day_reset_at": "2026-11-07T23:00:00Z",
+		"seven_day_fable_used_pct": "96.00", "seven_day_fable_reset_at": "2026-11-07T23:00:00Z",
+		"seven_day_opus_used_pct":       "50.00",
+		"seven_day_oauth_apps_used_pct": "10.00",
+	}}
+	r := authFakeReader{events: []*eventschema.Envelope{meter}}
+	for range 20 { // map order must not matter
+		names := map[string]float64{}
+		for _, w := range VendorWindows(context.Background(), r, eventschema.ProviderAnthropic, now) {
+			if _, dup := names[w.Name]; dup {
+				t.Fatalf("window %q read twice", w.Name)
+			}
+			names[w.Name] = w.UsedPct
+		}
+		want := map[string]float64{"week": 20, "week (Fable)": 96, "week (Opus)": 50, "week (OAuth apps)": 10}
+		for name, pct := range want {
+			if got, ok := names[name]; !ok || got != pct {
+				t.Fatalf("%s = %v (present %v), all %v", name, got, ok, names)
+			}
+		}
+	}
+}
