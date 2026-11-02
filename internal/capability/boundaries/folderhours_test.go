@@ -71,7 +71,7 @@ func TestStatusShowsConditionsAndWhetherHoursHoldNow(t *testing.T) {
 		t.Errorf("night condition = %+v; noon is outside", h)
 	}
 	for _, h := range st.Rules[0].Harnesses {
-		if (h.Harness == HarnessCodex || h.Harness == HarnessCursor) && h.Enforcement != EnforcementNotEvaluated {
+		if h.Harness == HarnessCursor && h.Enforcement != EnforcementNotEvaluated {
 			t.Errorf("%s: %s; a folder rule cannot be judged without a working directory", h.Harness, h.Enforcement)
 		}
 	}

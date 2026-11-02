@@ -168,10 +168,19 @@ func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget f
 			event:   "PreToolUse",
 			matcher: "*",
 			marker:  "boundary-guard",
-			args:    []string{"boundary-guard"},
+			args:    boundaryArgs(provider),
 		})
 	}
 	return out
+}
+
+// boundaryArgs is the pause point's command: Codex's runs it told so,
+// since Codex takes a refusal but not an ask.
+func boundaryArgs(provider string) []string {
+	if provider == "openai" {
+		return []string{"boundary-guard", "--client", hookClientCodex}
+	}
+	return []string{"boundary-guard"}
 }
 
 // loopTipMatcher is the second matcher read-guard is installed on: the
@@ -273,7 +282,7 @@ func resolveHookConfigPath(client, override string) (string, error) {
 // codebase keeps finding in other people's tools; declining out loud is
 // the only honest option until Codex grows a read tool.
 func refuseUnsupportedHook(client string, readGuard, boundary bool) error {
-	if boundary && (strings.EqualFold(client, hookClientCursor) || strings.EqualFold(client, hookClientCodex)) {
+	if boundary && strings.EqualFold(client, hookClientCursor) {
 		return fmt.Errorf(
 			"boundary-guard is not installed on %s: its hooks cannot refuse every tool call, so a boundary there "+
 				"would claim enforcement it lacks. `tokenops boundaries status` reports its rules as advice only", client)

@@ -42,7 +42,7 @@ func HeadroomPause(cfg config.Config, env Env, installed map[string]bool) (Pause
 	}
 	out := PauseSummary{
 		Configured: true, Rule: r.Name, Stage: string(r.Stage),
-		PausePoint: installed[HarnessClaudeCode] || installed[HarnessOpencode],
+		PausePoint: installed[HarnessClaudeCode] || installed[HarnessOpencode] || installed[HarnessCodex],
 		When:       planLeftWords(r), Require: string(r.Require.Kind),
 	}
 	sessions, err := env.Dir.Sessions()
