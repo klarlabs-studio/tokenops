@@ -1,6 +1,8 @@
 package boundaries
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -11,7 +13,9 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/capability/explain"
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
+	infrapresence "go.klarlabs.de/tokenops/internal/infra/presence"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -38,6 +42,10 @@ type ExtraRequest struct {
 	Why string
 	// Method is how the grant reached TokenOps; only the CLI grants.
 	Method string
+	// Signer signs the grant with this Mac's presence key when
+	// boundary_approval is presence or presence-strict (ADR 0015, "Extra
+	// allowances"); unused otherwise.
+	Signer Signer
 }
 
 // ExtraView is an extra allowance as status, the glance and the API show
@@ -49,11 +57,23 @@ type ExtraView struct {
 	Until   time.Time `json:"until"`
 	Granter string    `json:"granter"`
 	Why     string    `json:"why,omitempty"`
+	// Presence is "signed" when the grant carries a valid presence-key
+	// signature, and "refused" when presence is enforced and it does not,
+	// so it lifts nothing; empty for an unsigned grant under channel.
+	Presence string `json:"presence,omitempty"`
+	// PresenceKey is the key that signed it.
+	PresenceKey string `json:"presence_key,omitempty"`
+	// Ignored says why a refused grant lifts nothing.
+	Ignored string `json:"ignored,omitempty"`
 }
 
 func extraView(e boundaryledger.Extra) ExtraView {
 	return ExtraView{ID: e.ID, Rules: e.Rules, At: e.At, Until: e.Until, Granter: e.Granter, Why: e.Why}
 }
+
+// Lifts reports whether the extra allowance lifts its boundaries: every
+// one does under channel, and under presence only a signed one.
+func (v ExtraView) Lifts() bool { return v.Presence != PresenceRefused }
 
 // ExtraGranted is what a grant did.
 type ExtraGranted struct {
@@ -62,19 +82,24 @@ type ExtraGranted struct {
 }
 
 // GrantExtra records an extra allowance. It is the operator's word only:
-// no MCP tool or API route reaches it, the CLI refuses it without a
-// terminal, and it is refused while approvals must be signed
-// (boundary_approval: presence), since a grant cannot be signed yet. The
-// grant is recorded as a decision with who granted it, why and until
-// when, and it ends on its own.
-func GrantExtra(rules []domain.Rule, env Env, req ExtraRequest) (ExtraGranted, error) {
+// no MCP tool or API route reaches it, and the CLI refuses it without a
+// terminal. While approvals must be signed (boundary_approval: presence
+// or presence-strict) the grant is signed with this Mac's presence key
+// through req.Signer, which raises the dialog; without a key, a helper or
+// a person at the screen it is refused, and the pause point honours it
+// only while the signature verifies. The grant is recorded as a decision
+// with who granted it, why and until when, and it ends on its own.
+func GrantExtra(ctx context.Context, rules []domain.Rule, env Env, req ExtraRequest) (ExtraGranted, error) {
 	if req.Method != MethodCLI {
 		return ExtraGranted{}, actions.InputError{Err: fmt.Errorf("an extra allowance is the operator's word: " +
 			"run `tokenops boundaries extra` in your own terminal; an agent cannot grant one")}
 	}
+	var trust presence.Trust
 	if env.approval().Enforced() {
-		return ExtraGranted{}, actions.InputError{Err: fmt.Errorf("boundary_approval is %s, and an extra allowance cannot be "+
-			"signed yet: answer each ask with `tokenops approve <id> --session`, which signs", env.approval())}
+		var err error
+		if trust, err = grantTrust(env, req.Signer); err != nil {
+			return ExtraGranted{}, err
+		}
 	}
 	now := env.now()
 	until, err := extraUntil(req, now)
@@ -89,15 +114,110 @@ func GrantExtra(rules []domain.Rule, env Env, req ExtraRequest) (ExtraGranted, e
 		ID: domain.DecisionID("_extra", uuid.NewString()), Rules: names,
 		At: now, Until: until, Granter: env.user(), Method: req.Method, Why: strings.TrimSpace(req.Why),
 	}
+	if env.approval().Enforced() {
+		if err := signExtra(ctx, env, req.Signer, trust, &e); err != nil {
+			return ExtraGranted{}, err
+		}
+	}
 	if err := env.Dir.PutExtra(e, now); err != nil {
 		return ExtraGranted{}, err
 	}
 	if err := env.Dir.Append(extraEnvelope(e, eventschema.DecisionStageAccepted, now)); err != nil {
 		return ExtraGranted{}, err
 	}
-	return ExtraGranted{ExtraView: extraView(e), Note: fmt.Sprintf("%s will not ask or refuse until %s; "+
-		"then %s again on its own. `tokenops boundaries extra --end` ends it sooner",
-		strings.Join(names, ", "), until.Local().Format("15:04"), bindWord(len(names)))}, nil
+	view := extraView(e)
+	note := fmt.Sprintf("%s will not ask or refuse until %s; then %s again on its own. "+
+		"`tokenops boundaries extra --end` ends it sooner",
+		strings.Join(names, ", "), e.Until.Local().Format("15:04"), bindWord(len(names)))
+	if e.Grant != nil {
+		view.Presence, view.PresenceKey = PresenceSigned, e.Grant.Key
+		note += "; signed with presence key " + e.Grant.Key + ", and honoured only while that signature verifies"
+	}
+	return ExtraGranted{ExtraView: view, Note: note}, nil
+}
+
+// grantTrust is the key a grant is signed under when presence is
+// enforced: refused, wrapping ErrPresenceUnavailable, when there is no
+// helper or no usable key.
+func grantTrust(env Env, s Signer) (presence.Trust, error) {
+	if s == nil {
+		return presence.Trust{}, extraUnavailable(env, unavailable{"the presence helper is not installed on this machine"})
+	}
+	trust, err := signingTrust(env)
+	if err != nil {
+		return presence.Trust{}, extraUnavailable(env, err)
+	}
+	return trust, nil
+}
+
+func extraUnavailable(env Env, err error) error {
+	return fmt.Errorf("boundary_approval is %s, so an extra allowance must be signed with this Mac's presence key, "+
+		"and it cannot be: %w; nothing was granted", env.approval(), err)
+}
+
+// signExtra has the person at this Mac sign the grant (one dialog naming
+// what it lifts and until when) and attaches the signature. The grant's
+// times are whole seconds, as the statement binds them. The signature is
+// checked before the grant is stored, so a blob that does not match the
+// enrolled key is caught here, not by a grant that silently lifts nothing.
+func signExtra(ctx context.Context, env Env, s Signer, trust presence.Trust, e *boundaryledger.Extra) error {
+	e.At, e.Until = e.At.UTC().Truncate(time.Second), e.Until.UTC().Truncate(time.Second)
+	g := presence.Grant{
+		V: presence.Version, Key: trust.Key.ID, ID: e.ID, Rules: e.Rules,
+		Granter: e.Granter, Why: e.Why, At: e.At, Until: e.Until,
+	}
+	msg, err := g.Message()
+	if err != nil {
+		return err
+	}
+	if g.Sig, err = s.Sign(ctx, env.presenceDir().BlobPath(), msg, infrapresence.DialogText(extraDialog(*e))); err != nil {
+		if err = signError(err); errors.Is(err, ErrPresenceUnavailable) {
+			return extraUnavailable(env, err)
+		}
+		return fmt.Errorf("%w: nothing was granted", err)
+	}
+	if res := presence.VerifyGrant(&g, grantExpect(*e, env.now()), trust); !res.OK() {
+		return fmt.Errorf("the signature the presence helper returned is not valid (%s): re-enrol with `%s --replace`",
+			res.Reason.Phrase(), EnrolCommand)
+	}
+	e.Grant = &g
+	return nil
+}
+
+// extraDialog is the dialog's text: what the grant lifts, until when, and
+// why, because a paired Apple Watch shows only this.
+func extraDialog(e boundaryledger.Extra) string {
+	text := fmt.Sprintf("grant a TokenOps extra allowance lifting %s until %s",
+		strings.Join(e.Rules, ", "), e.Until.Local().Format("Mon 15:04"))
+	if e.Why != "" {
+		text += " (" + e.Why + ")"
+	}
+	return text
+}
+
+func grantExpect(e boundaryledger.Extra, now time.Time) presence.GrantExpect {
+	return presence.GrantExpect{ID: e.ID, Rules: e.Rules, Granter: e.Granter, Why: e.Why, At: e.At, Until: e.Until, Now: now}
+}
+
+// checkExtra is the presence check on one stored grant.
+func checkExtra(e boundaryledger.Extra, trust presence.Trust, trustErr error, now time.Time) presence.Result {
+	if trustErr != nil {
+		return presence.Result{Reason: presence.ReasonKeyUnreadable}
+	}
+	return presence.VerifyGrant(e.Grant, grantExpect(e, now), trust)
+}
+
+// honouredExtras is the extra allowances that lift boundaries at now:
+// every active one under channel; under presence, only those whose
+// signature verifies, so a hand-written or edited extras.json lifts
+// nothing. The key store is read only when an extra is active.
+func honouredExtras(env Env, now time.Time) []boundaryledger.Extra {
+	active := env.Dir.ActiveExtras(now)
+	if len(active) == 0 || !env.approval().Enforced() {
+		return active
+	}
+	trust, err := env.presenceDir().Trust(now)
+	return slices.DeleteFunc(active, func(e boundaryledger.Extra) bool { return !checkExtra(e, trust, err, now).OK() })
 }
 
 func bindWord(n int) string {
@@ -168,15 +288,33 @@ func extraRules(rules []domain.Rule, named []string) ([]string, error) {
 	return out, nil
 }
 
-// ActiveExtras is the extra allowances in force now, newest first.
+// ActiveExtras is the extra allowances in force now, newest first, each
+// with what the presence check found: signed, or (under presence)
+// refused with the reason, in which case it lifts nothing.
 func ActiveExtras(env Env) []ExtraView {
-	active := env.Dir.ActiveExtras(env.now())
+	now := env.now()
+	active := env.Dir.ActiveExtras(now)
 	if len(active) == 0 {
 		return nil
 	}
+	enforced := env.approval().Enforced()
+	var (
+		trust    presence.Trust
+		trustErr error
+	)
+	if enforced || slices.ContainsFunc(active, func(e boundaryledger.Extra) bool { return e.Grant != nil }) {
+		trust, trustErr = env.presenceDir().Trust(now)
+	}
 	out := make([]ExtraView, 0, len(active))
 	for _, e := range active {
-		out = append(out, extraView(e))
+		v := extraView(e)
+		switch res := checkExtra(e, trust, trustErr, now); {
+		case res.OK():
+			v.Presence, v.PresenceKey = PresenceSigned, res.KeyID
+		case enforced:
+			v.Presence, v.Ignored = PresenceRefused, res.Reason.Phrase()
+		}
+		out = append(out, v)
 	}
 	return out
 }
@@ -210,6 +348,10 @@ func extraEnvelope(e boundaryledger.Extra, stage eventschema.DecisionStage, at t
 	if e.Why != "" {
 		rationale += "; why: " + e.Why
 	}
+	if e.Grant != nil {
+		rationale += "; signed in person with presence key " + e.Grant.Key +
+			" (Touch ID, a paired Apple Watch or the login password); if you did not approve that dialog, end it with `tokenops boundaries extra --end`"
+	}
 	selected := lift
 	if stage == eventschema.DecisionStageExpired {
 		selected = keep
@@ -224,12 +366,22 @@ func extraEnvelope(e boundaryledger.Extra, stage eventschema.DecisionStage, at t
 			Alternatives: []eventschema.ResourceOption{keep, lift}, Selected: selected,
 			Policy: explain.BoundaryPolicyPrefix + e.Rules[0], Authority: "operator", Confidence: 1,
 			Rationale: rationale, Executable: true, Adapter: e.Method,
-			Actor: eventschema.DecisionActor{User: e.Granter},
-			Approval: eventschema.DecisionApproval{
-				Approver: e.Granter, Method: e.Method, At: e.At, Rule: rules, Scope: "until " + e.Until.Format(time.RFC3339),
-			},
+			Actor:    eventschema.DecisionActor{User: e.Granter},
+			Approval: extraApproval(e, e.Method, rules),
 		},
 	}
+}
+
+// extraApproval is the approval a grant records: who granted it, how,
+// until when, and, for a signed grant, the presence key that signed it.
+func extraApproval(e boundaryledger.Extra, method, rules string) eventschema.DecisionApproval {
+	a := eventschema.DecisionApproval{
+		Approver: e.Granter, Method: method, At: e.At, Rule: rules, Scope: "until " + e.Until.Format(time.RFC3339),
+	}
+	if e.Grant != nil {
+		a.Presence, a.PresenceKey = PresenceSigned, e.Grant.Key
+	}
+	return a
 }
 
 // liftedBy is the extra allowance that lifts rule at now, if any.
@@ -256,7 +408,7 @@ func liftExtras(v *domain.Verdict, relevant []domain.Rule, action domain.Action,
 		return nil
 	}
 	now := env.now()
-	extras := env.Dir.ActiveExtras(now)
+	extras := honouredExtras(env, now)
 	if len(extras) == 0 {
 		return nil
 	}
@@ -291,16 +443,16 @@ func (g *guard) recordLifted(l liftedMatch) error {
 	}
 	g.session.Recorded[id] = string(stage) + "+" + l.extra.ID
 	g.changed = true
-	approval := eventschema.DecisionApproval{
-		Approver: l.extra.Granter, Method: MethodExtra, At: l.extra.At, Rule: l.match.Rule.Name,
-		Scope: "until " + l.extra.Until.Format(time.RFC3339),
-	}
+	approval := extraApproval(l.extra, MethodExtra, l.match.Rule.Name)
 	env := decisionEnvelope(l.match, stage, g.call, g.env, g.now, g.evidence, approval)
 	if d, ok := env.Payload.(*eventschema.DecisionEvent); ok {
 		d.Rationale += fmt.Sprintf("; let through by the extra allowance %s, granted by %s until %s",
 			l.extra.ID, l.extra.Granter, l.extra.Until.Format(time.RFC3339))
 		if l.extra.Why != "" {
 			d.Rationale += " (" + l.extra.Why + ")"
+		}
+		if l.extra.Grant != nil {
+			d.Rationale += "; the grant is signed with presence key " + l.extra.Grant.Key
 		}
 	}
 	return g.env.Dir.Append(env)

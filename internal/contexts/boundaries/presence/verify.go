@@ -74,6 +74,8 @@ func (r Reason) Phrase() string {
 		return "this one-step approval was already used"
 	case ReasonKeyUnreadable:
 		return "the presence key store could not be read"
+	case ReasonGrantAltered:
+		return "the grant's end time, start, granter or reason are not the ones signed"
 	}
 	return string(r)
 }
