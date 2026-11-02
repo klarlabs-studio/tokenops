@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.117.0 - 2026-11-02
+
 ### Added
 
 - **boundaries:** `tokenops boundaries extra` now works under `boundary_approval: presence`. The grant is signed with this Mac's presence key, one Touch ID, Apple Watch or password dialog naming what it lifts, until when and why; the signature covers the rules, start and end, granter, reason and the grant's id, and is kept with the grant. The pause point honours a grant under presence only while its signature verifies, so a hand-written or edited `extras.json` lifts nothing, and `boundaries status`, the glance and `GET /api/boundaries` (`presence`, `ignored`) say whether a grant is presence-signed or not honoured. With no enrolled key, no helper or nobody at the screen the grant is refused. Under `channel` nothing changes, and `--end` still needs no presence. See ADR 0015, *Extra allowances*.
