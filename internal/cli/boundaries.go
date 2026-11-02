@@ -255,6 +255,12 @@ func writeBoundariesStatus(w io.Writer, st bcap.Status) {
 		if e.Why != "" {
 			fmt.Fprintf(w, " (%s)", e.Why)
 		}
+		switch e.Presence {
+		case bcap.PresenceSigned:
+			fmt.Fprintf(w, ", presence-signed with key %s", e.PresenceKey)
+		case bcap.PresenceRefused:
+			fmt.Fprintf(w, ": NOT honoured, it lifts nothing (%s)", e.Ignored)
+		}
 		fmt.Fprintln(w)
 	}
 	if len(st.Pending) > 0 {

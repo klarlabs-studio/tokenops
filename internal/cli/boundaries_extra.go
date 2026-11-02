@@ -9,6 +9,7 @@ import (
 
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/config"
+	infrapresence "go.klarlabs.de/tokenops/internal/infra/presence"
 )
 
 // newBoundariesExtraCmd grants the operator a temporary extra allowance
@@ -39,9 +40,13 @@ records that it did. Status, the glance and the menu bar show it while it
 holds. Your organisation's rules are not lifted here.
 
 It is your word only: an agent cannot grant one. No MCP tool or API route
-grants it, this command refuses to run when stdin is not a terminal, and
-it is refused while boundary_approval is presence, since a grant cannot
-be signed yet. --end only tightens, so it runs anywhere.`,
+grants it, and this command refuses to run when stdin is not a terminal.
+With boundary_approval: presence (or presence-strict) the grant is signed
+with this Mac's presence key: Touch ID, a paired Apple Watch or your
+password confirms it, and the pause point honours it only while that
+signature verifies, so an edited extras.json lifts nothing. Without an
+enrolled key, the helper or someone at the screen, it is refused.
+--end only tightens, so it runs anywhere and needs no presence.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			env, err := presenceEnv(cmd)
@@ -88,7 +93,12 @@ be signed yet. --end only tightens, so it runs anywhere.`,
 			if err != nil {
 				return err
 			}
-			res, err := bcap.GrantExtra(bcap.AllRules(cfg), env, req)
+			if env.Approval.Enforced() {
+				if helper, err := infrapresence.FindHelper(); err == nil {
+					req.Signer = prompting(cmd, helper)
+				}
+			}
+			res, err := bcap.GrantExtra(cmd.Context(), bcap.AllRules(cfg), env, req)
 			if err != nil {
 				return err
 			}

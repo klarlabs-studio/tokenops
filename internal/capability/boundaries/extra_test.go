@@ -1,6 +1,7 @@
 package boundaries
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -18,8 +19,8 @@ func enforcedPause() domain.RuleSpec {
 	return r
 }
 
-// A grant is the operator's word: only the CLI gives one, never while
-// approvals must be signed, for a time in the future up to a day, and on
+// A grant is the operator's word: only the CLI gives one, never unsigned
+// while approvals must be signed, for a time in the future up to a day, and on
 // local rules only. Unnamed, it lifts every local headroom rule.
 func TestGrantExtraValidates(t *testing.T) {
 	pause := enforcedPause()
@@ -38,7 +39,7 @@ func TestGrantExtraValidates(t *testing.T) {
 	}{
 		{name: "over MCP", req: ExtraRequest{For: time.Hour, Method: MethodMCP}, wantErr: "operator's word"},
 		{name: "over the API", req: ExtraRequest{For: time.Hour, Method: MethodAPI}, wantErr: "operator's word"},
-		{name: "presence enforced", req: ExtraRequest{For: time.Hour, Method: MethodCLI}, approval: presence.ModePresence, wantErr: "cannot be signed"},
+		{name: "presence enforced", req: ExtraRequest{For: time.Hour, Method: MethodCLI}, approval: presence.ModePresence, wantErr: "must be signed"},
 		{name: "no length", req: ExtraRequest{Method: MethodCLI}, wantErr: "how long"},
 		{name: "both lengths", req: ExtraRequest{For: time.Hour, Until: testNow.Add(time.Hour), Method: MethodCLI}, wantErr: "not both"},
 		{name: "in the past", req: ExtraRequest{Until: testNow.Add(-time.Minute), Method: MethodCLI}, wantErr: "not in the future"},
@@ -54,7 +55,7 @@ func TestGrantExtraValidates(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			env := testEnv(t, false)
 			env.Approval = tc.approval
-			got, err := GrantExtra(r, env, tc.req)
+			got, err := GrantExtra(context.Background(), r, env, tc.req)
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("err = %v, want %q", err, tc.wantErr)
@@ -101,7 +102,7 @@ func TestAnExtraAllowanceLiftsTheBoundaryUntilItEnds(t *testing.T) {
 	if res, err := Pause(r, call("s1"), env); err != nil || res.Verdict != VerdictDeny {
 		t.Fatalf("before the extra: %+v, %v", res, err)
 	}
-	g, err := GrantExtra(r, env, ExtraRequest{For: 20 * time.Minute, Method: MethodCLI, Why: "demo"})
+	g, err := GrantExtra(context.Background(), r, env, ExtraRequest{For: 20 * time.Minute, Method: MethodCLI, Why: "demo"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +146,7 @@ func TestAnExtraAllowanceLiftsTheBoundaryUntilItEnds(t *testing.T) {
 	}
 
 	// Ended early, it lifts nothing.
-	if _, err := GrantExtra(r, env, ExtraRequest{For: time.Hour, Method: MethodCLI}); err != nil {
+	if _, err := GrantExtra(context.Background(), r, env, ExtraRequest{For: time.Hour, Method: MethodCLI}); err != nil {
 		t.Fatal(err)
 	}
 	ended, err := EndExtras(env)
@@ -164,7 +165,7 @@ func TestAnExtraAllowanceLiftsTheBoundaryUntilItEnds(t *testing.T) {
 func TestStatusShowsActiveExtras(t *testing.T) {
 	env := testEnv(t, false)
 	r := rules(t, enforcedPause())
-	if _, err := GrantExtra(r, env, ExtraRequest{For: 2 * time.Hour, Method: MethodCLI, Why: "launch"}); err != nil {
+	if _, err := GrantExtra(context.Background(), r, env, ExtraRequest{For: 2 * time.Hour, Method: MethodCLI, Why: "launch"}); err != nil {
 		t.Fatal(err)
 	}
 	st, err := RuleStatuses(r, env, map[string]bool{})

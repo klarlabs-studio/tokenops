@@ -113,6 +113,12 @@ func TestExtraFindings(t *testing.T) {
 		{name: "without one", extras: []boundaries.ExtraView{{ID: "bnd-0123456789ac", Rules: []string{"a", "b"},
 			At: at, Until: at.Add(time.Hour), Granter: "felix"}},
 			want: []string{"until 16:30", "a, b", "felix"}},
+		{name: "presence-signed", extras: []boundaries.ExtraView{{ID: "bnd-0123456789ad", Rules: []string{"headroom-pause"},
+			At: at, Until: at.Add(time.Hour), Granter: "felix", Presence: boundaries.PresenceSigned, PresenceKey: "pk-1"}},
+			want: []string{"until 16:30", "presence-signed with key pk-1"}},
+		{name: "not honoured under presence", extras: []boundaries.ExtraView{{ID: "bnd-0123456789ae", Rules: []string{"headroom-pause"},
+			At: at, Until: at.Add(time.Hour), Granter: "felix", Presence: boundaries.PresenceRefused, Ignored: "the signature does not verify"}},
+			want: []string{"not honoured", "headroom-pause", "the signature does not verify"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -130,7 +136,11 @@ func TestExtraFindings(t *testing.T) {
 					t.Errorf("%q lacks %q", text, w)
 				}
 			}
-			if f.Kind != KindBoundary || f.Level != LevelNotice || !strings.Contains(f.Action, "--end") {
+			level := LevelNotice
+			if tc.extras[0].Presence == boundaries.PresenceRefused {
+				level = LevelWarn
+			}
+			if f.Kind != KindBoundary || f.Level != level || !strings.Contains(f.Action, "--end") {
 				t.Errorf("finding = %+v", f)
 			}
 		})

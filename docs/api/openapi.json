@@ -114,6 +114,15 @@
                           "id": {
                             "type": "string"
                           },
+                          "ignored": {
+                            "type": "string"
+                          },
+                          "presence": {
+                            "type": "string"
+                          },
+                          "presence_key": {
+                            "type": "string"
+                          },
                           "rules": {
                             "items": {
                               "type": "string"
