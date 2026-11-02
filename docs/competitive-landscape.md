@@ -131,11 +131,11 @@ first, then the team they will one day bring. Status as of 2026-11-02.
 | G1 | **Harness breadth.** CodexBar at 110+ providers; tokscale and agentsview at 50+ | Individual tools | High | About 90 providers read for windows; Copilot CLI sign-in, Junie quota, opencode 2 and the current Cursor plans read (0.114); transcript readers still fewer |
 | G2 | **Setup friction** | ccusage, CodexBar | High | `npx tokenops checkup` (0.101), `init` binding plans from evidence, headroom pause written by `init` (0.108); wizard open |
 | G20 | **Vendor budgets inside the harness.** Codex enforces rollout budgets by default; Claude's gateway enforces user, group and pooled caps; Copilot caps automations | OpenAI, Anthropic, GitHub | **High, new** | A TokenOps session budget on Codex neither reads nor defers to the rollout budget; two budgets can speak about one session |
-| G18 | **Headroom pause, and the rules around it.** Peras 0.5 pauses on burn rate, per prompt, per subagent count, folder and hour, and guards across agents | Peras, limitcast, agent-usage-guard, spare10, Pushary | Medium-high | Pause on by default in shadow (0.108), loop breaker (0.113); folder and hour rules are research-roadmap step 12; no burn-rate or subagent-count lines; no cross-agent guard |
+| G18 | **Headroom pause, and the rules around it.** Peras 0.5 pauses on burn rate, per prompt, per subagent count, folder and hour, and guards across agents | Peras, limitcast, agent-usage-guard, spare10, Pushary | Medium-high | Pause on by default in shadow (0.108), loop breaker (0.113), folder and hour scope and a temporary extra allowance under presence approval (0.117). Open: burn-rate and subagent-count lines, a cross-agent guard |
 | G17 | **Vendor approvals.** Auto mode is the default; Codex Guardian V3; Copilot assisted permissions GA (10-26) | Anthropic, OpenAI, GitHub | High | Claude Code's verdicts are read from the transcript and never taken as the person's yes (0.108). The OTel route is moot: `safety_event` was dropped in 2.1.312 |
-| G19 | **New window shapes.** Ultra with no 5-hour limit and a separate Fable weekly limit; banked resets (OpenAI); early resets; per-model quotas (Antigravity); shared pools (Cursor with Grok [U]) | Vendors | Medium-high (raised) | Max/Ultra and Ultra's week-only measure (0.116.5); early resets (0.112, 0.114); Antigravity quota groups (0.114). Open: banked resets as headroom, Ultra's Fable weekly window, shared pools |
+| G19 | **New window shapes.** Ultra with no 5-hour limit and a separate Fable weekly limit; banked resets (OpenAI); early resets; per-model quotas (Antigravity); shared pools (Cursor with Grok [U]) | Vendors | Medium-high (raised) | Max/Ultra and Ultra's week-only measure (0.116.5); early resets (0.112, 0.114); Antigravity quota groups (0.114); Codex reset credits read with their expiry, and a finding before one lapses, and before a week resets mostly unused (0.117); observed limits overlay the catalog (0.117). Open: Ultra's Fable weekly window, shared pools |
 | G16 | **Vendor coach overlap on Claude** | Anthropic | Medium (lowered) | Coach stands down where the vendor speaks and measures it (0.110). Claude Code still shows no pace signal, so the run-out warning stays |
-| G4 | Outcome linkage: cost per commit, PR and task | Faros, Jellyfish, Milestone, agentsview (per PR with subagents, 0.46) | Medium | Shipped: `spend --by commit` (0.99), `spend units` (0.105), cost per task (0.115), subagent transcripts read (unreleased) |
+| G4 | Outcome linkage: cost per commit, PR and task | Faros, Jellyfish, Milestone, agentsview (per PR with subagents, 0.46) | Medium | Shipped: `spend --by commit` (0.99), `spend units` (0.105), cost per task (0.115); subagent transcripts, `--by subagent`, and work a revert undid (0.117) |
 | G7 | Team view with budgets and approvals | Anthropic (group and pooled caps, approval queue), Harness, GitLab, Copilot, Opviera | High for teams | Team plane, org boundaries and role approval (0.102–0.103), FOCUS 1.4 and schema 3 (0.115–0.116); does not yet read vendor org caps |
 | G9 | Positioning and name | Promptster (receding), Pushary, Harness; [theagentplane/tokenops](https://github.com/theagentplane/tokenops) ("run-aware token governance for multi-agent systems", 85★, v2.0.1 10-15); Finout and CloudNuro use "TokenOps" as a category word | Medium (raised) | Guardrails positioning shipped (10-13); the name is now a category word others write about |
 | G8 | Ambient GUI on Linux and Windows | ai-usagebar, CodeZeno, Developer-Island, CodexBar Linux | Low-medium | macOS menu bar only |
@@ -148,8 +148,8 @@ The 2026-10-03 plan is done: gateway caps (#507), router governance (#518,
 #521), cost per commit (#550, 0.105), OTel export (#551), the menu bar and
 alerts, the team plane (0.102) and action boundaries (0.103). The October
 plan below is half done; its status as of 2026-11-02 is in the last column.
-The research roadmap (`docs/research-roadmap-2026-11.md`) sequences the
-November work; the new steps here are for it to take up.
+The research roadmap (`docs/research-roadmap-2026-11.md`) shipped in
+0.117; the new steps here come after it.
 
 **Direction priorities (2026-10-25)** sit above this table and, where they
 overlap, win: see "Direction (2026-10-25)" below.
@@ -161,7 +161,7 @@ overlap, win: see "Direction (2026-10-25)" below.
 | 1 | **Headroom pause as a default**, in shadow on every new install | G18 | **Done** (0.108): `init` writes `headroom-pause`; findings say what it would have done |
 | 2 | **Read the vendor's verdicts** instead of asking twice | G17 | **Done for Claude Code** by the transcript route (0.108). The OTel route is gone with `safety_event` (2.1.312). Codex rollouts still record no approval |
 | 3 | **Coach stands down where the vendor coaches** | G16 | **Done** (0.110), with tip volume and the unseen rate in `coach stats` |
-| 4 | **New window shapes** in the plan catalog | G19 | **Partly done**: Ultra, early resets, Antigravity groups. Open: banked resets counted as headroom, Ultra's Fable weekly window, shared pools |
+| 4 | **New window shapes** in the plan catalog | G19 | **Mostly done**: Ultra, early resets, Antigravity groups, Codex reset credits and their expiry (0.117). Open: Ultra's Fable weekly window, shared pools |
 | 5 | **Org caps as vendor readings**: OpenAI per-seat limits, Copilot budgets, the Claude gateway's user, group and pooled caps, so a team rule sits under the vendor's cap | G7 | Open; the Claude side grew (pooled budgets, approval queue) |
 | 6 | **Transcript readers, wave 2** (Claude Desktop, Junie, Droid, Qwen Code) | G1 | Junie quota read (0.114); transcripts open |
 | 7 (new) | **Defer to a harness's own budget.** Read Codex's rollout budget (enforced or advisory) and the Claude gateway's cap as the vendor's; a TokenOps budget on the same session says it sits under it, as the coach does with `vendor_speaks` | G20 | A Codex session with a rollout budget gets one budget message, not two, and `explain` names both |
@@ -228,8 +228,8 @@ the unseen rate by kind, which is how the cut is judged.
   at its own product. TokenOps' case is the rule that spans them, and it has
   to read their caps rather than stack a second one beside them (step 7).
 - **Peras out-specifies the boundaries for a Claude Code and Codex user**, for
-  free. Close the cheap rules (folder, hour, burn rate, subagent count,
-  cross-agent) and lead with what Peras cannot do: Cursor, opencode, Copilot,
+  free. Folder and hour shipped in 0.117; close the rest (burn rate, subagent
+  count, cross-agent) and lead with what Peras cannot do: Cursor, opencode, Copilot,
   money across plans, a team, an explained record.
 
 Deliberately not planned: session search and memory (agentsview), failover
