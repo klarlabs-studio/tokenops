@@ -234,11 +234,35 @@ func claudeWindows(attrs map[string]string, now time.Time) []VendorWindow {
 			w.Name += " (" + scope + ")"
 		} else if scope := attrs[label+"_surface_scope"]; scope != "" {
 			w.Name += " (" + scope + ")"
+		} else if scope := topLevelScope(label); scope != "" {
+			w.Name += " (" + scope + ")"
 		}
 		setReset(&w, attrs[label+"_reset_at"], now)
 		out = append(out, w)
 	}
 	return out
+}
+
+// topLevelScope names the scope of a window Anthropic sends as a top-level
+// block with a suffix, such as seven_day_opus or Ultra's Fable week: the
+// block carries no scope of its own, and read unscoped it would stand for
+// the account's whole window. A window from the limits array is scoped
+// already and never reaches here.
+func topLevelScope(label string) string {
+	suffix, ok := strings.CutPrefix(label, "seven_day_")
+	if !ok || suffix == "" {
+		return ""
+	}
+	if suffix == "oauth_apps" {
+		return "OAuth apps"
+	}
+	words := strings.Split(suffix, "_")
+	for i, word := range words {
+		if i == 0 && word != "" {
+			words[i] = strings.ToUpper(word[:1]) + word[1:]
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 // DefaultCodexLimit is the limit_id of Codex's default bucket.
