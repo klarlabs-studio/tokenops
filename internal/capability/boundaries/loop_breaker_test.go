@@ -162,17 +162,18 @@ func TestNoLoopRuleKeepsNoCalls(t *testing.T) {
 	}
 }
 
-// Only Claude Code's hook sends the tool's input, so status says the loop
-// breaker is not evaluated anywhere else rather than claim it is.
+// Only Claude Code's and Codex's hooks send the tool's input, so status
+// says the loop breaker is not evaluated anywhere else rather than claim
+// it is.
 func TestStatusSaysWhereTheLoopBreakerIsEvaluated(t *testing.T) {
 	env := testEnv(t, false)
 	st, err := RuleStatuses(rules(t, config.LoopBreakerRule()), env,
-		map[string]bool{HarnessClaudeCode: true, HarnessOpencode: true})
+		map[string]bool{HarnessClaudeCode: true, HarnessOpencode: true, HarnessCodex: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := map[string]string{HarnessClaudeCode: EnforcementShadow, HarnessOpencode: EnforcementNotEvaluated,
-		HarnessCodex: EnforcementNotEvaluated, HarnessCursor: EnforcementNotEvaluated}
+		HarnessCodex: EnforcementShadow, HarnessCursor: EnforcementNotEvaluated}
 	for _, h := range st.Rules[0].Harnesses {
 		if want[h.Harness] != h.Enforcement {
 			t.Errorf("%s = %q (%s); want %q", h.Harness, h.Enforcement, h.Note, want[h.Harness])

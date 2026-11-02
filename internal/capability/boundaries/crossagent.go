@@ -21,7 +21,7 @@ var agentCLIs = map[string]string{
 // harnessProvider is the plan each harness's own turns spend, which its
 // pause point reads already. opencode's is any plan, so starting Claude
 // Code from it still names the Claude plan.
-var harnessProvider = map[string]string{HarnessClaudeCode: "anthropic"}
+var harnessProvider = map[string]string{HarnessClaudeCode: "anthropic", HarnessCodex: "openai"}
 
 // commandSeparators split a shell command into the commands it runs.
 var commandSeparators = regexp.MustCompile(`&&|\|\||[;|&\n]|\$\(|` + "`")

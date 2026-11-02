@@ -48,7 +48,7 @@ var hiddenCommands = map[string]string{
 	"coach-hook":       "Claude Code's Stop hook",
 	"read-guard":       "Claude Code's PreToolUse hook",
 	"route-guard":      "Claude Code's UserPromptSubmit hook",
-	"boundary-guard":   "the boundary pause point, Claude Code's and opencode's PreToolUse hook",
+	"boundary-guard":   "the boundary pause point, Claude Code's, opencode's and Codex's PreToolUse hook",
 	"anthropic-bridge": "launched by `hooks install`",
 	"serve":            "the MCP server, started by the client",
 	"start":            "the daemon's foreground process, started by `daemon install`",

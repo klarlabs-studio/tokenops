@@ -22,7 +22,7 @@ func LoopBreaker(cfg config.Config, env Env, installed map[string]bool) (PauseSu
 	}
 	out := PauseSummary{
 		Configured: true, Rule: r.Name, Stage: string(r.Stage),
-		PausePoint: installed[HarnessClaudeCode],
+		PausePoint: installed[HarnessClaudeCode] || installed[HarnessCodex],
 		When:       loopWords(r), Require: string(r.Require.Kind),
 	}
 	sessions, err := env.Dir.Sessions()

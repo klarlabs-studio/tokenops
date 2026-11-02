@@ -416,7 +416,7 @@ func TestStatusReportsEnforcementPerHarness(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]map[string]string{
-		"session-spend": {HarnessClaudeCode: EnforcementEnforced, HarnessOpencode: EnforcementNotInstalled, HarnessCodex: EnforcementAdviceOnly, HarnessCursor: EnforcementAdviceOnly},
+		"session-spend": {HarnessClaudeCode: EnforcementEnforced, HarnessOpencode: EnforcementNotInstalled, HarnessCodex: EnforcementNotInstalled, HarnessCursor: EnforcementAdviceOnly},
 		"shadowed":      {HarnessClaudeCode: EnforcementShadow},
 	}
 	for _, rs := range st.Rules {
@@ -502,5 +502,31 @@ func TestARepeatMatchCountsWithoutRewritingTheSession(t *testing.T) {
 	}
 	if got := st.Rules[0].Matches; got != 3 {
 		t.Fatalf("matches = %d, want 3", got)
+	}
+}
+
+// Codex enforces once its hook is trusted; written but untrusted, Codex
+// skips it, and status says so instead of claiming enforcement.
+func TestStatusReadsCodexTrust(t *testing.T) {
+	env := testEnv(t, false)
+	r := rules(t, spendRule("ask", "enforce"))
+	for _, tc := range []struct {
+		installed map[string]bool
+		want      string
+		note      string
+	}{
+		{map[string]bool{HarnessCodex: true}, EnforcementEnforced, ""},
+		{map[string]bool{codexUntrusted: true}, EnforcementNotInstalled, "trust"},
+		{map[string]bool{}, EnforcementNotInstalled, "--client codex"},
+	} {
+		st, err := RuleStatuses(r, env, tc.installed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, h := range st.Rules[0].Harnesses {
+			if h.Harness == HarnessCodex && (h.Enforcement != tc.want || !strings.Contains(h.Note, tc.note)) {
+				t.Errorf("%v: codex = %q (%s); want %q", tc.installed, h.Enforcement, h.Note, tc.want)
+			}
+		}
 	}
 }

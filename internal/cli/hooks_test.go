@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"os"
@@ -498,5 +499,49 @@ func TestHooksInstallOpencodeGeneratesBothHalves(t *testing.T) {
 func TestHooksInstallOpencodeRefusesAnEmptySelection(t *testing.T) {
 	if err := runHooks(t, "install", "--client", "opencode", "--settings", t.TempDir()); err == nil {
 		t.Error("install with neither --coach nor --read-guard succeeded")
+	}
+}
+
+// Codex's PreToolUse hook can refuse a call, so the pause point installs
+// there, on every tool, told which client runs it.
+func TestHooksInstallBoundaryOnCodex(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hooks.json")
+	var out bytes.Buffer
+	root := NewRoot()
+	root.SetArgs([]string{"hooks", "install", "--boundary", "--client", "codex", "--settings", path})
+	root.SetOut(&out)
+	root.SetErr(&out)
+	if err := root.Execute(); err != nil {
+		t.Fatalf("install: %v\n%s", err, out.String())
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Hooks map[string][]struct {
+			Matcher string           `json:"matcher"`
+			Hooks   []map[string]any `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	groups := doc.Hooks["PreToolUse"]
+	if len(groups) != 1 || groups[0].Matcher != "*" {
+		t.Fatalf("PreToolUse = %+v", groups)
+	}
+	if cmd, _ := groups[0].Hooks[0]["command"].(string); !strings.HasSuffix(cmd, "boundary-guard --client codex") {
+		t.Fatalf("command = %q", cmd)
+	}
+	if !strings.Contains(out.String(), "Codex skips a hook until you trust it") {
+		t.Errorf("no trust note:\n%s", out.String())
+	}
+}
+
+// Cursor's hooks still cannot refuse every call.
+func TestHooksInstallRefusesBoundaryOnCursor(t *testing.T) {
+	if err := runHooks(t, "install", "--boundary", "--client", "cursor"); err == nil {
+		t.Fatal("cursor accepted the pause point")
 	}
 }

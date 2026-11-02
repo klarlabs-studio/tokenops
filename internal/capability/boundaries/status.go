@@ -10,6 +10,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
+	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
 	"go.klarlabs.de/tokenops/internal/infra/opencodeplugin"
 	"go.klarlabs.de/tokenops/internal/infra/teamclient"
 )
@@ -126,8 +127,10 @@ type Status struct {
 }
 
 // Installed reports, per harness that can refuse, whether its boundary
-// hook is wired: Claude Code's settings.json and opencode's generated
-// plugin. Empty paths take the defaults.
+// hook is wired: Claude Code's settings.json, opencode's generated plugin,
+// and Codex's hooks.json once Codex trusts the hook (codexUntrusted marks
+// one written but not yet trusted, which Codex skips). Empty paths take
+// the defaults.
 func Installed(claudeSettings, opencodePluginDir string) map[string]bool {
 	home, _ := os.UserHomeDir()
 	if claudeSettings == "" {
@@ -145,8 +148,16 @@ func Installed(claudeSettings, opencodePluginDir string) map[string]bool {
 	if b, err := os.ReadFile(filepath.Join(opencodePluginDir, opencodeplugin.FileName)); err == nil { //nolint:gosec // TokenOps' own plugin
 		out[HarnessOpencode] = opencodeplugin.Has(string(b), HookVerb)
 	}
+	if home, err := codexsettings.Home(); err == nil {
+		written, trusted := codexsettings.HookTrust(home, "PreToolUse", HookVerb)
+		out[HarnessCodex], out[codexUntrusted] = trusted, written && !trusted
+	}
 	return out
 }
+
+// codexUntrusted is Installed's key for a Codex boundary hook that is
+// written but not trusted in Codex, which skips it until it is.
+const codexUntrusted = "codex-untrusted"
 
 // RuleStatuses reports each rule: its stage, how often it matched, and,
 // per harness, whether it is enforced, in shadow, or advice only.
@@ -196,7 +207,7 @@ func RuleStatuses(rules []domain.Rule, env Env, installed map[string]bool) (Stat
 	switch {
 	case len(rules) == 0:
 		out.Note = "no boundaries configured; add a boundaries: section to config.yaml"
-	case needsHook(rules) && !installed[HarnessClaudeCode] && !installed[HarnessOpencode]:
+	case needsHook(rules) && !installed[HarnessClaudeCode] && !installed[HarnessOpencode] && !installed[HarnessCodex]:
 		out.Note = "no boundary hook is installed, so continue and spend rules are not evaluated: run `tokenops hooks install --boundary`"
 	}
 	return out, nil
@@ -222,15 +233,18 @@ func harnesses(r domain.Rule, installed map[string]bool) []HarnessStatus {
 		return out
 	}
 	out := make([]HarnessStatus, 0, 4)
-	for _, h := range []string{HarnessClaudeCode, HarnessOpencode} {
+	for _, h := range []string{HarnessClaudeCode, HarnessOpencode, HarnessCodex} {
 		hs := HarnessStatus{Harness: h}
 		switch {
 		case readsLoop(r) && h == HarnessOpencode:
 			hs.Enforcement = EnforcementNotEvaluated
 			hs.Note = loopOnlyClaudeCode
-		case r.Action == domain.ActionSubagentModel && h == HarnessOpencode:
+		case r.Action == domain.ActionSubagentModel && h != HarnessClaudeCode:
 			hs.Enforcement = EnforcementAdviceOnly
-			hs.Note = "opencode's subagents are not routed through a hook TokenOps can answer"
+			hs.Note = h + "'s subagents are not routed through a hook TokenOps can answer"
+		case h == HarnessCodex && installed[codexUntrusted]:
+			hs.Enforcement = EnforcementNotInstalled
+			hs.Note = "the hook is written but Codex skips it until you trust it: run /hooks in Codex and trust the tokenops entry"
 		case !installed[hookKey(r, h)]:
 			hs.Enforcement = EnforcementNotInstalled
 			hs.Note = "tokenops hooks install --boundary --client " + h
@@ -245,17 +259,14 @@ func harnesses(r domain.Rule, installed map[string]bool) []HarnessStatus {
 		}
 		out = append(out, hs)
 	}
-	for _, h := range []string{HarnessCodex, HarnessCursor} {
-		if readsLoop(r) {
-			out = append(out, HarnessStatus{Harness: h, Enforcement: EnforcementNotEvaluated, Note: loopOnlyClaudeCode})
-			continue
-		}
-		if reads(r, domain.FieldFolder) {
-			out = append(out, HarnessStatus{Harness: h, Enforcement: EnforcementNotEvaluated, Note: folderOnlyHooks})
-			continue
-		}
+	switch {
+	case readsLoop(r):
+		out = append(out, HarnessStatus{Harness: HarnessCursor, Enforcement: EnforcementNotEvaluated, Note: loopOnlyClaudeCode})
+	case reads(r, domain.FieldFolder):
+		out = append(out, HarnessStatus{Harness: HarnessCursor, Enforcement: EnforcementNotEvaluated, Note: folderOnlyHooks})
+	default:
 		out = append(out, HarnessStatus{
-			Harness: h, Enforcement: EnforcementAdviceOnly,
+			Harness: HarnessCursor, Enforcement: EnforcementAdviceOnly,
 			Note: "its hooks cannot refuse a call; the rule reaches the agent as advice through tokenops_glance",
 		})
 	}
@@ -263,10 +274,10 @@ func harnesses(r domain.Rule, installed map[string]bool) []HarnessStatus {
 }
 
 // loopOnlyClaudeCode says why a loop rule is not evaluated in a harness.
-const loopOnlyClaudeCode = "loop_calls needs each tool call's input, which only Claude Code's hook sends"
+const loopOnlyClaudeCode = "loop_calls needs each tool call's input, which only Claude Code's and Codex's hooks send"
 
 // folderOnlyHooks says why a folder rule is not evaluated in a harness.
-const folderOnlyHooks = "folder needs the session's working directory, which only Claude Code's and opencode's hooks send"
+const folderOnlyHooks = "folder needs the session's working directory, which only Claude Code's, opencode's and Codex's hooks send"
 
 // readsLoop reports whether a rule reads the loop figure.
 func readsLoop(r domain.Rule) bool { return reads(r, domain.FieldLoopCalls) }
