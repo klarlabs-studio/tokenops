@@ -1,0 +1,58 @@
+package boundaries
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestPlanRunsOutEarly(t *testing.T) {
+	parse := func(when map[string]string) Rule {
+		t.Helper()
+		rs, err := Parse([]RuleSpec{{Name: "pace", Action: "continue", Require: "ask", When: when}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rs[0]
+	}
+	any := parse(map[string]string{"plan_runs_out_early_min": ">= 60"})
+	week := parse(map[string]string{"plan_runs_out_early_min": ">= 60", "window": "week"})
+	if got := any.When[0].String(); got != "plan_runs_out_early_min >= 60" {
+		t.Errorf("String = %q", got)
+	}
+	if got := week.When[0].String(); got != "plan_runs_out_early_min >= 60 (week)" {
+		t.Errorf("String = %q", got)
+	}
+
+	f := Facts{PlanVendor: "Claude", PlanEarlyMin: map[Window]float64{Window5h: 20, WindowWeek: 130}}
+	m, ok := any.Match(ActionContinue, f)
+	if !ok || !strings.Contains(m.Crossed(), "Claude week runs out 2h 10m before its reset at this pace (>= 60m)") {
+		t.Fatalf("any window = %v %q", ok, m.Crossed())
+	}
+	if x := m.Crossings(); len(x) != 1 || x[0].Field != FieldPlanEarly || x[0].Value != 130 || x[0].Window != WindowWeek {
+		t.Errorf("crossings = %+v", x)
+	}
+	if _, ok := week.Match(ActionContinue, Facts{PlanEarlyMin: map[Window]float64{Window5h: 200}}); ok {
+		t.Error("a 5h run-out held a weekly rule")
+	}
+	if _, ok := any.Match(ActionContinue, Facts{}); ok {
+		t.Error("an unknown pace held")
+	}
+	f.PlanEarlyVendors = map[Window]string{WindowWeek: "Codex"}
+	if m, _ := any.Match(ActionContinue, f); !strings.Contains(m.Crossed(), "Codex week") {
+		t.Errorf("per-window vendor = %q", m.Crossed())
+	}
+
+	for _, bad := range []map[string]string{
+		{"plan_runs_out_early_min": "60"},
+		{"plan_runs_out_early_min": ">= -5"},
+		{"plan_runs_out_early_min": ">= 20000"},
+	} {
+		if _, err := Parse([]RuleSpec{{Name: "x", Action: "continue", Require: "ask", When: bad}}); err == nil {
+			t.Errorf("%v parsed", bad)
+		}
+	}
+	if _, err := Parse([]RuleSpec{{Name: "x", Action: "spend", Require: "ask",
+		When: map[string]string{"plan_runs_out_early_min": ">= 60"}}}); err == nil {
+		t.Error("a spend rule took a plan pace")
+	}
+}

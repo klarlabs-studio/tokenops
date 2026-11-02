@@ -66,6 +66,9 @@ type Field string
 const (
 	FieldSessionCost Field = "session_cost_usd"
 	FieldPlanLeft    Field = "plan_left_pct"
+	// FieldPlanEarly is how many minutes before its reset a plan window
+	// runs out at the pace so far: 0 while it lasts to the reset.
+	FieldPlanEarly   Field = "plan_runs_out_early_min"
 	FieldBudgetUsed  Field = "budget_used_pct"
 	FieldModelTier   Field = "model_tier"
 	FieldDestination Field = "destination"
@@ -75,7 +78,7 @@ const (
 
 // fieldOrder fixes the order conditions are checked and reported in, so
 // an error or a reason reads the same on every run.
-var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldBudgetUsed, FieldModelTier, FieldDestination, FieldLoopCalls, FieldWorkflow, FieldAgent, FieldFolder, FieldHours}
+var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldPlanEarly, FieldBudgetUsed, FieldModelTier, FieldDestination, FieldLoopCalls, FieldWorkflow, FieldAgent, FieldFolder, FieldHours}
 
 // fieldsFor are the figures each action can be judged by: the ones known
 // where the action is decided. A condition the decision point cannot read
@@ -83,16 +86,20 @@ var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldBudgetUsed, Field
 // day is known everywhere; a session's folder only where a hook hands it
 // over, which the router and the senders have none of.
 var fieldsFor = map[Action][]Field{
-	ActionContinue:      {FieldSessionCost, FieldPlanLeft, FieldLoopCalls, FieldWorkflow, FieldAgent, FieldFolder, FieldHours},
-	ActionSubagentModel: {FieldSessionCost, FieldPlanLeft, FieldModelTier, FieldWorkflow, FieldAgent, FieldFolder, FieldHours},
+	ActionContinue:      {FieldSessionCost, FieldPlanLeft, FieldPlanEarly, FieldLoopCalls, FieldWorkflow, FieldAgent, FieldFolder, FieldHours},
+	ActionSubagentModel: {FieldSessionCost, FieldPlanLeft, FieldPlanEarly, FieldModelTier, FieldWorkflow, FieldAgent, FieldFolder, FieldHours},
 	ActionSpend:         {FieldSessionCost, FieldBudgetUsed, FieldWorkflow, FieldAgent, FieldFolder, FieldHours},
-	ActionModelRoute:    {FieldPlanLeft, FieldModelTier, FieldWorkflow, FieldAgent, FieldHours},
+	ActionModelRoute:    {FieldPlanLeft, FieldPlanEarly, FieldModelTier, FieldWorkflow, FieldAgent, FieldHours},
 	ActionShare:         {FieldDestination, FieldHours},
 }
 
+// maxEarlyMin is the longest a window can run out ahead of its reset: a
+// week, the longest window.
+const maxEarlyMin = 7 * 24 * 60
+
 // Qualifiers narrow a condition; they are not conditions of their own.
 const (
-	// windowKey qualifies plan_left_pct.
+	// windowKey qualifies plan_left_pct and plan_runs_out_early_min.
 	windowKey = "window"
 	// budgetKey qualifies budget_used_pct with a budget's name.
 	budgetKey = "budget"
@@ -204,7 +211,7 @@ type Condition struct {
 	Op     Op
 	Number float64
 	Text   string
-	// Window qualifies FieldPlanLeft.
+	// Window qualifies FieldPlanLeft and FieldPlanEarly.
 	Window Window
 	// Budget qualifies FieldBudgetUsed; empty takes the fullest budget.
 	Budget string
@@ -229,7 +236,7 @@ func (c Condition) String() string {
 	}
 	out := fmt.Sprintf("%s %s %g", c.Field, c.Op, c.Number)
 	switch {
-	case c.Field == FieldPlanLeft && c.Window != WindowAny:
+	case (c.Field == FieldPlanLeft || c.Field == FieldPlanEarly) && c.Window != WindowAny:
 		out += " (" + string(c.Window) + ")"
 	case c.Field == FieldBudgetUsed && c.Budget != "":
 		out += " (budget " + c.Budget + ")"
@@ -408,8 +415,10 @@ func parseWhen(action Action, when map[string]string) ([]Condition, error) {
 		}
 	}
 	window, hasWindow := when[windowKey]
-	if _, ok := when[string(FieldPlanLeft)]; hasWindow && !ok {
-		return nil, fmt.Errorf("when.window qualifies plan_left_pct, which the rule does not set")
+	_, left := when[string(FieldPlanLeft)]
+	_, early := when[string(FieldPlanEarly)]
+	if hasWindow && !left && !early {
+		return nil, fmt.Errorf("when.window qualifies plan_left_pct or plan_runs_out_early_min, which the rule does not set")
 	}
 	budget, hasBudget := when[budgetKey]
 	if _, ok := when[string(FieldBudgetUsed)]; hasBudget && !ok {
@@ -426,7 +435,7 @@ func parseWhen(action Action, when map[string]string) ([]Condition, error) {
 			return nil, fmt.Errorf("when.%s: %w", f, err)
 		}
 		switch f {
-		case FieldPlanLeft:
+		case FieldPlanLeft, FieldPlanEarly:
 			w, err := parseWindow(window)
 			if err != nil {
 				return nil, fmt.Errorf("when.window: %w", err)
@@ -510,6 +519,15 @@ func parseCondition(f Field, raw string) (Condition, error) {
 			return Condition{}, fmt.Errorf("%v must be between 0 and 100", n)
 		}
 		c.Number = n
+	case FieldPlanEarly:
+		n, err := strconv.ParseFloat(value, 64)
+		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+			return Condition{}, fmt.Errorf("%q is not a number of minutes", value)
+		}
+		if n < 0 || n > maxEarlyMin {
+			return Condition{}, fmt.Errorf("%v minutes must be between 0 and %d, a week", n, maxEarlyMin)
+		}
+		c.Number = n
 	case FieldLoopCalls:
 		n, err := parseLoopCalls(op, value)
 		if err != nil {
@@ -590,6 +608,13 @@ type Facts struct {
 	// call that starts another agent reads that agent's plan too, and
 	// each window keeps the tighter. A window absent here is PlanVendor's.
 	PlanVendors map[Window]string
+	// PlanEarlyMin is how many minutes before its reset each plan window
+	// runs out at the pace so far, by window; 0 while it lasts. A window
+	// absent is unknown: no reading, or too early in it to judge a pace.
+	PlanEarlyMin map[Window]float64
+	// PlanEarlyVendors names whose plan each PlanEarlyMin window reads
+	// when it is not PlanVendor's.
+	PlanEarlyVendors map[Window]string
 	// BudgetUsedPct is the share of each configured budget used in its
 	// current window, by budget name. A budget absent is unknown.
 	BudgetUsedPct map[string]float64
@@ -694,6 +719,17 @@ func (c Condition) holds(f Facts) (string, bool) {
 			vendor = v
 		}
 		return strings.TrimSpace(fmt.Sprintf("%s plan left %.1f%% %s %g%% (%s)", vendor, left, c.Op, c.Number, window)), true
+	case FieldPlanEarly:
+		early, window, ok := planEarly(f.PlanEarlyMin, c.Window)
+		if !ok || !compare(early, c.Op, c.Number) {
+			return "", false
+		}
+		vendor := f.PlanVendor
+		if v := f.PlanEarlyVendors[window]; v != "" {
+			vendor = v
+		}
+		return strings.TrimSpace(fmt.Sprintf("%s %s runs out %s before its reset at this pace (%s %gm)",
+			vendor, window, minutesWords(early), c.Op, c.Number)), true
 	case FieldBudgetUsed:
 		used, name, ok := budgetUsed(f.BudgetUsedPct, c.Budget)
 		if !ok || !compare(used, c.Op, c.Number) {
@@ -747,6 +783,9 @@ func (c Condition) crossing(f Facts) (Crossing, bool) {
 	case FieldPlanLeft:
 		left, window, _ := planLeft(f.PlanLeftPct, c.Window)
 		x.Value, x.Window = left, window
+	case FieldPlanEarly:
+		early, window, _ := planEarly(f.PlanEarlyMin, c.Window)
+		x.Value, x.Window = early, window
 	case FieldBudgetUsed:
 		x.Value, _, _ = budgetUsed(f.BudgetUsedPct, c.Budget)
 	case FieldModelTier:
@@ -759,6 +798,31 @@ func (c Condition) crossing(f Facts) (Crossing, bool) {
 		return Crossing{}, false
 	}
 	return x, true
+}
+
+// planEarly reads the named window, or the one that runs out furthest
+// ahead of its reset.
+func planEarly(early map[Window]float64, w Window) (float64, Window, bool) {
+	if w != WindowAny {
+		v, ok := early[w]
+		return v, w, ok
+	}
+	best, bestW, found := 0.0, WindowAny, false
+	for _, cand := range []Window{Window5h, WindowWeek} {
+		if v, ok := early[cand]; ok && (!found || v > best) {
+			best, bestW, found = v, cand, true
+		}
+	}
+	return best, bestW, found
+}
+
+// minutesWords renders minutes as a person says them: 45m, 2h 10m.
+func minutesWords(minutes float64) string {
+	m := int(math.Round(minutes))
+	if h := m / 60; h > 0 {
+		return fmt.Sprintf("%dh %dm", h, m%60)
+	}
+	return fmt.Sprintf("%dm", m)
 }
 
 // planLeft reads the named window, or the tightest one known.

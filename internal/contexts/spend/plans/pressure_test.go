@@ -52,3 +52,30 @@ func TestTrustedPaceDecidesOverTheFloor(t *testing.T) {
 		}
 	}
 }
+
+func TestRunsOutEarly(t *testing.T) {
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	five := func(used float64, resetIn time.Duration) VendorWindow {
+		return VendorWindow{Name: "5h", UsedPct: used, Duration: 5 * time.Hour, ResetsAt: now.Add(resetIn)}
+	}
+	for _, tc := range []struct {
+		name   string
+		w      VendorWindow
+		before time.Duration
+		known  bool
+	}{
+		// 2.5h in, 75% used: the rest lasts 50m, 1h40m before the reset.
+		{"ahead of pace", five(75, 150*time.Minute), 100 * time.Minute, true},
+		{"lasts to the reset", five(30, 150*time.Minute), 0, true},
+		{"used up", five(100, 90*time.Minute), 90 * time.Minute, true},
+		// 10m into the window: too early to trust a pace.
+		{"too early", five(20, 290*time.Minute), 0, false},
+		{"no reset", VendorWindow{Name: "5h", UsedPct: 80, Duration: 5 * time.Hour}, 0, false},
+		{"nothing used", five(0, 150*time.Minute), 0, true},
+	} {
+		before, known := tc.w.RunsOutEarly(now)
+		if before != tc.before || known != tc.known {
+			t.Errorf("%s: RunsOutEarly = %v, %v; want %v, %v", tc.name, before, known, tc.before, tc.known)
+		}
+	}
+}

@@ -6,7 +6,6 @@ package boundaries
 
 import (
 	"fmt"
-	"maps"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -20,7 +19,6 @@ import (
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
-	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/routeguard"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -317,49 +315,8 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 			})
 		}
 	}
-	if needs(rules, domain.FieldPlanLeft) {
-		provider := call.Provider
-		if call.Harness == HarnessClaudeCode {
-			provider = "anthropic"
-			if left, observed, ok := planLeft(env.LimitsPath, now); ok {
-				f.PlanLeftPct, f.PlanVendor = left, planVendor(provider)
-				ev = append(ev, eventschema.EvidenceRef{
-					Kind: "plan_headroom", Source: "claude_code_statusline", ObservedAt: observed,
-					FreshUntil: observed.Add(limitsFreshFor), Confidence: 1, Scope: "anthropic",
-				})
-			}
-		}
-		if f.PlanLeftPct == nil {
-			if fig, ok := figs.get(); ok {
-				if left := figuresPlanLeft(fig, provider); len(left) > 0 {
-					f.PlanLeftPct, f.PlanVendor = left, planVendor(provider)
-					scope, caveat := provider, ""
-					if scope == "" {
-						scope, caveat = "any", "the tightest plan TokenOps watches, whichever provider"
-					}
-					ev = append(ev, eventschema.EvidenceRef{
-						Kind: "plan_headroom", Source: "daemon_glance", ObservedAt: fig.ObservedAt,
-						FreshUntil: fig.ObservedAt.Add(figuresFreshFor), Confidence: 1, Scope: scope, Caveat: caveat,
-					})
-				}
-			}
-		}
-	}
-	if needs(rules, domain.FieldPlanLeft) && len(call.Spends) > 0 {
-		if fig, ok := figs.get(); ok {
-			for _, provider := range call.Spends {
-				left := figuresPlanLeft(fig, provider)
-				if len(left) == 0 {
-					continue
-				}
-				f.PlanLeftPct, f.PlanVendors = tighterPlan(f.PlanLeftPct, f.PlanVendors, f.PlanVendor, left, planVendor(provider))
-				ev = append(ev, eventschema.EvidenceRef{
-					Kind: "plan_headroom", Source: "daemon_glance", ObservedAt: fig.ObservedAt,
-					FreshUntil: fig.ObservedAt.Add(figuresFreshFor), Confidence: 1, Scope: provider,
-					Caveat: "the tool call starts " + planVendor(provider) + ", which spends that plan",
-				})
-			}
-		}
+	if needs(rules, domain.FieldPlanLeft) || needs(rules, domain.FieldPlanEarly) {
+		ev = append(ev, readPlanFacts(&f, call, env, &figs, now)...)
 	}
 	if needs(rules, domain.FieldLoopCalls) {
 		if loop, ok := readLoop(call, env); ok {
@@ -443,72 +400,6 @@ func planVendor(provider string) string {
 		return v
 	}
 	return provider
-}
-
-// figuresPlanLeft is the provider's share left by window, or, with no
-// provider, the tightest share each window has across every plan.
-func figuresPlanLeft(fig boundaryledger.Figures, provider string) map[domain.Window]float64 {
-	out := map[domain.Window]float64{}
-	add := func(windows map[string]float64) {
-		for name, left := range windows {
-			w := domain.Window(name)
-			if w != domain.Window5h && w != domain.WindowWeek {
-				continue
-			}
-			if cur, ok := out[w]; !ok || left < cur {
-				out[w] = left
-			}
-		}
-	}
-	if provider != "" {
-		add(fig.PlanLeftPct[provider])
-		return out
-	}
-	for _, windows := range fig.PlanLeftPct {
-		add(windows)
-	}
-	return out
-}
-
-// tighterPlan keeps, for each window, the smaller share left of the
-// session's plan and another plan the call spends, and whose each one is.
-func tighterPlan(left map[domain.Window]float64, vendors map[domain.Window]string, vendor string,
-	other map[domain.Window]float64, otherVendor string) (map[domain.Window]float64, map[domain.Window]string) {
-	merged := maps.Clone(left)
-	if merged == nil {
-		merged = map[domain.Window]float64{}
-	}
-	byWindow := map[domain.Window]string{}
-	for w := range merged {
-		byWindow[w] = vendor
-		if v := vendors[w]; v != "" {
-			byWindow[w] = v
-		}
-	}
-	for w, v := range other {
-		if cur, ok := merged[w]; !ok || v < cur {
-			merged[w], byWindow[w] = v, otherVendor
-		}
-	}
-	return merged, byWindow
-}
-
-// planLeft is the share of each Claude plan window left, from the
-// reading the status line keeps. A window that has reset since is
-// unknown, not full: the reading no longer says anything about it.
-func planLeft(path string, now time.Time) (map[domain.Window]float64, time.Time, bool) {
-	r, ok, err := claudelimits.Read(path)
-	if err != nil || !ok || now.Sub(r.ObservedAt) > limitsFreshFor {
-		return nil, time.Time{}, false
-	}
-	out := map[domain.Window]float64{}
-	for w, win := range map[domain.Window]*claudelimits.Window{domain.Window5h: r.FiveHour, domain.WindowWeek: r.SevenDay} {
-		if win == nil || (win.ResetsAt > 0 && time.Unix(win.ResetsAt, 0).Before(now)) {
-			continue
-		}
-		out[w] = max(0, 100-win.UsedPct)
-	}
-	return out, r.ObservedAt.UTC(), len(out) > 0
 }
 
 type guard struct {

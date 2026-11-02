@@ -236,6 +236,8 @@ func crossingsText(cs []teamwire.Crossing) string {
 			parts = append(parts, fmt.Sprintf("%.0f calls round a loop %s %g", c.Value, c.Op, c.Threshold))
 		case "plan_left_pct":
 			parts = append(parts, fmt.Sprintf("plan left %.1f%% %s %g%% (%s)", c.Value, c.Op, c.Threshold, cmp.Or(c.Window, "tightest")))
+		case "plan_runs_out_early_min":
+			parts = append(parts, fmt.Sprintf("runs out %.0fm before its reset %s %gm (%s)", c.Value, c.Op, c.Threshold, cmp.Or(c.Window, "any window")))
 		default:
 			parts = append(parts, fmt.Sprintf("%s %.1f %s %g", c.Field, c.Value, c.Op, c.Threshold))
 		}

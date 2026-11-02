@@ -155,3 +155,29 @@ func pressureSpan(d time.Duration) string {
 	}
 	return fmt.Sprintf("%dm", mins)
 }
+
+// RunsOutEarly is how long before its reset w runs out at the pace so far
+// (PaceAt): zero when it lasts to the reset, the time to the reset when it
+// is used up already. Unknown without a length or reset, or before
+// pressureMinElapsed of the window has gone by, when one burst would
+// project a run-out the rest of the window never sees.
+func (w VendorWindow) RunsOutEarly(now time.Time) (time.Duration, bool) {
+	if w.Duration <= 0 || w.ResetsAt.IsZero() || !w.ResetsAt.After(now) {
+		return 0, false
+	}
+	toReset := w.ResetsAt.Sub(now)
+	if w.UsedPct >= 100 {
+		return toReset, true
+	}
+	if w.UsedPct <= 0 {
+		return 0, true
+	}
+	if elapsed := w.Duration - toReset; float64(elapsed) < pressureMinElapsed*float64(w.Duration) {
+		return 0, false
+	}
+	pace := w.PaceAt(now)
+	if pace == nil || pace.LastsToReset {
+		return 0, pace != nil
+	}
+	return max(0, toReset-pace.RunsOutIn), true
+}

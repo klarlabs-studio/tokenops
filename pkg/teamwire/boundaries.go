@@ -154,13 +154,14 @@ type Crossing struct {
 	// rank (haiku 1, sonnet 2, opus 3).
 	Value     float64 `json:"value"`
 	Threshold float64 `json:"threshold"`
-	// Window is 5h or week for plan_left_pct; Destination team or otel.
+	// Window is 5h or week for plan_left_pct and plan_runs_out_early_min;
+	// Destination team or otel.
 	Window      string `json:"window,omitempty"`
 	Destination string `json:"destination,omitempty"`
 }
 
 var (
-	crossingFields = []string{"session_cost_usd", "plan_left_pct", "budget_used_pct", "model_tier", "destination", "loop_calls"}
+	crossingFields = []string{"session_cost_usd", "plan_left_pct", "plan_runs_out_early_min", "budget_used_pct", "model_tier", "destination", "loop_calls"}
 	crossingOps    = []string{"<", "<=", ">", ">=", "=="}
 	crossingWins   = []string{"", "5h", "week"}
 	crossingDests  = []string{"", "team", "otel"}
