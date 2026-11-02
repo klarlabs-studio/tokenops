@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **boundaries:** a call that starts another agent reads that agent's plan. A Claude Code session with room that ran `codex exec …` while the Codex plan was used up went ahead, because the headroom pause read only the Claude plan, so an agent could carry on by handing its work to another one. The pause point now reads which agent a shell call starts (`codex`, `gemini`, `cursor-agent`, `copilot`, by its command word, so `brew upgrade codex` or `cat codex.md` start nothing) and compares the tighter of the session's plan and that agent's, window by window; the reason names whose plan it read ("Codex plan left 4.0% <= 10% (week)"). Only the provider's name is kept, never the command. The other plan is read from the daemon's figures, so with the daemon stopped it is unknown and the call goes ahead. opencode already compared the tightest plan of every provider.
+
 ## 0.117.1 - 2026-11-02
 
 ### Fixed

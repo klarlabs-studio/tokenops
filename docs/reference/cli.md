@@ -2758,6 +2758,17 @@ installs the pause point in Claude Code and opencode. A config that already
 has a `continue` rule on `plan_left_pct` is left as it is. Like `promote`,
 it has no MCP equivalent.
 
+**Calls that start another agent.** In Claude Code, a shell call that
+starts another agent's CLI (`codex`, `gemini`, `cursor-agent`, `copilot`)
+spends that agent's plan, so a `plan_left_pct` rule reads that plan too and
+compares the tighter of the two: with Codex used up, `codex exec …` from a
+Claude Code session with room is paused, and the reason names the Codex
+plan. Only the command word counts (`brew upgrade codex` and `cat
+codex.md` start nothing), and only the provider's name is kept, never the
+command. The other plan is read from the daemon's figures; with the daemon
+stopped it is unknown and the call goes ahead. opencode already compares
+the tightest plan of every provider.
+
 **The loop breaker** is the other boundary init writes: once the agent's
 latest tool calls go round a loop with no file changed (the same call four
 times, or the same two or three calls three times), the next call asks
