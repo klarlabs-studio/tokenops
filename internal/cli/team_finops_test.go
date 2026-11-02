@@ -21,6 +21,8 @@ func TestWriteMeNamesTheServersSchema(t *testing.T) {
 		"schema 2":        {2, teamwire.RoleMember, "accepts upload schema 2", "schema 3"},
 		"schema 3 member": {3, teamwire.RoleMember, "accepts upload schema 3", "vendor's daily bill"},
 		"schema 3 owner":  {3, teamwire.RoleOwner, "vendor's daily bill", "schema 2"},
+		"schema 4 member": {4, teamwire.RoleMember, "accepts upload schema 4", "schema 3"},
+		"schema 4 owner":  {4, teamwire.RoleOwner, "vendor's daily bill", "schema 3"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -69,5 +71,29 @@ func TestWriteFinOps(t *testing.T) {
 	writeFinOps(&out, teamwire.Upload{}, finOpsNote(true, 2))
 	if !strings.Contains(out.String(), "No plan use, waste, savings or plan advice") {
 		t.Errorf("empty preview = %q", out.String())
+	}
+}
+
+// `team status` says how long the server keeps the member's own rows when
+// that is shorter than the team totals, and only the totals' retention
+// for a server that does not say.
+func TestWriteMeNamesPersonalRetention(t *testing.T) {
+	cases := map[string]struct {
+		me     teamwire.Me
+		want   string
+		absent string
+	}{
+		"personal":     {teamwire.Me{RetentionDays: 400, PersonalRetentionDays: 90}, "kept 90 days after their week is released; team totals are kept 400 days", "), kept 400 days"},
+		"older server": {teamwire.Me{RetentionDays: 400}, "kept 400 days.", "after their week"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			var out bytes.Buffer
+			writeMe(&out, c.me)
+			got := out.String()
+			if !strings.Contains(got, c.want) || strings.Contains(got, c.absent) {
+				t.Errorf("status wants %q, not %q:\n%s", c.want, c.absent, got)
+			}
+		})
 	}
 }

@@ -359,8 +359,13 @@ type Me struct {
 	// Buckets and Days are how many rows and days of figures are held.
 	Buckets int `json:"buckets"`
 	Days    int `json:"days"`
-	// RetentionDays is how long figures are kept.
+	// RetentionDays is how long released team totals are kept.
 	RetentionDays int `json:"retention_days"`
+	// PersonalRetentionDays is how long the server keeps this member's own
+	// rows once their week is released, which is shorter than
+	// RetentionDays. Absent (zero) from servers that keep them as long as
+	// the totals.
+	PersonalRetentionDays int `json:"personal_retention_days,omitempty"`
 	// MinGroupSize is the smallest group an aggregate is shown for.
 	MinGroupSize int `json:"min_group_size"`
 	// Viewers are the people granted to see this member's individual
