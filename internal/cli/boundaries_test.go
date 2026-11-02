@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -362,5 +363,52 @@ func TestBoundaryHookAppliesAFolderRuleOnlyInItsFolder(t *testing.T) {
 	status, err := runCLI(t, nil, "boundaries", "status")
 	if err != nil || !strings.Contains(status, "when folder ~/work/acme") {
 		t.Fatalf("status = %s, %v", status, err)
+	}
+}
+
+// Claude Code with room starting Codex with none: the headroom rule reads
+// the Codex plan the call spends, and nothing of the command is kept.
+func TestBoundaryHookReadsThePlanACrossAgentCallSpends(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SESSION_ATTENDED", "0")
+	home := boundaryHome(t, `boundaries:
+  - name: headroom-pause
+    action: continue
+    when: { plan_left_pct: "<= 10" }
+    require: deny
+    stage: enforce
+`, 0)
+	dir := boundaryledger.Dir(filepath.Join(home, ".tokenops", "boundaries"))
+	if err := dir.PutFigures(boundaryledger.Figures{ObservedAt: time.Now(),
+		PlanLeftPct: map[string]map[string]float64{"anthropic": {"week": 70}, "openai": {"week": 4}}}); err != nil {
+		t.Fatal(err)
+	}
+	hook := func(command string) hookDecision {
+		t.Helper()
+		body, _ := json.Marshal(map[string]any{
+			"session_id": "s1", "transcript_path": "/x/.claude/projects/-repo/s1.jsonl", "tool_use_id": "tu-" + command,
+			"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": map[string]any{"command": command},
+		})
+		out, err := runCLI(t, body, "boundary-guard")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var d hookDecision
+		if out != "" {
+			if err := json.Unmarshal([]byte(out), &d); err != nil {
+				t.Fatalf("hook output %q: %v", out, err)
+			}
+		}
+		return d
+	}
+	if d := hook("go test ./..."); d.HookSpecificOutput.PermissionDecision != "" {
+		t.Fatalf("a call that starts no agent was stopped: %+v", d)
+	}
+	d := hook(`codex exec "secret prompt-like text"`)
+	if h := d.HookSpecificOutput; h.PermissionDecision != "deny" || !strings.Contains(h.PermissionDecisionReason, "Codex plan left 4.0%") {
+		t.Fatalf("codex exec with Codex used up = %+v", h)
+	}
+	b, _ := json.Marshal(ledger(t, home))
+	if strings.Contains(string(b), "secret prompt-like text") || strings.Contains(string(b), "codex exec") {
+		t.Fatal("the command reached the decision record")
 	}
 }
