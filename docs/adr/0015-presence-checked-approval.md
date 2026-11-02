@@ -435,3 +435,53 @@ which has no GUI session.
 
 The locked-console result already answers part of section 6: an approval
 asked while nobody is at the Mac fails at once instead of waiting.
+
+## Amendment: extra allowances (2026-11-02)
+
+`tokenops boundaries extra` (#845) lets the operator lift the headroom
+pause, or named local rules, for at most 24 hours. It shipped refused under
+`boundary_approval: presence`, because a grant is an approval of many future
+steps and could not be signed. The maintainer decided to sign it.
+
+**What is signed.** A grant is its own statement, with its own domain
+separator so it can never verify as an approval, a rotation or an
+enrolment, nor they as a grant:
+
+```
+tokenops.extra-allowance/v1
+key=<key id>  id=bnd-…  rules=<count>  rule=<name>…  granter=<account>
+why=<reason>  at=<RFC 3339>  until=<RFC 3339>
+```
+
+encoded like an approval (length-prefixed fields, times in whole UTC
+seconds), with `until − at` at most 24 hours. The grant's id is a fresh
+decision id, so one signature names exactly one grant; a grant needs no
+challenge, because it answers no waiting decision. The dialog names the
+rules, the end time and the reason, since that text is what a paired Apple
+Watch shows. The `Grant` value object and `VerifyGrant` live beside
+`Proof` and `Verify` in `internal/contexts/boundaries/presence`.
+
+**Where it is kept and checked.** The signed statement is stored with the
+grant in `boundaries/extras.json` (`presence_grant`). Under `presence` or
+`presence-strict` the pause point honours an active grant only when the
+statement verifies against the enrolled, unheld key *and* matches the
+grant as stored: its id, rules, granter, reason, start and end. A grant
+without a statement, or with an edited end, rule list or id, lifts nothing;
+`boundaries status`, the glance and `GET /api/boundaries` show it as not
+honoured, with the reason. The key store is read only when a grant is
+active and an enforced rule matched, so the pause point's budget is
+unaffected otherwise. The grant's decision and every decision it lets
+through record `Presence: signed` with the key.
+
+**Unchanged.** Only the CLI grants, at a terminal; no MCP tool or API route
+does. Organisation rules are refused; 24 hours is the maximum. With no
+enrolled key, no helper, a held key or nobody at the screen the grant is
+refused and nothing is recorded. Under `channel` grants are not signed and
+not checked, as before. Ending a grant (`--end`) only tightens and needs no
+presence anywhere. Turning presence on stops an unsigned grant made under
+`channel` from lifting anything.
+
+**Residual risk** is the one §7 names: any of the user's processes can ask
+the Secure Enclave for a signature with its own dialog text, so a person
+who approves a dialog they did not start grants what it asked. The grant's
+decision says it was signed in person and how to end it.
