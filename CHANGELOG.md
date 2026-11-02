@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **plans:** a model's own weekly limit could stand in for the account's week. Anthropic can send a model's weekly window as a top-level block (`seven_day_opus`, `seven_day_sonnet`, and on Ultra the separate Fable week) with no scope of its own, and TokenOps read each one as the plain weekly window. They then collided with the account-wide week, and whichever came first in map order became the week the glance showed and the headroom pause compared against: an Ultra account near its Fable limit could pause every session, and one near its account week could look fine. Each is now its own window, `week (Fable)`, `week (Opus)`, `week (OAuth apps)`, beside the account's `week`, and boundaries keep reading only the account's.
+
 ## 0.117.1 - 2026-11-02
 
 ### Fixed
