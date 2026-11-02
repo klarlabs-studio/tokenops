@@ -111,7 +111,7 @@ func CheckShare(rules []domain.Rule, destination string, env Env) error {
 // can measure — plan headroom outside Claude Code's status line, or a
 // budget — so the daemon writes them only when something reads them.
 func NeedsFigures(rules []domain.Rule) bool {
-	return needs(rules, domain.FieldPlanLeft) || needs(rules, domain.FieldBudgetUsed)
+	return needs(rules, domain.FieldPlanLeft) || needs(rules, domain.FieldPlanEarly) || needs(rules, domain.FieldBudgetUsed)
 }
 
 // Figures builds the readings the daemon writes for the pause point: the
@@ -138,6 +138,19 @@ func Figures(reports []plans.HeadroomReport, budgetUsed map[string]float64, now 
 			// Two plans on one provider: the tighter one binds.
 			if cur, ok := byWindow[name]; !ok || left < cur {
 				byWindow[name] = left
+			}
+			if before, known := w.RunsOutEarly(now); known {
+				if out.PlanEarlyMin == nil {
+					out.PlanEarlyMin = map[string]map[string]float64{}
+				}
+				early := out.PlanEarlyMin[r.Provider]
+				if early == nil {
+					early = map[string]float64{}
+					out.PlanEarlyMin[r.Provider] = early
+				}
+				if cur, ok := early[name]; !ok || before.Minutes() > cur {
+					early[name] = before.Minutes()
+				}
 			}
 		}
 	}
