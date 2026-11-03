@@ -184,6 +184,7 @@ tokenops team leave --keep-history
 tokenops team admin login           # owners and admins: approve this machine in the browser with a code
 tokenops team admin teams|create-team|invite|members|remove|role|grants|grant|revoke|billing|audit
 tokenops team admin caps            # each member's Claude Enterprise spend limit and requests for more
+tokenops team admin caps --github-org <org> --gh   # and the org's Copilot budgets
 ```
 
 `create` and `admin login` show a short code to type into the server's
@@ -201,8 +202,14 @@ a key the primary owner creates in claude.ai > Organization settings > API
 with the `read:spend_limits` scope, which can sit beside `read:analytics` on
 one key. The key stays on your machine; members are matched to the team by
 e-mail address in memory, and nothing is uploaded or kept. Requests are
-answered in claude.ai. OpenAI's per-seat credit limits are set only in its
-billing settings, with no API to read them.
+answered in claude.ai. With `--github-org`, it also lists that GitHub
+organisation's budgets on Copilot, its premium requests or AI credits (for
+the organisation, a cost center, a repository or a user), their spend this
+month and whether each stops usage or only alerts. It reads them with
+`GH_TOKEN` or `GITHUB_TOKEN`, or with `--gh` the GitHub CLI's token, as an
+owner or billing manager; a user budget names a GitHub login, matched to the
+team member of that name. OpenAI's per-seat credit limits are set only in
+its billing settings, with no API to read them.
 
 `join` takes `--name` (how people granted to see individual figures see
 you) and `--device`. The enrolment is kept in `~/.tokenops/team.json`

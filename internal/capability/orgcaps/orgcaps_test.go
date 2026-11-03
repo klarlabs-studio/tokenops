@@ -45,7 +45,7 @@ func TestReadMatchesMembersAndOrdersByUrgency(t *testing.T) {
 		{ID: "m4", Name: "Dee", Email: "dee@example.com"},
 		{ID: "m5", Name: "Eve", Email: "eve@example.com"},
 	}
-	rep, err := Read(context.Background(), r, members)
+	rep, err := ReadClaude(context.Background(), r, members)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestReadMatchesMembersAndOrdersByUrgency(t *testing.T) {
 }
 
 func TestReadNamesTheMissingScope(t *testing.T) {
-	_, err := Read(context.Background(), fakeReader{err: anthropicapi.ErrSpendLimitsScope}, nil)
+	_, err := ReadClaude(context.Background(), fakeReader{err: anthropicapi.ErrSpendLimitsScope}, nil)
 	if !errors.Is(err, anthropicapi.ErrSpendLimitsScope) || !strings.Contains(err.Error(), "Organization settings > API") {
 		t.Fatalf("err = %v", err)
 	}
