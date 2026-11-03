@@ -146,7 +146,8 @@ const (
 // Crossing is one figure that crossed a rule's condition.
 type Crossing struct {
 	// Field is the condition: session_cost_usd, plan_left_pct,
-	// budget_used_pct, model_tier, destination or loop_calls.
+	// plan_runs_out_early_min, budget_used_pct, model_tier, destination,
+	// loop_calls, session_subagents or prompt_subagents.
 	Field string `json:"field"`
 	// Op is the comparator: <, <=, >, >= or ==.
 	Op string `json:"op"`
@@ -161,7 +162,7 @@ type Crossing struct {
 }
 
 var (
-	crossingFields = []string{"session_cost_usd", "plan_left_pct", "plan_runs_out_early_min", "budget_used_pct", "model_tier", "destination", "loop_calls"}
+	crossingFields = []string{"session_cost_usd", "plan_left_pct", "plan_runs_out_early_min", "budget_used_pct", "model_tier", "destination", "loop_calls", "session_subagents", "prompt_subagents"}
 	crossingOps    = []string{"<", "<=", ">", ">=", "=="}
 	crossingWins   = []string{"", "5h", "week"}
 	crossingDests  = []string{"", "team", "otel"}
