@@ -6,9 +6,10 @@
 // vendor's members are matched to the team's by e-mail address, in memory:
 // nothing read here is uploaded, kept or logged.
 //
-// Claude Enterprise is the one source today (the Spend Limits API).
-// OpenAI's per-seat credit limits are set only in its billing settings,
-// with no API to read them.
+// Two vendors are read: Claude Enterprise's spend limits (the Spend
+// Limits API) and a GitHub organisation's Copilot budgets. OpenAI's
+// per-seat credit limits are set only in its billing settings, with no API
+// to read them.
 package orgcaps
 
 import (
@@ -55,6 +56,9 @@ type Row struct {
 	// Source says where the cap was inherited from: "user", "seat tier
 	// enterprise_standard", "group rbac_group_01…", "organization".
 	Source string `json:"source"`
+	// Shared is a cap on something other than one person: an
+	// organisation, cost center or repository budget.
+	Shared bool `json:"shared,omitempty"`
 	// Pending is a request for a higher cap waiting for an admin, and
 	// PendingSince when it was made.
 	Pending      bool      `json:"pending,omitempty"`
@@ -75,9 +79,10 @@ type Report struct {
 	Pending   int      `json:"pending"`
 }
 
-// Read reads the vendor's caps and matches them to members. members may
-// be empty: the caps are then shown by the vendor's names alone.
-func Read(ctx context.Context, r Reader, members []teamwire.Member) (Report, error) {
+// ReadClaude reads Claude Enterprise's caps and matches them to members by
+// e-mail. members may be empty: the caps are then shown by the vendor's
+// names alone.
+func ReadClaude(ctx context.Context, r Reader, members []teamwire.Member) (Report, error) {
 	limits, err := r.SpendLimits(ctx)
 	if err != nil {
 		if errors.Is(err, anthropicapi.ErrSpendLimitsScope) {
