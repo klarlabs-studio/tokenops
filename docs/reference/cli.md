@@ -183,11 +183,26 @@ tokenops team leave            # revoke this machine and erase its figures
 tokenops team leave --keep-history
 tokenops team admin login           # owners and admins: approve this machine in the browser with a code
 tokenops team admin teams|create-team|invite|members|remove|role|grants|grant|revoke|billing|audit
+tokenops team admin caps            # each member's Claude Enterprise spend limit and requests for more
 ```
 
 `create` and `admin login` show a short code to type into the server's
 page; the code is never part of a link. `admin` commands take `--server`, the listing ones `--json`
 (see [Team plane](https://team.klarlabs.de/guide/team#manage-it)).
+
+`admin caps` reads the spend limit Claude Enterprise sets on each member
+(the Spend Limits API): the cap and its period, where it was inherited from
+(set for them, their seat tier, a group or the organisation), the spend so
+far, and any request for a higher limit waiting for an admin, with the
+members at 90% of their cap or more marked. It is the ceiling your
+organisation's boundaries sit under. It reads with
+`vendor_usage.anthropic.analytics_key` (`TOKENOPS_ANTHROPIC_ANALYTICS_KEY`),
+a key the primary owner creates in claude.ai > Organization settings > API
+with the `read:spend_limits` scope, which can sit beside `read:analytics` on
+one key. The key stays on your machine; members are matched to the team by
+e-mail address in memory, and nothing is uploaded or kept. Requests are
+answered in claude.ai. OpenAI's per-seat credit limits are set only in its
+billing settings, with no API to read them.
 
 `join` takes `--name` (how people granted to see individual figures see
 you) and `--device`. The enrolment is kept in `~/.tokenops/team.json`
