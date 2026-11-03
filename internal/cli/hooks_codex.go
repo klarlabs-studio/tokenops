@@ -13,12 +13,16 @@ import (
 // `args` alongside `command`, which Claude Code honours; assuming Codex
 // does the same would, if wrong, run the bare binary with no subcommand —
 // a hook that is installed, reports success and does nothing.
-func codexCommandEntry(exe string, args []string) map[string]any {
+//
+// title goes in statusMessage, which Codex's /hooks list titles the hook
+// by ("Unnamed hook" without one) and shows while the hook runs.
+func codexCommandEntry(exe string, args []string, title string) map[string]any {
 	parts := append([]string{shellQuote(exe)}, args...)
 	return map[string]any{
-		"type":    "command",
-		"command": strings.Join(parts, " "),
-		"timeout": float64(10),
+		"type":          "command",
+		"command":       strings.Join(parts, " "),
+		"timeout":       float64(10),
+		"statusMessage": title,
 	}
 }
 
