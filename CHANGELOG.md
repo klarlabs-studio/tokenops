@@ -7,7 +7,6 @@
 ### Fixed
 
 - **coach:** the weekly waste finding no longer judges a week of work abandoned when git could not read a repository's history. A failed or timed-out `git log` (a full disk did it) read as "no commits", so every session in that repository counted as abandoned: the glance said ~94.7% of a Codex week was avoidable where the waste report, run again, found 0.8%. A repository whose history could not be read, or with no `user.email` configured, is now left unjudged and listed as "repository history unread" in `spend --by commit`; the savings ledger no longer counts it as work that did not land.
-
 - **hooks:** tokenops' Codex hooks have a name. Codex's `/hooks` listed them as "Unnamed hook", so you could not tell whose hook you were asked to trust; each now carries a title such as "tokenops: action boundaries", which Codex also shows while it runs. Run `tokenops hooks install` again to name hooks already installed; Codex then asks you to trust them once more, since their definition changed.
 - **boundaries:** `tokenops boundaries status` says "hook not trusted" for a Codex hook that is written but not yet trusted, instead of "hook not installed".
 
