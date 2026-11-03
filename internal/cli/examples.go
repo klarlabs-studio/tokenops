@@ -126,7 +126,7 @@ tokenops team admin billing --portal     # invoices, payment details, cancel`,
 	"team admin approvals":  `tokenops team admin approvals --all`,
 	"team admin approve":    `tokenops team admin approve bnd-1a2b3c4d5e6f --session`,
 	"team admin deny":       `tokenops team admin deny bnd-1a2b3c4d5e6f`,
-	"team admin caps":       `tokenops team admin caps --json`,
+	"team admin caps":       `tokenops team admin caps --github-org acme --gh`,
 	"version":               `tokenops version --json`,
 	"coach": `tokenops coach                   # the dials, what the coach did, what came of it
 tokenops coach preset advise`,
