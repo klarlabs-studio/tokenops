@@ -2,6 +2,7 @@ package gitlog
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -156,24 +157,38 @@ func TestRootDoesNotCacheACancelledLookup(t *testing.T) {
 }
 
 // Without a configured user there is no one to attribute work to, and
-// guessing would credit someone else's commits.
-func TestCommitsWithoutConfiguredUserIsEmpty(t *testing.T) {
+// guessing would credit someone else's commits. Nor is it "no commits":
+// a caller judging work by the commits that followed it would judge all
+// of it unfinished.
+func TestCommitsWithoutConfiguredUserIsUnread(t *testing.T) {
 	isolateGit(t)
 	repo := newRepo(t, "")
 	commit(t, repo, "someone@example.com", "theirs", time.Now())
 	got, err := NewRepos().Commits(context.Background(), repo, time.Time{})
-	if err != nil || got != nil {
-		t.Errorf("Commits = %v, %v; want nil, nil", got, err)
+	if !errors.Is(err, ErrNoAuthor) || got != nil {
+		t.Errorf("Commits = %v, %v; want nil, ErrNoAuthor", got, err)
 	}
 }
 
-func TestCommitsOutsideRepositoryIsEmpty(t *testing.T) {
+func TestCommitsOutsideRepositoryIsUnread(t *testing.T) {
 	isolateGit(t)
 	// No repository means no configured user is found either: nothing
-	// to attribute, and no error to surface.
+	// can be attributed, and the caller hears that rather than "none".
 	got, err := NewRepos().Commits(context.Background(), tempDir(t), time.Time{})
-	if err != nil || got != nil {
-		t.Errorf("Commits = %v, %v; want nil, nil", got, err)
+	if !errors.Is(err, ErrNoAuthor) || got != nil {
+		t.Errorf("Commits = %v, %v; want nil, ErrNoAuthor", got, err)
+	}
+}
+
+// A repository read with no commits of the user's in the window is an
+// empty list, not nil: callers tell "none" from "unread" by it.
+func TestCommitsWithNoneInWindowIsEmptyNotNil(t *testing.T) {
+	isolateGit(t)
+	repo := newRepo(t, "me@example.com")
+	commit(t, repo, "me@example.com", "old", time.Now().Add(-48*time.Hour))
+	got, err := NewRepos().Commits(context.Background(), repo, time.Now().Add(-time.Hour))
+	if err != nil || got == nil || len(got) != 0 {
+		t.Errorf("Commits = %#v, %v; want an empty list", got, err)
 	}
 }
 
