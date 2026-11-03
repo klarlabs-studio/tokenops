@@ -4,6 +4,10 @@
 
 ## 0.118.1 - 2026-11-03
 
+### Added
+
+- **checkup:** a finding for what Claude Code loads into every turn and you never use. It reads each session's skill listing, deferred MCP tools and MCP server instructions from the transcript and joins them with the skills invoked and the MCP tools called: a plugin none of whose skills ran and whose tools were never called, a claude.ai connector or an MCP server never called, once loaded in 5 sessions or more, comes out largest first with its tokens a turn and the command that unloads it (`claude plugin disable sales@synced`, `claude mcp remove <name>`, or the connector to turn off on claude.ai). A plugin already turned off in `enabledPlugins` is left out, so acting on it clears the finding at once. Only sizes and names are kept, never the listing's text. On one operator's machine it found ten unused synced plugins and six MCP servers and connectors, 9k tokens on every turn.
+
 ### Fixed
 
 - **coach:** the weekly waste finding no longer judges a week of work abandoned when git could not read a repository's history. A failed or timed-out `git log` (a full disk did it) read as "no commits", so every session in that repository counted as abandoned: the glance said ~94.7% of a Codex week was avoidable where the waste report, run again, found 0.8%. A repository whose history could not be read, or with no `user.email` configured, is now left unjudged and listed as "repository history unread" in `spend --by commit`; the savings ledger no longer counts it as work that did not land.
