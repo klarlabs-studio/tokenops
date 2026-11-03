@@ -125,6 +125,9 @@ type Report struct {
 	// UnknownDirectory is from sessions whose directory no client
 	// recorded (or whose transcript is gone).
 	UnknownDirectory Cost `json:"unknown_directory"`
+	// HistoryUnread ran in a repository whose commits could not be read:
+	// git failed or timed out, or no user.email is configured.
+	HistoryUnread Cost `json:"history_unread"`
 	// AttributedShare is the share of the window's API-equivalent value
 	// placed on a commit.
 	AttributedShare float64 `json:"attributed_share"`
@@ -152,7 +155,7 @@ func Compute(ctx context.Context, d Deps, since time.Time) (Report, error) {
 
 // Work is what the join reads: the turns since a time, where each
 // session ran, each directory's repository, and each repository's
-// commits.
+// commits; a repository whose history could not be read has no entry.
 type Work struct {
 	Turns     []analytics.SessionTurn
 	Dirs      map[string]sessiondirs.Dir
@@ -178,14 +181,21 @@ func Gather(ctx context.Context, d Deps, since time.Time) (Work, error) {
 		repos = gitlog.NewRepos()
 	}
 	w := Work{Turns: turns, Dirs: dirsOf(since), RootOf: map[string]string{}, CommitsOf: map[string][]gitlog.Commit{}, Repos: repos}
+	tried := map[string]bool{}
 	for _, dir := range w.Dirs {
 		if _, seen := w.RootOf[dir.CWD]; seen {
 			continue
 		}
 		root := repos.Root(ctx, dir.CWD)
 		w.RootOf[dir.CWD] = root
-		if _, listed := w.CommitsOf[root]; root != "" && !listed {
-			w.CommitsOf[root], _ = repos.Commits(ctx, root, since)
+		if root == "" || tried[root] {
+			continue
+		}
+		tried[root] = true
+		// A history that could not be read stays out of CommitsOf, so
+		// Place answers HistoryUnread rather than "no commit followed".
+		if cs, err := repos.Commits(ctx, root, since); err == nil {
+			w.CommitsOf[root] = cs
 		}
 	}
 	return w, nil
@@ -223,6 +233,9 @@ const (
 	// UnknownDirectory is from a session whose directory no client
 	// recorded.
 	UnknownDirectory
+	// HistoryUnread ran in a repository whose commits could not be read,
+	// so whether a commit followed is unknown.
+	HistoryUnread
 )
 
 // Place joins one turn to a commit: the repository its session ran in,
@@ -238,7 +251,10 @@ func Place(t analytics.SessionTurn, dirs map[string]sessiondirs.Dir, rootOf map[
 	if root == "" {
 		return OutsideARepository, gitlog.Commit{}
 	}
-	commits := commitsOf[root]
+	commits, read := commitsOf[root]
+	if !read {
+		return HistoryUnread, gitlog.Commit{}
+	}
 	i := sort.Search(len(commits), func(i int) bool { return !commits[i].At.Before(t.At) })
 	switch {
 	case i == len(commits):
@@ -268,6 +284,9 @@ func Attribute(since time.Time, turns []analytics.SessionTurn, dirs map[string]s
 			continue
 		case OutsideARepository:
 			r.OutsideARepository.Add(t)
+			continue
+		case HistoryUnread:
+			r.HistoryUnread.Add(t)
 			continue
 		case Uncommitted:
 			r.Uncommitted.Add(t)

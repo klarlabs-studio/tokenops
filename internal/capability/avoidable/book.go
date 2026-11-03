@@ -307,7 +307,7 @@ func (b *book) claimFindings(tr *workflow.Trace, findings []*eventschema.Coachin
 // claimAbandoned claims every turn of a session that has been over for a
 // day with no commit within a day of any turn and no outcome recorded. A
 // session the commit join cannot place (outside a repository, directory
-// unknown) is not judged.
+// unknown, history unread) is not judged.
 func (b *book) claimAbandoned(in Inputs) {
 	outcome := uniteconomics.OutcomeJoin(in.Outcomes)
 	for _, turns := range b.sessions {
@@ -322,7 +322,8 @@ func (b *book) claimAbandoned(in Inputs) {
 			total += t.Tokens
 			placed, _ := commits.Place(t, in.Dirs, in.RootOf, in.CommitsOf)
 			_, judged := outcome(t)
-			if placed == commits.OnCommit || placed == commits.OutsideARepository || placed == commits.UnknownDirectory || judged {
+			if placed == commits.OnCommit || placed == commits.OutsideARepository || placed == commits.UnknownDirectory ||
+				placed == commits.HistoryUnread || judged {
 				abandoned = false
 				break
 			}
