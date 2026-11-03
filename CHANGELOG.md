@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.118.0 - 2026-11-03
+
 ### Added
 
 - **team:** `tokenops team admin caps` shows the spend caps your vendors set beside the team. For Claude Enterprise, each member's spend limit: the cap and its period, where it was inherited from (set for them, a seat tier, a group or the organisation), the spend so far, and any request for a higher limit waiting for an admin, those first, then the fullest caps, marking members at 90% or more. It flags Claude members who are not in the team and team members with no Claude limit. It reads the Spend Limits API with `vendor_usage.anthropic.analytics_key`, which needs the `read:spend_limits` scope (one Enterprise key can carry it beside `read:analytics`); the key stays on the administrator's machine, members are matched by e-mail in memory, and nothing is uploaded. Requests are still answered in claude.ai. With `--github-org <org>` it also lists the organisation's Copilot budgets (on Copilot, premium requests or AI credits; for the organisation, a cost center, a repository or a user) with their spend this month and whether each stops usage or only alerts, read with `GH_TOKEN`/`GITHUB_TOKEN` or, with `--gh`, the GitHub CLI's token. OpenAI's per-seat credit limits have no API to read them.
