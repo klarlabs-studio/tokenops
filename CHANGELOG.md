@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.118.1 - 2026-11-03
+
 ### Fixed
 
 - **coach:** the weekly waste finding no longer judges a week of work abandoned when git could not read a repository's history. A failed or timed-out `git log` (a full disk did it) read as "no commits", so every session in that repository counted as abandoned: the glance said ~94.7% of a Codex week was avoidable where the waste report, run again, found 0.8%. A repository whose history could not be read, or with no `user.email` configured, is now left unjudged and listed as "repository history unread" in `spend --by commit`; the savings ledger no longer counts it as work that did not land.
