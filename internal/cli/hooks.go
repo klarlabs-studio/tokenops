@@ -26,7 +26,10 @@ import (
 
 // hookSpec describes one tokenops hook we can wire in.
 type hookSpec struct {
-	name    string // human label
+	name string // human label
+	// title names the hook where a client lists it: Codex's /hooks shows
+	// it, and its status line while the hook runs.
+	title   string
 	event   string // Claude Code hook event (Stop, PreToolUse, ...)
 	matcher string // tool matcher; "" means "all" (Stop has no matcher)
 	marker  string // args[0] that identifies our entry (coach-hook / read-guard)
@@ -109,6 +112,7 @@ func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget f
 	if coach {
 		out = append(out, hookSpec{
 			name:   "coach-hook (Stop nudge)",
+			title:  "tokenops: coaching nudge",
 			event:  "Stop",
 			marker: "coach-hook",
 			args:   []string{"coach-hook", "--budget", formatBudget(budget)},
@@ -117,6 +121,7 @@ func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget f
 	if readGuard {
 		out = append(out, hookSpec{
 			name:    "read-guard (Read dedup)",
+			title:   "tokenops: read dedup",
 			event:   "PreToolUse",
 			matcher: "Read",
 			marker:  "read-guard",
@@ -128,6 +133,7 @@ func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget f
 		// counted, never answered.
 		out = append(out, hookSpec{
 			name:       "read-guard (search loops, repeated commands)",
+			title:      "tokenops: search loops",
 			event:      "PreToolUse",
 			matcher:    loopTipMatcher,
 			marker:     "read-guard",
@@ -142,6 +148,7 @@ func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget f
 		}
 		out = append(out, hookSpec{
 			name:   "route-guard (per-turn model fit)",
+			title:  "tokenops: model fit",
 			event:  "UserPromptSubmit",
 			marker: "route-guard",
 			args:   args,
@@ -152,6 +159,7 @@ func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget f
 		if provider == "anthropic" {
 			out = append(out, hookSpec{
 				name:    "route-guard (subagent model)",
+				title:   "tokenops: subagent model",
 				event:   "PreToolUse",
 				matcher: "Agent",
 				marker:  "route-guard",
@@ -165,6 +173,7 @@ func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget f
 		// for the loop breaker, and answers from a few small files.
 		out = append(out, hookSpec{
 			name:    "boundary-guard (action boundaries)",
+			title:   "tokenops: action boundaries",
 			event:   "PreToolUse",
 			matcher: "*",
 			marker:  "boundary-guard",
@@ -379,7 +388,7 @@ func installClientHooks(out io.Writer, client, settingsPath string, sel hookSele
 	for _, sp := range specs {
 		entry := commandEntry(exe, sp.args)
 		if strings.EqualFold(client, hookClientCodex) {
-			entry = codexCommandEntry(exe, sp.args)
+			entry = codexCommandEntry(exe, sp.args, sp.title)
 		}
 		retired := retireMatchers(hooks, sp.event, sp.marker, sp.supersedes...)
 		changed, warn := mergeHook(hooks, sp.event, sp.matcher, entry, sp.marker)

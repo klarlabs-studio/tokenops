@@ -54,6 +54,9 @@ const (
 	EnforcementShadow       = "shadow"
 	EnforcementAdviceOnly   = "advice only"
 	EnforcementNotInstalled = "hook not installed"
+	// EnforcementUntrusted is a hook written to a client that skips it
+	// until the operator trusts it (Codex).
+	EnforcementUntrusted = "hook not trusted"
 	// EnforcementIdle is a decision point inside TokenOps that is not in
 	// use, so the rule has nothing to decide there.
 	EnforcementIdle = "idle"
@@ -243,8 +246,8 @@ func harnesses(r domain.Rule, installed map[string]bool) []HarnessStatus {
 			hs.Enforcement = EnforcementAdviceOnly
 			hs.Note = h + "'s subagents are not routed through a hook TokenOps can answer"
 		case h == HarnessCodex && installed[codexUntrusted]:
-			hs.Enforcement = EnforcementNotInstalled
-			hs.Note = "the hook is written but Codex skips it until you trust it: run /hooks in Codex and trust the tokenops entry"
+			hs.Enforcement = EnforcementUntrusted
+			hs.Note = "Codex skips it until you trust it: run /hooks in Codex and trust the tokenops entry"
 		case !installed[hookKey(r, h)]:
 			hs.Enforcement = EnforcementNotInstalled
 			hs.Note = "tokenops hooks install --boundary --client " + h
