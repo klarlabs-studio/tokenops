@@ -47,7 +47,8 @@ The five positions this doc called unoccupied on 2026-10-03, as of 11-02:
    across Claude Code and Codex. Nobody else acts on it across Cursor,
    opencode, Copilot or Gemini as well, or across accounts and plans together.
 2. **Action inside the live session, per developer.** *Contested, and the
-   vendors moved in.* Codex enforces rollout budgets natively; Claude Code caps
+   vendors moved in.* Codex is building a rollout budget (behind a feature
+   flag still under development, off by default); Claude Code caps
    auto-continue at a usage limit at three (2.1.314). Nobody else combines the
    read guard, compression, budgets, the loop breaker and boundaries in one
    place.
@@ -91,7 +92,7 @@ rival's plan.
 | Hook-sized enforcers (cc-cost, agentwatchdog, terse, claudepace, coding-agent-guardrails) | Per-project budgets with warn/block hooks, budget circuit breakers, destructive-command blocks | **Yes** | Mostly CC | 0–2★ each, 09–10 | Signal, not threat: the idea is obvious |
 | Menu-bar and widget long tail (ai-usagebar, TokenBar, codex-usage-badge, Developer-Island, Clawdmeter, CodeZeno's Windows monitor, OrbMet, Paceline and others) | 5h and weekly bars, per-account notch, Windows taskbar, GNOME/KDE, an ESP32 desk display | No | 1–4 vendors | ai-usagebar 739★ (10-30); TokenBar 200★ (11-02); Clawdmeter 2.3k★ v2.2.5 (11-02); CodeZeno 675★ v2.22.4 | Linux, Windows and hardware presence we lack |
 | Claude Code `/usage`, `/insights`, `/cost` | Plan bars; waste warnings with one-key fixes (2.1.299, 2.1.305), large cache misses (2.1.311); resume warning on 5h share (2.1.304); auto-continue at a usage limit capped at three (2.1.314); idle compaction; gateway spend limit in dollars with warnings at 75% and 95% | **Yes** (fixes on request; auto mode default) | Claude Code | First party. No pace signal in the release notes from 2.1.257 to 2.1.316 | Authoritative, built in, *acts* on Claude waste |
-| OpenAI Codex usage | Personal dashboard (Enterprise/Edu): history, top consuming chats, per-chat cost; dollar usage per thread in `/status` and the status line for ENT26 plans (0.166); widgets; banked resets; **rollout budgets, enforced by default or advisory** (0.166, 10-29); `PreModelRequest`/`PostModelRequest` hooks that report each request's tokens (0.164, 10-23) | **Yes** (rollout budgets; apply a saved reset) | Codex, ChatGPT | First party | Session budget inside the harness; per-chat cost for Codex users |
+| OpenAI Codex usage | Personal dashboard (Enterprise/Edu): history, top consuming chats, per-chat cost; dollar usage per thread in `/status` and the status line for ENT26 plans (0.166); widgets; banked resets; **rollout budgets behind the `rollout_budget` feature, under development and off by default; once on, enforced unless `enforce_limit = false`** (0.166, 10-29); `PreModelRequest`/`PostModelRequest` hooks that report each request's tokens (0.164, 10-23) | **Yes** (apply a saved reset; rollout budgets once the feature ships) | Codex, ChatGPT | First party | Session budget inside the harness; per-chat cost for Codex users |
 | Cursor dashboard | Allowance per pool | No | Cursor | First party | Authoritative for its own plan. [U] New weekly pool shared with Grok (10-12) |
 
 ### Team and enterprise
@@ -130,7 +131,7 @@ first, then the team they will one day bring. Status as of 2026-11-02.
 |---|---|---|---|---|
 | G1 | **Harness breadth.** CodexBar at 110+ providers; tokscale and agentsview at 50+ | Individual tools | High | About 90 providers read for windows; Copilot CLI sign-in, Junie quota, opencode 2 and the current Cursor plans read (0.114); transcript readers still fewer |
 | G2 | **Setup friction** | ccusage, CodexBar | High | `npx tokenops checkup` (0.101), `init` binding plans from evidence, headroom pause written by `init` (0.108); wizard open |
-| G20 | **Vendor budgets inside the harness.** Codex enforces rollout budgets by default; Claude's gateway enforces user, group and pooled caps; Copilot caps automations | OpenAI, Anthropic, GitHub | **High, new** | A TokenOps session budget on Codex neither reads nor defers to the rollout budget; two budgets can speak about one session |
+| G20 | **Vendor budgets inside the harness.** Codex has a rollout budget behind a feature flag (`Stage::UnderDevelopment`, `default_enabled: false` in 0.166's source); Claude's gateway enforces user, group and pooled caps; Copilot caps automations | OpenAI, Anthropic, GitHub | Low until Codex ships it (lowered 2026-11-03) | A TokenOps session budget on Codex would neither read nor defer to a rollout budget, but no Codex user has one without opting into an unfinished feature. Revisit when it leaves development. Vendor org caps are read for admins (#857, #858) |
 | G18 | **Headroom pause, and the rules around it.** Peras 0.5 pauses on burn rate, per prompt, per subagent count, folder and hour, and guards across agents | Peras, limitcast, agent-usage-guard, spare10, Pushary | Medium-high | Pause on by default in shadow (0.108), loop breaker (0.113), folder and hour scope and a temporary extra allowance under presence approval (0.117). Unreleased: a cross-agent guard (#853), a pause on pace, `plan_runs_out_early_min` (#854), subagent fan-out per prompt and per session (#856). Open: phone approvals |
 | G17 | **Vendor approvals.** Auto mode is the default; Codex Guardian V3; Copilot assisted permissions GA (10-26) | Anthropic, OpenAI, GitHub | High | Claude Code's verdicts are read from the transcript and never taken as the person's yes (0.108). The OTel route is moot: `safety_event` was dropped in 2.1.312 |
 | G19 | **New window shapes.** Ultra with no 5-hour limit and a separate Fable weekly limit; banked resets (OpenAI); early resets; per-model quotas (Antigravity); shared pools (Cursor with Grok [U]) | Vendors | Medium-high (raised) | Max/Ultra and Ultra's week-only measure (0.116.5); early resets (0.112, 0.114); Antigravity quota groups (0.114); Codex reset credits read with their expiry, and a finding before one lapses, and before a week resets mostly unused (0.117); observed limits overlay the catalog (0.117). Unreleased: a model's own weekly window, Ultra's Fable week among them, read as its own window (#852). Open: shared pools |
@@ -164,8 +165,8 @@ overlap, win: see "Direction (2026-10-25)" below.
 | 4 | **New window shapes** in the plan catalog | G19 | **Mostly done**: Ultra, early resets, Antigravity groups, Codex reset credits and their expiry (0.117). Open: Ultra's Fable weekly window, shared pools |
 | 5 | **Org caps as vendor readings**: OpenAI per-seat limits, Copilot budgets, the Claude gateway's user, group and pooled caps, so a team rule sits under the vendor's cap | G7 | Claude Enterprise spend limits and Copilot budgets read on the admin's machine (#857, #858); OpenAI has no API; the gateway's pooled caps are not readable yet |
 | 6 | **Transcript readers, wave 2** (Claude Desktop, Junie, Droid, Qwen Code) | G1 | Junie quota read (0.114); transcripts open |
-| 7 (new) | **Defer to a harness's own budget.** Read Codex's rollout budget (enforced or advisory) and the Claude gateway's cap as the vendor's; a TokenOps budget on the same session says it sits under it, as the coach does with `vendor_speaks` | G20 | A Codex session with a rollout budget gets one budget message, not two, and `explain` names both |
-| 8 (new) | **Read Codex's per-request usage hooks.** `PostModelRequest` reports each request's tokens; take it as evidence with its source (direction priority 5) where the rollout files are late or missing | G1, G19 | Codex spend matches the hook figure, stored as Codex's |
+| 7 (new) | **Defer to a harness's own budget.** Read Codex's rollout budget (enforced or advisory) and the Claude gateway's cap as the vendor's; a TokenOps budget on the same session says it sits under it, as the coach does with `vendor_speaks` | G20 | Deferred (2026-11-03): Codex's rollout budget is off by default and under development; revisit when it ships. The gateway's pooled caps have no reader yet |
+| 8 (new) | **Read Codex's per-request usage hooks.** `PostModelRequest` reports each request's tokens; take it as evidence with its source (direction priority 5) where the rollout files are late or missing | G1, G19 | Codex spend matches the hook figure, stored as Codex's. The hooks are observation-only, not feature-gated, and shipped in 0.164 |
 | 9 (new) | **A cross-agent guard.** While a boundary pauses one harness, a call from another harness into it (`codex exec` from Claude Code, `claude -p` from Codex) is held by the same boundary | G18 | **Done** (#853, unreleased): a shell call that starts another agent's CLI reads that agent's plan too |
 
 **Step 2 and 3 audit (2026-10-24, against Claude Code 2.1.307's own
@@ -209,8 +210,9 @@ the unseen rate by kind, which is how the cut is judged.
 - That nobody else acts on headroom across harnesses (2026-11-02). Peras and
   ccx act across Claude Code and Codex. Say "across every harness and plan you
   use", and name the ones the pause guards do not reach.
-- That a session budget is ours alone. Codex enforces its own rollout budget
-  by default; say a TokenOps budget spans harnesses and plans.
+- That a session budget is ours alone. Codex is building its own rollout
+  budget (off by default for now); say a TokenOps budget spans harnesses and
+  plans.
 
 **Positioning risks:**
 
@@ -545,7 +547,8 @@ dates and sources. The tables above carry these.
 - **OpenAI Codex** ([releases](https://github.com/openai/codex/releases)):
   0.164 (10-23) `PreModelRequest`/`PostModelRequest` hooks reporting tokens
   per request; 0.165 (10-27) Guardian V3 config; 0.166 (10-29)
-  `features.rollout_budget.enforce_limit` (enforced by default, or advisory)
+  `features.rollout_budget.enforce_limit` (the feature is under development
+  and off by default; once enabled the limit is enforced unless set false)
   and dollar thread usage for ENT26 plans. Not verified: whether the usage
   dashboard reached Plus and Pro, and whether banked resets apply on their
   own (help.openai.com refused the fetch).
@@ -607,8 +610,9 @@ item: Claude's weekly pace banner, seen in the Claude desktop app on
 
 ## Watch list
 
-- **Vendor budgets inside the harness:** Codex rollout budgets (does the
-  ChatGPT admin push them centrally?), the Claude apps gateway, Copilot
+- **Vendor budgets inside the harness:** Codex rollout budgets (when does
+  `rollout_budget` leave `UnderDevelopment`, and does the ChatGPT admin push
+  it centrally?), the Claude apps gateway, Copilot
   Automations. Each release decides what our budgets defer to.
 - **Claude Code `/usage` and the plans:** Ultra's weekly-only shape spreading
   to other tiers; a pace signal arriving in Claude Code itself.
