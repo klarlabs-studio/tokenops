@@ -269,6 +269,16 @@ Sessions: A  (1880 instructions; `tokenops dx` for the breakdown)
     instruction files and the first instruction), with how many MCP
     servers and skills are configured. Every turn reads it again, so it
     is worth acting on from 40k tokens;
+  - what Claude Code loaded into every turn and the window never used: a
+    plugin (its skills in the listing and its MCP tools) none of whose
+    skills was invoked or tools called, a claude.ai connector or an MCP
+    server never called, once loaded in 5 sessions or more, largest
+    first by tokens read, with `claude plugin disable <name>@<source>`,
+    `claude mcp remove <name>` or the connector to turn off. Your own
+    skills and Claude Code's built-in ones are left out (the listing does
+    not tell them apart), and so is a plugin already turned off in
+    `enabledPlugins`. Sizes are what the transcript carried, in bytes
+    over four;
   - lookups ("show me…", "list…") answered on a flagship model;
   - catalog drift: your own plan windows on two tiers disagree with the
     catalog's ratio between them (Max at five times Pro, Ultra's week at

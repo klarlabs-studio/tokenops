@@ -109,6 +109,7 @@ func Compute(ctx context.Context, o Options) Report {
 	r.Findings = append(r.Findings, rereads(records, o.Installed["read-guard"])...)
 	r.Findings = append(r.Findings, standingContext(o.Home, turnsByCWD, r.Total)...)
 	r.Findings = append(r.Findings, startingContext(records, o.Home)...)
+	r.Findings = append(r.Findings, unusedContext(ctx, o.Home, since)...)
 	r.Findings = append(r.Findings, oversized(records, o.Installed["route-guard"])...)
 	r.TierDrifts = ProviderDrifts(ctx, o)
 	r.Findings = append(r.Findings, catalogDrift(r.TierDrifts, o.ObservedOff)...)
