@@ -50,6 +50,7 @@ func writeCommitReport(out io.Writer, r commits.Report) {
 		{"no commit within a day", r.NoCommitWithinADay},
 		{"outside a repository", r.OutsideARepository},
 		{"session directory unknown", r.UnknownDirectory},
+		{"repository history unread", r.HistoryUnread},
 	} {
 		if b.c.Turns > 0 {
 			fmt.Fprintf(out, "  %-26s %9s  %d turns\n", b.label+":", usd(b.c.APIEquivalentUSD), b.c.Turns)

@@ -63,7 +63,8 @@ const commitWindow = 24 * time.Hour
 // GitCommits answers whether a commit landed in a session's repository
 // within a day after an intervention, from the directory the client
 // recorded for the session and that repository's git log. A session
-// outside a repository, or a day not yet over, is unknown.
+// outside a repository or in one whose history could not be read, or a
+// day not yet over, is unknown.
 func GitCommits(ctx context.Context, since, now time.Time) func(session string, at time.Time) (bool, bool) {
 	var dirs map[string]sessiondirs.Dir
 	repos := gitlog.NewRepos()
@@ -89,6 +90,11 @@ func GitCommits(ctx context.Context, since, now time.Time) func(session string, 
 		if !listed {
 			commits, _ = repos.Commits(ctx, root, since)
 			commitsOf[root] = commits
+		}
+		if commits == nil {
+			// The history could not be read: whether a commit
+			// landed is unknown, not a miss.
+			return false, false
 		}
 		for _, c := range commits {
 			if c.At.After(at) && !c.At.After(at.Add(commitWindow)) {

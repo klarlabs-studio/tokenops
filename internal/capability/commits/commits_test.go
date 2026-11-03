@@ -64,8 +64,8 @@ func TestAttribute(t *testing.T) {
 // Place answers, for one turn, the join Attribute makes: so another
 // report (the waste taxonomy's abandoned sessions) reads the same join.
 func TestPlace(t *testing.T) {
-	dirs := map[string]sessiondirs.Dir{"a": {CWD: "/w/app"}, "c": {CWD: "/tmp"}}
-	rootOf := map[string]string{"/w/app": "/w/app", "/tmp": ""}
+	dirs := map[string]sessiondirs.Dir{"a": {CWD: "/w/app"}, "c": {CWD: "/tmp"}, "u": {CWD: "/w/lib"}}
+	rootOf := map[string]string{"/w/app": "/w/app", "/tmp": "", "/w/lib": "/w/lib"}
 	commitsOf := map[string][]gitlog.Commit{"/w/app": {{SHA: "1", At: t0.Add(time.Hour)}, {SHA: "2", At: t0.Add(80 * time.Hour)}}}
 	for _, c := range []struct {
 		turn analytics.SessionTurn
@@ -76,6 +76,8 @@ func TestPlace(t *testing.T) {
 		{turn("a", 90*time.Hour, 1), Uncommitted},
 		{turn("c", 0, 1), OutsideARepository},
 		{turn("z", 0, 1), UnknownDirectory},
+		// /w/lib's history could not be read: unknown, not uncommitted.
+		{turn("u", 0, 1), HistoryUnread},
 	} {
 		if got, _ := Place(c.turn, dirs, rootOf, commitsOf); got != c.want {
 			t.Errorf("%s at %s: %v, want %v", c.turn.SessionID, c.turn.At, got, c.want)

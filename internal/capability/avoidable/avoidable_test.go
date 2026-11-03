@@ -169,6 +169,18 @@ func TestBuildNeverCountsATokenTwice(t *testing.T) {
 	}
 }
 
+// A repository whose history could not be read (git failed, timed out,
+// or no user is configured) says nothing about whether a session's work
+// landed, so none of its sessions is judged abandoned. Reading it as
+// "no commits" once judged a whole week of Codex work abandoned.
+func TestUnreadHistoryJudgesNoSessionAbandoned(t *testing.T) {
+	in := fixture()
+	in.CommitsOf = map[string][]gitlog.Commit{}
+	if got := class(Build(in), waste.ClassAbandoned); got.Tokens != 0 {
+		t.Errorf("abandoned = %+v, want none while the history is unread", got)
+	}
+}
+
 func TestRealizedSitsBesideAvoidable(t *testing.T) {
 	in := fixture()
 	in.Savings.RealizedUSD = measurement.Derived(1.5, "holdout")

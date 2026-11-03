@@ -282,6 +282,7 @@ func (in Inputs) commitUnit(current []analytics.SessionTurn, total float64) (Uni
 		{Label: "no commit within a day", Cost: cur.NoCommitWithinADay},
 		{Label: "outside a repository", Cost: cur.OutsideARepository},
 		{Label: "session directory unknown", Cost: cur.UnknownDirectory},
+		{Label: "repository history unread", Cost: cur.HistoryUnread},
 	})
 	u.finish(total-sum(u.Unplaced), total)
 	return u, classes

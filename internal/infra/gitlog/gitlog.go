@@ -5,6 +5,7 @@ package gitlog
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -12,6 +13,12 @@ import (
 	"sync"
 	"time"
 )
+
+// ErrNoAuthor is a repository with no user.email configured: its
+// commits cannot be told from anyone else's, so none are listed. It is an
+// error rather than an empty list because "no commits of yours" would
+// judge every turn there unfinished.
+var ErrNoAuthor = errors.New("gitlog: no user.email configured")
 
 // Commit is one commit, newest work last when listed.
 type Commit struct {
@@ -78,12 +85,12 @@ func (r *Repos) Root(ctx context.Context, dir string) string {
 // branch. Local branches only: --all would count git notes (provenance
 // notes are commits too) and remote copies, and a branch merged by squash
 // and deleted leaves its work on the squash commit — the merged change.
-// No configured user means no commits: attributing someone else's work
-// would be wrong.
+// No configured user is ErrNoAuthor: attributing someone else's work
+// would be wrong, and so would answering that there is none.
 func (r *Repos) Commits(ctx context.Context, root string, since time.Time) ([]Commit, error) {
 	email, err := git(ctx, root, "config", "user.email")
 	if err != nil || email == "" {
-		return nil, nil
+		return nil, ErrNoAuthor
 	}
 	// --author matches a pattern anywhere in "Name <email>": a bare
 	// address also matches jimbob@ for bob@, and its dots match any
@@ -101,7 +108,7 @@ func (r *Repos) Commits(ctx context.Context, root string, since time.Time) ([]Co
 	if err != nil {
 		return nil, err
 	}
-	var commits []Commit
+	commits := []Commit{}
 	for _, record := range strings.Split(out, "\x1e") {
 		parts := strings.SplitN(strings.TrimLeft(record, "\n"), "\x1f", 5)
 		if len(parts) < 3 {

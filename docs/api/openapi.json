@@ -7242,6 +7242,36 @@
                     "commits_total": {
                       "type": "integer"
                     },
+                    "history_unread": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "api_equivalent_usd": {
+                          "type": "number"
+                        },
+                        "cache_read_share": {
+                          "type": "number"
+                        },
+                        "cache_read_tokens": {
+                          "type": "integer"
+                        },
+                        "cost_usd": {
+                          "type": "number"
+                        },
+                        "input_tokens": {
+                          "type": "integer"
+                        },
+                        "tokens": {
+                          "type": "integer"
+                        },
+                        "turns": {
+                          "type": "integer"
+                        },
+                        "unpriced_turns": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "mean_usd": {
                       "type": "number"
                     },
