@@ -10,8 +10,8 @@
 // boundary only ever tightens.
 //
 // Conditions read figures TokenOps already holds — session cost, plan
-// headroom, model tier, workflow and agent, the project folder and the time
-// of day — and never prompt text. The
+// headroom, model tier, subagents started, workflow and agent, the project
+// folder and the time of day — and never prompt text. The
 // package is pure: callers supply the figures, and nothing here reads a
 // file or a store, so the evaluation that runs before every tool call
 // stays in memory.
@@ -78,7 +78,7 @@ const (
 
 // fieldOrder fixes the order conditions are checked and reported in, so
 // an error or a reason reads the same on every run.
-var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldPlanEarly, FieldBudgetUsed, FieldModelTier, FieldDestination, FieldLoopCalls, FieldWorkflow, FieldAgent, FieldFolder, FieldHours}
+var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldPlanEarly, FieldBudgetUsed, FieldModelTier, FieldDestination, FieldLoopCalls, FieldSessionSubagents, FieldPromptSubagents, FieldWorkflow, FieldAgent, FieldFolder, FieldHours}
 
 // fieldsFor are the figures each action can be judged by: the ones known
 // where the action is decided. A condition the decision point cannot read
@@ -87,7 +87,7 @@ var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldPlanEarly, FieldB
 // over, which the router and the senders have none of.
 var fieldsFor = map[Action][]Field{
 	ActionContinue:      {FieldSessionCost, FieldPlanLeft, FieldPlanEarly, FieldLoopCalls, FieldWorkflow, FieldAgent, FieldFolder, FieldHours},
-	ActionSubagentModel: {FieldSessionCost, FieldPlanLeft, FieldPlanEarly, FieldModelTier, FieldWorkflow, FieldAgent, FieldFolder, FieldHours},
+	ActionSubagentModel: {FieldSessionCost, FieldPlanLeft, FieldPlanEarly, FieldModelTier, FieldSessionSubagents, FieldPromptSubagents, FieldWorkflow, FieldAgent, FieldFolder, FieldHours},
 	ActionSpend:         {FieldSessionCost, FieldBudgetUsed, FieldWorkflow, FieldAgent, FieldFolder, FieldHours},
 	ActionModelRoute:    {FieldPlanLeft, FieldPlanEarly, FieldModelTier, FieldWorkflow, FieldAgent, FieldHours},
 	ActionShare:         {FieldDestination, FieldHours},
@@ -534,6 +534,12 @@ func parseCondition(f Field, raw string) (Condition, error) {
 			return Condition{}, err
 		}
 		c.Number = n
+	case FieldSessionSubagents, FieldPromptSubagents:
+		n, err := parseSubagents(value)
+		if err != nil {
+			return Condition{}, err
+		}
+		c.Number = n
 	case FieldModelTier:
 		tier := TierOf(value)
 		if tier == "" {
@@ -628,6 +634,9 @@ type Facts struct {
 	// Loop is the loop at the end of the session's tool calls; unknown
 	// when the harness did not say which tool ran with what input.
 	Loop LoopFigure
+	// Subagents counts the subagents the session started, for a
+	// subagent_model action; unknown when no transcript was read.
+	Subagents SubagentFigure
 	// Folder is the session's working directory; empty when the harness
 	// did not say.
 	Folder string
@@ -752,6 +761,12 @@ func (c Condition) holds(f Facts) (string, bool) {
 			return "", false
 		}
 		return loopWords(f.Loop.Reading), true
+	case FieldSessionSubagents, FieldPromptSubagents:
+		n, ok := subagentCount(f.Subagents, c.Field)
+		if !ok || !compare(float64(n), c.Op, c.Number) {
+			return "", false
+		}
+		return subagentWords(n, c.Field, c), true
 	case FieldWorkflow:
 		ok, _ := path.Match(c.Text, f.WorkflowID)
 		return "", ok && f.WorkflowID != ""
@@ -794,6 +809,9 @@ func (c Condition) crossing(f Facts) (Crossing, bool) {
 		x.Destination = f.Destination
 	case FieldLoopCalls:
 		x.Value = float64(f.Loop.Reading.Calls)
+	case FieldSessionSubagents, FieldPromptSubagents:
+		n, _ := subagentCount(f.Subagents, c.Field)
+		x.Value = float64(n)
 	default:
 		return Crossing{}, false
 	}

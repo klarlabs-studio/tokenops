@@ -226,14 +226,20 @@ func readUser(tl *moveverdict.Timeline, idx map[string]int, e timelineEntry, at 
 func addPrompt(tl *moveverdict.Timeline, text string, at time.Time) {
 	t := strings.TrimSpace(text)
 	switch {
-	case t == "":
 	case strings.Contains(strings.ToLower(t), interruptText):
 		tl.Interrupts = append(tl.Interrupts, at)
-	case strings.HasPrefix(t, "<"), agentdx.IsInjected(t):
-		// A slash command, reminder or notification the harness wrote.
-	default:
+	case isPrompt(t):
 		tl.Prompts = append(tl.Prompts, moveverdict.Prompt{At: at, Rejects: agentdx.IsRejection(t)})
 	}
+}
+
+// isPrompt reports whether a user entry's text is the operator's: not
+// empty, not an interrupt, and not a slash command, reminder or
+// notification the harness wrote.
+func isPrompt(text string) bool {
+	t := strings.TrimSpace(text)
+	return t != "" && !strings.Contains(strings.ToLower(t), interruptText) &&
+		!strings.HasPrefix(t, "<") && !agentdx.IsInjected(t)
 }
 
 // mentions are the file paths named in text, at most a few dozen.

@@ -328,6 +328,15 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 			})
 		}
 	}
+	if needs(rules, domain.FieldSessionSubagents) || needs(rules, domain.FieldPromptSubagents) {
+		if n, ok := routeguard.SubagentLaunches(call.TranscriptPath, call.ToolUseID); ok {
+			f.Subagents = domain.SubagentFigure{Known: true, Session: n.Session + 1, Prompt: n.Prompt + 1, PromptKnown: n.PromptFound}
+			ev = append(ev, eventschema.EvidenceRef{
+				Kind: "subagents_started", Source: "claude_code_transcript", ObservedAt: now, Confidence: 1, Scope: call.SessionID,
+				Caveat: "counts the one about to start; a launch declined, stopped or refused does not count",
+			})
+		}
+	}
 	if needs(rules, domain.FieldBudgetUsed) {
 		if fig, ok := figs.get(); ok && len(fig.BudgetUsedPct) > 0 {
 			f.BudgetUsedPct = fig.BudgetUsedPct
