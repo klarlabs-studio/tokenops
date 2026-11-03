@@ -545,3 +545,44 @@ func TestHooksInstallRefusesBoundaryOnCursor(t *testing.T) {
 		t.Fatal("cursor accepted the pause point")
 	}
 }
+
+// Codex's /hooks list titles a hook by its statusMessage and shows
+// "Unnamed hook" without one, so the operator asked to trust a hook cannot
+// tell whose it is. Each entry carries one, and installing again names an
+// entry an earlier version wrote without it.
+func TestHooksInstallNamesCodexHooks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hooks.json")
+	old := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/bin/tokenops coach-hook --budget 50","timeout":10}]}]}}`
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runHooks(t, "install", "--coach", "--route-guard", "--boundary", "--client", "codex", "--settings", path); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Hooks map[string][]struct {
+			Hooks []map[string]any `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	seen := 0
+	for event, groups := range doc.Hooks {
+		for _, g := range groups {
+			for _, h := range g.Hooks {
+				seen++
+				if msg, _ := h["statusMessage"].(string); !strings.HasPrefix(msg, "tokenops: ") {
+					t.Errorf("%s hook %q has statusMessage %q, want a tokenops title", event, h["command"], msg)
+				}
+			}
+		}
+	}
+	if seen != 3 {
+		t.Fatalf("want 3 hooks, got %d:\n%s", seen, b)
+	}
+}

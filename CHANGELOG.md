@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- **hooks:** tokenops' Codex hooks have a name. Codex's `/hooks` listed them as "Unnamed hook", so you could not tell whose hook you were asked to trust; each now carries a title such as "tokenops: action boundaries", which Codex also shows while it runs. Run `tokenops hooks install` again to name hooks already installed; Codex then asks you to trust them once more, since their definition changed.
+- **boundaries:** `tokenops boundaries status` says "hook not trusted" for a Codex hook that is written but not yet trusted, instead of "hook not installed".
+
 ## 0.118.0 - 2026-11-03
 
 ### Added
