@@ -516,7 +516,7 @@ func TestStatusReadsCodexTrust(t *testing.T) {
 		note      string
 	}{
 		{map[string]bool{HarnessCodex: true}, EnforcementEnforced, ""},
-		{map[string]bool{codexUntrusted: true}, EnforcementNotInstalled, "trust"},
+		{map[string]bool{codexUntrusted: true}, EnforcementUntrusted, "trust"},
 		{map[string]bool{}, EnforcementNotInstalled, "--client codex"},
 	} {
 		st, err := RuleStatuses(r, env, tc.installed)
