@@ -12,8 +12,9 @@ jobs:
   # macOS, and handed to goreleaser, which puts it in the darwin archives.
   # The presence helper (tokenops-presence, Swift, ADR 0015) is built with
   # it, inside the bundle and beside it.
-  # It is ad hoc signed: there is no Developer ID to notarize it with, and
-  # the cask's install steps clear its quarantine flag.
+  # Both are signed with the Developer ID and notarized here; goreleaser
+  # signs and notarizes the CLI and the daemon (.goreleaser.yaml). Without
+  # the signing secrets each step falls back to ad hoc signing, as CI builds.
   menubar-app:
     runs-on: macos-latest
     env:
@@ -24,8 +25,21 @@ jobs:
         with:
           go-version-file: apps/menubar/go.mod
           cache-dependency-path: apps/menubar/go.sum
+      - name: Import the Developer ID certificate
+        env:
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+        run: scripts/macos-keychain.sh
       - name: Build TokenOps.app
         run: scripts/build-menubar-app.sh "${GITHUB_REF_NAME}" menubar-dist
+      # Before anything is published: a rejected notarization stops the
+      # release here, and Apple's log says why.
+      - name: Notarize TokenOps.app and the presence helper
+        env:
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: scripts/macos-notarize.sh menubar-dist
       # An artifact upload drops file modes; a tarball keeps the bundle's
       # executable bit and its signature intact.
       - name: Pack
@@ -137,6 +151,14 @@ jobs:
           # The "Check the tap credential" step above asserts this resolves
           # and authenticates before goreleaser publishes anything.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # The Developer ID and App Store Connect key that sign and notarize
+          # the darwin binaries (.goreleaser.yaml, notarize). Unset, they are
+          # ad hoc signed.
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
 
   # npm is a delivery channel only: `npx @klarlabs-studio/tokenops checkup`
   # with no other install. The wrapper launches the binary from one of four
