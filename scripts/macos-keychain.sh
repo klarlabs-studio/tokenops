@@ -35,7 +35,14 @@ security create-keychain -p "$kc_password" "$kc"
 security set-keychain-settings -lut 21600 "$kc"
 security unlock-keychain -p "$kc_password" "$kc"
 security import "$p12" -k "$kc" -f pkcs12 -P "$MACOS_SIGN_PASSWORD" -T /usr/bin/codesign >/dev/null
-security import "$ca" -k "$kc" >/dev/null
+# Runners with Xcode already hold it, and import then refuses with "already
+# exists": that is the chain complete, not a failure.
+if ! out=$(security import "$ca" -k "$kc" 2>&1); then
+  case "$out" in
+    *"already exists"*) echo "Apple's Developer ID intermediate is already installed" ;;
+    *) echo "$out" >&2; exit 1 ;;
+  esac
+fi
 # Lets codesign use the key without a dialog no runner could answer.
 security set-key-partition-list -S apple-tool:,apple: -s -k "$kc_password" "$kc" >/dev/null
 # shellcheck disable=SC2046 # the existing search list, one keychain per word
