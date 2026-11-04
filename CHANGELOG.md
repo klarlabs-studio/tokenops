@@ -2,7 +2,13 @@
 
 ## Unreleased
 
-## 0.118.2 - 2026-11-04
+## 0.118.3 - 2026-11-04
+
+### Fixed
+
+- **release:** the macOS signing step accepts Apple's Developer ID intermediate already installed on the build machine. Its refusal ("already exists") stopped the 0.118.2 release before anything was published, so 0.118.2 exists only as a tag; 0.118.3 ships its changes below.
+
+## 0.118.2 - 2026-11-04 (not published)
 
 ### Changed
 
