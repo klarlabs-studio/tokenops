@@ -2,9 +2,15 @@
 
 ## Unreleased
 
+## 0.118.2 - 2026-11-04
+
 ### Changed
 
 - **macOS:** the release signs tokenops, tokenopsd, TokenOps.app and the presence helper with a Developer ID (Felix Johannes Geelhaar, URVCPHMPWE), with the hardened runtime, and has Apple notarize them; the app carries its ticket stapled. Until now they were ad hoc signed, and Gatekeeper could refuse an upgraded binary outright: after one `brew upgrade` the daemon and every hook hung at launch until the binary was replaced by hand. A signed binary also keeps the same identity across upgrades, so the Keychain no longer asks again after each one. The cask still clears the quarantine flag for now; that goes once a signed release has been checked to start without it.
+
+### Security
+
+- **python:** the LangChain integration requires `langchain-core` 0.3.81 or later; its floor of 0.3 admitted versions open to GHSA-c67j-w6g6-q2cm (serialization injection in `dumps`/`loads`).
 
 ## 0.118.1 - 2026-11-03
 
