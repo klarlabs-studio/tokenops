@@ -5,10 +5,10 @@
 #
 # macOS only: Vitra's native tray needs cgo against AppKit. The app is one
 # universal binary (arm64 + x86_64) so both darwin archives carry the same
-# bundle. It is signed ad hoc: there is no Developer ID, so it is not
-# notarized, and it reaches people through the Homebrew cask, whose
-# post-install hook clears the quarantine flag as it does for the CLI. A
-# copy downloaded by a browser is blocked by Gatekeeper.
+# bundle. It is signed with MACOS_SIGN_IDENTITY, the Developer ID the
+# release imports (scripts/macos-keychain.sh), with the hardened runtime and
+# Apple's timestamp, and notarized after (scripts/macos-notarize.sh); without
+# one, as in CI, it is signed ad hoc.
 #
 # usage: scripts/build-menubar-app.sh <version> <out-dir>
 set -euo pipefail
@@ -46,7 +46,14 @@ app=$(find "$work/pkg" -maxdepth 2 -name '*.app' -type d | head -1)
 # is signed, and beside it in the output for the darwin archives' top level.
 "$here/scripts/build-presence-helper.sh" "$work/presence"
 cp "$work/presence/tokenops-presence" "$app/Contents/MacOS/tokenops-presence"
-codesign --force --deep --sign - "$app"
+# The helper is signed already, with its own identifier; the bundle is
+# signed around it, not with --deep, which would re-sign the helper under a
+# derived identifier. Verifying with --deep then fails on any nested code
+# left unsigned.
+identity="${MACOS_SIGN_IDENTITY:--}"
+sign=(--force --sign "$identity")
+[ "$identity" = "-" ] || sign+=(--options runtime --timestamp)
+codesign "${sign[@]}" "$app"
 codesign --verify --deep --strict "$app"
 
 mkdir -p "$out"

@@ -56,6 +56,29 @@ builds:
     goos:
       - darwin
 
+# The darwin binaries are signed with the Developer ID and notarized here,
+# on Linux, with quill (hardened runtime, Apple's timestamp). A bare binary
+# cannot carry a stapled ticket: Gatekeeper looks the notarization up online
+# the first time it runs. TokenOps.app and tokenops-presence are signed and
+# notarized on the macOS runner instead (scripts/macos-notarize.sh), since
+# quill does not sign app bundles.
+#
+# It runs only when the signing secrets reach the job (release.yml); the
+# CI dry run has none, so it builds ad hoc signed binaries as before.
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      ids: [tokenops-darwin, tokenopsd-darwin]
+      sign:
+        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
+        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
+      notarize:
+        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
+        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
+        key: "{{ .Env.MACOS_NOTARY_KEY }}"
+        wait: true
+        timeout: 20m
+
 archives:
   - id: linux
     ids: [tokenops-linux, tokenopsd-linux]
@@ -63,12 +86,11 @@ archives:
     files:
       - LICENSE
       - README.md
-  # The menu bar app is ad hoc signed, not notarized (there is no Developer
-  # ID); the cask's install steps clear its quarantine flag along with
-  # the binaries', and `tokenops menubar` installs it to ~/Applications.
-  # tokenops-presence is the presence helper (ADR 0015), built with the app
-  # on the macOS runner (scripts/build-presence-helper.sh), ad hoc signed,
-  # and also inside TokenOps.app. tokenops finds it beside itself (through
+  # The menu bar app is signed with the Developer ID and notarized on the
+  # macOS runner (release.yml); `tokenops menubar` installs it to
+  # ~/Applications. tokenops-presence is the presence helper (ADR 0015),
+  # built with the app on the macOS runner (scripts/build-presence-helper.sh),
+  # signed the same way, and also inside TokenOps.app. tokenops finds it beside itself (through
   # the cask's bin/ link), so the cask needs no binaries entry for it.
   - id: darwin
     ids: [tokenops-darwin, tokenopsd-darwin]
@@ -152,10 +174,11 @@ homebrew_casks:
       after that upgrade, run `tokenops daemon install` once.
     hooks:
       post:
-        # The release archives are not notarized, so Gatekeeper quarantines the
-        # binaries (and TokenOps.app and tokenops-presence in the same archive)
-        # on first run. A formula was never subject to this; a cask is, so
-        # without this none of them will start.
+        # The release archives were ad hoc signed until the Developer ID
+        # signing above, and Gatekeeper refused the quarantined binaries
+        # (and TokenOps.app and tokenops-presence in the same archive) on
+        # first run. Clearing the flag stays until a signed release has been
+        # verified to start with it in place; then this step goes.
         #
         # Homebrew runs install steps sandboxed, with a fake HOME and no
         # localhost, so nothing in them can reach the real ~/Library, launchd
