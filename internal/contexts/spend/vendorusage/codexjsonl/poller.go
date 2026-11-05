@@ -47,6 +47,13 @@ type PollerOptions struct {
 	// Health records each scan: a failed read or an unrecognised record
 	// shape is an error, never an empty success. nil records nothing.
 	Health *freshness.Recorder
+	// CheckpointPath is where the poller saves how far it read each
+	// rollout, and resumes from after a restart. Empty reads every
+	// rollout again at each start.
+	CheckpointPath string
+	// checkpointLag is how far the saved positions lag the reads; zero is
+	// jsonltail.DefaultCheckpointLag, negative none (tests).
+	checkpointLag time.Duration
 }
 
 // Poller scans Codex session JSONLs, dedupes turns by (sessionID, sequence)
@@ -65,6 +72,10 @@ type Poller struct {
 	// is whole, so it is read again only when it changes.
 	tail   jsonltail.Tail[readState]
 	packed map[string]fileIdentity
+	// ckpt saves tail and packed; nil without CheckpointPath. restored is
+	// whether the saved ones were read back.
+	ckpt     *jsonltail.Checkpointer[checkpoint]
+	restored bool
 }
 
 // fileIdentity is what tells a compressed rollout has changed.
@@ -95,7 +106,12 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
-	return &Poller{bus: bus, opts: opts, seen: make(map[string]struct{})}
+	p := &Poller{bus: bus, opts: opts, seen: make(map[string]struct{})}
+	if opts.CheckpointPath != "" {
+		p.ckpt = &jsonltail.Checkpointer[checkpoint]{Path: opts.CheckpointPath, Version: checkpointVersion,
+			Lag: jsonltail.Lag(opts.checkpointLag)}
+	}
+	return p
 }
 
 func (p *Poller) Run(ctx context.Context) error {
@@ -105,13 +121,16 @@ func (p *Poller) Run(ctx context.Context) error {
 	}
 	t := pollnow.NewTicker(ctx, p.opts.Interval)
 	defer t.Stop()
+	p.restore()
 	p.scan(ctx, root)
+	p.checkpoint()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-t.C:
 			p.scan(ctx, root)
+			p.checkpoint()
 		}
 	}
 }
@@ -184,7 +203,7 @@ func (p *Poller) scanCompressed(ctx context.Context, paths []string, visit func(
 			continue // gone between the listing and the stat
 		}
 		id := fileIdentity{size: info.Size(), modTime: info.ModTime()}
-		if prev, ok := p.packed[path]; ok && prev == id {
+		if prev, ok := p.packed[path]; ok && prev.size == id.size && prev.modTime.Equal(id.modTime) {
 			live[path] = prev
 			continue
 		}

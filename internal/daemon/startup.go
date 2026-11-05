@@ -12,6 +12,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
+	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/routers"
 	"go.klarlabs.de/tokenops/internal/capability/state"
@@ -324,7 +325,9 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	s.startCorrections(store, routes)
 	// The composition root builds and starts the vendor-usage pollers.
 	s.ingest = ingestionBus(ctx, s.events.Bus, store, s.sup, s.logger)
-	refresh := bootstrap.StartVendorUsagePollers(s.cfg, s.ingest, s.sourceHealth, claudeCodeBaseURLAt(routes), s.sup, s.logger)
+	// The transcript pollers resume where they read to, beside the glance
+	// the daemon saves: a start no longer reads every transcript again.
+	refresh := bootstrap.StartVendorUsagePollers(s.cfg, s.ingest, s.sourceHealth, claudeCodeBaseURLAt(routes), findings.DefaultDir(), s.sup, s.logger)
 	s.opts = append(s.opts, proxy.WithSourcesRefresh(refresh))
 
 	if err := bootstrap.StartRetentionRuntime(s.cfg.Retention, store, s.sup, s.logger); err != nil {
