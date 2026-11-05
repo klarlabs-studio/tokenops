@@ -12,6 +12,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
+	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/routers"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
@@ -434,7 +435,7 @@ func (s *startup) configureRouting(context.Context) error {
 	// Window pressure is read per request, so it comes from a cache a
 	// background loop refreshes — scanning the event store inline would
 	// put a full window query on the hot path.
-	startWindowPressureRuntime(s.cfg, rc, s.components.Store, s.sup, s.logger)
+	startWindowPressureRuntime(s.cfg, rc, s.pressureEvents(), s.sup, s.logger)
 	// Proposals need somewhere to live. Both the preferred-model ceiling
 	// and in_request mode refer decisions to the operator, so either one
 	// requires the approval log — wiring it only for the ceiling would
@@ -565,4 +566,18 @@ func (s *startup) shutdown() error {
 		},
 		running: s.sup.Running,
 	})
+}
+
+// pressureEvents is what the window-pressure probe reads: the glance's
+// event cache, which holds its two weeks already. Read from the store,
+// the probe decoded every one of those events once a minute. Nil without
+// a store.
+func (s *startup) pressureEvents() headroom.EventReader {
+	if s.events != nil && s.events.GlanceEvents != nil {
+		return s.events.GlanceEvents
+	}
+	if s.components != nil && s.components.Store != nil {
+		return s.components.Store
+	}
+	return nil
 }

@@ -37,7 +37,10 @@ import (
 // eventRuntime owns the canonical event bus and the adapters subscribed to it.
 // Store lifetime remains owned by bootstrap.Components.
 type eventRuntime struct {
-	Store           *sqlite.Store
+	Store *sqlite.Store
+	// GlanceEvents is the cache of events the glance, findings, OTel
+	// gauges and window-pressure probe read; nil without a store.
+	GlanceEvents    *sqlite.EventCache
 	Bus             *events.AsyncBus
 	AuditSubscriber *auditlog.Subscriber
 	ProxyOptions    []proxy.Option
@@ -111,6 +114,7 @@ func initializeEventRuntime(
 	// they read, filled in the background so the first glance after a
 	// start does not wait for a month of events to be read.
 	glance := newGlanceEvents(rt.Store)
+	rt.GlanceEvents = glance
 	warmGlanceEvents(sup, glance, logger)
 	startOTelMetricsRuntime(cfg, rt.Store, glance, components, sup, logger)
 	startTeamUploadRuntime(cfg, components, sup, logger)

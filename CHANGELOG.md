@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- **daemon:** the window-pressure probe behind model routing reads the glance's event cache instead of the store. It read two weeks of events from the store, every one decoded, once a minute: on a busy store a steady share of a core, more at a start.
+
+### Fixed
+
 - **daemon:** a read of events reaching further back than the glance's cache holds no longer stalls every glance behind it. The cache read the missing weeks from the store while holding its lock; it now reads them outside it, one read per event type at a time, and answers what it already holds meanwhile.
 
 ## 0.118.6 - 2026-11-05
