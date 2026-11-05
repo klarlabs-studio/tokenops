@@ -474,6 +474,15 @@ func (m *menubar) read(ctx context.Context) view {
 		return v
 	}
 	v.Glance = g
+	// The daemon answers from its last computation, which can be a minute
+	// old, and after a start from the one it saved: show its age, not
+	// when this asked.
+	var at struct {
+		ComputedAt time.Time `json:"computed_at"`
+	}
+	if json.Unmarshal(g, &at) == nil && !at.ComputedAt.IsZero() {
+		v.Updated = at.ComputedAt
+	}
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() {

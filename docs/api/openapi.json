@@ -3566,6 +3566,10 @@
                       },
                       "type": "array"
                     },
+                    "computed_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
                     "early_resets": {
                       "items": {
                         "additionalProperties": false,

@@ -1,6 +1,8 @@
 package headroom
 
 import (
+	"time"
+
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
@@ -68,6 +70,11 @@ type GlancePayload struct {
 	// a hard window the boundary that enforces it. The caller sets them;
 	// Payload leaves them empty.
 	SpendBudgets []boundaryledger.BudgetReading `json:"spend_budgets,omitempty"`
+	// ComputedAt is when the glance was computed. The daemon answers from
+	// its last computation (and, after a start, from the one it saved),
+	// so a reader shows this, not when it asked. The caller sets it;
+	// Payload leaves it empty.
+	ComputedAt time.Time `json:"computed_at,omitzero"`
 	// Routing tells the agent, while a plan is running short, to pass a
 	// cheaper model on subagent calls for work that fits, and why. Absent
 	// under no pressure.

@@ -71,22 +71,53 @@ func (s *Server) findingsDeps() FindingsDeps {
 }
 
 // computeFindings ranks what the coach and the session analysis observed
-// around the glance; the coach's report comes from the state routes' deps
-// when they are mounted.
+// around the glance, from the last computation of both (view). A finding
+// acted on since that computation is left out: the next one no longer
+// draws it.
 func (s *Server) computeFindings(ctx context.Context, now time.Time) (findings.Report, error) {
-	d := s.plans()
-	g, err := s.glance(ctx, now)
+	v, at, err := s.view(ctx, now)
 	if err != nil {
 		return findings.Report{}, err
 	}
-	var c *coachcap.Report
-	if s.state != nil {
-		if st := s.state(); st.Coach != nil {
-			r := st.Coach(now)
-			c = &r
+	return s.withoutActed(v.Findings, at), nil
+}
+
+// withoutActed is r without the findings acted on after at, when r was
+// computed. Actions older than at are forgotten: r already reflects them.
+func (s *Server) withoutActed(r findings.Report, at time.Time) findings.Report {
+	s.actedMu.Lock()
+	defer s.actedMu.Unlock()
+	if len(s.acted) == 0 {
+		return r
+	}
+	out := r
+	out.Findings = make([]findings.Finding, 0, len(r.Findings))
+	for _, f := range r.Findings {
+		if when, ok := s.acted[f.Key]; ok && !when.Before(at) {
+			continue
+		}
+		out.Findings = append(out.Findings, f)
+	}
+	for k, when := range s.acted {
+		if when.Before(at) {
+			delete(s.acted, k)
 		}
 	}
-	return findings.Compute(findings.Gather(&g, c, d.Config, findings.DefaultDir())), nil
+	return out
+}
+
+// noteActed records an action on the finding key at now, and has the next
+// request recompute the glance and findings.
+func (s *Server) noteActed(key string, now time.Time) {
+	s.actedMu.Lock()
+	if s.acted == nil {
+		s.acted = map[string]time.Time{}
+	}
+	s.acted[key] = now
+	s.actedMu.Unlock()
+	if s.glances != nil {
+		s.glances.stale()
+	}
 }
 
 // shown is the findings with the dismissed ones left out. A dismissal
@@ -221,6 +252,7 @@ func (s *Server) actOnFinding(r *http.Request, now time.Time) (map[string]any, a
 	if err != nil {
 		return nil, nil, err
 	}
+	s.noteActed(in.Key, now)
 	report, err := shown(r.Context(), d, now)
 	if err != nil {
 		return nil, nil, err
