@@ -60,6 +60,10 @@ type Server struct {
 	// plans supplies the headroom capability's dependencies. nil leaves
 	// the plan routes unmounted.
 	plans func() headroom.Deps
+	// glances answers the glance from its last computation (glanceSnapshots);
+	// made from plans on first use.
+	glancesOnce sync.Once
+	glances     *glanceSnapshots
 	// state supplies the control plane's own state. nil leaves the state
 	// routes unmounted.
 	state func() state.Deps

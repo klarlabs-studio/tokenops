@@ -10,7 +10,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/actions"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
-	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/config"
 )
 
@@ -76,7 +75,7 @@ func (s *Server) findingsDeps() FindingsDeps {
 // when they are mounted.
 func (s *Server) computeFindings(ctx context.Context, now time.Time) (findings.Report, error) {
 	d := s.plans()
-	g, err := headroom.ComputeGlance(ctx, d, now)
+	g, err := s.glance(ctx, now)
 	if err != nil {
 		return findings.Report{}, err
 	}

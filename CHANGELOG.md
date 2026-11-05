@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **menu bar:** the panel fills at once even on a store a month of heavy Codex use deep. 0.118.5 brought a glance there down from minutes to 15–30 seconds in a busy daemon, often still longer than the menu bar waits. The daemon now answers `/api/glance` and `/api/findings` from the last glance it computed, and computes a newer one in the background once that is 30 seconds old, so a request never waits for the computation, except the first after a start. The two routes share it, so one menu bar refresh computes the glance once instead of twice.
+
 ## 0.118.5 - 2026-11-05
 
 ### Fixed
