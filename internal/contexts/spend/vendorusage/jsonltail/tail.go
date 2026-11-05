@@ -10,8 +10,8 @@ package jsonltail
 
 import (
 	"bufio"
-	"bytes"
 	"context"
+	"crypto/sha256"
 	"io"
 	"os"
 	"time"
@@ -107,8 +107,19 @@ type cursor[S any] struct {
 	modTime time.Time
 	offset  int64 // bytes of complete lines consumed
 	state   S
-	id      os.FileInfo // which file this was; a replacement is another file
-	head    []byte      // the first min(offset, headBytes) bytes as read
+	// id is which file this was; a replacement is another file. Nil for a
+	// cursor restored from a checkpoint: the head alone recognises it.
+	id os.FileInfo
+	// head is a digest of the first min(offset, headBytes) bytes as read,
+	// not the bytes: a transcript's first line can be a prompt.
+	head head
+}
+
+// head identifies a file by a digest of its first n bytes.
+type head struct {
+	n   int64
+	sum [sha256.Size]byte
+	ok  bool
 }
 
 // Tracked reports how many files the Tail holds a cursor for.
@@ -178,28 +189,27 @@ func (t *Tail[S]) advance(path string, cur *cursor[S], read ReadFunc[S], warn fu
 // the bytes cur consumed: same file, not shorter than the offset, and the
 // same first bytes.
 func continues[S any](f *os.File, info os.FileInfo, cur *cursor[S]) bool {
-	if info.Size() < cur.offset || (cur.offset > 0 && cur.head == nil) {
+	if info.Size() < cur.offset || (cur.offset > 0 && !cur.head.ok) {
 		return false
 	}
 	if cur.id != nil && !os.SameFile(cur.id, info) {
 		return false
 	}
-	buf := make([]byte, len(cur.head))
-	n, err := f.ReadAt(buf, 0)
-	if err != nil && err != io.EOF {
-		return false
+	if !cur.head.ok {
+		return true
 	}
-	return n == len(cur.head) && bytes.Equal(buf[:n], cur.head)
+	h := headOf(f, cur.head.n)
+	return h.ok && h.sum == cur.head.sum
 }
 
-// headOf returns the first min(offset, headBytes) bytes of f, or nil when
-// they cannot all be read.
-func headOf(f *os.File, offset int64) []byte {
+// headOf is the digest of f's first min(offset, headBytes) bytes; not ok
+// when they cannot all be read.
+func headOf(f *os.File, offset int64) head {
 	want := min(offset, headBytes)
 	buf := make([]byte, want)
 	n, err := f.ReadAt(buf, 0)
 	if int64(n) != want || (err != nil && err != io.EOF) {
-		return nil
+		return head{}
 	}
-	return buf
+	return head{n: want, sum: sha256.Sum256(buf), ok: true}
 }
