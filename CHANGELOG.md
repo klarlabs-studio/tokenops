@@ -5,6 +5,7 @@
 ### Fixed
 
 - **menu bar:** findings no longer take seconds per refresh, and a daemon restart (an upgrade does one) no longer leaves the panel empty for minutes. The daemon runs at background priority, which makes its computations several times slower than the same code in a terminal: the findings were computed on every request, and after a start the first glance took about two minutes. The glance and the findings are now computed together in the background, and each result is saved, so after a start the daemon answers the saved one, under the same config and less than a day old, until its first computation lands. The glance carries `computed_at`, and the menu bar's "Updated" shows that rather than when it asked. A finding you act on leaves the panel at once.
+- **daemon:** the window-pressure probe behind model routing reads the glance's event cache instead of the store. It read two weeks of events from the store, every one decoded, once a minute: on a busy store a steady share of a core, more at a start.
 - **daemon:** a read of events reaching further back than the glance's cache holds no longer stalls every glance behind it. The cache read the missing weeks from the store while holding its lock; it now reads them outside it, one read per event type at a time, and answers what it already holds meanwhile.
 
 ## 0.118.6 - 2026-11-05
