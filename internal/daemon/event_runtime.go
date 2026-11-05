@@ -219,7 +219,7 @@ func warmGlanceEvents(sup *lifecycle.Supervisor, events *sqlite.EventCache, logg
 		return
 	}
 	sup.Go("glance-cache-warm", func(ctx context.Context) error {
-		// UTC, as the routes compute: the floor is the start of the month.
+		// UTC, as the routes compute: back to the plan advice's 30 days.
 		started := time.Now().UTC()
 		if err := events.Warm(ctx, eventschema.EventTypePrompt, headroom.EventsFloor(started)); err != nil {
 			if ctx.Err() == nil {

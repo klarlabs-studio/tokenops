@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -37,9 +38,17 @@ func memoFloor(now time.Time) time.Time {
 	return month
 }
 
-// EventsFloor is how far back a headroom computation at now reads events:
-// a cache filled from it ahead of time answers the computation.
-func EventsFloor(now time.Time) time.Time { return memoFloor(now) }
+// EventsFloor is how far back a glance at now reads events: a cache filled
+// from it ahead of time answers the whole glance. That is the memo's floor
+// or the plan advice's replay (plans.AdviceDays back), whichever is
+// earlier; the advice reads through the same reader, outside the memo.
+func EventsFloor(now time.Time) time.Time {
+	advice := now.Add(-time.Duration(plans.AdviceDays) * 24 * time.Hour)
+	if f := memoFloor(now); f.Before(advice) {
+		return f
+	}
+	return advice
+}
 
 // memoize switches the memo off, for a test comparing answers with and
 // without it.
