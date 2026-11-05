@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **homebrew:** `brew upgrade` no longer leaves tokenops hanging at launch. The cask cleared the quarantine flag only after Homebrew had linked the new binaries into `bin/`, and the status line, every Claude Code and Codex hook and the daemon run tokenops constantly, so one of them usually ran the new binary while it was still quarantined. When Gatekeeper's first-launch check did not allow it (always for the ad hoc builds, and for a notarized build whenever Apple's online notarization lookup failed), it raised a "Not Opened" prompt and held every launch of that path until the prompt was answered, which nothing headless does: after 0.118.1 and 0.118.3 the status line, hooks and daemon hung until `syspolicyd` was restarted. The flag is now cleared before the binaries are linked, so a quarantined tokenops is never reachable. If an upgrade already hung for you, answer the "tokenops Not Opened" prompt if one is on screen, or run `sudo killall syspolicyd`, then `tokenops daemon restart`.
+
 ## 0.118.3 - 2026-11-04
 
 ### Fixed
