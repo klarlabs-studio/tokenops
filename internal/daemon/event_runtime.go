@@ -2,9 +2,13 @@ package daemon
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
@@ -13,6 +17,7 @@ import (
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/promptcache"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
@@ -143,6 +148,7 @@ func initializeEventRuntime(
 		proxy.WithEventBus(rt.Bus),
 		proxy.WithSourceFreshness(sources),
 		proxy.WithPlans(plansDeps(cfg, glance, components.Spend)),
+		proxy.WithGlanceSnapshot(filepath.Join(findings.DefaultDir(), "glance.json"), configKey(cfg)),
 		proxy.WithActions(actionDeps(cfg, rt.Store, logger)),
 		proxy.WithSessions(func() proxy.SessionRoots { return proxy.SessionRoots{} }),
 		proxy.WithState(stateDeps(cfg, rt.Store, sources, rt.Bus.DroppedCount)),
@@ -350,4 +356,16 @@ func signedInAccounts() map[string]string {
 		return nil
 	}
 	return planevidence.Accounts(home)
+}
+
+// configKey names cfg for the saved glance: a glance saved under another
+// config is not answered after a start. It is a digest, so the file holds
+// no setting.
+func configKey(cfg config.Config) string {
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
 }
