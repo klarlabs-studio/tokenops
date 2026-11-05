@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/capability/boundaries"
-	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 )
 
@@ -42,14 +40,11 @@ func (s *Server) registerPlanRoutes(mux RouteMux) {
 		}
 	}
 	mux.HandleFunc("GET /api/glance", serve(func(ctx context.Context, d headroom.Deps, now time.Time) (any, error) {
-		g, err := s.glance(ctx, now)
+		v, _, err := s.view(ctx, now)
 		if err != nil {
 			return nil, err
 		}
-		p := g.Payload()
-		p.Boundaries = boundaries.GlanceAdvice(d.Config, g.Headroom.Reports)
-		p.SpendBudgets = budgets.Current("", now)
-		return p, nil
+		return v.Glance, nil
 	}))
 	// The findings rank what the coach and the session analysis observed
 	// around the same glance; the coach's report comes from the state

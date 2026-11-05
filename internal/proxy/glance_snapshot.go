@@ -2,9 +2,16 @@ package proxy
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/boundaries"
+	"go.klarlabs.de/tokenops/internal/capability/budgets"
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 )
 
@@ -15,79 +22,118 @@ const glanceRefreshBudget = 5 * time.Minute
 // newer one. The menu bar reads every minute.
 const glanceFresh = 30 * time.Second
 
-// glanceSnapshots keeps the glance off the request path. A glance replays
-// weeks of events several times over; on a store with a month of heavy
-// Codex use it takes longer than the menu bar waits, and a request that
-// computed it showed nothing. Instead every request is answered from the
-// last glance computed, at once, while a stale one is recomputed in the
-// background. Only the first request, with nothing computed yet, waits.
-// /api/glance and /api/findings share it, so one menu bar refresh
-// computes the glance once, not twice.
-type glanceSnapshots struct {
-	compute func(context.Context, time.Time) (headroom.Glance, error)
-	fresh   time.Duration
+// glanceDiskMaxAge is the oldest saved glance answered after a start.
+const glanceDiskMaxAge = 24 * time.Hour
+
+// glanceView is what /api/glance and /api/findings answer, computed
+// together: one glance serves both.
+type glanceView struct {
+	Glance   *headroom.GlancePayload `json:"glance"`
+	Findings findings.Report         `json:"findings"`
+}
+
+// snapshots keeps a slow computation off the request path. The glance
+// replays weeks of events several times over, and the daemon runs at
+// background priority: on a store with a month of heavy Codex use it takes
+// longer than the menu bar waits, and a request that computed it showed
+// nothing. Instead every request is answered from the last result, at
+// once, while a stale one is recomputed in the background.
+//
+// With path set, each result is saved there, and after a start the saved
+// one (under maxDiskAge) is answered until the first computation lands, so
+// a restart, which an upgrade does, never blanks the menu bar. Only a
+// first start with nothing saved waits.
+type snapshots[T any] struct {
+	compute    func(context.Context, time.Time) (T, error)
+	fresh      time.Duration
+	path       string
+	maxDiskAge time.Duration
+	// key names what a result depends on beyond time (the config): a
+	// saved result under another key is not answered.
+	key string
 
 	mu sync.Mutex
-	g  headroom.Glance
+	v  T
 	at time.Time // the now it was computed for
 	ok bool
+	// loaded is whether the saved result was looked for.
+	loaded bool
 	// running is open while a computation runs; err is how the last one
 	// ended.
 	running chan struct{}
 	err     error
 }
 
-func newGlanceSnapshots(compute func(context.Context, time.Time) (headroom.Glance, error), fresh time.Duration) *glanceSnapshots {
-	return &glanceSnapshots{compute: compute, fresh: fresh}
+// saved is a result as written to path.
+type saved[T any] struct {
+	At    time.Time `json:"at"`
+	Key   string    `json:"key,omitempty"`
+	Value T         `json:"value"`
 }
 
-// get is the glance for a request at now: the snapshot when there is one,
-// starting a newer computation when it is stale; otherwise it waits for
-// the first one, or for ctx.
-func (c *glanceSnapshots) get(ctx context.Context, now time.Time) (headroom.Glance, error) {
+// get is the result for a request at now and when it was computed: the
+// snapshot when there is one, starting a newer computation when it is
+// stale; otherwise it waits for the first one, or for ctx.
+func (c *snapshots[T]) get(ctx context.Context, now time.Time) (T, time.Time, error) {
 	c.mu.Lock()
+	if !c.ok && !c.loaded {
+		c.loaded = true
+		c.load(now)
+	}
 	if c.ok && now.Sub(c.at) < c.fresh {
-		g := c.g
+		v, at := c.v, c.at
 		c.mu.Unlock()
-		return g, nil
+		return v, at, nil
 	}
 	if c.running == nil {
 		c.start(now)
 	}
 	if c.ok {
-		g := c.g
+		v, at := c.v, c.at
 		c.mu.Unlock()
-		return g, nil
+		return v, at, nil
 	}
 	running := c.running
 	c.mu.Unlock()
 
+	var zero T
 	select {
 	case <-running:
 	case <-ctx.Done():
-		return headroom.Glance{}, ctx.Err()
+		return zero, time.Time{}, ctx.Err()
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.ok {
-		return headroom.Glance{}, c.err
+		return zero, time.Time{}, c.err
 	}
-	return c.g, nil
+	return c.v, c.at, nil
 }
 
-// start computes the glance for now in the background. c.mu is held.
-// The computation outlives the request that started it: its result serves
-// the next one.
-func (c *glanceSnapshots) start(now time.Time) {
+// stale makes the next request start a newer computation, as after an
+// action that changes what it shows; the current result is still answered
+// until that one lands.
+func (c *snapshots[T]) stale() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.at = time.Time{}
+}
+
+// start computes the result for now in the background. c.mu is held. The
+// computation outlives the request that started it: it serves the next.
+func (c *snapshots[T]) start(now time.Time) {
 	done := make(chan struct{})
 	c.running = done
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), glanceRefreshBudget)
-		g, err := c.compute(ctx, now)
+		v, err := c.compute(ctx, now)
 		cancel()
+		if err == nil {
+			c.save(v, now)
+		}
 		c.mu.Lock()
 		if err == nil {
-			c.g, c.at, c.ok = g, now, true
+			c.v, c.at, c.ok = v, now, true
 		}
 		c.err, c.running = err, nil
 		c.mu.Unlock()
@@ -95,8 +141,49 @@ func (c *glanceSnapshots) start(now time.Time) {
 	}()
 }
 
+// load answers from the saved result when there is a recent one. c.mu is
+// held. A missing, unreadable or old file leaves nothing to answer.
+func (c *snapshots[T]) load(now time.Time) {
+	if c.path == "" {
+		return
+	}
+	b, err := os.ReadFile(c.path)
+	if err != nil {
+		return
+	}
+	var s saved[T]
+	if json.Unmarshal(b, &s) != nil || s.Key != c.key || s.At.IsZero() || s.At.After(now) || now.Sub(s.At) > c.maxDiskAge {
+		return
+	}
+	c.v, c.at, c.ok = s.Value, s.At, true
+}
+
+// save writes v to path, replacing the file whole. A failure only means
+// the next start computes before it answers.
+func (c *snapshots[T]) save(v T, at time.Time) {
+	if c.path == "" {
+		return
+	}
+	b, err := json.Marshal(saved[T]{At: at, Key: c.key, Value: v})
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(c.path), 0o700); err != nil {
+		return
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(c.path), ".glance-*")
+	if err != nil {
+		return
+	}
+	_, werr := tmp.Write(b)
+	cerr := tmp.Close()
+	if werr != nil || cerr != nil || os.Rename(tmp.Name(), c.path) != nil {
+		_ = os.Remove(tmp.Name())
+	}
+}
+
 // waitIdle returns once no computation is running, for tests.
-func (c *glanceSnapshots) waitIdle() {
+func (c *snapshots[T]) waitIdle() {
 	c.mu.Lock()
 	running := c.running
 	c.mu.Unlock()
@@ -105,12 +192,42 @@ func (c *glanceSnapshots) waitIdle() {
 	}
 }
 
-// glance is the glance for a request at now, from the plan routes' deps.
-func (s *Server) glance(ctx context.Context, now time.Time) (headroom.Glance, error) {
+// WithGlanceSnapshot saves each computed glance and its findings at path,
+// and answers from the saved ones after a start until the first
+// computation lands. key names the config they were computed under: a
+// save under another (the config changed, and the daemon restarted for
+// it) is not answered.
+func WithGlanceSnapshot(path, key string) Option {
+	return func(s *Server) { s.glancePath, s.glanceKey = path, key }
+}
+
+// view is the glance and findings for a request at now, from the plan
+// routes' deps, and when they were computed.
+func (s *Server) view(ctx context.Context, now time.Time) (glanceView, time.Time, error) {
 	s.glancesOnce.Do(func() {
-		s.glances = newGlanceSnapshots(func(ctx context.Context, now time.Time) (headroom.Glance, error) {
-			return headroom.ComputeGlance(ctx, s.plans(), now)
-		}, glanceFresh)
+		s.glances = &snapshots[glanceView]{compute: s.computeView, fresh: glanceFresh,
+			path: s.glancePath, key: s.glanceKey, maxDiskAge: glanceDiskMaxAge}
 	})
 	return s.glances.get(ctx, now)
+}
+
+// computeView computes the glance and the findings ranked around it.
+func (s *Server) computeView(ctx context.Context, now time.Time) (glanceView, error) {
+	d := s.plans()
+	g, err := headroom.ComputeGlance(ctx, d, now)
+	if err != nil {
+		return glanceView{}, err
+	}
+	p := g.Payload()
+	p.Boundaries = boundaries.GlanceAdvice(d.Config, g.Headroom.Reports)
+	p.SpendBudgets = budgets.Current("", now)
+	p.ComputedAt = now
+	var c *coachcap.Report
+	if s.state != nil {
+		if st := s.state(); st.Coach != nil {
+			r := st.Coach(now)
+			c = &r
+		}
+	}
+	return glanceView{Glance: p, Findings: findings.Compute(findings.Gather(&g, c, d.Config, findings.DefaultDir()))}, nil
 }

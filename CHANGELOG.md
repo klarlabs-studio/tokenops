@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **menu bar:** findings no longer take seconds per refresh, and a daemon restart (an upgrade does one) no longer leaves the panel empty for minutes. The daemon runs at background priority, which makes its computations several times slower than the same code in a terminal: the findings were computed on every request, and after a start the first glance took about two minutes. The glance and the findings are now computed together in the background, and each result is saved, so after a start the daemon answers the saved one, under the same config and less than a day old, until its first computation lands. The glance carries `computed_at`, and the menu bar's "Updated" shows that rather than when it asked. A finding you act on leaves the panel at once.
+
 ## 0.118.6 - 2026-11-05
 
 ### Fixed
