@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.118.5 - 2026-11-05
+
 ### Fixed
 
 - **menu bar:** the panel no longer stays blank on a busy store. The daemon warms its event cache so a glance answers from memory, but warmed only two weeks back while the glance's plan advice replays 30 days. The advice's first replay then read the missing weeks from the store while holding the cache, and every glance waited behind it: with a month of heavy Codex use (some 33,000 events a day) a glance took longer than the menu bar waits, so it had nothing to show. The cache now warms as far back as the whole glance reads; on that store a glance takes about 3 seconds instead of timing out.
