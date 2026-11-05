@@ -173,29 +173,42 @@ homebrew_casks:
       A new release that changes the daemon's unit says so in its changelog;
       after that upgrade, run `tokenops daemon install` once.
     hooks:
-      post:
-        # The release archives were ad hoc signed until the Developer ID
-        # signing above, and Gatekeeper refused the quarantined binaries
-        # (and TokenOps.app and tokenops-presence in the same archive) on
-        # first run. Clearing the flag stays until a signed release has been
-        # verified to start with it in place; then this step goes.
-        #
-        # Homebrew runs install steps sandboxed, with a fake HOME and no
-        # localhost, so nothing in them can reach the real ~/Library, launchd
-        # or the running daemon. The raw-Ruby hook this replaces did, and
-        # Homebrew deprecated it. What it did, and where that now happens:
-        #
-        # - restart the daemon onto the new binary: the daemon checks its own
-        #   binary every 30 seconds; when supervised it exits, and launchd or
-        #   systemd starts the installed one (internal/daemon/binary_drift.go).
-        # - refresh ~/Applications/TokenOps.app: the daemon does it at start,
-        #   and copies the app without its quarantine flag
-        #   (internal/daemon/menubar_refresh.go, internal/infra/menubarapp).
-        # - re-apply the launchd or systemd unit: not done any more. The unit
-        #   embeds the binary path (the stable bin/tokenops link), so it only
-        #   changes in a release that changes the unit template. Such a release
-        #   says so, and the caveats above tell the operator to run
-        #   `tokenops daemon install`.
+      # Clear the quarantine flag BEFORE Homebrew links the binaries into
+      # bin/, not after. Homebrew installs a cask in a fixed order: extract to
+      # the Caskroom, preflight steps, the binary links, postflight steps
+      # (Library/Homebrew/cask/artifact/abstract_artifact.rb, sort_order).
+      # As a postflight step this left the new binaries quarantined and
+      # already on PATH, and tokenops is run constantly from outside: the
+      # status line every second, every Claude Code and Codex hook, launchd's
+      # KeepAlive daemon. The first of those to run the new binary inside the
+      # window got Gatekeeper's first-launch check. A quarantined binary that
+      # check does not allow -- an ad hoc one always; a notarized one when the
+      # online notarization lookup fails, and a bare binary cannot carry a
+      # stapled ticket to fall back on -- gets a "Not Opened" prompt, and the
+      # kernel parks every exec of that path until the prompt is answered
+      # (syspolicyd: "Prompt shown (5, 0), waiting for response"). Nothing
+      # headless answers it, so after v0.118.1 and v0.118.3 the status line,
+      # every hook and the daemon hung at launch until syspolicyd was
+      # restarted. Cleared before the links exist, no quarantined tokenops is
+      # ever reachable, and Gatekeeper never prompts for it.
+      #
+      # Homebrew runs install steps sandboxed, with a fake HOME and no
+      # localhost, so nothing in them can reach the real ~/Library, launchd
+      # or the running daemon. The raw-Ruby hook this replaces did, and
+      # Homebrew deprecated it. What it did, and where that now happens:
+      #
+      # - restart the daemon onto the new binary: the daemon checks its own
+      #   binary every 30 seconds; when supervised it exits, and launchd or
+      #   systemd starts the installed one (internal/daemon/binary_drift.go).
+      # - refresh ~/Applications/TokenOps.app: the daemon does it at start,
+      #   and copies the app without its quarantine flag
+      #   (internal/daemon/menubar_refresh.go, internal/infra/menubarapp).
+      # - re-apply the launchd or systemd unit: not done any more. The unit
+      #   embeds the binary path (the stable bin/tokenops link), so it only
+      #   changes in a release that changes the unit template. Such a release
+      #   says so, and the caveats above tell the operator to run
+      #   `tokenops daemon install`.
+      pre:
         install_steps: |
           on_macos do
             run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}"]
