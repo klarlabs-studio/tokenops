@@ -42,7 +42,7 @@ func (s *Server) registerPlanRoutes(mux RouteMux) {
 		}
 	}
 	mux.HandleFunc("GET /api/glance", serve(func(ctx context.Context, d headroom.Deps, now time.Time) (any, error) {
-		g, err := headroom.ComputeGlance(ctx, d, now)
+		g, err := s.glance(ctx, now)
 		if err != nil {
 			return nil, err
 		}
