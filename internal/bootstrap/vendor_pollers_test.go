@@ -61,7 +61,7 @@ func TestStartVendorUsagePollersStartsOnlyAlwaysOnReaders(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	sup := lifecycle.New(ctx, logger)
 	bus := events.NewAsync(events.NoopSink{}, events.Options{})
-	StartVendorUsagePollers(cfg, bus, freshness.NewRegistry(), func(time.Time) string { return "" }, sup, logger)
+	StartVendorUsagePollers(cfg, bus, freshness.NewRegistry(), func(time.Time) string { return "" }, "", sup, logger)
 
 	got := sup.Running()
 	slices.Sort(got)

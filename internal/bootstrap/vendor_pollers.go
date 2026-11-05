@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -58,6 +59,10 @@ import (
 // the Claude Code JSONL reader uses it to attribute each turn to the
 // endpoint that served it.
 //
+// checkpointDir is where the transcript pollers save how far they read, to
+// resume from after a restart instead of reading every transcript again;
+// empty saves nothing.
+//
 // It returns the refresh that asks every poller it started to poll now
 // (POST /api/sources/refresh).
 func StartVendorUsagePollers(
@@ -65,6 +70,7 @@ func StartVendorUsagePollers(
 	bus events.Bus,
 	sourceHealth *freshness.Registry,
 	claudeCodeBaseURLAt func(time.Time) string,
+	checkpointDir string,
 	sup *lifecycle.Supervisor,
 	logger *slog.Logger,
 ) SourcesRefresh {
@@ -82,7 +88,8 @@ func StartVendorUsagePollers(
 		p := claudecodejsonl.NewPoller(bus, claudecodejsonl.PollerOptions{
 			Root: cfg.VendorUsage.ClaudeCodeJSONL.Root, Interval: cfg.VendorUsage.ClaudeCodeJSONL.Interval,
 			Logger: logger, CostSource: PlanCostSource(cfg, eventschema.ProviderAnthropic),
-			BaseURLAt: claudeCodeBaseURLAt,
+			BaseURLAt:      claudeCodeBaseURLAt,
+			CheckpointPath: checkpointPath(checkpointDir, "claude-code-jsonl"),
 		})
 		sup.Go("claude-code-jsonl", refreshable(sig, p.Run))
 		logger.Info("claude-code jsonl poller live", "interval", cfg.VendorUsage.ClaudeCodeJSONL.Interval, "root", cfg.VendorUsage.ClaudeCodeJSONL.Root)
@@ -93,6 +100,7 @@ func StartVendorUsagePollers(
 			Logger: logger, CostSource: PlanCostSource(cfg, eventschema.ProviderOpenAI),
 			ProviderBaseURL: codexsettings.ProviderBaseURL,
 			Health:          sourceHealth.For(codexjsonl.SourceTag),
+			CheckpointPath:  checkpointPath(checkpointDir, "codex-jsonl"),
 		})
 		sup.Go("codex-jsonl", refreshable(sig, p.Run))
 		logger.Info("codex jsonl poller live", "interval", cfg.VendorUsage.CodexJSONL.Interval, "root", cfg.VendorUsage.CodexJSONL.Root)
@@ -311,4 +319,13 @@ type SourcesRefresh func(now time.Time) (pollers int, accepted bool, next time.T
 // ticker also fires on a refresh.
 func refreshable(sig *pollnow.Signal, run func(context.Context) error) func(context.Context) error {
 	return func(ctx context.Context) error { return run(pollnow.With(ctx, sig)) }
+}
+
+// checkpointPath is where the poller named name saves its read positions
+// under dir; empty when dir is.
+func checkpointPath(dir, name string) string {
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, name+"-positions.json")
 }

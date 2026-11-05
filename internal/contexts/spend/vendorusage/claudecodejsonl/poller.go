@@ -51,6 +51,13 @@ type PollerOptions struct {
 	// decides who bills a turn and whether a plan covers it (ADR 0009).
 	// nil means the default.
 	BaseURLAt func(time.Time) string
+	// CheckpointPath is where the poller saves how far it read each
+	// transcript, and resumes from after a restart. Empty reads every
+	// transcript again at each start.
+	CheckpointPath string
+	// checkpointLag is how far the saved positions lag the reads; zero is
+	// jsonltail.DefaultCheckpointLag, negative none (tests).
+	checkpointLag time.Duration
 }
 
 // The in-memory dedup set is bounded. A duplicate message ID comes from
@@ -89,6 +96,10 @@ type Poller struct {
 	// meta file is read once rather than on every scan that finds the
 	// transcript grown.
 	sources map[string]source
+	// ckpt saves tail; nil without CheckpointPath. restored is whether the
+	// saved positions were read back.
+	ckpt     *jsonltail.Checkpointer[[]jsonltail.Saved[readState]]
+	restored bool
 }
 
 // sourceOf is sourceOf(path), read once per transcript.
@@ -113,13 +124,18 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
-	return &Poller{
+	p := &Poller{
 		bus:     bus,
 		opts:    opts,
 		seen:    make(map[string]int64),
 		maxSeen: maxSeenIDs,
 		now:     time.Now,
 	}
+	if opts.CheckpointPath != "" {
+		p.ckpt = &jsonltail.Checkpointer[[]jsonltail.Saved[readState]]{Path: opts.CheckpointPath,
+			Version: checkpointVersion, Lag: jsonltail.Lag(opts.checkpointLag)}
+	}
+	return p
 }
 
 // Run blocks until ctx is cancelled, scanning the JSONL tree on each
@@ -132,13 +148,16 @@ func (p *Poller) Run(ctx context.Context) error {
 	}
 	t := pollnow.NewTicker(ctx, p.opts.Interval)
 	defer t.Stop()
+	p.restore()
 	p.scan(ctx, root)
+	p.checkpoint()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-t.C:
 			p.scan(ctx, root)
+			p.checkpoint()
 		}
 	}
 }
