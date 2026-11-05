@@ -209,3 +209,54 @@ func TestEventCacheReadsNewEventsByRowid(t *testing.T) {
 		t.Fatalf("changed events are not read by rowid:\n%s", plan)
 	}
 }
+
+// A full read runs outside the cache's lock. While one reaches further
+// back than the cache holds (the plan advice's month), a read the cache
+// already covers (the glance's two weeks) is answered from memory instead
+// of queueing behind it; a read that needs the older window waits for the
+// one in flight rather than starting a second.
+func TestEventCacheFullReadDoesNotHoldCoveredReads(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	c := newTestCache(t, s)
+	envs := make([]*eventschema.Envelope, 0, 60)
+	for i := range 60 {
+		envs = append(envs, promptAt(fmt.Sprintf("f%03d", i), cacheNow.Add(-time.Duration(i)*12*time.Hour), eventschema.ProviderAnthropic, 100))
+	}
+	if err := s.AppendBatch(ctx, envs); err != nil {
+		t.Fatal(err)
+	}
+	twoWeeks, month := cacheNow.Add(-14*24*time.Hour), cacheNow.Add(-29*24*time.Hour)
+	sameAsStore(t, s, c, eventschema.EventTypePrompt, twoWeeks, "warm")
+
+	entered, release := make(chan struct{}), make(chan struct{})
+	c.beforeFullRead = func() { close(entered); <-release }
+	monthDone := make(chan error, 2)
+	go func() { _, err := c.ReadEvents(ctx, eventschema.EventTypePrompt, month); monthDone <- err }()
+	<-entered
+	c.beforeFullRead = nil
+
+	covered := make(chan error, 1)
+	go func() { _, err := c.ReadEvents(ctx, eventschema.EventTypePrompt, twoWeeks); covered <- err }()
+	select {
+	case err := <-covered:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a read the cache covers waited for a full read of an older window")
+	}
+
+	go func() { _, err := c.ReadEvents(ctx, eventschema.EventTypePrompt, month); monthDone <- err }()
+	close(release)
+	for range 2 {
+		if err := <-monthDone; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if c.fullReads != 2 {
+		t.Fatalf("%d full reads, want 2 (the warm read and one month, shared)", c.fullReads)
+	}
+	sameAsStore(t, s, c, eventschema.EventTypePrompt, month, "after the month")
+	sameAsStore(t, s, c, eventschema.EventTypePrompt, twoWeeks, "two weeks after the month")
+}

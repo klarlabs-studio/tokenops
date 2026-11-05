@@ -56,7 +56,13 @@ type EventCache struct {
 
 	mu    sync.Mutex
 	types map[eventschema.EventType]*cachedEvents
-	timer *time.Timer
+	// filling is the full read in flight per type, run outside mu so the
+	// reads the cache already covers are not held behind it.
+	filling map[eventschema.EventType]*fill
+	timer   *time.Timer
+	// beforeFullRead, when set, runs as a full read starts, outside mu;
+	// for tests.
+	beforeFullRead func()
 	// fullReads counts the windows read in full, for tests.
 	fullReads int
 }
@@ -106,7 +112,7 @@ func NewEventCache(store *Store, maxSpan, idle time.Duration) *EventCache {
 		idle = DefaultCacheIdle
 	}
 	return &EventCache{store: store, maxSpan: maxSpan, idle: idle, now: time.Now,
-		types: map[eventschema.EventType]*cachedEvents{}}
+		types: map[eventschema.EventType]*cachedEvents{}, filling: map[eventschema.EventType]*fill{}}
 }
 
 // CountBySource is Store.CountBySource; it is a single indexed query.
@@ -130,23 +136,79 @@ func (c *EventCache) ReadEvents(ctx context.Context, t eventschema.EventType, si
 	if from < oldest {
 		return c.store.ReadEvents(ctx, t, since)
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.touch()
-	cached, err := c.refresh(ctx, t, from, oldest)
-	if errors.Is(err, errNoChangeLog) {
-		// A store without migration 7 cannot say what changed.
-		return c.store.ReadEvents(ctx, t, since)
+	for {
+		c.mu.Lock()
+		c.touch()
+		// What the cache holds, brought up to date: a few rows, under the
+		// lock.
+		if cur := c.types[t]; cur != nil && cur.floor <= from {
+			ok, err := c.update(ctx, t, cur, oldest)
+			if err != nil {
+				c.mu.Unlock()
+				if errors.Is(err, errNoChangeLog) {
+					// A store without migration 7 cannot say what changed.
+					return c.store.ReadEvents(ctx, t, since)
+				}
+				return nil, err
+			}
+			if ok {
+				out := cur.since(from)
+				c.mu.Unlock()
+				return out, nil
+			}
+		}
+		// A full read is needed. One per type at a time: wait for the one
+		// in flight, then look again.
+		if f := c.filling[t]; f != nil {
+			c.mu.Unlock()
+			select {
+			case <-f.done:
+				continue
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		f := &fill{done: make(chan struct{})}
+		c.filling[t] = f
+		hook := c.beforeFullRead
+		c.mu.Unlock()
+
+		if hook != nil {
+			hook()
+		}
+		fresh, err := c.fullRead(ctx, t, from)
+
+		c.mu.Lock()
+		delete(c.filling, t)
+		close(f.done)
+		if err != nil {
+			c.mu.Unlock()
+			if errors.Is(err, errNoChangeLog) {
+				return c.store.ReadEvents(ctx, t, since)
+			}
+			return nil, err
+		}
+		// Reads that ran meanwhile updated the window this replaces; the
+		// next read brings this one up to date from its own snapshot.
+		c.fullReads++
+		c.types[t] = fresh
+		out := fresh.since(from)
+		c.mu.Unlock()
+		return out, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	i := sort.Search(len(cached.events), func(i int) bool { return cached.events[i].env.Timestamp.UnixNano() >= from })
-	out := make([]*eventschema.Envelope, len(cached.events)-i)
-	for j, e := range cached.events[i:] {
+}
+
+// fill is a full read in flight; done closes when it ends.
+type fill struct{ done chan struct{} }
+
+// since is the window's events at or after from, oldest first.
+func (ce *cachedEvents) since(from int64) []*eventschema.Envelope {
+	i := sort.Search(len(ce.events), func(i int) bool { return ce.events[i].env.Timestamp.UnixNano() >= from })
+	out := make([]*eventschema.Envelope, len(ce.events)-i)
+	for j, e := range ce.events[i:] {
 		out[j] = e.env
 	}
-	return out, nil
+	return out
 }
 
 // touch restarts the idle countdown. c.mu is held.
@@ -165,38 +227,46 @@ func (c *EventCache) touch() {
 // errNoChangeLog marks a store without events_changes.
 var errNoChangeLog = errors.New("sqlite: store has no events_changes")
 
-// refresh brings t's window up to date with the store and returns it,
-// reaching back to from at least. c.mu is held.
-func (c *EventCache) refresh(ctx context.Context, t eventschema.EventType, from, oldest int64) (*cachedEvents, error) {
+// update brings cur up to date with the store from what changed since its
+// snapshot, and reports whether it could tell what changed; otherwise the
+// window must be read in full. c.mu is held.
+func (c *EventCache) update(ctx context.Context, t eventschema.EventType, cur *cachedEvents, oldest int64) (bool, error) {
+	tx, err := c.store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("sqlite: event cache: begin: %w", err)
+	}
+	// Read-only: rolling back ends the snapshot.
+	defer func() { _ = tx.Rollback() }()
+	snap, err := snapshotOf(ctx, tx)
+	if err != nil {
+		return false, err
+	}
+	updated, err := cur.update(ctx, tx, t, snap)
+	if err != nil || !updated {
+		return false, err
+	}
+	cur.trim(oldest)
+	return true, nil
+}
+
+// fullRead reads t's window from from in one snapshot of the store. It
+// takes no lock: it is the slow read, and runs while the cache answers
+// what it already holds.
+func (c *EventCache) fullRead(ctx context.Context, t eventschema.EventType, from int64) (*cachedEvents, error) {
 	tx, err := c.store.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: event cache: begin: %w", err)
 	}
-	// Read-only: rolling back ends the snapshot.
 	defer func() { _ = tx.Rollback() }()
-
 	snap, err := snapshotOf(ctx, tx)
 	if err != nil {
 		return nil, err
-	}
-	if cur := c.types[t]; cur != nil && cur.floor <= from {
-		updated, err := cur.update(ctx, tx, t, snap)
-		if err != nil {
-			return nil, err
-		}
-		if updated {
-			cur.trim(oldest)
-			return cur, nil
-		}
 	}
 	events, err := readCachedEvents(ctx, tx, t, from)
 	if err != nil {
 		return nil, err
 	}
-	c.fullReads++
-	fresh := &cachedEvents{floor: from, seq: snap.seq, tail: snap.tail, events: events}
-	c.types[t] = fresh
-	return fresh, nil
+	return &cachedEvents{floor: from, seq: snap.seq, tail: snap.tail, events: events}, nil
 }
 
 // snapshot is what a read transaction saw of the store's changes.
