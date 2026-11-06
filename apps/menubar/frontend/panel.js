@@ -273,6 +273,23 @@
     });
   }
 
+  // The utilization figure is about windows that have reset, never the
+  // current one, so it is named as a past peak: "Plan used: 100%" under
+  // "6% left" read as the current window being used up.
+  function peakLabel(u) {
+    var ws = u.windows || [];
+    for (var i = 0; i < ws.length; i++) {
+      if (ws[i].label === u.utilization_window && ws[i].windows === 1) return "Last " + u.utilization_window + " peak";
+    }
+    return "Avg " + u.utilization_window + " peak, 7 days";
+  }
+
+  function coveredTokens(pct) {
+    if (pct >= 100) return "all tokens";
+    if (pct > 99) return ">99% of tokens";
+    return Math.round(pct) + "% of tokens";
+  }
+
   // Over the last week: how full the plan's longest window got on average
   // (are the seats used?) and how much of the usage the plan carried
   // rather than an API key or a gateway.
@@ -283,12 +300,12 @@
     var box = el("section", "metric usage");
     var grid = el("div", "stats");
     if (u.utilization_pct != null) {
-      grid.appendChild(stat("Plan used, 7 days", Math.round(u.utilization_pct) + "% of " + u.utilization_window));
+      grid.appendChild(stat(peakLabel(u), Math.round(u.utilization_pct) + "%"));
     }
     // Pay as you go has no plan to carry tokens: the share is always 0.
     var covered = u.coverage_pct != null && r.plan_name !== "pay-as-you-go";
     if (u.utilization_pct == null && !covered) return;
-    if (covered) grid.appendChild(stat("On the plan, 7 days", Math.round(u.coverage_pct) + "% of tokens"));
+    if (covered) grid.appendChild(stat("Covered by plan, 7 days", coveredTokens(u.coverage_pct)));
     box.appendChild(grid);
     main.appendChild(box);
   }
