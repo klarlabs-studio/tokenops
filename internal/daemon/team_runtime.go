@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
+
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/teamshare"
@@ -32,7 +34,7 @@ const teamUploadTimeout = 15 * time.Minute
 // on every tick, so `tokenops team join` and `leave` take effect without a
 // restart; until a machine joins, a tick reads one missing file and does
 // nothing.
-func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components, sup *lifecycle.Supervisor, logger *slog.Logger) {
+func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components, transcripts *sessions.TranscriptCache, sup *lifecycle.Supervisor, logger *slog.Logger) {
 	if !cfg.Team.UploadsEnabled() || components == nil {
 		return
 	}
@@ -51,6 +53,9 @@ func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components,
 	// admin's machine, with the admin keys configured here.
 	deps := teamshare.MachineDeps(cfg, components.Aggregator, components.Store, components.Spend,
 		func(ctx context.Context) map[string]string { return bootstrap.AdminKeys(ctx, cfg) })
+	if transcripts != nil {
+		deps.Units = teamshare.UnitsFrom(transcripts)
+	}
 	sup.Go("team-upload", func(ctx context.Context) error {
 		wait := time.NewTimer(teamFirstUpload)
 		defer wait.Stop()

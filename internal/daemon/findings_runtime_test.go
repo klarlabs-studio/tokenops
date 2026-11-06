@@ -15,7 +15,7 @@ func TestSessionFindingsStopsBeforeTheFirstRun(t *testing.T) {
 	cancel()
 	done := make(chan struct{})
 	go func() {
-		runSessionFindings(ctx, t.TempDir(), time.Hour, time.Hour, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		runSessionFindings(ctx, t.TempDir(), nil, time.Hour, time.Hour, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		close(done)
 	}()
 	select {

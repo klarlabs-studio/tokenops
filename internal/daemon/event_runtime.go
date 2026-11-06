@@ -122,7 +122,6 @@ func initializeEventRuntime(
 	rt.GlanceEvents = glance
 	warmGlanceEvents(sup, glance, logger)
 	startOTelMetricsRuntime(cfg, rt.Store, glance, components, sup, logger)
-	startTeamUploadRuntime(cfg, components, sup, logger)
 	startTeamBoundariesRuntime(cfg, sup, logger)
 	// A nil aggregator must reach the runtime as a nil Source, not a
 	// typed nil it would call.

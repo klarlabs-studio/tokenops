@@ -108,6 +108,16 @@ func NewPromptFactsCache() *TranscriptCache {
 	return agentdx.NewTranscriptCacheWithFacts(promptFacts)
 }
 
+// NewSharedTranscriptCache returns a prompt-facts cache that holds the
+// last keep of transcripts whatever a read's window, so readers of
+// different windows (the daemon's week of session analysis, its two weeks
+// of team upload) share one copy: neither's cut-off makes the other read
+// the files again, and the records are held once.
+func NewSharedTranscriptCache(keep time.Duration) *TranscriptCache {
+	return agentdx.NewTranscriptCacheWithFacts(promptFacts,
+		agentdx.KeepFrom(func() time.Time { return time.Now().Add(-keep) }))
+}
+
 // promptFacts derives an instruction's facts from its words.
 func promptFacts(text string) agentdx.PromptFacts {
 	f := agentdx.PromptFacts{Known: true, Continues: story.ContinuesText(text)}

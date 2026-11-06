@@ -333,3 +333,35 @@ func TestTranscriptCacheKeepsFactsNotWords(t *testing.T) {
 		t.Errorf("%d prompts, facts derived %d times; want 6 and 6", prompts, len(seen))
 	}
 }
+
+// One cache serves readers of different windows (the daemon's 7-day
+// session analysis and 14-day team upload) from one copy: it keeps the
+// records back to the floor its owner sets, so neither reader's cut-off
+// makes the other read the files again, and each gets exactly its window.
+func TestTranscriptCacheServesTwoWindowsFromOneRead(t *testing.T) {
+	dir := t.TempDir()
+	cc, cx := filepath.Join(dir, "claude"), filepath.Join(dir, "codex")
+	writeFile(t, filepath.Join(cc, "p", "s.jsonl"), turns(cacheEpoch.Add(-12*24*time.Hour), 24*12, 0, claudeTurn))
+	rollout := filepath.Join(cx, "2026", "08", "08", "rollout-2026-08-08T00-00-00-aaa.jsonl")
+	writeFile(t, rollout, turns(cacheEpoch.Add(-12*24*time.Hour), 24*12, 0, codexTurn))
+	now := cacheEpoch
+	cache := NewTranscriptCache(KeepFrom(func() time.Time { return now.AddDate(0, 0, -15) }))
+
+	for round := range 3 {
+		for _, days := range []int{14, 7} {
+			since := now.AddDate(0, 0, -days)
+			step := fmt.Sprintf("round %d, %d days", round, days)
+			scanBoth(t, step, cache, cc, cx, since)
+		}
+		if round == 0 {
+			continue
+		}
+		claude, codex := cache.bytesRead()
+		ci, _ := os.Stat(filepath.Join(cc, "p", "s.jsonl"))
+		xi, _ := os.Stat(rollout)
+		if claude != ci.Size() || codex != xi.Size() {
+			t.Fatalf("after round %d read %d+%d bytes, want each file once (%d+%d)", round, claude, codex, ci.Size(), xi.Size())
+		}
+		now = now.Add(time.Hour)
+	}
+}
