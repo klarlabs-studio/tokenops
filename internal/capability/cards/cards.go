@@ -376,6 +376,8 @@ func details(r plans.HeadroomReport, cost *spending.ProviderCost, late bool, use
 		out = append(out, detail{"Overage risk", risk, map[string]rgb{"MEDIUM": warnC, "HIGH": dangerC}[risk]})
 	}
 	switch {
+	case cost != nil && cost.Last30Unread:
+		out = append(out, detail{"Today", usage(cost.Today), porcelain}, detail{"30 days", "not read in time", muted})
 	case cost != nil:
 		out = append(out, detail{"Today", usage(cost.Today), porcelain}, detail{"30 days", usage(cost.Last30), porcelain})
 	case late:

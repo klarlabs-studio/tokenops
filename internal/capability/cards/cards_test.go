@@ -263,6 +263,19 @@ func TestLateCostSaysSo(t *testing.T) {
 	}
 }
 
+// A card whose 30 days were not read in time still says what today cost.
+func TestLateThirtyDaysKeepToday(t *testing.T) {
+	c := costs["openai"]
+	c.Last30, c.Last30Unread = spending.Usage{}, true
+	out := Render(sample(), Options{Width: 130, Costs: map[string]spending.ProviderCost{"openai": c}, CostsLate: true})
+	if !strings.Contains(out, "Today:") || !strings.Contains(out, usage(c.Today)) {
+		t.Errorf("today's cost dropped with the 30 days:\n%s", out)
+	}
+	if !strings.Contains(out, "30 days:") || !strings.Contains(out, "not read in time") {
+		t.Errorf("the missing 30 days are not named:\n%s", out)
+	}
+}
+
 // Each plan's card says how full the plan's windows that ended this week
 // got, and how much of the usage the plan carried. Both are about past
 // windows, so neither may read as the current window being used up: a

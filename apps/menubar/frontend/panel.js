@@ -226,16 +226,20 @@
 
   function usage(main, r, c) {
     var box = el("section", "metric usage");
-    var covered = c.last_30_days.cost_usd === 0 && c.last_30_days.api_equivalent_usd > 0;
+    // When the 30 days could not be read, today alone says whether a
+    // plan covers the usage.
+    var unread = !!c.last_30_days_unread;
+    var basis = unread ? c.today : c.last_30_days;
+    var covered = basis.cost_usd === 0 && basis.api_equivalent_usd > 0;
     var grid = el("div", "stats");
     grid.appendChild(stat("Today", amount(c.today, covered)));
-    grid.appendChild(stat("Last 30 days cost", amount(c.last_30_days, covered)));
-    grid.appendChild(stat("Last 30 days tokens", tokens(c.last_30_days.tokens)));
+    grid.appendChild(stat("Last 30 days cost", unread ? "not read in time" : amount(c.last_30_days, covered)));
+    grid.appendChild(stat("Last 30 days tokens", unread ? "—" : tokens(c.last_30_days.tokens)));
     grid.appendChild(stat("Today tokens", tokens(c.today.tokens)));
     box.appendChild(grid);
     if (c.daily && c.daily.length) box.appendChild(chart(c.daily));
     if (c.top_model) box.appendChild(el("div", "top-model", "Top model: " + c.top_model));
-    var notes = ["From local " + name(r.provider) + " logs."], s30 = c.last_30_days;
+    var notes = ["From local " + name(r.provider) + " logs."], s30 = basis;
     if (covered && share(s30) <= 0.5) notes.push("Cost at API prices; your plan covers it.");
     if (share(s30) > 0.02) {
       notes.push(Math.round(share(s30) * 100) + "% of requests use models without a list price yet" +
