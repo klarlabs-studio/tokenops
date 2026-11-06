@@ -31,6 +31,9 @@ type TranscriptCache struct {
 	mu     sync.Mutex
 	claude map[string]*claudeEntry
 	codexs map[string]*codexEntry
+	// facts derives each instruction's facts as it is read; nil keeps
+	// none.
+	facts PromptFactsFunc
 	// codexBytes counts the rollout bytes read, for tests.
 	codexBytes int64
 }
@@ -39,6 +42,17 @@ type TranscriptCache struct {
 func NewTranscriptCache() *TranscriptCache {
 	return &TranscriptCache{claude: map[string]*claudeEntry{}, codexs: map[string]*codexEntry{}}
 }
+
+// NewTranscriptCacheWithFacts returns an empty cache that keeps, for each
+// instruction, the facts fn derives from its words, and not the words.
+func NewTranscriptCacheWithFacts(fn PromptFactsFunc) *TranscriptCache {
+	c := NewTranscriptCache()
+	c.facts = fn
+	return c
+}
+
+// HasPromptFacts reports whether the cache keeps prompt facts.
+func (c *TranscriptCache) HasPromptFacts() bool { return c != nil && c.facts != nil }
 
 type cacheSource int
 
@@ -125,7 +139,7 @@ func (c *TranscriptCache) claudeCode(path string, info os.FileInfo, since time.T
 	case e != nil && notBefore(since, e.since) && stamp.size > e.stamp.size:
 		// Grown: read from the last complete line.
 		if !e.stopped {
-			recs, offset, tail, stopped, err := readClaudeFrom(path, e.offset, e.since)
+			recs, offset, tail, stopped, err := readClaudeFrom(path, e.offset, e.since, c.facts)
 			if err != nil {
 				delete(c.claude, path)
 				return nil
@@ -135,7 +149,7 @@ func (c *TranscriptCache) claudeCode(path string, info os.FileInfo, since time.T
 		}
 		e.stamp = stamp
 	default:
-		recs, offset, tail, stopped, err := readClaudeFrom(path, 0, since)
+		recs, offset, tail, stopped, err := readClaudeFrom(path, 0, since, c.facts)
 		if err != nil {
 			delete(c.claude, path)
 			return nil
@@ -174,7 +188,7 @@ func (c *TranscriptCache) codex(path string, info os.FileInfo, since time.Time) 
 		}
 		e.stamp = stamp
 	default:
-		e = &codexEntry{stamp: stamp, reader: newCodexReader(sessionIDFromPath(path), since, false), compressed: codexrollout.IsCompressed(path)}
+		e = &codexEntry{stamp: stamp, reader: newCodexReader(sessionIDFromPath(path), since, false, c.facts), compressed: codexrollout.IsCompressed(path)}
 		if err := c.readCodexFrom(path, e); err != nil {
 			delete(c.codexs, path)
 			return nil
@@ -282,7 +296,7 @@ func dropBefore(recs []Record, since time.Time) []Record {
 // start of a line. It returns the records of the newline-terminated lines,
 // the offset after the last of them, the records of an unterminated final
 // line, and whether a line too long to read ended the scan.
-func readClaudeFrom(path string, offset int64, since time.Time) (recs []Record, end int64, tail []Record, stopped bool, err error) {
+func readClaudeFrom(path string, offset int64, since time.Time, facts PromptFactsFunc) (recs []Record, end int64, tail []Record, stopped bool, err error) {
 	f, err := os.Open(path) //nolint:gosec // operator's own transcript dir
 	if err != nil {
 		return nil, 0, nil, false, err
@@ -292,13 +306,13 @@ func readClaudeFrom(path string, offset int64, since time.Time) (recs []Record, 
 		return nil, 0, nil, false, err
 	}
 	n, last, stopped, err := readLines(f, func(line []byte) {
-		recs = appendTranscriptLine(recs, line, since, false)
+		recs = appendTranscriptLine(recs, line, since, false, facts)
 	})
 	if err != nil {
 		return nil, 0, nil, false, err
 	}
 	if len(last) > 0 {
-		tail = appendTranscriptLine(nil, last, since, false)
+		tail = appendTranscriptLine(nil, last, since, false, facts)
 	}
 	return recs, offset + n, tail, stopped, nil
 }

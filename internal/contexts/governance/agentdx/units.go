@@ -25,6 +25,9 @@ type Unit struct {
 	// Prompt is the operator's instruction. Empty unless the extraction
 	// was asked to carry text.
 	Prompt string
+	// PromptFacts are what was derived from the words when a cache built
+	// with prompt facts read them instead.
+	PromptFacts PromptFacts
 
 	// Start is when the instruction was typed; End is the agent's last
 	// turn answering it, zero when it never answered.
@@ -250,6 +253,7 @@ func sessionUnits(records []Record) []Unit {
 			cur = Unit{
 				SessionID:     r.SessionID,
 				Prompt:        r.Text,
+				PromptFacts:   r.Facts,
 				Start:         r.At,
 				Provider:      r.Provider,
 				PromptRejects: r.Rejects,

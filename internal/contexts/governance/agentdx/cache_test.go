@@ -297,3 +297,39 @@ func TestCodexCutOffOnlyFiltersRecords(t *testing.T) {
 		t.Errorf("%d prompts after the cut-off, want 1: the rollout uses response_items, so the event is not counted", prompts)
 	}
 }
+
+// A cache built with prompt facts keeps, for each instruction in either
+// client's transcripts, what the function derived from its words, and not
+// the words.
+func TestTranscriptCacheKeepsFactsNotWords(t *testing.T) {
+	dir := t.TempDir()
+	cc, cx := filepath.Join(dir, "claude"), filepath.Join(dir, "codex")
+	writeFile(t, filepath.Join(cc, "p", "s.jsonl"), turns(cacheEpoch, 3, 0, claudeTurn))
+	writeFile(t, filepath.Join(cx, "2026", "08", "20", "rollout-2026-08-20T00-00-00-aaa.jsonl"), turns(cacheEpoch, 3, 0, codexTurn))
+	var seen []string
+	cache := NewTranscriptCacheWithFacts(func(text string) PromptFacts {
+		seen = append(seen, text)
+		return PromptFacts{Known: true, Kind: "k:" + text}
+	})
+	cc1, err := Extract(ExtractOptions{Root: cc, IncludeScratch: true, Cache: cache})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cx1, err := ExtractCodex(ExtractOptions{Root: cx, Cache: cache})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prompts int
+	for _, r := range append(cc1, cx1...) {
+		if r.Kind != KindPrompt {
+			continue
+		}
+		prompts++
+		if r.Text != "" || !r.Facts.Known || !strings.HasPrefix(r.Facts.Kind, "k:") || len(r.Facts.Kind) < 4 {
+			t.Errorf("prompt record text %q facts %+v; want no text and facts from it", r.Text, r.Facts)
+		}
+	}
+	if prompts != 6 || len(seen) != 6 {
+		t.Errorf("%d prompts, facts derived %d times; want 6 and 6", prompts, len(seen))
+	}
+}

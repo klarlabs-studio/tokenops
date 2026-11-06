@@ -13,6 +13,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/story"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass"
 )
 
 // Window selects which transcripts to read.
@@ -96,6 +97,25 @@ type TranscriptCache = agentdx.TranscriptCache
 
 // NewTranscriptCache returns an empty transcript cache for Window.Cache.
 func NewTranscriptCache() *TranscriptCache { return agentdx.NewTranscriptCache() }
+
+// NewPromptFactsCache returns an empty transcript cache for Window.Cache
+// that keeps, for each instruction, what the work-classifying surfaces
+// derive from its words (story boundaries, the kind of work) and not the
+// words. Units read through it carry PromptFacts instead of Prompt, so a
+// caller that reads them repeatedly (the team upload) reads only what
+// changed and still holds no prompt text between reads.
+func NewPromptFactsCache() *TranscriptCache {
+	return agentdx.NewTranscriptCacheWithFacts(promptFacts)
+}
+
+// promptFacts derives an instruction's facts from its words.
+func promptFacts(text string) agentdx.PromptFacts {
+	f := agentdx.PromptFacts{Known: true, Continues: story.ContinuesText(text)}
+	if k := taskclass.OwnKind(text); k != taskclass.KindUnknown {
+		f.Kind = string(k)
+	}
+	return f
+}
 
 // days resolves the window: a positive day count, or -1 for all history.
 //
@@ -186,9 +206,11 @@ func DegradationNote(bands []ContextBand) string { return agentdx.DegradationNot
 // the surfaces that group or reconstruct work from them. The text is read
 // at scan time and never persisted. A client whose transcripts could not
 // be read is reported in the error, which joins one per client; whatever
-// the others yielded is still returned.
+// the others yielded is still returned. Read through a prompt-facts cache
+// (NewPromptFactsCache), units carry PromptFacts instead of the words.
 func Units(w Window, now time.Time) ([]Unit, error) {
-	records, _, _, err := w.read(now, true)
+	// A prompt-facts cache stands in for the words.
+	records, _, _, err := w.read(now, !w.Cache.HasPromptFacts())
 	return agentdx.Units(records), err
 }
 
