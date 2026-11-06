@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.118.7 - 2026-11-06
+
 ### Fixed
 
 - **daemon:** a start no longer reads every Claude Code and Codex transcript again. The transcript pollers kept how far they had read each file in memory only, so every start (an upgrade does one) parsed every transcript from the first byte: on one machine 6 GB, 283,000 events re-published and deduplicated, ~50 seconds of CPU in a terminal and several times that at the daemon's background priority, with every other start-up task waiting. They now save their positions under `~/.tokenops/cache` and resume from them; that start took 2 seconds. The positions are saved two minutes behind the reads, so what the event store may not have written yet is read again rather than skipped, and they hold no transcript text: a file is recognised by a digest of its first bytes, which the reader no longer keeps in memory either.
