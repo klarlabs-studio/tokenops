@@ -91,6 +91,9 @@ type Record struct {
 	// lives in memory for the length of a scan and is not written to the
 	// event store — the rule every coaching surface here follows.
 	Text string
+	// Facts are what a cache built with prompt facts derived from Text
+	// before dropping it; zero otherwise.
+	Facts PromptFacts
 
 	// Harness is the client that wrote the record (claude-code, codex,
 	// cursor, opencode), stamped by ExtractAll.
@@ -359,3 +362,23 @@ func percentile(vs []float64, p float64) float64 {
 }
 
 func round1(v float64) float64 { return math.Round(v*10) / 10 }
+
+// PromptFacts are what the work-classifying surfaces derive from an
+// instruction's words: whether it continues the work in flight, and the
+// kind of work it starts. A reader that cannot keep the words (the
+// transcript cache holds no prompt text) keeps these instead, so a
+// surface that needs only them reads through the cache.
+type PromptFacts struct {
+	// Known is set when the facts were derived; the zero value says
+	// nothing about the instruction.
+	Known bool
+	// Continues is whether the words continue the work in flight.
+	Continues bool
+	// Kind is the kind of work the words start on their own; empty when
+	// they keep the kind in flight.
+	Kind string
+}
+
+// PromptFactsFunc derives an instruction's facts from its words. It must
+// be a pure function of them: a cache reuses what it derived.
+type PromptFactsFunc func(text string) PromptFacts

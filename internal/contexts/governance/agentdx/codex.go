@@ -135,7 +135,7 @@ type codexLine struct {
 // both counts the response_item, which is also the only one with the
 // instruction's text on it.
 func readCodexTranscript(r io.Reader, sessionID string, since time.Time, withText bool) []Record {
-	cr := newCodexReader(sessionID, since, withText)
+	cr := newCodexReader(sessionID, since, withText, nil)
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 1<<20), maxTranscriptLine)
 	for sc.Scan() {
@@ -158,6 +158,7 @@ type codexReader struct {
 	sessionID string
 	since     time.Time
 	withText  bool
+	facts     PromptFactsFunc
 
 	out []Record
 	// Prompts from each channel are kept apart until the records are
@@ -177,8 +178,8 @@ type codexReader struct {
 	role string
 }
 
-func newCodexReader(sessionID string, since time.Time, withText bool) *codexReader {
-	return &codexReader{sessionID: sessionID, since: since, withText: withText}
+func newCodexReader(sessionID string, since time.Time, withText bool, facts PromptFactsFunc) *codexReader {
+	return &codexReader{sessionID: sessionID, since: since, withText: withText, facts: facts}
 }
 
 // line reads one line of the rollout.
@@ -212,6 +213,9 @@ func (c *codexReader) line(b []byte) {
 			base.Role = c.role
 			if c.withText {
 				base.Text = e.Payload.Message
+			}
+			if c.facts != nil {
+				base.Facts = c.facts(e.Payload.Message)
 			}
 			emit(&c.eventPrompts, base)
 		case "turn_aborted":
@@ -265,6 +269,9 @@ func (c *codexReader) line(b []byte) {
 				base.Role = c.role
 				if c.withText {
 					base.Text = text
+				}
+				if c.facts != nil {
+					base.Facts = c.facts(text)
 				}
 				emit(&c.itemPrompts, base)
 			}
