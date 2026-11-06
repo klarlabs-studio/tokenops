@@ -17,12 +17,12 @@ import (
 // transcripts every few hours, and reading all of them again took a
 // minute or more of a core each time.
 //
-// A Claude Code transcript is read line by line, each line on its own, so
-// a file that grew is read from where the last scan stopped. A Codex
-// rollout carries state from line to line (the model of the turn, the
-// context size before it), so a changed rollout is read again whole. An
-// entry is used only when reading the file again would yield exactly what
-// it holds; anything else reads the file.
+// A file that grew is read from where the last scan stopped: a Claude
+// Code transcript line by line, each line on its own, and a Codex rollout
+// through the reader that read the lines before, since a rollout carries
+// state from line to line. A compressed rollout is read again whole when
+// it changes. An entry is used only when reading the file again would
+// yield exactly what it holds; anything else reads the file.
 //
 // The cache holds no prompt text: a scan that asks for it reads the files
 // as before (ExtractOptions.WithPromptText), so the words still live only
@@ -31,6 +31,8 @@ type TranscriptCache struct {
 	mu     sync.Mutex
 	claude map[string]*claudeEntry
 	codexs map[string]*codexEntry
+	// codexBytes counts the rollout bytes read, for tests.
+	codexBytes int64
 }
 
 // NewTranscriptCache returns an empty cache.
@@ -71,12 +73,19 @@ type claudeEntry struct {
 	stopped bool
 }
 
-// codexEntry is one Codex rollout, read whole.
+// codexEntry is one Codex rollout as far as it has been read.
 type codexEntry struct {
-	stamp   fileStamp
-	since   time.Time
-	first   time.Time
-	records []Record
+	stamp fileStamp
+	// reader has read the newline-terminated lines before offset.
+	reader *codexReader
+	offset int64
+	// tail is a final line still being written; it is read again once
+	// the file grows.
+	tail []byte
+	// stopped is set when a line too long to read ended the scan.
+	stopped bool
+	// compressed rollouts cannot be read from an offset.
+	compressed bool
 }
 
 // writtenSince stats path and reports whether it can hold an entry at or
@@ -145,28 +154,84 @@ func (c *TranscriptCache) claudeCode(path string, info os.FileInfo, since time.T
 }
 
 // codex returns what the Codex rollout at path yields from since on,
-// reading it again unless the cached read is exactly what it would yield.
+// reading only what the cache does not already hold.
 func (c *TranscriptCache) codex(path string, info os.FileInfo, since time.Time) []Record {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	stamp := stampOf(info)
 	e := c.codexs[path]
-	// The same file read with another cut-off yields the same records when
-	// no line falls between the two: every line is at or after both.
-	same := e != nil && e.stamp == stamp &&
-		(e.since.Equal(since) || e.first.IsZero() || (notBefore(e.first, since) && notBefore(e.first, e.since)))
-	if !same {
-		f, err := codexrollout.Open(path)
-		if err != nil {
+	reachable := e != nil && notBefore(since, e.reader.since)
+	switch {
+	case reachable && e.stamp == stamp:
+		// Unchanged.
+	case reachable && !e.compressed && stamp.size > e.stamp.size:
+		// Grown: read on from the last complete line.
+		if !e.stopped {
+			if err := c.readCodexFrom(path, e); err != nil {
+				delete(c.codexs, path)
+				return nil
+			}
+		}
+		e.stamp = stamp
+	default:
+		e = &codexEntry{stamp: stamp, reader: newCodexReader(sessionIDFromPath(path), since, false), compressed: codexrollout.IsCompressed(path)}
+		if err := c.readCodexFrom(path, e); err != nil {
 			delete(c.codexs, path)
 			return nil
 		}
-		recs, first := readCodexTranscriptFrom(f, sessionIDFromPath(path), since, false)
-		_ = f.Close()
-		e = &codexEntry{stamp: stamp, since: since, first: first, records: recs}
 		c.codexs[path] = e
 	}
-	return append([]Record(nil), e.records...)
+	// The cut-off only moves forward between the daemon's scans; records
+	// before it can never be returned again.
+	e.reader.advance(since)
+	if len(e.tail) == 0 {
+		return e.reader.records()
+	}
+	f := e.reader.fork()
+	f.line(e.tail)
+	return f.records()
+}
+
+// readCodexFrom reads e's rollout on from e.offset into e.reader; a
+// compressed rollout is read from the start.
+func (c *TranscriptCache) readCodexFrom(path string, e *codexEntry) error {
+	if e.compressed {
+		r, err := codexrollout.Open(path)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = r.Close() }()
+		n, tail, stopped, err := readLines(r, e.reader.line)
+		c.codexBytes += n + int64(len(tail))
+		if err != nil {
+			return err
+		}
+		e.tail, e.stopped = tail, stopped
+		return nil
+	}
+	f, err := os.Open(path) //nolint:gosec // a rollout under Codex's home
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	if _, err := f.Seek(e.offset, io.SeekStart); err != nil {
+		return err
+	}
+	n, tail, stopped, err := readLines(f, e.reader.line)
+	c.codexBytes += n + int64(len(tail))
+	if err != nil {
+		return err
+	}
+	e.offset += n
+	e.tail, e.stopped = tail, stopped
+	return nil
+}
+
+// codexRead reports how many rollout bytes the cache has read.
+func (c *TranscriptCache) codexRead() int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.codexBytes
 }
 
 // retain forgets every file of src a scan did not keep: deleted, or last
@@ -226,35 +291,51 @@ func readClaudeFrom(path string, offset int64, since time.Time) (recs []Record, 
 	if _, err := f.Seek(offset, io.SeekStart); err != nil {
 		return nil, 0, nil, false, err
 	}
-	r := bufio.NewReaderSize(f, 1<<20)
-	end = offset
+	n, last, stopped, err := readLines(f, func(line []byte) {
+		recs = appendTranscriptLine(recs, line, since, false)
+	})
+	if err != nil {
+		return nil, 0, nil, false, err
+	}
+	if len(last) > 0 {
+		tail = appendTranscriptLine(nil, last, since, false)
+	}
+	return recs, offset + n, tail, stopped, nil
+}
+
+// readLines hands each newline-terminated line of r to fn, without its
+// line ending, as bufio.ScanLines would. It returns how many bytes those
+// lines took, an unterminated final line (a copy), and whether a line of
+// maxTranscriptLine or more ended the read, as it ends a bufio.Scanner's.
+func readLines(r io.Reader, fn func([]byte)) (n int64, tail []byte, stopped bool, err error) {
+	br := bufio.NewReaderSize(r, 1<<20)
 	var long []byte
 	for {
-		chunk, rerr := r.ReadSlice('\n')
+		chunk, rerr := br.ReadSlice('\n')
 		line := chunk
 		if errors.Is(rerr, bufio.ErrBufferFull) || long != nil {
 			long = append(long, chunk...)
 			line = long
 		}
 		if len(trimLine(line)) >= maxTranscriptLine {
-			return recs, end, nil, true, nil
+			return n, nil, true, nil
 		}
 		if errors.Is(rerr, bufio.ErrBufferFull) {
 			continue
 		}
 		if rerr == nil {
-			end += int64(len(line))
-			recs = appendTranscriptLine(recs, trimLine(line), since, false)
+			n += int64(len(line))
+			fn(trimLine(line))
 			long = nil
 			continue
 		}
 		if !errors.Is(rerr, io.EOF) {
-			return nil, 0, nil, false, rerr
+			return n, nil, false, rerr
 		}
 		if len(line) > 0 {
-			tail = appendTranscriptLine(nil, trimLine(line), since, false)
+			tail = bytes.Clone(trimLine(line))
 		}
-		return recs, end, tail, false, nil
+		return n, tail, false, nil
 	}
 }
 
