@@ -223,3 +223,77 @@ func TestExtractSkipsFilesWrittenBeforeTheWindow(t *testing.T) {
 		t.Errorf("read %d records from a file last written before the window", len(got))
 	}
 }
+
+// A rollout that grew is read from where the last scan stopped, and one
+// that did not change is not read at all, however far the cut-off moved:
+// a busy machine's rollouts reach gigabytes, and reading them whole every
+// few minutes kept the daemon on two cores.
+func TestCodexCacheReadsOnlyWhatWasAppended(t *testing.T) {
+	cx := t.TempDir()
+	rollout := filepath.Join(cx, "2026", "08", "20", "rollout-2026-08-20T00-00-00-aaa.jsonl")
+	writeFile(t, rollout, turns(cacheEpoch, 40, 0, codexTurn))
+	cache := NewTranscriptCache()
+	scan := func(since time.Time) {
+		t.Helper()
+		if _, err := ExtractCodex(ExtractOptions{Root: cx, Since: since, Cache: cache}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scan(cacheEpoch.Add(-time.Hour))
+	first := cache.codexRead()
+	if info, _ := os.Stat(rollout); first != info.Size() {
+		t.Fatalf("first scan read %d bytes, want the whole file (%d)", first, info.Size())
+	}
+
+	// The cut-off moves past the file's first lines: nothing is read.
+	scan(cacheEpoch.Add(90 * time.Minute))
+	if got := cache.codexRead(); got != first {
+		t.Errorf("an unchanged rollout read %d more bytes when the cut-off moved", got-first)
+	}
+
+	more := turns(cacheEpoch.Add(50*time.Hour), 2, 40, codexTurn)
+	appendFile(t, rollout, more)
+	scan(cacheEpoch.Add(2 * time.Hour))
+	if got := cache.codexRead() - first; got != int64(len(more)) {
+		t.Errorf("a grown rollout read %d bytes, want only the %d appended", got, len(more))
+	}
+}
+
+// What a session runs as, the model of a turn and which prompt channel a
+// rollout uses are read from every line; the cut-off only decides which
+// records are returned. A subagent session that started before the
+// cut-off used to read as the operator's own.
+func TestCodexCutOffOnlyFiltersRecords(t *testing.T) {
+	lines := []string{
+		`{"timestamp":"2026-08-20T00:00:00Z","type":"session_meta","payload":{"source":{"subagent":{"other":"worker"}}}}`,
+		`{"timestamp":"2026-08-20T00:00:01Z","type":"turn_context","payload":{"model":"gpt-5.5","effort":"high"}}`,
+		`{"timestamp":"2026-08-20T00:00:02Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"first"}]}}`,
+		`{"timestamp":"2026-08-20T02:00:00Z","type":"event_msg","payload":{"type":"user_message","message":"second"}}`,
+		`{"timestamp":"2026-08-20T02:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"second"}]}}`,
+		`{"timestamp":"2026-08-20T02:00:02Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[]}}`,
+	}
+	body := strings.Join(lines, "\n") + "\n"
+	since := time.Date(2026, 8, 20, 1, 0, 0, 0, time.UTC)
+	got := readCodexTranscript(strings.NewReader(body), "s", since, false)
+	all := readCodexTranscript(strings.NewReader(body), "s", time.Time{}, false)
+	if want := dropBefore(append([]Record(nil), all...), since); !reflect.DeepEqual(got, want) {
+		t.Fatalf("a cut-off read\n%+v\nwant the full read filtered\n%+v", got, want)
+	}
+	var prompts int
+	for _, r := range got {
+		switch r.Kind {
+		case KindPrompt:
+			prompts++
+			if r.Role != RoleSubagent {
+				t.Errorf("prompt after the cut-off has role %q, want %q from the session_meta before it", r.Role, RoleSubagent)
+			}
+		case KindAssistantTurn:
+			if r.Model != "gpt-5.5" {
+				t.Errorf("turn after the cut-off has model %q, want gpt-5.5 from the turn_context before it", r.Model)
+			}
+		}
+	}
+	if prompts != 1 {
+		t.Errorf("%d prompts after the cut-off, want 1: the rollout uses response_items, so the event is not counted", prompts)
+	}
+}
