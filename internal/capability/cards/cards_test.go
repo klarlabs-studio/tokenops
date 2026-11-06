@@ -263,27 +263,48 @@ func TestLateCostSaysSo(t *testing.T) {
 	}
 }
 
-// Each plan's card says how much of the plan the week used and how much of
-// the usage the plan carried.
+// Each plan's card says how full the plan's windows that ended this week
+// got, and how much of the usage the plan carried. Both are about past
+// windows, so neither may read as the current window being used up: a
+// "Plan used: 100%" under "6% left" read as a contradiction.
 func TestCardShowsPlanUse(t *testing.T) {
-	g := sample()
-	util, cov := 62.0, 90.0
-	g.PlanUse = &plans.PlanUseReport{Providers: []plans.PlanUse{
-		{Provider: "anthropic", UtilizationPct: &util, UtilizationWindow: "weekly", CoveragePct: &cov},
-	}}
-	out := Render(g, Options{Width: 130})
-	for _, want := range []string{"Plan used, 7d:", "62% of weekly", "On the plan:", "90% of tokens"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("cards lack %q:\n%s", want, out)
-		}
+	cases := []struct {
+		name    string
+		windows int
+		cov     float64
+		want    []string
+	}{
+		{"one weekly window ended", 1, 90, []string{"Last weekly peak:", "62%", "Covered by plan:", "90% of tokens"}},
+		{"several windows ended", 3, 100, []string{"Avg weekly peak, 7d:", "62%", "Covered by plan:", "all tokens"}},
 	}
-	if strings.Count(out, "On the plan:") != 1 {
-		t.Errorf("plan use shown on a plan it is not about:\n%s", out)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := sample()
+			util, cov := 62.0, tc.cov
+			g.PlanUse = &plans.PlanUseReport{Providers: []plans.PlanUse{{
+				Provider: "anthropic", UtilizationPct: &util, UtilizationWindow: "weekly", CoveragePct: &cov,
+				Windows: []plans.WindowUse{{Label: "weekly", Windows: tc.windows, AvgPeakPct: util}},
+			}}}
+			out := Render(g, Options{Width: 130})
+			for _, want := range tc.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("cards lack %q:\n%s", want, out)
+				}
+			}
+			for _, gone := range []string{"Plan used", "On the plan", "of weekly"} {
+				if strings.Contains(out, gone) {
+					t.Errorf("cards still say %q:\n%s", gone, out)
+				}
+			}
+			if strings.Count(out, "Covered by plan:") != 1 {
+				t.Errorf("plan use shown on a plan it is not about:\n%s", out)
+			}
+		})
 	}
 }
 
 // On pay as you go the spend limit is the whole plan, not extra usage on
-// top of one, and no plan carries tokens, so "on the plan" is not shown.
+// top of one, and no plan carries tokens, so "covered by plan" is not shown.
 func TestPayAsYouGoShowsItsLimitAsThePlan(t *testing.T) {
 	g := sample()
 	g.Headroom.Reports = []plans.HeadroomReport{{Provider: "fireworks", PlanName: plans.PayAsYouGo,
@@ -295,7 +316,7 @@ func TestPayAsYouGoShowsItsLimitAsThePlan(t *testing.T) {
 	if !strings.Contains(out, "Monthly spend limit") || strings.Contains(out, "Extra usage") {
 		t.Errorf("the limit is not titled as the plan's:\n%s", out)
 	}
-	if strings.Contains(out, "On the plan") {
+	if strings.Contains(out, "Covered by plan") {
 		t.Errorf("pay as you go shows a share on a plan it does not have:\n%s", out)
 	}
 }

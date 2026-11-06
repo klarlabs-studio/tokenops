@@ -353,11 +353,11 @@ func details(r plans.HeadroomReport, cost *spending.ProviderCost, late bool, use
 	var out []detail
 	if u, ok := use.For(r.Provider); ok {
 		if u.UtilizationPct != nil {
-			out = append(out, detail{"Plan used, 7d", fmt.Sprintf("%.0f%% of %s", *u.UtilizationPct, u.UtilizationWindow), porcelain})
+			out = append(out, detail{peakLabel(u), fmt.Sprintf("%.0f%%", *u.UtilizationPct), porcelain})
 		}
 		// Pay as you go has no plan to carry tokens: the share is always 0.
 		if u.CoveragePct != nil && r.PlanName != plans.PayAsYouGo {
-			out = append(out, detail{"On the plan", fmt.Sprintf("%.0f%% of tokens", *u.CoveragePct), porcelain})
+			out = append(out, detail{"Covered by plan", coveredTokens(*u.CoveragePct), porcelain})
 		}
 	}
 	switch {
@@ -384,6 +384,32 @@ func details(r plans.HeadroomReport, cost *spending.ProviderCost, late bool, use
 		out = append(out, detail{"This month", tokens(r.ConsumedTokens) + " tok", porcelain})
 	}
 	return out
+}
+
+// peakLabel names the utilization figure: how full the windows that ended
+// in the last week got. It is about windows that have reset, never the
+// current one, so it is named as a past peak; "Plan used: 100%" under
+// "6% left" read as the current window being used up.
+func peakLabel(u plans.PlanUse) string {
+	for _, w := range u.Windows {
+		if w.Label == u.UtilizationWindow && w.Windows == 1 {
+			return "Last " + u.UtilizationWindow + " peak"
+		}
+	}
+	return "Avg " + u.UtilizationWindow + " peak, 7d"
+}
+
+// coveredTokens is the share of the tokens a plan carried rather than a
+// per-token bill.
+func coveredTokens(pct float64) string {
+	switch {
+	case pct >= 100:
+		return "all tokens"
+	case pct > 99:
+		// Rounded up, a share with some tokens billed reads as all of them.
+		return ">99% of tokens"
+	}
+	return fmt.Sprintf("%.0f%% of tokens", pct)
 }
 
 // usage is "$745+ · 2.24B tok": the money at API prices where a plan

@@ -142,8 +142,13 @@ func TestSnapshotsAnswerTheSavedResultAfterAStart(t *testing.T) {
 
 	// The next start: its computation is held open.
 	c := &counter{gate: make(chan struct{})}
-	defer close(c.gate)
 	restarted := newCounterSnapshots(c, path)
+	// Released at the end, the held computation saves into the temp dir;
+	// wait for that before the dir is removed (cleanups run last first).
+	t.Cleanup(func() {
+		close(c.gate)
+		restarted.waitIdle()
+	})
 	later := snapNow.Add(10 * time.Minute)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

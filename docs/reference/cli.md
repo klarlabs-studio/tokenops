@@ -57,14 +57,16 @@ reset 5d 12h early*, with the readings either side of it. A plan switch
 between those readings is not counted. The findings and `early_resets` in
 `/api/glance` report it.
 
-**Plan use** is two figures per plan over the last 7 days. *Plan used* is
-the average peak of the plan's longest window (usually the weekly one)
-across the windows that reset in that week. It answers "is this seat
-used?", and idle days count against it. *On the plan* is the share of that
-provider's tokens a plan covered rather than an API key, a gateway or
-overflow billed per token. The menu bar and `/api/glance` (`plan_use`)
-carry the same figures, and `tokenops scorecard` reports them over its own
-window.
+**Plan use** is two figures per plan over the last 7 days. The *peak*
+(*Last weekly peak*, or *Avg weekly peak, 7d* when more than one window
+ended) is how full the plan's longest window got, across the windows that
+reset in that week. It is about windows that have ended, never the current
+one: a 100% peak means last week's window was used up, whatever the
+current window shows. It answers "is this seat used?", and idle days count
+against it. *Covered by plan* is the share of that provider's tokens a
+plan covered rather than an API key, a gateway or overflow billed per
+token. The menu bar and `/api/glance` (`plan_use`) carry the same figures,
+and `tokenops scorecard` reports them over its own window.
 
 **Cost** is at API list prices where a plan covers the usage. Requests on
 models without a list price yet are left out of the money: a `+` marks a
