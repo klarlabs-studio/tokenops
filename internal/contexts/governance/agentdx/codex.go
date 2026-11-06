@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -134,133 +135,181 @@ type codexLine struct {
 // both counts the response_item, which is also the only one with the
 // instruction's text on it.
 func readCodexTranscript(r io.Reader, sessionID string, since time.Time, withText bool) []Record {
-	out, _ := readCodexTranscriptFrom(r, sessionID, since, withText)
-	return out
-}
-
-// readCodexTranscriptFrom is readCodexTranscript, plus the earliest time
-// any line of the file carries (zero when none has one). A line before
-// since still sets nothing, so a file whose every line is at or after two
-// cut-offs reads the same under either.
-func readCodexTranscriptFrom(r io.Reader, sessionID string, since time.Time, withText bool) ([]Record, time.Time) {
+	cr := newCodexReader(sessionID, since, withText)
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 1<<20), maxTranscriptLine)
-	var first time.Time
-	var (
-		out []Record
-		// Prompts from each channel are kept apart until the whole file
-		// has been read, because "does this file use response_items"
-		// cannot be answered from the first line.
-		eventPrompts []Record
-		itemPrompts  []Record
-		// Context size is reported by its own event, just before the turn
-		// it describes; carry it to the next assistant message.
-		pendingContext int64
-		// The model and effort the current turn runs under, from its
-		// turn_context line.
-		model, effort string
-		// role is what the session runs as, from its session_meta line.
-		role string
-	)
 	for sc.Scan() {
-		var e codexLine
-		if json.Unmarshal(sc.Bytes(), &e) != nil {
-			continue
-		}
-		at, err := time.Parse(time.RFC3339Nano, e.Timestamp)
-		if err != nil {
-			continue
-		}
-		at = at.UTC()
-		if first.IsZero() || at.Before(first) {
-			first = at
-		}
-		if !since.IsZero() && at.Before(since) {
-			continue
-		}
-		base := Record{At: at, SessionID: sessionID}
+		cr.line(sc.Bytes())
+	}
+	return cr.records()
+}
 
-		switch e.Type {
-		case "session_meta":
-			role = codexSessionRole(e.Payload.Source)
-		case "turn_context":
-			model, effort = e.Payload.Model, normEffort(e.Payload.Effort)
-		case "event_msg":
-			switch e.Payload.Type {
-			case "user_message":
-				base.Kind = KindPrompt
-				base.Role = role
-				if withText {
-					base.Text = e.Payload.Message
-				}
-				eventPrompts = append(eventPrompts, base)
-			case "turn_aborted":
-				base.Kind = KindInterrupt
-				out = append(out, base)
-			case "task_complete":
-				base.Kind = KindTurnEnd
-				base.DurationMs = e.Payload.DurationMs
-				if e.Payload.TTFTMs != nil {
-					base.TTFTMs, base.TTFTRecorded = *e.Payload.TTFTMs, true
-				}
-				out = append(out, base)
-			case "token_count":
-				u := e.Payload.Info.LastTokenUsage
-				pendingContext = u.InputTokens + u.CachedInputTokens + u.CacheWriteTokens
+// codexReader flattens a rollout one line at a time. A rollout carries
+// state from line to line (what the session runs as, the model of the
+// turn, the context size before it, which channel it records prompts on),
+// so the reader is kept between lines, and the transcript cache keeps it
+// between scans to read only what was appended.
+//
+// State is read from every line; the cut-off only decides which records
+// are kept. A read with a cut-off therefore yields exactly a full read's
+// records at or after it, and a subagent session that started before the
+// cut-off still reads as a subagent.
+type codexReader struct {
+	sessionID string
+	since     time.Time
+	withText  bool
+
+	out []Record
+	// Prompts from each channel are kept apart until the records are
+	// asked for, because "does this file use response_items" cannot be
+	// answered from the first line. itemSeen remembers the answer once
+	// the prompts that gave it have been dropped.
+	eventPrompts []Record
+	itemPrompts  []Record
+	itemSeen     bool
+	// Context size is reported by its own event, just before the turn
+	// it describes; carry it to the next assistant message.
+	pendingContext int64
+	// The model and effort the current turn runs under, from its
+	// turn_context line.
+	model, effort string
+	// role is what the session runs as, from its session_meta line.
+	role string
+}
+
+func newCodexReader(sessionID string, since time.Time, withText bool) *codexReader {
+	return &codexReader{sessionID: sessionID, since: since, withText: withText}
+}
+
+// line reads one line of the rollout.
+func (c *codexReader) line(b []byte) {
+	var e codexLine
+	if json.Unmarshal(b, &e) != nil {
+		return
+	}
+	at, err := time.Parse(time.RFC3339Nano, e.Timestamp)
+	if err != nil {
+		return
+	}
+	at = at.UTC()
+	keep := c.since.IsZero() || !at.Before(c.since)
+	base := Record{At: at, SessionID: c.sessionID}
+	emit := func(dst *[]Record, r Record) {
+		if keep {
+			*dst = append(*dst, r)
+		}
+	}
+
+	switch e.Type {
+	case "session_meta":
+		c.role = codexSessionRole(e.Payload.Source)
+	case "turn_context":
+		c.model, c.effort = e.Payload.Model, normEffort(e.Payload.Effort)
+	case "event_msg":
+		switch e.Payload.Type {
+		case "user_message":
+			base.Kind = KindPrompt
+			base.Role = c.role
+			if c.withText {
+				base.Text = e.Payload.Message
 			}
-		case "response_item":
-			switch e.Payload.Type {
-			case "function_call", "custom_tool_call":
-				// custom_tool_call is how current Codex issues its own
-				// tools (apply_patch among them); reading function_call
-				// alone missed most of a session's calls.
-				base.Kind = KindToolUse
-				base.ToolName = e.Payload.Name
+			emit(&c.eventPrompts, base)
+		case "turn_aborted":
+			base.Kind = KindInterrupt
+			emit(&c.out, base)
+		case "task_complete":
+			base.Kind = KindTurnEnd
+			base.DurationMs = e.Payload.DurationMs
+			if e.Payload.TTFTMs != nil {
+				base.TTFTMs, base.TTFTRecorded = *e.Payload.TTFTMs, true
+			}
+			emit(&c.out, base)
+		case "token_count":
+			u := e.Payload.Info.LastTokenUsage
+			c.pendingContext = u.InputTokens + u.CachedInputTokens + u.CacheWriteTokens
+		}
+	case "response_item":
+		switch e.Payload.Type {
+		case "function_call", "custom_tool_call":
+			// custom_tool_call is how current Codex issues its own
+			// tools (apply_patch among them); reading function_call
+			// alone missed most of a session's calls.
+			base.Kind = KindToolUse
+			base.ToolName = e.Payload.Name
+			base.CallID = e.Payload.CallID
+			base.FilePath = codexFilePath(e.Payload.Content)
+			emit(&c.out, base)
+		case "function_call_output", "custom_tool_call_output":
+			if e.Payload.CallID != "" {
+				base.Kind = KindToolResult
 				base.CallID = e.Payload.CallID
-				base.FilePath = codexFilePath(e.Payload.Content)
-				out = append(out, base)
-			case "function_call_output", "custom_tool_call_output":
-				if e.Payload.CallID != "" {
-					base.Kind = KindToolResult
-					base.CallID = e.Payload.CallID
-					out = append(out, base)
+				emit(&c.out, base)
+			}
+		case "message":
+			switch {
+			case strings.EqualFold(e.Payload.Role, "assistant"):
+				base.Kind = KindAssistantTurn
+				base.Model, base.Effort = c.model, c.effort
+				base.InputTokens = c.pendingContext
+				c.pendingContext = 0
+				emit(&c.out, base)
+			case strings.EqualFold(e.Payload.Role, "user"):
+				// A developer-role message is injected scaffolding and
+				// is never an instruction; a user-role one usually is.
+				text := codexMessageText(e.Payload.Content)
+				if isCodexScaffolding(text) {
+					return
 				}
-			case "message":
-				switch {
-				case strings.EqualFold(e.Payload.Role, "assistant"):
-					base.Kind = KindAssistantTurn
-					base.Model, base.Effort = model, effort
-					base.InputTokens = pendingContext
-					pendingContext = 0
-					out = append(out, base)
-				case strings.EqualFold(e.Payload.Role, "user"):
-					// A developer-role message is injected scaffolding and
-					// is never an instruction; a user-role one usually is.
-					text := codexMessageText(e.Payload.Content)
-					if isCodexScaffolding(text) {
-						continue
-					}
-					base.Kind = KindPrompt
-					base.Role = role
-					if withText {
-						base.Text = text
-					}
-					itemPrompts = append(itemPrompts, base)
+				c.itemSeen = true
+				base.Kind = KindPrompt
+				base.Role = c.role
+				if c.withText {
+					base.Text = text
 				}
+				emit(&c.itemPrompts, base)
 			}
 		}
 	}
+}
+
+// records returns what the rollout yields so far, in time order, without
+// changing the reader.
+func (c *codexReader) records() []Record {
 	// One channel, chosen by what the file actually contains.
-	prompts := itemPrompts
-	if len(prompts) == 0 {
-		prompts = eventPrompts
+	prompts := c.itemPrompts
+	if !c.itemSeen {
+		prompts = c.eventPrompts
 	}
+	out := make([]Record, 0, len(c.out)+len(prompts))
+	out = append(out, c.out...)
 	out = append(out, prompts...)
 	// Prompts were held back, so append order is no longer file order.
 	// Everything downstream — unit grouping, idle gaps, the story's
 	// boundaries — reads these in sequence.
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
-	return out, first
+	return out
+}
+
+// fork returns a copy whose further lines leave c as it is: a final line
+// still being written is read on the copy, and read again on c once it is
+// finished.
+func (c *codexReader) fork() *codexReader {
+	f := *c
+	f.out, f.eventPrompts, f.itemPrompts = slices.Clip(c.out), slices.Clip(c.eventPrompts), slices.Clip(c.itemPrompts)
+	return &f
+}
+
+// advance moves the cut-off forward to since and forgets the records
+// before it. A cut-off earlier than the reader's is not reachable; the
+// caller reads the file again.
+func (c *codexReader) advance(since time.Time) {
+	if !since.After(c.since) {
+		return
+	}
+	c.since = since
+	c.out = dropBefore(c.out, since)
+	c.eventPrompts = dropBefore(c.eventPrompts, since)
+	c.itemPrompts = dropBefore(c.itemPrompts, since)
 }
 
 // codexSessionRole reads what a session runs as from session_meta's
