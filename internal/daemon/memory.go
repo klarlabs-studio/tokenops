@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
 	"runtime/debug"
+	"runtime/metrics"
 	"time"
 )
 
@@ -33,7 +35,65 @@ func (s *startup) limitMemory(context.Context) error {
 		return nil
 	}
 	debug.SetMemoryLimit(defaultMemoryLimit)
+	stop := make(chan struct{})
+	go tuneMemoryLimit(stop, memoryTuneEvery, liveHeap, s.logger)
+	s.deferCleanup(func() { close(stop) })
 	return nil
+}
+
+// memoryTuneEvery is how often the limit is matched to the live heap.
+const memoryTuneEvery = 30 * time.Second
+
+// memoryLimitFor is the soft limit for a live heap: the default, or half
+// again the live heap when that is more. The limit trims the collector's
+// headroom (without one the heap doubles before a collection); below the
+// live heap it leaves none, and the collector runs back to back, capped
+// at half the CPU. A month of a busy machine's events outgrew the fixed
+// default (1.3 GB live), and that held the daemon at two cores.
+func memoryLimitFor(live uint64) int64 {
+	return max(int64(defaultMemoryLimit), int64(live+live/2))
+}
+
+// applyMemoryLimit sets the limit for live when it differs from the
+// current one by a tenth or more, and returns the limit in force.
+func applyMemoryLimit(live uint64, logger *slog.Logger) int64 {
+	want := memoryLimitFor(live)
+	cur := debug.SetMemoryLimit(-1)
+	diff := want - cur
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff < cur/10 {
+		return cur
+	}
+	debug.SetMemoryLimit(want)
+	logger.Info("memory limit follows the live heap", "live_bytes", live, "limit_bytes", want)
+	return want
+}
+
+// tuneMemoryLimit matches the limit to the live heap every period until
+// stop closes.
+func tuneMemoryLimit(stop <-chan struct{}, every time.Duration, live func() uint64, logger *slog.Logger) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+			applyMemoryLimit(live(), logger)
+		}
+	}
+}
+
+// liveHeap is the heap the last collection found live.
+func liveHeap() uint64 {
+	sample := []metrics.Sample{{Name: "/gc/heap/live:bytes"}}
+	metrics.Read(sample)
+	if sample[0].Value.Kind() != metrics.KindUint64 {
+		return 0
+	}
+	return sample[0].Value.Uint64()
 }
 
 // startProfiler serves Go's profiles on TOKENOPS_PPROF_ADDR when it is
