@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.118.8 - 2026-11-06
+
+### Fixed
+
+- **daemon:** the daemon no longer holds two cores around the clock on a machine with heavy Codex use. Every five minutes the session analysis read each changed Codex rollout again from its first byte, and re-read unchanged ones whenever the rolling 7-day cut-off passed their first line, which it does on every scan: with 4 GB of rollouts in a week a run took over three minutes, so the next began soon after. Rollouts are now read from where the last scan stopped and not at all when unchanged; on that machine a rescan after the largest rollout grew took 160 ms instead of 13 seconds. The cut-off now only decides which records count, so a subagent session that started before it no longer reads as one of yours.
+- **team:** uploads no longer run out of time on a busy machine. Each hourly upload read two weeks of transcripts from scratch (about 4.5 minutes in the daemon) and, with the daemon busy, ran past its 15-minute limit: one machine logged 99 failed uploads. The upload now reads through its own cache, which keeps only what it derives from each instruction (whether it continues the work in flight, and the kind of work it starts), never the words; a re-read takes under a second, and the upload is identical.
+- **glance:** a card whose 30-day cost is not read in time still says what today cost. The glance reads both within 4 seconds, and when the 30 days ran out the time on a busy machine, today's figure, already read, was dropped with them; the card now shows `Today` and `30 days: not read in time`. The menu bar kept a provider's costs only when both reads succeeded, and now keeps today too.
+- **glance:** the plan-use lines no longer read as the current window being used up. "Plan used, 7d: 100% of weekly" under "Weekly 6% left" was last week's peak; it now reads "Last weekly peak: 100%" (or "Avg weekly peak, 7d" when several windows ended), and "On the plan: 100% of tokens" reads "Covered by plan: all tokens". The menu bar says the same.
+
 ## 0.118.7 - 2026-11-06
 
 ### Fixed
