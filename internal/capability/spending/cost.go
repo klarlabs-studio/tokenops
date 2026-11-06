@@ -2,6 +2,8 @@ package spending
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -42,10 +44,21 @@ func (u Usage) Covered() bool { return u.CostUSD == 0 && u.APIEquivalentUSD > 0 
 type ProviderCost struct {
 	Today  Usage `json:"today"`
 	Last30 Usage `json:"last_30_days"`
+	// Last30Unread is set when the 30 days could not be read (in time);
+	// Last30 is then empty, not zero usage.
+	Last30Unread bool `json:"last_30_days_unread,omitempty"`
 }
 
+// ErrLast30Unread is CostOf's error when only the 30 days could not be
+// read: the ProviderCost it returns still carries today.
+var ErrLast30Unread = errors.New("spending: the last 30 days could not be read")
+
 // CostOf totals provider's usage over the last 24 hours and 30 days; the
-// two run at once.
+// two run at once. When only the 30 days fail (a busy store runs out the
+// caller's time on the longer read), today is still returned, marked
+// Last30Unread, with an error that wraps ErrLast30Unread: a caller that
+// can show a partial figure keeps it, one that cannot treats it as an
+// error.
 func CostOf(ctx context.Context, s Summarizer, provider string, now time.Time) (ProviderCost, error) {
 	var (
 		c        ProviderCost
@@ -59,11 +72,12 @@ func CostOf(ctx context.Context, s Summarizer, provider string, now time.Time) (
 	}()
 	last30, err := usageSince(ctx, s, provider, now.Add(-30*24*time.Hour))
 	wg.Wait()
-	if err != nil {
-		return ProviderCost{}, err
-	}
 	if errToday != nil {
 		return ProviderCost{}, errToday
+	}
+	if err != nil {
+		c.Last30Unread = true
+		return c, fmt.Errorf("%w: %w", ErrLast30Unread, err)
 	}
 	c.Last30 = last30
 	return c, nil

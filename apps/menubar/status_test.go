@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"image/png"
 	"math"
@@ -285,5 +286,32 @@ func TestRefreshNote(t *testing.T) {
 		if got := r.note(now); got != want {
 			t.Errorf("note(%+v) = %q, want %q", r, got, want)
 		}
+	}
+}
+
+// A provider whose 30 days the daemon could not read still shows what
+// today cost; the 30 days are marked unread rather than shown as zero.
+func TestCostsKeepTodayWhenThe30DaysFail(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/spend/summary" || r.URL.Query().Get("since") != "24h" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte(`{"summary":{"Requests":4,"TotalTokens":1000,"CostUSD":0,"APIEquivalentUSD":1.25}}`))
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	d := &daemon{urlFile: filepath.Join(dir, "daemon.url"), hc: srv.Client()}
+	if err := os.WriteFile(d.urlFile, []byte(`{"url":"`+srv.URL+`","dashboard_token":"tok"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := &menubar{daemon: d}
+	got := m.costs(context.Background(), json.RawMessage(`{"plan_headroom":{"reports":[{"provider":"openai"}]}}`))
+	c, ok := got["openai"]
+	if !ok {
+		t.Fatalf("costs %+v: today's figure dropped with the 30 days", got)
+	}
+	if c.Today.Tokens != 1000 || c.Today.APIEquivalent != 1.25 || !c.Last30Unread || c.Last30 != (spend{}) {
+		t.Errorf("cost = %+v, want today and the 30 days marked unread", c)
 	}
 }

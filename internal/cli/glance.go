@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -164,7 +165,8 @@ func glanceCosts(ctx context.Context, s spending.Summarizer, g headroom.Glance, 
 		wg.Add(1)
 		go func(provider string) {
 			defer wg.Done()
-			if c, err := spending.CostOf(ctx, s, provider, now); err == nil {
+			// Today read in time is shown even when the 30 days were not.
+			if c, err := spending.CostOf(ctx, s, provider, now); err == nil || errors.Is(err, spending.ErrLast30Unread) {
 				mu.Lock()
 				out[provider] = c
 				mu.Unlock()
