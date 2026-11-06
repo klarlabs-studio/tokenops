@@ -229,14 +229,14 @@ func readTranscript(r io.Reader, since time.Time, withText bool) []Record {
 	sc.Buffer(make([]byte, 0, 1<<20), maxTranscriptLine)
 	var out []Record
 	for sc.Scan() {
-		out = appendTranscriptLine(out, sc.Bytes(), since, withText)
+		out = appendTranscriptLine(out, sc.Bytes(), since, withText, nil)
 	}
 	return out
 }
 
 // appendTranscriptLine appends what one transcript line yields. Each line
 // stands alone, so a file read in pieces yields what it yields read whole.
-func appendTranscriptLine(out []Record, line []byte, since time.Time, withText bool) []Record {
+func appendTranscriptLine(out []Record, line []byte, since time.Time, withText bool, facts PromptFactsFunc) []Record {
 	var e rawEntry
 	if json.Unmarshal(line, &e) != nil {
 		return out
@@ -270,6 +270,9 @@ func appendTranscriptLine(out []Record, line []byte, since time.Time, withText b
 		if isOperatorPrompt(parts, text) {
 			if withText {
 				base.Text = text
+			}
+			if facts != nil {
+				base.Facts = facts(text)
 			}
 			base.Kind = KindPrompt
 			base.Rejects = IsRejection(text)
@@ -444,9 +447,9 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 	case opts.Source == SourceCodex:
 		return stamped(SourceCodex)(ExtractCodex(opts))
 	case opts.Source == SourceCursor:
-		return stamped(SourceCursor)(ExtractCursor(opts))
+		return stamped(SourceCursor)(withFacts(opts, ExtractCursor))
 	case opts.Source == SourceOpencode:
-		return stamped(SourceOpencode)(ExtractOpencode(opts))
+		return stamped(SourceOpencode)(withFacts(opts, ExtractOpencode))
 	case opts.Root != "":
 		// Pinned tree, unnamed source: read it as Claude Code, the
 		// historical meaning of Root.
@@ -466,14 +469,14 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 	// the others: every source that can be read still is, and the error
 	// names each one that could not.
 	var errs []error
-	cu, err := stamped(SourceCursor)(ExtractCursor(opts))
+	cu, err := stamped(SourceCursor)(withFacts(opts, ExtractCursor))
 	switch {
 	case err == nil:
 		out = append(out, cu...)
 	case errors.Is(err, ErrCursorSchema), errors.Is(err, ErrNoCursorStore):
 		errs = append(errs, err)
 	}
-	oc, err := stamped(SourceOpencode)(ExtractOpencode(opts))
+	oc, err := stamped(SourceOpencode)(withFacts(opts, ExtractOpencode))
 	switch {
 	case err == nil:
 		out = append(out, oc...)
@@ -481,6 +484,26 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 		errs = append(errs, err)
 	}
 	return out, errors.Join(errs...)
+}
+
+// withFacts reads a source the transcript cache does not hold. When the
+// scan's cache keeps prompt facts, the source is read with the words, each
+// instruction's facts are derived from them, and the words are dropped, so
+// every source answers a facts scan alike.
+func withFacts(opts ExtractOptions, read func(ExtractOptions) ([]Record, error)) ([]Record, error) {
+	c := opts.cache()
+	if !c.HasPromptFacts() {
+		return read(opts)
+	}
+	o := opts
+	o.WithPromptText = true
+	recs, err := read(o)
+	for i := range recs {
+		if recs[i].Kind == KindPrompt {
+			recs[i].Facts, recs[i].Text = c.facts(recs[i].Text), ""
+		}
+	}
+	return recs, err
 }
 
 // stamped marks every record a reader returned with the harness that

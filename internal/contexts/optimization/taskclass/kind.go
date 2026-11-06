@@ -147,19 +147,26 @@ var continuations = map[string]bool{
 // saying the last answer was wrong wants a better one whatever the task
 // was before.
 func KindForTurn(instruction string, prev Kind) Kind {
-	t := strings.ToLower(strings.TrimSpace(instruction))
-	t = strings.TrimRight(t, ".!? ")
-	if t == "" {
-		return prev
-	}
-	if isRejection(t) {
-		return KindDeep
-	}
-	if continuations[t] {
-		return prev
-	}
-	if k := ClassifyKind(instruction); k != KindUnknown {
+	if k := OwnKind(instruction); k != KindUnknown {
 		return k
 	}
 	return prev
+}
+
+// OwnKind is the kind of work an instruction starts on its own words:
+// KindUnknown when it keeps the kind in flight (empty, a continuation, or
+// nothing to classify). KindForTurn is OwnKind falling back to prev; a
+// reader that keeps facts instead of words keeps this.
+func OwnKind(instruction string) Kind {
+	t := strings.ToLower(strings.TrimSpace(instruction))
+	t = strings.TrimRight(t, ".!? ")
+	switch {
+	case t == "":
+		return KindUnknown
+	case isRejection(t):
+		return KindDeep
+	case continuations[t]:
+		return KindUnknown
+	}
+	return ClassifyKind(instruction)
 }

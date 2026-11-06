@@ -172,9 +172,25 @@ func IsContinuation(u agentdx.Unit) bool {
 	}
 	raw := strings.TrimSpace(u.Prompt)
 	if raw == "" {
+		// A read that kept facts instead of words judged them as it read.
+		if u.PromptFacts.Known {
+			return u.PromptFacts.Continues
+		}
 		// Without text there is nothing to judge. Fall back to treating it
 		// as new work, so a scan that did not carry prompt text still
 		// produces the same boundaries it always did.
+		return false
+	}
+	return ContinuesText(raw)
+}
+
+// ContinuesText reports whether an instruction's words, on their own,
+// continue the work in flight. IsContinuation adds what the transcript
+// says beyond the words; a reader that keeps facts instead of words
+// derives them with this.
+func ContinuesText(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
 		return false
 	}
 	if carriesNoWork(raw) {

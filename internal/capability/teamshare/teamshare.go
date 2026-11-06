@@ -86,10 +86,14 @@ type Deps struct {
 // DepsFor reads this machine's transcripts, its event store through agg,
 // and git.
 func DepsFor(agg *analytics.Aggregator) Deps {
+	// The upload reads two weeks of transcripts every hour; read through
+	// its own cache, each upload reads only what changed. The cache keeps
+	// what the upload derives from the words, never the words (#884).
+	cache := sessions.NewPromptFactsCache()
 	return Deps{
 		Units: func(since, now time.Time) ([]sessions.Unit, error) {
 			days := int(now.Sub(since).Hours()/24) + 1
-			return sessions.Units(sessions.Window{Days: days}, now)
+			return sessions.Units(sessions.Window{Days: days, Cache: cache}, now)
 		},
 		Turns: func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
 			if agg == nil {
@@ -283,7 +287,7 @@ func aggregate(units []sessions.Unit, turns []analytics.SessionTurn, repoOf map[
 		sort.SliceStable(us, func(i, j int) bool { return us[i].Start.Before(us[j].Start) })
 		prev := taskclass.KindUnknown
 		for _, u := range us {
-			kind := taskclass.KindForTurn(u.Prompt, prev)
+			kind := kindForTurn(u, prev)
 			prev = kind
 			spans[id] = append(spans[id], span{u.Start, kind})
 			day := u.Start.UTC().Format(teamwire.DayLayout)
@@ -347,4 +351,16 @@ func aggregate(units []sessions.Unit, turns []analytics.SessionTurn, repoOf map[
 		return x.Kind < y.Kind
 	})
 	return out, spans
+}
+
+// kindForTurn is the kind of work a unit does, from its words, or from the
+// facts derived from them when it was read through a prompt-facts cache.
+func kindForTurn(u sessions.Unit, prev taskclass.Kind) taskclass.Kind {
+	if u.Prompt == "" && u.PromptFacts.Known {
+		if u.PromptFacts.Kind != "" {
+			return taskclass.Kind(u.PromptFacts.Kind)
+		}
+		return prev
+	}
+	return taskclass.KindForTurn(u.Prompt, prev)
 }
