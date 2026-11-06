@@ -91,6 +91,34 @@ func TestCostOf(t *testing.T) {
 	}
 }
 
+// slowSummarizer answers the last day at once and holds the 30 days until
+// ctx ends, as a busy machine's store does.
+type slowSummarizer struct{ today analytics.Summary }
+
+func (s slowSummarizer) Summarize(ctx context.Context, flt analytics.Filter) (analytics.Summary, error) {
+	if time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC).Sub(flt.Since) <= 24*time.Hour {
+		return s.today, nil
+	}
+	<-ctx.Done()
+	return analytics.Summary{}, ctx.Err()
+}
+
+// When the 30 days are not read in time, today's figure, which was, is
+// kept and the 30 days are named as missing: dropping both left the card
+// unable to say what today cost.
+func TestCostOfKeepsTodayWhenThe30DaysAreLate(t *testing.T) {
+	now := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	c, err := CostOf(ctx, slowSummarizer{today: analytics.Summary{Requests: 10, TotalTokens: 100, APIEquivalentUSD: 4}}, "openai", now)
+	if !errors.Is(err, ErrLast30Unread) {
+		t.Fatalf("err = %v, want ErrLast30Unread", err)
+	}
+	if !c.Last30Unread || c.Today.Tokens != 100 || c.Today.APIEquivalentUSD != 4 || c.Last30 != (Usage{}) {
+		t.Errorf("cost = %+v, want today's figure and the 30 days marked unread", c)
+	}
+}
+
 // Grouped by session, each consumer carries the share of its input read
 // from the cache, summed over the days it spans; a session with no input
 // has none rather than 0%.

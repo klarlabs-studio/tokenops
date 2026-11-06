@@ -106,7 +106,10 @@ type view struct {
 type costs struct {
 	Today  spend `json:"today"`
 	Last30 spend `json:"last_30_days"`
-	Daily  []day `json:"daily,omitempty"`
+	// Last30Unread is set when the 30 days could not be read; Last30 is
+	// then empty, not zero usage.
+	Last30Unread bool  `json:"last_30_days_unread,omitempty"`
+	Daily        []day `json:"daily,omitempty"`
 	// TopModel is the model with the most tokens over the 30 days.
 	TopModel string `json:"top_model,omitempty"`
 }
@@ -509,7 +512,8 @@ func (m *menubar) read(ctx context.Context) view {
 }
 
 // costs reads each plan's provider's usage today and over 30 days, all at
-// once. A provider whose figures cannot be read is left out.
+// once. A provider whose today cannot be read is left out; one whose 30
+// days cannot be is kept with them marked unread.
 func (m *menubar) costs(ctx context.Context, g json.RawMessage) map[string]costs {
 	var gv glanceView
 	if json.Unmarshal(g, &gv) != nil {
@@ -524,12 +528,14 @@ func (m *menubar) costs(ctx context.Context, g json.RawMessage) map[string]costs
 		wg.Add(1)
 		go func(provider string) {
 			defer wg.Done()
-			today, err1 := m.daemon.spendSince(ctx, provider, "24h")
-			last30, err2 := m.daemon.spendSince(ctx, provider, "720h")
-			if err1 != nil || err2 != nil {
+			today, err := m.daemon.spendSince(ctx, provider, "24h")
+			if err != nil {
 				return
 			}
-			c := costs{Today: today, Last30: last30}
+			// The 30 days are the heavier read; when they fail, today is
+			// still worth showing.
+			last30, err := m.daemon.spendSince(ctx, provider, "720h")
+			c := costs{Today: today, Last30: last30, Last30Unread: err != nil}
 			// The chart and the top model are extras: a daemon without the
 			// series still shows the figures.
 			c.Daily, _ = m.daemon.daily(ctx, provider)
