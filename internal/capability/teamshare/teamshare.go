@@ -87,14 +87,11 @@ type Deps struct {
 // and git.
 func DepsFor(agg *analytics.Aggregator) Deps {
 	// The upload reads two weeks of transcripts every hour; read through
-	// its own cache, each upload reads only what changed. The cache keeps
-	// what the upload derives from the words, never the words (#884).
-	cache := sessions.NewPromptFactsCache()
+	// a cache, each upload reads only what changed. The cache keeps what
+	// the upload derives from the words, never the words (#884). The
+	// daemon hands it the cache its session analysis reads (UnitsFrom).
 	return Deps{
-		Units: func(since, now time.Time) ([]sessions.Unit, error) {
-			days := int(now.Sub(since).Hours()/24) + 1
-			return sessions.Units(sessions.Window{Days: days, Cache: cache}, now)
-		},
+		Units: UnitsFrom(sessions.NewPromptFactsCache()),
 		Turns: func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
 			if agg == nil {
 				return nil, nil
@@ -103,6 +100,16 @@ func DepsFor(agg *analytics.Aggregator) Deps {
 		},
 		Dirs:  func(since time.Time) map[string]sessiondirs.Dir { return sessiondirs.Find(sessiondirs.Roots{}, since) },
 		Repos: gitlog.NewRepos(),
+	}
+}
+
+// UnitsFrom reads the upload's units through cache, which must keep prompt
+// facts (sessions.NewPromptFactsCache or NewSharedTranscriptCache): the
+// upload judges work from them, never from the words.
+func UnitsFrom(cache *sessions.TranscriptCache) func(since, now time.Time) ([]sessions.Unit, error) {
+	return func(since, now time.Time) ([]sessions.Unit, error) {
+		days := int(now.Sub(since).Hours()/24) + 1
+		return sessions.Units(sessions.Window{Days: days, Cache: cache}, now)
 	}
 }
 

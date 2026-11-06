@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
+
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
@@ -34,6 +36,9 @@ import (
 type startup struct {
 	cfg    config.Config
 	logger *slog.Logger
+	// transcripts is the transcript cache the session analysis and the
+	// team upload share.
+	transcripts *sessions.TranscriptCache
 	// restart ends the run with a cause; the binary watch uses it to stop
 	// the daemon when its binary has been replaced.
 	restart context.CancelCauseFunc
@@ -191,7 +196,19 @@ func (s *startup) buildProviderRoutes(context.Context) error {
 func (s *startup) startSupervision(ctx context.Context) error {
 	s.sourceHealth = state.NewSourceRegistry()
 	s.sup = lifecycle.New(ctx, s.logger)
+	// One transcript cache for every reader of the transcripts, held as
+	// far back as the longest of them reads: two caches held the same
+	// days twice, and the daemon's heap outgrew its memory limit.
+	s.transcripts = sessions.NewSharedTranscriptCache(transcriptKeep(s.cfg))
 	return nil
+}
+
+// transcriptKeep is how far back the shared transcript cache holds: the
+// team upload's days or the session analysis's week, whichever is longer,
+// and a day for the upload's whole first day.
+func transcriptKeep(cfg config.Config) time.Duration {
+	days := max(cfg.Team.EffectiveDays(), findings.SessionDays)
+	return time.Duration(days+1) * 24 * time.Hour
 }
 
 // buildTransportOptions sets the proxy's base options: logging, shutdown,
@@ -283,6 +300,7 @@ func (s *startup) startEventRuntime(ctx context.Context) error {
 	s.events = rt
 	s.deferCleanup(rt.Detach)
 	s.opts = append(s.opts, rt.ProxyOptions...)
+	startTeamUploadRuntime(s.cfg, s.components, s.transcripts, s.sup, s.logger)
 	return nil
 }
 
@@ -413,7 +431,7 @@ func (s *startup) startBackgroundRefreshers(context.Context) error {
 	startPricingRefreshRuntime(s.cfg, s.components.Spend, s.sup, s.logger)
 
 	// The findings' session analysis is too slow to run per answer.
-	startSessionFindingsRuntime(s.sup, s.logger)
+	startSessionFindingsRuntime(s.transcripts, s.sup, s.logger)
 
 	// So is spend anomaly detection, which reads four weeks of turns.
 	startAnomalyRuntime(s.cfg, s.components, s.sup, s.logger)
