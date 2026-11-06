@@ -34,21 +34,63 @@ type TranscriptCache struct {
 	// facts derives each instruction's facts as it is read; nil keeps
 	// none.
 	facts PromptFactsFunc
-	// codexBytes counts the rollout bytes read, for tests.
-	codexBytes int64
+	// keep, when set, is the earliest time the cache holds records from,
+	// whatever a scan's cut-off: readers of different windows then share
+	// one copy. Nil holds from each scan's cut-off on.
+	keep func() time.Time
+	// claudeBytes and codexBytes count the bytes read, for tests.
+	claudeBytes, codexBytes int64
+}
+
+// CacheOption configures a TranscriptCache.
+type CacheOption func(*TranscriptCache)
+
+// KeepFrom makes the cache hold records from keep() on, however late a
+// scan's cut-off, so scans of different windows (a week, two weeks)
+// share one copy instead of each reading the files again when the other
+// moved the cut-off. A scan reaching earlier than keep() reads the files.
+func KeepFrom(keep func() time.Time) CacheOption {
+	return func(c *TranscriptCache) { c.keep = keep }
 }
 
 // NewTranscriptCache returns an empty cache.
-func NewTranscriptCache() *TranscriptCache {
-	return &TranscriptCache{claude: map[string]*claudeEntry{}, codexs: map[string]*codexEntry{}}
+func NewTranscriptCache(opts ...CacheOption) *TranscriptCache {
+	c := &TranscriptCache{claude: map[string]*claudeEntry{}, codexs: map[string]*codexEntry{}}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
 }
 
 // NewTranscriptCacheWithFacts returns an empty cache that keeps, for each
 // instruction, the facts fn derives from its words, and not the words.
-func NewTranscriptCacheWithFacts(fn PromptFactsFunc) *TranscriptCache {
-	c := NewTranscriptCache()
+func NewTranscriptCacheWithFacts(fn PromptFactsFunc, opts ...CacheOption) *TranscriptCache {
+	c := NewTranscriptCache(opts...)
 	c.facts = fn
 	return c
+}
+
+// floor is the earliest time a scan with cut-off since keeps records
+// from: since, or the owner's keep when that is earlier.
+func (c *TranscriptCache) floor(since time.Time) time.Time {
+	if c.keep == nil || since.IsZero() {
+		return since
+	}
+	if k := c.keep(); k.Before(since) {
+		return k
+	}
+	return since
+}
+
+// atOrAfter returns the records at or after since, as a new slice.
+func atOrAfter(recs []Record, since time.Time) []Record {
+	out := make([]Record, 0, len(recs))
+	for _, r := range recs {
+		if since.IsZero() || !r.At.Before(since) {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // HasPromptFacts reports whether the cache keeps prompt facts.
@@ -132,11 +174,12 @@ func (c *TranscriptCache) claudeCode(path string, info os.FileInfo, since time.T
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	stamp := stampOf(info)
+	floor := c.floor(since)
 	e := c.claude[path]
 	switch {
-	case e != nil && notBefore(since, e.since) && e.stamp == stamp:
+	case e != nil && notBefore(floor, e.since) && e.stamp == stamp:
 		// Unchanged.
-	case e != nil && notBefore(since, e.since) && stamp.size > e.stamp.size:
+	case e != nil && notBefore(floor, e.since) && stamp.size > e.stamp.size:
 		// Grown: read from the last complete line.
 		if !e.stopped {
 			recs, offset, tail, stopped, err := readClaudeFrom(path, e.offset, e.since, c.facts)
@@ -144,27 +187,28 @@ func (c *TranscriptCache) claudeCode(path string, info os.FileInfo, since time.T
 				delete(c.claude, path)
 				return nil
 			}
+			c.claudeBytes += offset - e.offset
 			e.records = append(e.records, recs...)
 			e.offset, e.tail, e.stopped = offset, tail, stopped
 		}
 		e.stamp = stamp
 	default:
-		recs, offset, tail, stopped, err := readClaudeFrom(path, 0, since, c.facts)
+		recs, offset, tail, stopped, err := readClaudeFrom(path, 0, floor, c.facts)
 		if err != nil {
 			delete(c.claude, path)
 			return nil
 		}
-		e = &claudeEntry{stamp: stamp, since: since, records: recs, offset: offset, tail: tail, stopped: stopped}
+		c.claudeBytes += offset
+		e = &claudeEntry{stamp: stamp, since: floor, records: recs, offset: offset, tail: tail, stopped: stopped}
 		c.claude[path] = e
 	}
-	// The cut-off only moves forward between the daemon's scans; records
+	// The floor only moves forward between the daemon's scans; records
 	// before it can never be returned again.
-	e.records = dropBefore(e.records, since)
-	e.tail = dropBefore(e.tail, since)
-	e.since = since
-	out := make([]Record, 0, len(e.records)+len(e.tail))
-	out = append(out, e.records...)
-	return append(out, e.tail...)
+	e.records = dropBefore(e.records, floor)
+	e.tail = dropBefore(e.tail, floor)
+	e.since = floor
+	out := atOrAfter(e.records, since)
+	return append(out, atOrAfter(e.tail, since)...)
 }
 
 // codex returns what the Codex rollout at path yields from since on,
@@ -173,8 +217,9 @@ func (c *TranscriptCache) codex(path string, info os.FileInfo, since time.Time) 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	stamp := stampOf(info)
+	floor := c.floor(since)
 	e := c.codexs[path]
-	reachable := e != nil && notBefore(since, e.reader.since)
+	reachable := e != nil && notBefore(floor, e.reader.since)
 	switch {
 	case reachable && e.stamp == stamp:
 		// Unchanged.
@@ -188,22 +233,23 @@ func (c *TranscriptCache) codex(path string, info os.FileInfo, since time.Time) 
 		}
 		e.stamp = stamp
 	default:
-		e = &codexEntry{stamp: stamp, reader: newCodexReader(sessionIDFromPath(path), since, false, c.facts), compressed: codexrollout.IsCompressed(path)}
+		e = &codexEntry{stamp: stamp, reader: newCodexReader(sessionIDFromPath(path), floor, false, c.facts), compressed: codexrollout.IsCompressed(path)}
 		if err := c.readCodexFrom(path, e); err != nil {
 			delete(c.codexs, path)
 			return nil
 		}
 		c.codexs[path] = e
 	}
-	// The cut-off only moves forward between the daemon's scans; records
+	// The floor only moves forward between the daemon's scans; records
 	// before it can never be returned again.
-	e.reader.advance(since)
-	if len(e.tail) == 0 {
-		return e.reader.records()
+	e.reader.advance(floor)
+	r := e.reader
+	if len(e.tail) > 0 {
+		r = e.reader.fork()
+		r.line(e.tail)
 	}
-	f := e.reader.fork()
-	f.line(e.tail)
-	return f.records()
+	// records is a new slice: filtering it in place leaves the reader's.
+	return dropBefore(r.records(), since)
 }
 
 // readCodexFrom reads e's rollout on from e.offset into e.reader; a
@@ -239,6 +285,14 @@ func (c *TranscriptCache) readCodexFrom(path string, e *codexEntry) error {
 	e.offset += n
 	e.tail, e.stopped = tail, stopped
 	return nil
+}
+
+// bytesRead reports how many Claude Code and Codex bytes the cache has
+// read.
+func (c *TranscriptCache) bytesRead() (claude, codex int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.claudeBytes, c.codexBytes
 }
 
 // codexRead reports how many rollout bytes the cache has read.

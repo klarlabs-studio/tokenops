@@ -44,6 +44,9 @@ const MaxSnapshotAge = 6 * time.Hour
 const snapshotFile = "session-findings.json"
 
 // DefaultDir is ~/.tokenops/cache.
+// SessionDays is the window the session analysis reads.
+const SessionDays = 7
+
 func DefaultDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -109,7 +112,7 @@ func AnalyzeSessions(ctx context.Context, dir string, now time.Time, cache *sess
 	if err := ctx.Err(); err != nil {
 		return SessionsSnapshot{}, nil, err
 	}
-	dx, curve := sessions.ComputeDXWithCurve(sessions.Window{Days: 7, Cache: cache}, now)
+	dx, curve := sessions.ComputeDXWithCurve(sessions.Window{Days: SessionDays, Cache: cache}, now)
 	s = SessionsSnapshot{ComputedAt: now.UTC(), DX: dx, Curve: curve}
 	dropped, err = WriteSnapshot(dir, s)
 	return s, dropped, err
