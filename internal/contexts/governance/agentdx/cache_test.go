@@ -365,3 +365,34 @@ func TestTranscriptCacheServesTwoWindowsFromOneRead(t *testing.T) {
 		now = now.Add(time.Hour)
 	}
 }
+
+// A file last written inside the cache's floor but before a shorter
+// scan's cut-off stays cached through that scan: the daemon's 7-day scan
+// used to forget the files the 14-day upload had read, which then read
+// them again every hour.
+func TestShorterScanKeepsOlderFilesOfALongerWindow(t *testing.T) {
+	dir := t.TempDir()
+	cc, cx := filepath.Join(dir, "claude"), filepath.Join(dir, "codex")
+	now := cacheEpoch
+	oldCC := filepath.Join(cc, "p", "old.jsonl")
+	writeFile(t, oldCC, turns(now.AddDate(0, 0, -11), 24, 0, claudeTurn))
+	oldCX := filepath.Join(cx, "2026", "08", "09", "rollout-2026-08-09T00-00-00-old.jsonl")
+	writeFile(t, oldCX, turns(now.AddDate(0, 0, -11), 24, 0, codexTurn))
+	tenDaysAgo := now.AddDate(0, 0, -10)
+	for _, p := range []string{oldCC, oldCX} {
+		if err := os.Chtimes(p, tenDaysAgo, tenDaysAgo); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cache := NewTranscriptCache(KeepFrom(func() time.Time { return now.AddDate(0, 0, -15) }))
+	for round := range 3 {
+		scanBoth(t, fmt.Sprintf("round %d, 14 days", round), cache, cc, cx, now.AddDate(0, 0, -14))
+		scanBoth(t, fmt.Sprintf("round %d, 7 days", round), cache, cc, cx, now.AddDate(0, 0, -7))
+	}
+	claude, codex := cache.bytesRead()
+	ci, _ := os.Stat(oldCC)
+	xi, _ := os.Stat(oldCX)
+	if claude != ci.Size() || codex != xi.Size() {
+		t.Errorf("read %d+%d bytes over three rounds, want each file once (%d+%d)", claude, codex, ci.Size(), xi.Size())
+	}
+}

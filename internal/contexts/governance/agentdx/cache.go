@@ -82,6 +82,18 @@ func (c *TranscriptCache) floor(since time.Time) time.Time {
 	return since
 }
 
+// holds reports whether the cache keeps path for a scan with cut-off
+// since: whether the file was written since the cache's floor, which is
+// earlier than since when the cache keeps a longer window for another
+// reader. A file a scan skips but the cache holds is not forgotten.
+func (c *TranscriptCache) holds(path string, since time.Time) bool {
+	if c == nil {
+		return false
+	}
+	_, ok := writtenSince(path, c.floor(since))
+	return ok
+}
+
 // atOrAfter returns the records at or after since, as a new slice.
 func atOrAfter(recs []Record, since time.Time) []Record {
 	out := make([]Record, 0, len(recs))
