@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.118.9 - 2026-11-07
+
 ### Fixed
 
 - **daemon:** the daemon no longer holds two cores on a busy machine. It set a fixed 1 GB soft memory limit, and a month of a busy machine's events in the glance's cache (about 360,000 prompt events with their attributes) and the transcript caches grew the live heap past it, to 1.3 GB. With no headroom left the collector ran back to back, capped by Go at half the CPU: profiles of 0.118.7 and 0.118.8 spent 40–55% of the daemon's CPU collecting. The limit now follows the live heap, at half again what is live when that is more than 1 GB, and comes back down when the heap shrinks; `GOMEMLIMIT` still overrides it.
