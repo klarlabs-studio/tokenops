@@ -50,16 +50,16 @@ func ProviderDrifts(ctx context.Context, o Options) map[string][]plans.TierDrift
 		o.Now = time.Now()
 	}
 	since := o.Now.AddDate(0, 0, -DriftDays)
-	envs, err := o.Events.ReadEvents(ctx, eventschema.EventTypePrompt, since)
-	if err != nil {
+	readings, turns, ok := driftInputs(ctx, o, since)
+	if !ok {
 		return nil
 	}
 	out := make(map[string][]plans.TierDrift, len(o.Plans))
 	for provider, current := range o.Plans {
 		in := plans.DriftInput{
 			Provider: provider, Since: since,
-			Readings: plans.QuotaReadingsFrom(envs, provider, since, o.Now),
-			Turns:    plans.DriftTurnsFrom(envs, provider, since, o.Now, o.Price),
+			Readings: readings[provider],
+			Turns:    turns[provider],
 			PlanAt:   func(t time.Time) string { return o.PlanHistory.At(provider, t, current) },
 		}
 		out[provider] = plans.TierDrifts(in)
@@ -101,4 +101,47 @@ func driftFix(observedOff bool) string {
 	}
 	return fix + ". Meanwhile this machine's plan advice uses your observed figure, labelled as observed " +
 		"(`tokenops plan observed`; `tokenops plan observed reset` goes back to the catalog)"
+}
+
+// eventStreamer is an event reader that hands events one at a time.
+type eventStreamer interface {
+	EachEvent(ctx context.Context, t eventschema.EventType, since time.Time, fn func(*eventschema.Envelope) error) error
+}
+
+// driftInputs reads each plan's provider's window readings and requests
+// since since. A store that streams is read one event at a time, keeping
+// only the readings and requests: 90 days of a busy machine's decoded
+// events held at once (about a million) sent the daemon's collector into
+// overdrive once a day.
+func driftInputs(ctx context.Context, o Options, since time.Time) (map[string][]plans.QuotaReading, map[string][]plans.DriftTurn, bool) {
+	readings := map[string][]plans.QuotaReading{}
+	turns := map[string][]plans.DriftTurn{}
+	add := func(envs []*eventschema.Envelope) {
+		for provider := range o.Plans {
+			readings[provider] = append(readings[provider], plans.QuotaReadingsFrom(envs, provider, since, o.Now)...)
+			turns[provider] = append(turns[provider], plans.DriftTurnsFrom(envs, provider, since, o.Now, o.Price)...)
+		}
+	}
+	if s, ok := o.Events.(eventStreamer); ok {
+		one := make([]*eventschema.Envelope, 1)
+		err := s.EachEvent(ctx, eventschema.EventTypePrompt, since, func(e *eventschema.Envelope) error {
+			one[0] = e
+			add(one)
+			return nil
+		})
+		if err != nil {
+			return nil, nil, false
+		}
+		// The store streams oldest first, as QuotaReadingsFrom sorts.
+		for p := range readings {
+			sort.SliceStable(readings[p], func(i, j int) bool { return readings[p][i].At.Before(readings[p][j].At) })
+		}
+		return readings, turns, true
+	}
+	envs, err := o.Events.ReadEvents(ctx, eventschema.EventTypePrompt, since)
+	if err != nil {
+		return nil, nil, false
+	}
+	add(envs)
+	return readings, turns, true
 }
