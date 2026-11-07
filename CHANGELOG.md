@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.118.10 - 2026-11-07
+
+### Fixed
+
+- **daemon:** the daily comparison of plan tiers no longer holds two cores for minutes. Twenty minutes after a start and once a day after that it read 90 days of prompt events into memory at once (about a million on a busy machine, each decoded with its attributes) to keep a few figures from each, and the collector ran hard until it finished. The store now hands the events over one at a time and only the window readings and request values are kept; the comparison is the same.
+
 ## 0.118.9 - 2026-11-07
 
 ### Fixed
