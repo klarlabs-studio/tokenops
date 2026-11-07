@@ -2,6 +2,8 @@ package checkup
 
 import (
 	"context"
+	"errors"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -104,5 +106,57 @@ func TestCatalogDrift(t *testing.T) {
 	}
 	if got := driftFindings(context.Background(), Options{Now: now, Plans: map[string]string{"anthropic": "claude-max"}}); got != nil {
 		t.Errorf("no store, yet %+v", got)
+	}
+}
+
+// streamReader hands its events one at a time and refuses a whole read.
+type streamReader struct{ envReader }
+
+func (r streamReader) ReadEvents(context.Context, eventschema.EventType, time.Time) ([]*eventschema.Envelope, error) {
+	return nil, errors.New("read whole")
+}
+
+func (r streamReader) EachEvent(_ context.Context, _ eventschema.EventType, since time.Time, fn func(*eventschema.Envelope) error) error {
+	for _, e := range r.envReader {
+		if e.Timestamp.Before(since) {
+			continue
+		}
+		if err := fn(e); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// A store that streams its events is read one event at a time, keeping
+// only what the comparison needs: 90 days of a busy machine's decoded
+// events held at once sent the daemon's collector into overdrive once a
+// day. The drifts are the same as from the whole read.
+func TestProviderDriftsStreamsEvents(t *testing.T) {
+	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	start := now.AddDate(0, 0, -80)
+	history := plans.History{
+		{Provider: "anthropic", Plan: "claude-pro", From: start.AddDate(0, 0, -30)},
+		{Provider: "anthropic", Plan: "claude-max", From: start.Add(5 * 7 * 24 * time.Hour)},
+	}
+	envs := driftEvents(start, 2.5)
+	price := func(_ *eventschema.PromptEvent, at time.Time) (float64, error) {
+		for _, e := range envs {
+			if e.Timestamp.Equal(at) && e.Attributes["usd"] != "" {
+				return strconv.ParseFloat(e.Attributes["usd"], 64)
+			}
+		}
+		return 0, nil
+	}
+	opts := Options{Now: now, Plans: map[string]string{"anthropic": "claude-max"}, PlanHistory: history, Price: price}
+	opts.Events = envs
+	whole := ProviderDrifts(context.Background(), opts)
+	opts.Events = streamReader{envs}
+	streamed := ProviderDrifts(context.Background(), opts)
+	if len(whole["anthropic"]) == 0 {
+		t.Fatal("the fixture drifts nothing")
+	}
+	if !reflect.DeepEqual(whole, streamed) {
+		t.Errorf("streamed drifts %+v, want %+v", streamed, whole)
 	}
 }

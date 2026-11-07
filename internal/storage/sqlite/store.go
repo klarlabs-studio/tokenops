@@ -603,6 +603,20 @@ func (s *Store) ReadEvents(ctx context.Context, t eventschema.EventType, since t
 	return readEvents(ctx, s.db, t, since)
 }
 
+// EachEvent hands fn every event of type t at or after since, oldest
+// first, one page in memory at a time: what ReadEvents returns, for a
+// caller that keeps only a little of each event and need not hold them
+// all. An error from fn stops the read and is returned.
+func (s *Store) EachEvent(ctx context.Context, t eventschema.EventType, since time.Time, fn func(*eventschema.Envelope) error) error {
+	return readEventPages(ctx, s.db, selectSQL, t, since, func(rs *sql.Rows) (*eventschema.Envelope, error) {
+		env, err := scanEnvelope(rs)
+		if err != nil {
+			return nil, err
+		}
+		return env, fn(env)
+	})
+}
+
 // querier is what a read runs on: the pool, or one transaction when
 // several reads must see the same snapshot.
 type querier interface {
