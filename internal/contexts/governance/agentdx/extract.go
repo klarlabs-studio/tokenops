@@ -108,6 +108,11 @@ func Extract(opts ExtractOptions) ([]Record, error) {
 	for _, path := range files {
 		info, fresh := writtenSince(path, opts.Since)
 		if !fresh {
+			// Too old for this scan but within what the cache keeps for
+			// a longer one: it stays cached.
+			if cache.holds(path, opts.Since) {
+				kept[path] = true
+			}
 			continue
 		}
 		if cache != nil {
