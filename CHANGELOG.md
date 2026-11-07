@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.118.11 - 2026-11-07
+
+### Fixed
+
+- **team:** the hourly upload reads its transcripts from the shared cache again. The session analysis's week-long scan dropped from the cache every file it skipped, among them the files from 8 to 14 days ago the upload had read, so each upload read them again: 2.5 minutes of a 10-minute upload. Files within the window the cache keeps for the upload now stay cached through the shorter scan; a warm upload reads its two weeks of transcripts in under a second.
+
 ## 0.118.10 - 2026-11-07
 
 ### Fixed
