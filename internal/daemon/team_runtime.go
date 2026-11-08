@@ -66,8 +66,13 @@ func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components,
 		}
 		tick := time.NewTicker(every)
 		defer tick.Stop()
+		var cadence teamCadence
+		full := opts.Days
 		for {
-			uploadTeamOnce(ctx, deps, opts, path, logger)
+			now := time.Now()
+			o := opts
+			o.Days, o.FullDays = cadence.days(now, full), full
+			cadence.done(now, o.Days, full, uploadTeamOnce(ctx, deps, o, path, logger))
 			select {
 			case <-ctx.Done():
 				return nil
@@ -84,7 +89,50 @@ func shareAllowed(cfg config.Config, destination string) func() error {
 	return func() error { return bcap.CheckShare(rules(), destination, bcap.Env{Approval: cfg.ApprovalMode()}) }
 }
 
-func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Options, path string, logger *slog.Logger) {
+// teamRecentDays is how many UTC days an upload between full ones covers:
+// today, and yesterday, which a session running past midnight still adds
+// to.
+const teamRecentDays = 2
+
+// teamCadence decides how many days each upload covers. A day before
+// yesterday no longer changes, yet a full upload recomputes every covered
+// day: hourly, that kept the daemon busy four of every sixty minutes. So
+// the first upload after a start (a new version or config may compute
+// differently), the first of each UTC day (prices and late reads settle)
+// and the one after a failure cover all the days; the others only the
+// last two. The server replaces only the days an upload names.
+type teamCadence struct {
+	// full is when the last full upload succeeded; zero when none has.
+	full time.Time
+	// failed is whether the last upload did not reach the server.
+	failed bool
+}
+
+// days is how many days the upload at now covers, of the full n.
+func (c *teamCadence) days(now time.Time, n int) int {
+	if c.failed || c.full.IsZero() || n <= teamRecentDays || !sameUTCDay(c.full, now) {
+		return n
+	}
+	return teamRecentDays
+}
+
+// done notes how the upload at now, covering days of the full n, ended.
+func (c *teamCadence) done(now time.Time, days, n int, err error) {
+	c.failed = err != nil
+	if err == nil && days == n {
+		c.full = now
+	}
+}
+
+func sameUTCDay(a, b time.Time) bool {
+	ay, am, ad := a.UTC().Date()
+	by, bm, bd := b.UTC().Date()
+	return ay == by && am == bm && ad == bd
+}
+
+// uploadTeamOnce builds and sends one upload; the error is nil only when
+// the server took it.
+func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Options, path string, logger *slog.Logger) error {
 	ctx, cancel := context.WithTimeout(ctx, teamUploadTimeout)
 	defer cancel()
 	start := time.Now()
@@ -96,7 +144,7 @@ func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Opt
 	took := slog.Group("took", append([]any{slog.Duration("total", time.Since(start).Round(time.Millisecond))}, parts...)...)
 	switch {
 	case errors.Is(err, teamclient.ErrNotJoined):
-		return
+		return err
 	case bcap.IsShareRefused(err):
 		logger.Info("team upload held by a boundary", "detail", err.Error())
 	case errors.As(err, new(*teamshare.PausedError)):
@@ -115,4 +163,5 @@ func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Opt
 	for _, w := range res.Warnings {
 		logger.Warn("team upload: part of the figures could not be read", "detail", w)
 	}
+	return err
 }
