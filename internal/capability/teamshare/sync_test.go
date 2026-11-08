@@ -2,6 +2,7 @@ package teamshare
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"go.klarlabs.de/tokenops/internal/infra/teamclient"
+	"go.klarlabs.de/tokenops/pkg/teamwire"
 )
 
 func TestAllowHoldsTheUploadBeforeAnythingIsSent(t *testing.T) {
@@ -41,5 +43,29 @@ func TestAllowIsNotAskedBeforeJoining(t *testing.T) {
 	_, err := Sync(context.Background(), deps(), opts, filepath.Join(t.TempDir(), "none.json"), now)
 	if !errors.Is(err, teamclient.ErrNotJoined) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestPausedSaysTheFullWindowIsResent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/ingest" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPaymentRequired)
+		_ = json.NewEncoder(w).Encode(teamwire.Error{Error: "trial ended", Code: teamwire.CodeUploadsPaused})
+	}))
+	defer srv.Close()
+	path := filepath.Join(t.TempDir(), "team.json")
+	if err := teamclient.Save(path, teamclient.State{URL: srv.URL, DeviceToken: "tok"}); err != nil {
+		t.Fatal(err)
+	}
+	// The daemon's uploads between full ones cover two days; a resumed
+	// upload resends the full window.
+	_, err := Sync(context.Background(), deps(), Options{Days: 2, FullDays: 14}, path, now)
+	var paused *PausedError
+	if !errors.As(err, &paused) || paused.Days != 14 {
+		t.Fatalf("err = %v; want paused with the full 14 days", err)
 	}
 }
