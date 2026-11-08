@@ -39,6 +39,10 @@ const (
 type Options struct {
 	// Days is how many UTC days, today included, the upload covers.
 	Days int
+	// FullDays is how many a full upload covers, when Days covers only
+	// the last few (the daemon's uploads between full ones); zero means
+	// Days. A paused upload says this many are resent once uploads resume.
+	FullDays int
 	// RepoNames is remote, directory or hidden.
 	RepoNames string
 	// ClientVersion is this TokenOps' version.

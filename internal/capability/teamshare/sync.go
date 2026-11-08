@@ -53,6 +53,9 @@ func Sync(ctx context.Context, d Deps, opts Options, statePath string, now time.
 	switch {
 	case teamclient.IsCode(sendErr, teamwire.CodeUploadsPaused):
 		paused := &PausedError{Days: opts.Days}
+		if opts.FullDays > 0 {
+			paused.Days = opts.FullDays
+		}
 		errors.As(sendErr, &paused.Server)
 		sendErr = paused
 		st.LastResult = "paused: the organisation has no active trial or subscription"
