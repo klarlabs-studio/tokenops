@@ -2,6 +2,8 @@ package agentdx
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -209,16 +211,19 @@ type rawToolUse struct {
 
 // callSignature identifies a tool call by name and arguments. Truncated
 // because a signature only has to be distinctive, not complete, and some
-// tool inputs run to megabytes.
+// tool inputs run to megabytes. The arguments are kept only as a digest:
+// a signature is only ever compared, and the transcript cache, which a
+// daemon saves across restarts, holds no tool's arguments.
 func callSignature(name string, input json.RawMessage) string {
 	if name == "" {
 		return ""
 	}
-	arg := string(input)
+	arg := input
 	if len(arg) > 400 {
 		arg = arg[:400]
 	}
-	return name + "|" + arg
+	sum := sha256.Sum256(arg)
+	return name + "|" + hex.EncodeToString(sum[:12])
 }
 
 // interruptMarker is what the client writes into the transcript when the
