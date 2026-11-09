@@ -185,3 +185,15 @@ func TestSignalIsGradedPerProvider(t *testing.T) {
 		t.Errorf("proxy events dropped for openai: %d", got)
 	}
 }
+
+// A Codex plan read only through Codex's app server is graded by it, not
+// by the MCP-ping default, which spoke of Claude conversation turns.
+func TestSignalFromCodexAppServer(t *testing.T) {
+	q := ClassifySignal(SignalFromCounts(map[string]int64{"codex-app-server": 3, "mcp-session": 9}, "openai"))
+	if q.Level != SignalLevelHigh || q.Source != SignalSourceCodexAppServer {
+		t.Errorf("signal = %+v; want high from codex_app_server", q)
+	}
+	if q := ClassifySignal(SignalFromCounts(map[string]int64{"codex-app-server": 3}, "anthropic")); q.Source == SignalSourceCodexAppServer {
+		t.Error("an Anthropic plan was graded by Codex's app server")
+	}
+}
