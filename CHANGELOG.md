@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.118.13 - 2026-11-09
+
+### Fixed
+
+- **daemon:** the daemon no longer re-reads the same month of events for every surface. The team upload read a month of prompt events from the store and replayed the plan advice on each upload, and the menu bar's glance, the OTel gauges, the boundary figures and the upload each kept their own copy of that advice. They now read through the glance's event cache and share one advice replay, made at most hourly; the upload sends the advice the glance shows. Each glance also parsed every plan-window reading of the last two weeks to keep the newest two per source; it now parses only those.
+- **menu bar:** the 30-day spend figures, chart and top model refresh every ten minutes instead of every minute; today's figures still refresh every minute, and Refresh reads everything at once. Each minute the panel had the daemon scan every provider's 30 days three times.
+- **plans:** a Codex plan whose windows come from Codex's app server is graded by it. It fell through to the MCP-ping default, so the glance called a vendor-reported weekly reading a low-quality activity proxy that cannot see Claude conversation turns.
+- **status:** a client that keeps no store on this machine is no longer reported as a silent source. A missing default store was "unknown", like a mistyped configured path, so an opencode used weeks ago and since removed stayed a critical stale source and marked every spend figure untrusted. A missing default now means nothing to ingest; a missing configured path still warns.
+
 ## 0.118.12 - 2026-11-09
 
 ### Fixed
