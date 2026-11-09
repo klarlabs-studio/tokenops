@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.118.12 - 2026-11-09
+
+### Fixed
+
+- **team:** the hourly upload no longer keeps the daemon busy four to five minutes of every hour. Each upload recomputed all fourteen covered days, though only today and yesterday still change. The first upload after a start, the first of each UTC day and the one after a failure still cover every day; the others cover the last two, which on a busy machine builds in about 20 seconds instead of two and a half minutes. The server replaces only the days an upload names, so the older ones stand. `tokenops team sync` and `team preview` still cover the whole window.
+
 ## 0.118.11 - 2026-11-07
 
 ### Fixed
