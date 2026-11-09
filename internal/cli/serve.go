@@ -233,7 +233,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	tracker := headroom.NewSessionTracker(sessionBus, sessionProvider)
 
 	planDeps := mcp.PlanDeps{Store: components.Store, Tracker: tracker, Provider: sessionProvider, Spend: components.Spend,
-		AdviceCache: headroom.NewAdviceCache()}
+		AdviceCache: headroom.NewAdviceCache(), Daemon: mcp.DaemonPlanReader(daemonURL)}
 	if cfgErr == nil {
 		planDeps.Config = &cfg
 		planDeps.ConfigGetter = currentConfig

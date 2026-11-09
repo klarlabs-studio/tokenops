@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
@@ -34,6 +35,9 @@ type PlanDeps struct {
 	// AdviceCache keeps the glance's plan advice between calls; nil
 	// replays it on every glance.
 	AdviceCache *headroom.AdviceCache
+	// Daemon reads the daemon's answers to the plan views, which are
+	// preferred to computing them here; nil computes them here.
+	Daemon DaemonJSON
 }
 
 // activeConfig returns the live Config snapshot: prefers ConfigGetter
@@ -111,6 +115,14 @@ func planAdvice(ctx context.Context, d PlanDeps, in planAdviceInput) (*planAdvic
 	if in.Days < 0 || in.Days > headroom.MaxAdviceDays {
 		return nil, inputError(fmt.Errorf("days must be from 1 to %d", headroom.MaxAdviceDays))
 	}
+	path := "/api/plans/advice"
+	if in.Days > 0 {
+		path += "?days=" + strconv.Itoa(in.Days)
+	}
+	var fromDaemon planAdviceResult
+	if d.fromDaemon(ctx, path, &fromDaemon) {
+		return &fromDaemon, nil
+	}
 	res, err := headroom.Advise(ctx, d.headroomDeps(), headroom.AdviceQuery{Days: in.Days}, time.Now().UTC())
 	if err != nil {
 		return nil, err
@@ -150,6 +162,10 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 }
 
 func sessionBudgetData(ctx context.Context, d PlanDeps) (*sessionBudgetResult, error) {
+	var fromDaemon sessionBudgetResult
+	if d.fromDaemon(ctx, "/api/plans/session-budget", &fromDaemon) {
+		return &fromDaemon, nil
+	}
 	res, err := headroom.SessionBudgets(ctx, d.headroomDeps(), time.Now().UTC())
 	if err != nil {
 		return nil, err
@@ -177,6 +193,10 @@ func (d PlanDeps) headroomDeps() headroom.Deps {
 // the loop, which is how the CLI kept the unsorted-provider bug after it
 // was fixed here.
 func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) {
+	var fromDaemon planHeadroomResult
+	if d.fromDaemon(ctx, "/api/plans/headroom", &fromDaemon) {
+		return &fromDaemon, nil
+	}
 	computed, err := headroom.Compute(ctx, d.headroomDeps(), time.Now().UTC())
 	if err != nil {
 		return nil, err
