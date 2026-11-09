@@ -154,7 +154,24 @@ type menubar struct {
 	// refreshing is a refresh the operator asked for whose readings are
 	// still coming in.
 	refreshing bool
+	// month is each provider's 30 days as last read; see monthEvery.
+	month map[string]monthCosts
 }
+
+// monthCosts is a provider's 30 days and when they were read.
+type monthCosts struct {
+	at       time.Time
+	last30   spend
+	daily    []day
+	topModel string
+}
+
+// monthEvery is how often a provider's 30 days are read again. Each read
+// scans a month of usage three times in the daemon, and an hour of use
+// barely moves a 30-day figure: read every minute with today's, they
+// were a steady share of the daemon's CPU. A refresh the operator asks
+// for reads them at once.
+const monthEvery = 10 * time.Minute
 
 // newMenubar wires the runtime, the panel's grant and commands, and the
 // tray.
@@ -408,6 +425,10 @@ var refreshAgain = []time.Duration{4 * time.Second, 15 * time.Second, 35 * time.
 // Re-reading alone returned the same readings: the daemon polls each
 // vendor on its own interval, up to 15 minutes.
 func (m *menubar) refreshNow(ctx context.Context) view {
+	// What the operator asks for is read fresh, the 30 days too.
+	m.mu.Lock()
+	m.month = nil
+	m.mu.Unlock()
 	r, err := m.daemon.refreshSources(ctx)
 	if err == nil {
 		// The note stays until the last follow-up read, so the panel says
@@ -532,14 +553,22 @@ func (m *menubar) costs(ctx context.Context, g json.RawMessage) map[string]costs
 			if err != nil {
 				return
 			}
-			// The 30 days are the heavier read; when they fail, today is
-			// still worth showing.
-			last30, err := m.daemon.spendSince(ctx, provider, "720h")
-			c := costs{Today: today, Last30: last30, Last30Unread: err != nil}
-			// The chart and the top model are extras: a daemon without the
-			// series still shows the figures.
-			c.Daily, _ = m.daemon.daily(ctx, provider)
-			c.TopModel, _ = m.daemon.topModel(ctx, provider)
+			c := costs{Today: today}
+			if mc, ok := m.monthOf(provider, time.Now()); ok {
+				c.Last30, c.Daily, c.TopModel = mc.last30, mc.daily, mc.topModel
+			} else {
+				// The 30 days are the heavier read; when they fail, today
+				// is still worth showing.
+				last30, err := m.daemon.spendSince(ctx, provider, "720h")
+				c.Last30, c.Last30Unread = last30, err != nil
+				// The chart and the top model are extras: a daemon without
+				// the series still shows the figures.
+				c.Daily, _ = m.daemon.daily(ctx, provider)
+				c.TopModel, _ = m.daemon.topModel(ctx, provider)
+				if err == nil {
+					m.keepMonth(provider, monthCosts{at: time.Now(), last30: last30, daily: c.Daily, topModel: c.TopModel})
+				}
+			}
 			mu.Lock()
 			out[provider] = c
 			mu.Unlock()
@@ -547,6 +576,28 @@ func (m *menubar) costs(ctx context.Context, g json.RawMessage) map[string]costs
 	}
 	wg.Wait()
 	return out
+}
+
+// monthOf is provider's 30 days when they were read under monthEvery
+// before now.
+func (m *menubar) monthOf(provider string, now time.Time) (monthCosts, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	mc, ok := m.month[provider]
+	if !ok || now.Before(mc.at) || now.Sub(mc.at) >= monthEvery {
+		return monthCosts{}, false
+	}
+	return mc, true
+}
+
+// keepMonth keeps provider's 30 days for the next monthEvery.
+func (m *menubar) keepMonth(provider string, mc monthCosts) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.month == nil {
+		m.month = map[string]monthCosts{}
+	}
+	m.month[provider] = mc
 }
 
 // explain says what a failed read means for the person reading the

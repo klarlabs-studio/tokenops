@@ -349,7 +349,7 @@ func (s *startup) startEventRuntime(ctx context.Context) error {
 	s.events = rt
 	s.deferCleanup(rt.Detach)
 	s.opts = append(s.opts, rt.ProxyOptions...)
-	startTeamUploadRuntime(s.cfg, s.components, s.transcripts, s.sup, s.logger)
+	startTeamUploadRuntime(s.cfg, s.components, rt.Plans, s.transcripts, s.sup, s.logger)
 	return nil
 }
 

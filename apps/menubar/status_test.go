@@ -315,3 +315,42 @@ func TestCostsKeepTodayWhenThe30DaysFail(t *testing.T) {
 		t.Errorf("cost = %+v, want today and the 30 days marked unread", c)
 	}
 }
+
+// The 30 days are read once every monthEvery, today on every refresh.
+func TestCostsReadThe30DaysEveryTenMinutes(t *testing.T) {
+	var today, month int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/spend/summary" && r.URL.Query().Get("since") == "24h":
+			today++
+			_, _ = w.Write([]byte(`{"summary":{"Requests":4,"TotalTokens":1000}}`))
+		case r.URL.Path == "/api/spend/summary":
+			month++
+			_, _ = w.Write([]byte(`{"summary":{"Requests":40,"TotalTokens":30000}}`))
+		default:
+			_, _ = w.Write([]byte(`{"rows":[]}`))
+		}
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	d := &daemon{urlFile: filepath.Join(dir, "daemon.url"), hc: srv.Client()}
+	if err := os.WriteFile(d.urlFile, []byte(`{"url":"`+srv.URL+`","dashboard_token":"tok"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := &menubar{daemon: d}
+	g := json.RawMessage(`{"plan_headroom":{"reports":[{"provider":"openai"}]}}`)
+	for range 3 {
+		c := m.costs(context.Background(), g)["openai"]
+		if c.Today.Tokens != 1000 || c.Last30.Tokens != 30000 || c.Last30Unread {
+			t.Fatalf("cost = %+v", c)
+		}
+	}
+	if today != 3 || month != 1 {
+		t.Errorf("read today %d times and the 30 days %d times; want 3 and 1", today, month)
+	}
+	m.keepMonth("openai", monthCosts{at: time.Now().Add(-monthEvery), last30: spend{Tokens: 30000}})
+	m.costs(context.Background(), g)
+	if month != 2 {
+		t.Errorf("30 days older than %v were not read again", monthEvery)
+	}
+}
