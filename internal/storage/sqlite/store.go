@@ -851,36 +851,50 @@ func (s *Store) CountBySource(ctx context.Context, since, until time.Time) (map[
 	if s == nil || s.db == nil {
 		return nil, errors.New("sqlite: store not initialised")
 	}
-	var (
-		conds []string
-		args  []any
-	)
+	// One count per source, each a range of the (source, timestamp_ns)
+	// index; the sources are found by skipping through that index. Grouping
+	// a window's rows read every row from the table for its source: about
+	// a second for a busy machine's week, which the glance asked every
+	// minute. This reads the index alone, in milliseconds.
+	window, args := "", []any{}
 	if !since.IsZero() {
-		conds = append(conds, "timestamp_ns >= ?")
+		window += " AND e.timestamp_ns >= ?"
 		args = append(args, since.UTC().UnixNano())
 	}
 	if !until.IsZero() {
-		conds = append(conds, "timestamp_ns < ?")
+		window += " AND e.timestamp_ns < ?"
 		args = append(args, until.UTC().UnixNano())
 	}
-	q := "SELECT COALESCE(NULLIF(source, ''), '(none)') AS src, COUNT(*) FROM events"
-	if len(conds) > 0 {
-		q += " WHERE " + strings.Join(conds, " AND ")
-	}
-	q += " GROUP BY src ORDER BY 2 DESC"
-	rows, err := s.db.QueryContext(ctx, q, args...)
+	q := `WITH RECURSIVE s(src) AS (
+	SELECT MIN(source) FROM events
+	UNION ALL
+	SELECT (SELECT MIN(source) FROM events WHERE source > s.src) FROM s WHERE s.src IS NOT NULL
+)
+SELECT src, (SELECT COUNT(*) FROM events e WHERE e.source = s.src` + window + `) FROM s WHERE src IS NOT NULL
+UNION ALL
+SELECT NULL, (SELECT COUNT(*) FROM events e WHERE e.source IS NULL` + window + `)`
+	all := append(append([]any{}, args...), args...)
+	rows, err := s.db.QueryContext(ctx, q, all...)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: count-by-source: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	out := map[string]int64{}
 	for rows.Next() {
-		var src string
+		var src sql.NullString
 		var n int64
 		if err := rows.Scan(&src, &n); err != nil {
 			return nil, err
 		}
-		out[src] = n
+		if n == 0 {
+			continue
+		}
+		key := src.String
+		if key == "" {
+			// No source, or an empty one: unlabelled traffic.
+			key = "(none)"
+		}
+		out[key] += n
 	}
 	return out, rows.Err()
 }
