@@ -442,9 +442,18 @@ func billedOf(t analytics.SessionTurn, n int64, onPlan bool) float64 {
 // calibrations size each provider's plan window from the turns recorded
 // while its windows were open.
 func calibrations(in Inputs) []plans.WindowCalibration {
-	byProvider := map[string][]analytics.SessionTurn{}
+	byProvider := map[string]*tokenSeries{}
 	for _, t := range in.Turns {
-		byProvider[t.Provider] = append(byProvider[t.Provider], t)
+		if _, ok := in.Windows[t.Provider]; !ok {
+			continue
+		}
+		s := byProvider[t.Provider]
+		if s == nil {
+			s = &tokenSeries{}
+			byProvider[t.Provider] = s
+		}
+		s.at = append(s.at, t.At)
+		s.tokens = append(s.tokens, t.Tokens)
 	}
 	providers := make([]string, 0, len(in.Windows))
 	for p := range in.Windows {
@@ -453,22 +462,56 @@ func calibrations(in Inputs) []plans.WindowCalibration {
 	sort.Strings(providers)
 	var out []plans.WindowCalibration
 	for _, p := range providers {
-		turns := byProvider[p]
-		tokensIn := func(from, to time.Time) int64 {
-			var n int64
-			for _, t := range turns {
-				if !t.At.Before(from) && t.At.Before(to) {
-					n += t.Tokens
-				}
-			}
-			return n
+		s := byProvider[p]
+		if s == nil {
+			s = &tokenSeries{}
 		}
+		s.index()
 		since := in.Since.AddDate(0, 0, -CalibrationDays)
-		if c, ok := plans.Calibrate(p, in.Windows[p], since, in.Until, tokensIn); ok {
+		if c, ok := plans.Calibrate(p, in.Windows[p], since, in.Until, s.in); ok {
 			out = append(out, c)
 		}
 	}
 	return out
+}
+
+// tokenSeries is one provider's turns as times and tokens, for summing
+// the tokens of many windows. Each day of a report sized every window by
+// copying every turn and scanning them all for each window: on a busy
+// machine the largest share of what the daemon allocated.
+type tokenSeries struct {
+	at     []time.Time
+	tokens []int64
+	// sum[i] is the tokens of the first i turns in time order.
+	sum []int64
+}
+
+// index orders the turns by time and sums them.
+func (s *tokenSeries) index() {
+	sort.Sort(byAt{s})
+	s.sum = make([]int64, len(s.at)+1)
+	for i, n := range s.tokens {
+		s.sum[i+1] = s.sum[i] + n
+	}
+}
+
+// in is the tokens of the turns at or after from and before to.
+func (s *tokenSeries) in(from, to time.Time) int64 {
+	lo := sort.Search(len(s.at), func(i int) bool { return !s.at[i].Before(from) })
+	hi := sort.Search(len(s.at), func(i int) bool { return !s.at[i].Before(to) })
+	if hi <= lo {
+		return 0
+	}
+	return s.sum[hi] - s.sum[lo]
+}
+
+type byAt struct{ s *tokenSeries }
+
+func (b byAt) Len() int           { return len(b.s.at) }
+func (b byAt) Less(i, j int) bool { return b.s.at[i].Before(b.s.at[j]) }
+func (b byAt) Swap(i, j int) {
+	b.s.at[i], b.s.at[j] = b.s.at[j], b.s.at[i]
+	b.s.tokens[i], b.s.tokens[j] = b.s.tokens[j], b.s.tokens[i]
 }
 
 // shares states each provider's tokens as a share of its window.
