@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.118.16 - 2026-11-09
+
+### Fixed
+
+- **team:** a plan day no longer counts hours blocked after a reset credit opened a fresh window. A lockout ran from the moment a window ran out to the reset it named, but Codex grants credits that open the next window early; the plan days a team saw marked whole days blocked while the operator worked on the new window. A lockout now ends when the next window of that limit has room. The next full upload corrects the days the server holds.
+- **claude.ai meter:** a browser session that does not decrypt is no longer reported as no session at all. The meter logged that the browser had no claude.ai cookie while it held a fresh one, and its advice, to open claude.ai again, could not help; the log now names the cookie and why it could not be read.
+
 ## 0.118.15 - 2026-11-09
 
 ### Fixed
