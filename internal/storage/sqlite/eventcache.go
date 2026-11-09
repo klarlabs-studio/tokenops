@@ -376,6 +376,7 @@ func readCachedEvents(ctx context.Context, q querier, t eventschema.EventType, f
 		var e cachedEvent
 		var err error
 		if e.env, err = scanEnvelope(rs, &e.rowid); err == nil {
+			e.env.Attributes = trimCached(e.env.Attributes)
 			out = append(out, e)
 		}
 		return e.env, err
@@ -395,6 +396,7 @@ func scanCachedEvents(rs *sql.Rows) ([]cachedEvent, error) {
 		if e.env, err = scanEnvelope(rs, &e.rowid); err != nil {
 			return nil, err
 		}
+		e.env.Attributes = trimCached(e.env.Attributes)
 		out = append(out, e)
 	}
 	if err := rs.Err(); err != nil {
@@ -525,4 +527,43 @@ func compareCached(a, b cachedEvent) int {
 	default:
 		return strings.Compare(a.env.ID, b.env.ID)
 	}
+}
+
+// uncachedAttributes are the attributes the readers' writers record that
+// no reader of the cache asks for: per-turn token splits and record
+// bookkeeping, also kept in the payload or never read back. Readers that
+// need them read the store.
+//
+// The cache holds a month of prompt events, most of them Codex turns
+// carrying 17 attributes each; their maps were most of the daemon's heap
+// (about 500 MB of 1.1 GB on a busy machine), and the collector's work
+// grows with it. Leaving these out takes a Codex turn to 13, half the
+// map's storage. A key is only listed here when no code outside the
+// readers that write it reads it: the readers that match keys by suffix
+// (_used_pct, _reset_at) or by prefix (allowance_) are why this is a list
+// of keys to leave out, not of keys to keep.
+var uncachedAttributes = []string{
+	"cached_input", "reasoning_output", "sequence", "model_provider", "message_id",
+	"input_uncached", "cache_creation_input", "service_tier", "subagent_tool_use_id",
+}
+
+// trimCached is attrs without uncachedAttributes, in a map sized for what
+// is left: deleting from a Go map does not free its storage.
+func trimCached(attrs map[string]string) map[string]string {
+	drop := 0
+	for _, k := range uncachedAttributes {
+		if _, ok := attrs[k]; ok {
+			drop++
+		}
+	}
+	if drop == 0 {
+		return attrs
+	}
+	out := make(map[string]string, len(attrs)-drop)
+	for k, v := range attrs {
+		if !slices.Contains(uncachedAttributes, k) {
+			out[k] = v
+		}
+	}
+	return out
 }
