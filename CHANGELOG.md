@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.118.14 - 2026-11-09
+
+### Fixed
+
+- **daemon:** the glance no longer reads a week of events from the store every minute to count them by source. Grouping the week's rows looked up every row for its source, about a second on a busy machine; the counts now come from the source index alone, in milliseconds.
+- **waste:** a waste report no longer copies every turn for each of its days to size the plan windows, the largest share of what the daemon allocated during a full team upload (6 GB in ten minutes) and so of its garbage collection. Each provider's turns are kept as times and tokens with running sums, and a window's tokens are two lookups.
+
 ## 0.118.13 - 2026-11-09
 
 ### Fixed
