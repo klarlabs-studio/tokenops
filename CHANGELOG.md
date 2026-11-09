@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.118.17 - 2026-11-09
+
+### Fixed
+
+- **mcp:** an agent's glance and plan views come from the daemon. `tokenops serve` lives as long as the MCP client that started it, through every upgrade, and computed them with that release's code: days after a fix, agents still read the figures it fixed, while the menu bar showed them right. The glance, headroom, session budget, plan advice and findings now come from the daemon, which also leaves out the findings you dismissed; with no daemon answering, `serve` computes them as before. Sessions started before this release pick it up when their MCP client restarts the server.
+
 ## 0.118.16 - 2026-11-09
 
 ### Fixed
