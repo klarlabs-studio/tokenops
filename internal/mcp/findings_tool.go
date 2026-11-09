@@ -22,6 +22,10 @@ func RegisterFindingsTool(s *Server, d PlanDeps) error {
 		Description("What the coach and the session analysis observed, ranked, with what to do.").
 		OutputSchema(findings.Report{}).
 		Handler(func(ctx context.Context, _ findingsInput) (findings.Report, error) {
+			var fromDaemon findings.Report
+			if d.fromDaemon(ctx, "/api/findings", &fromDaemon) {
+				return fromDaemon, nil
+			}
 			now := time.Now().UTC()
 			deps := d.headroomDeps()
 			g, err := headroom.ComputeGlance(ctx, deps, now)

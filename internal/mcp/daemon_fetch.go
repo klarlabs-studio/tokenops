@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,10 +64,16 @@ func FetchDaemonDomainEvents(baseURL string) (DaemonDomainEvents, error) {
 }
 
 func getDaemonJSON(baseURL, path string, out any) error {
+	return getDaemonJSONWithin(context.Background(), baseURL, path, daemonFetchTimeout, 64*1024, out)
+}
+
+// getDaemonJSONWithin is getDaemonJSON with the caller's context, a
+// timeout and a body limit of its own.
+func getDaemonJSONWithin(ctx context.Context, baseURL, path string, timeout time.Duration, limit int64, out any) error {
 	if baseURL == "" {
 		return fmt.Errorf("no daemon URL")
 	}
-	req, err := http.NewRequest(http.MethodGet, baseURL+path, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+path, nil)
 	if err != nil {
 		return err
 	}
@@ -77,7 +84,7 @@ func getDaemonJSON(baseURL, path string, out any) error {
 	if tok := daemonhint.Token(); tok != "" {
 		req.Header.Set("Authorization", "Bearer "+tok)
 	}
-	client := http.Client{Timeout: daemonFetchTimeout}
+	client := http.Client{Timeout: timeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -86,7 +93,7 @@ func getDaemonJSON(baseURL, path string, out any) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s answered %d", path, resp.StatusCode)
 	}
-	return json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(out)
+	return json.NewDecoder(io.LimitReader(resp.Body, limit)).Decode(out)
 }
 
 // DaemonSources is what the daemon's /api/sources answered: one report
