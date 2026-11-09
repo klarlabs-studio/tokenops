@@ -131,19 +131,30 @@ func vendorWindows(ctx context.Context, reader EventReader, provider eventschema
 // that reports several Codex limits is read per limit, so one limit's
 // newest reading does not hide another's.
 func newestTwo(events []*eventschema.Envelope, sources []string, usable func(*eventschema.Envelope) bool) (newest, prior map[string]*eventschema.Envelope) {
-	byReading := map[string][]*eventschema.Envelope{}
+	type candidate struct {
+		e   *eventschema.Envelope
+		key string
+	}
+	var cands []candidate
 	for _, e := range events {
-		if e == nil || !slices.Contains(sources, e.Source) || e.Attributes == nil || !usable(e) {
+		if e == nil || !slices.Contains(sources, e.Source) || e.Attributes == nil {
 			continue
 		}
-		byReading[readingKey(e)] = append(byReading[readingKey(e)], e)
+		cands = append(cands, candidate{e: e, key: readingKey(e)})
 	}
+	// Newest first, and usable asked only until a reading has its two:
+	// asking it parses the reading, and the glance asked it of two weeks
+	// of readings to keep two of each.
+	sort.SliceStable(cands, func(i, j int) bool { return cands[i].e.Timestamp.After(cands[j].e.Timestamp) })
 	newest, prior = map[string]*eventschema.Envelope{}, map[string]*eventschema.Envelope{}
-	for src, es := range byReading {
-		sort.SliceStable(es, func(i, j int) bool { return es[i].Timestamp.After(es[j].Timestamp) })
-		newest[src] = es[0]
-		if len(es) > 1 {
-			prior[src] = es[1]
+	for _, c := range cands {
+		if prior[c.key] != nil || !usable(c.e) {
+			continue
+		}
+		if newest[c.key] == nil {
+			newest[c.key] = c.e
+		} else {
+			prior[c.key] = c.e
 		}
 	}
 	return newest, prior
