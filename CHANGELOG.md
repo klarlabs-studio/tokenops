@@ -7,6 +7,8 @@
 ### Fixed
 
 - **team:** the hourly upload no longer keeps the daemon busy four to five minutes of every hour. Each upload recomputed all fourteen covered days, though only today and yesterday still change. The first upload after a start, the first of each UTC day and the one after a failure still cover every day; the others cover the last two, which on a busy machine builds in about 20 seconds instead of two and a half minutes. The server replaces only the days an upload names, so the older ones stand. `tokenops team sync` and `team preview` still cover the whole window.
+- **anomalies:** the hourly spend anomaly check no longer reads four weeks of turns and prices them again each time, about half a minute of every hour on a busy machine. Its first run of each UTC day reads the four weeks; the others keep the older days and read only yesterday and today, with the same answer.
+- **daemon:** a restart no longer runs hot for several minutes. After every start, which every upgrade and login does, the first scans read two weeks of transcripts again. The transcript cache is now saved at shutdown and loaded at the next start of the same version; on a busy machine the first scan after a start takes 5 seconds instead of a minute. The saved cache holds no instruction's words, and a tool call's arguments are now kept only as a digest. An upgrade still reads the transcripts once, since a new version may read them differently.
 
 ## 0.118.11 - 2026-11-07
 
