@@ -188,6 +188,46 @@ func TestGlanceCarriesPlanAdvice(t *testing.T) {
 	}
 }
 
+// The team upload's advice is the glance's replay when it is under an
+// hour old, and a replay it makes serves the next glance.
+func TestCachedAdviceSharesTheGlanceReplay(t *testing.T) {
+	now := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	reader := &countingReader{eventsReader: eventsReader{envs: adviceEvents(now, "15")}}
+	deps := headroom.Deps{
+		Config:      cfgWith(map[string]string{"anthropic": "claude-max"}),
+		Reader:      reader,
+		Price:       tenDollars,
+		AdviceCache: headroom.NewAdviceCache(),
+	}
+	first, err := headroom.CachedAdvice(context.Background(), deps, now)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("advice = %+v, %v", first, err)
+	}
+	if reader.long != 1 {
+		t.Fatalf("read %d month-long windows; want 1", reader.long)
+	}
+	if _, err := headroom.ComputeGlance(context.Background(), deps, now.Add(10*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	again, err := headroom.CachedAdvice(context.Background(), deps, now.Add(20*time.Minute))
+	if err != nil || len(again) != 1 {
+		t.Fatalf("advice = %+v, %v", again, err)
+	}
+	if reader.long != 1 {
+		t.Errorf("the glance and a second upload within the hour read %d month-long windows; want the first only", reader.long)
+	}
+	if _, err := headroom.CachedAdvice(context.Background(), deps, now.Add(2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if reader.long != 2 {
+		t.Errorf("advice older than an hour was not replayed (%d reads)", reader.long)
+	}
+	plain, err := headroom.CachedAdvice(context.Background(), headroom.Deps{Config: deps.Config, Reader: reader, Price: tenDollars}, now)
+	if err != nil || len(plain) != 1 {
+		t.Errorf("without a cache: advice = %+v, %v", plain, err)
+	}
+}
+
 // countingReader counts reads reaching back further than three weeks.
 type countingReader struct {
 	eventsReader

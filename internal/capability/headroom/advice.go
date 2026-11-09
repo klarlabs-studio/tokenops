@@ -208,12 +208,7 @@ func glanceAdvice(ctx context.Context, d Deps, now time.Time) []plans.Advice {
 	if d.Config == nil || len(d.Config.Plans) == 0 || d.Reader == nil {
 		return nil
 	}
-	key := fmt.Sprint(d.Config.Plans)
-	if d.Observed != nil {
-		// A changed overlay is a different replay.
-		o := d.Observed()
-		key += fmt.Sprint(o.Off, o.UpdatedAt.UnixNano())
-	}
+	key := adviceKey(d)
 	c := d.AdviceCache
 	if c == nil {
 		// No cache to fill: the replay fits the budget or is left out.
@@ -268,6 +263,65 @@ func glanceAdvice(ctx context.Context, d Deps, now time.Time) []plans.Advice {
 		c.at, c.key, c.res, c.ok, c.failedAt = now, key, res.Providers, true, time.Time{}
 	}()
 	return c.stale(held)
+}
+
+// adviceKey names what a replay depends on beyond time: the bound plans
+// and the observed-limits overlay. A changed overlay is a different
+// replay.
+func adviceKey(d Deps) string {
+	key := fmt.Sprint(d.Config.Plans)
+	if d.Observed != nil {
+		o := d.Observed()
+		key += fmt.Sprint(o.Off, o.UpdatedAt.UnixNano())
+	}
+	return key
+}
+
+// CachedAdvice is the default period's advice for a caller that can wait
+// for it, such as the team upload: the replay d.AdviceCache holds when it
+// is under AdviceCacheTTL old, otherwise a new one, which the glance then
+// reuses. The upload replayed a month of events every hour on its own,
+// beside the glance's replay of the same month. Without a cache it
+// replays.
+func CachedAdvice(ctx context.Context, d Deps, now time.Time) ([]plans.Advice, error) {
+	c := d.AdviceCache
+	if c == nil || d.Config == nil || len(d.Config.Plans) == 0 || d.Reader == nil {
+		res, err := Advise(ctx, d, AdviceQuery{}, now)
+		return res.Providers, err
+	}
+	key := adviceKey(d)
+	c.mu.Lock()
+	for {
+		if c.ok && c.key == key && !now.Before(c.at) && now.Sub(c.at) < AdviceCacheTTL {
+			res := c.res
+			c.mu.Unlock()
+			return res, nil
+		}
+		running := c.refreshing
+		if running == nil {
+			break
+		}
+		// The glance's replay is under way: its result serves here too.
+		c.mu.Unlock()
+		select {
+		case <-running:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		c.mu.Lock()
+	}
+	done := make(chan struct{})
+	c.refreshing = done
+	c.mu.Unlock()
+	res, err := Advise(ctx, d, AdviceQuery{}, now)
+	c.mu.Lock()
+	c.refreshing = nil
+	if err == nil {
+		c.at, c.key, c.res, c.ok, c.failedAt = now, key, res.Providers, true, time.Time{}
+	}
+	c.mu.Unlock()
+	close(done)
+	return res.Providers, err
 }
 
 // stale is the advice held, served while a refresh runs. c.mu is held.

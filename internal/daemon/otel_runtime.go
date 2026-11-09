@@ -8,6 +8,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/telemetry"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
@@ -19,7 +20,7 @@ import (
 // startOTelMetricsRuntime pushes TokenOps' derived metrics to the
 // configured collector every interval: the figures the glance, the coach
 // and cost per commit show, and nothing they are derived from.
-func startOTelMetricsRuntime(cfg config.Config, store *sqlite.Store, glance *sqlite.EventCache, components *bootstrap.Components, sup *lifecycle.Supervisor, logger *slog.Logger) {
+func startOTelMetricsRuntime(cfg config.Config, store *sqlite.Store, plans func() headroom.Deps, components *bootstrap.Components, sup *lifecycle.Supervisor, logger *slog.Logger) {
 	eng := components.Spend
 	if !cfg.OTel.MetricsEnabled() || store == nil || eng == nil || components.Aggregator == nil {
 		return
@@ -37,7 +38,7 @@ func startOTelMetricsRuntime(cfg config.Config, store *sqlite.Store, glance *sql
 	if every <= 0 {
 		every = telemetry.Every
 	}
-	g := &telemetry.Gatherer{Glance: plansDeps(cfg, glance, eng), Agg: components.Aggregator, Coach: func(now time.Time) *coachcap.Report {
+	g := &telemetry.Gatherer{Glance: plans, Agg: components.Aggregator, Coach: func(now time.Time) *coachcap.Report {
 		ledger, levers := coachEnv(cfg)
 		r := coachcap.Status(cfg, ledger, levers, now)
 		return &r

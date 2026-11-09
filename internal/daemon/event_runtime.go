@@ -45,7 +45,11 @@ type eventRuntime struct {
 	Store *sqlite.Store
 	// GlanceEvents is the cache of events the glance, findings, OTel
 	// gauges and window-pressure probe read; nil without a store.
-	GlanceEvents    *sqlite.EventCache
+	GlanceEvents *sqlite.EventCache
+	// Plans is what every reader of the plans reads through: the glance
+	// events and one plan-advice cache. Each reader built its own, so the
+	// month-long advice replay ran once an hour for each.
+	Plans           func() headroom.Deps
 	Bus             *events.AsyncBus
 	AuditSubscriber *auditlog.Subscriber
 	ProxyOptions    []proxy.Option
@@ -121,7 +125,9 @@ func initializeEventRuntime(
 	glance := newGlanceEvents(rt.Store)
 	rt.GlanceEvents = glance
 	warmGlanceEvents(sup, glance, logger)
-	startOTelMetricsRuntime(cfg, rt.Store, glance, components, sup, logger)
+	deps := plansDeps(cfg, glance, components.Spend)
+	rt.Plans = deps
+	startOTelMetricsRuntime(cfg, rt.Store, deps, components, sup, logger)
 	startTeamBoundariesRuntime(cfg, sup, logger)
 	// A nil aggregator must reach the runtime as a nil Source, not a
 	// typed nil it would call.
@@ -129,7 +135,6 @@ func initializeEventRuntime(
 	if components.Aggregator != nil {
 		budgetSource = taggedBudgetSource(cfg, components.Aggregator)
 	}
-	deps := plansDeps(cfg, glance, components.Spend)
 	rt.Bills = newVendorBills(deps).Bill
 	startBoundaryFiguresRuntime(cfg, deps, rt.Bills, budgetSource, sup, logger)
 
@@ -146,7 +151,7 @@ func initializeEventRuntime(
 	rt.ProxyOptions = append(rt.ProxyOptions,
 		proxy.WithEventBus(rt.Bus),
 		proxy.WithSourceFreshness(sources),
-		proxy.WithPlans(plansDeps(cfg, glance, components.Spend)),
+		proxy.WithPlans(deps),
 		proxy.WithGlanceSnapshot(filepath.Join(findings.DefaultDir(), "glance.json"), configKey(cfg)),
 		proxy.WithActions(actionDeps(cfg, rt.Store, logger)),
 		proxy.WithSessions(func() proxy.SessionRoots { return proxy.SessionRoots{} }),
