@@ -111,13 +111,13 @@ func TestAllProbesReadConfiguredRoots(t *testing.T) {
 }
 
 // An unset root resolves each client's default under HOME. With nothing
-// installed, every origin is unknown rather than empty.
+// installed, every origin is a known empty: a default cannot be a typo.
 func TestAllProbesResolveDefaultsUnderHome(t *testing.T) {
 	home := isolateHome(t)
 	probes := All(cfgWith(true, true, true, ""))
 	for tag, probe := range probes {
-		if at, ok := probe(); ok || !at.IsZero() {
-			t.Errorf("%s probe with nothing installed = %v, %v; want unknown", tag, at, ok)
+		if at, ok := probe(); !ok || !at.IsZero() {
+			t.Errorf("%s probe with nothing installed = %v, %v; want zero, true", tag, at, ok)
 		}
 	}
 
@@ -285,8 +285,8 @@ func TestAllProbesGeminiAndPi(t *testing.T) {
 		if probes[tag] == nil {
 			t.Fatalf("no %s probe", tag)
 		}
-		if at, ok := probes[tag](); ok || !at.IsZero() {
-			t.Errorf("%s with nothing installed = %v, %v; want unknown", tag, at, ok)
+		if at, ok := probes[tag](); !ok || !at.IsZero() {
+			t.Errorf("%s with nothing installed = %v, %v; want zero, true", tag, at, ok)
 		}
 	}
 
@@ -314,5 +314,24 @@ func TestAllProbesGeminiAndPi(t *testing.T) {
 		if at, ok := All(c)[tag](); !ok || !at.Equal(base.Add(3*time.Hour)) {
 			t.Errorf("%s with configured root = %v, %v", tag, at, ok)
 		}
+	}
+}
+
+// A client whose default store does not exist keeps nothing here to miss:
+// its probe is a known empty, so it is never called silent. A configured
+// root that is missing stays unknown: it may be a typo.
+func TestMissingDefaultStoreIsEmptyAndMissingConfiguredRootUnknown(t *testing.T) {
+	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
+		t.Skip("home resolution differs here")
+	}
+	isolateHome(t)
+	for tag, probe := range All(cfgWith(true, true, true, "")) {
+		if at, ok := probe(); !ok || !at.IsZero() {
+			t.Errorf("%s probe with no default store = %v, %v; want zero, true", tag, at, ok)
+		}
+	}
+	missing := filepath.Join(t.TempDir(), "absent")
+	if at, ok := probeRoot(missing, func() (string, error) { return "", nil }, newestJSONLAt)(); ok || !at.IsZero() {
+		t.Errorf("configured missing root = %v, %v; want unknown", at, ok)
 	}
 }
