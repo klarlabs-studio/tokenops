@@ -81,20 +81,77 @@ type Deps struct {
 
 // Run reads the last four weeks, detects, and stores the snapshot in dir.
 func Run(ctx context.Context, d Deps, dir string, now time.Time) (Snapshot, error) {
-	since := midnight(now.Add(-lookback))
-	turns, err := d.Turns(ctx, since)
+	items, turns, err := read(ctx, d, midnight(now.Add(-lookback)), now)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	charges, err := d.Charges(ctx, since, now)
+	return detect(ctx, d, dir, items, turns, now)
+}
+
+// Runner runs the detection again and again, as the daemon does every
+// hour. A day before yesterday no longer changes, yet a run read all four
+// weeks of turns and priced them again: half a minute of every hour on a
+// busy machine. A Runner keeps those days' items from its first run of
+// each UTC day, which reads the four weeks, and reads only yesterday and
+// today on the others. Not safe for concurrent use.
+type Runner struct {
+	Deps Deps
+	Dir  string
+
+	// closed are the items of the days before cut, read on day.
+	closed   []anomaly.Item
+	cut, day time.Time
+}
+
+// Run detects as of now and stores the snapshot.
+func (r *Runner) Run(ctx context.Context, now time.Time) (Snapshot, error) {
+	today := midnight(now)
+	if !r.day.Equal(today) {
+		items, turns, err := read(ctx, r.Deps, midnight(now.Add(-lookback)), now)
+		if err != nil {
+			return Snapshot{}, err
+		}
+		cut := today.AddDate(0, 0, -1)
+		closed := make([]anomaly.Item, 0, len(items))
+		for _, it := range items {
+			if it.Day.Before(cut) {
+				closed = append(closed, it)
+			}
+		}
+		r.closed, r.cut, r.day = closed, cut, today
+		return detect(ctx, r.Deps, r.Dir, items, turns, now)
+	}
+	recent, turns, err := read(ctx, r.Deps, r.cut, now)
 	if err != nil {
 		return Snapshot{}, err
+	}
+	items := make([]anomaly.Item, 0, len(r.closed)+len(recent))
+	items = append(append(items, r.closed...), recent...)
+	return detect(ctx, r.Deps, r.Dir, items, turns, now)
+}
+
+// read is the items of the days from since, a UTC midnight, to now, and
+// the turns they were summed from.
+func read(ctx context.Context, d Deps, since, now time.Time) ([]anomaly.Item, []analytics.SessionTurn, error) {
+	turns, err := d.Turns(ctx, since)
+	if err != nil {
+		return nil, nil, err
+	}
+	charges, err := d.Charges(ctx, since, now)
+	if err != nil {
+		return nil, nil, err
 	}
 	var repoOf map[string]string
 	if d.RepoOf != nil {
 		repoOf = d.RepoOf(ctx, since)
 	}
-	items := Items(turns, charges, repoOf)
+	return Items(turns, charges, repoOf), turns, nil
+}
+
+// detect finds the anomalies in items, oldest day first, and stores the
+// snapshot. turns are at least the days an anomaly is flagged on, to
+// name a runaway session's workflow.
+func detect(ctx context.Context, d Deps, dir string, items []anomaly.Item, turns []analytics.SessionTurn, now time.Time) (Snapshot, error) {
 	s := Snapshot{ComputedAt: now.UTC(), MinHistoryDays: anomaly.DefaultMinHistoryDays, Anomalies: []Anomaly{}}
 	if len(items) > 0 {
 		first := items[0].Day
