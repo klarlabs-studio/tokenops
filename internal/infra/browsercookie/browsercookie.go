@@ -45,6 +45,11 @@ import (
 // signed in there, or signed in under a different profile.
 var ErrNotFound = errors.New("browsercookie: no such cookie in this browser")
 
+// ErrUndecryptable means the browser holds the cookies but none of them
+// decrypted with the key its keychain item gave: a changed key or a format
+// this reader does not know, not a missing sign-in.
+var ErrUndecryptable = errors.New("browsercookie: the browser holds these cookies but they did not decrypt")
+
 // Browser is one installed browser's cookie store.
 type Browser struct {
 	// Name is what the operator calls it ("Chrome").
