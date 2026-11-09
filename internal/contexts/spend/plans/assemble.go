@@ -67,6 +67,7 @@ func SignalFromCounts(counts map[string]int64, provider string) SignalInputs {
 		ClaudeCodeCacheInWindow:  c("claude-code-stats-cache"),
 		ClaudeCodeJSONLInWindow:  c("claude-code-jsonl"),
 		CodexJSONLInWindow:       c("codex-jsonl"),
+		CodexAppServerInWindow:   c("codex-app-server"),
 		CopilotInWindow:          c("github-copilot"),
 		CursorInWindow:           c("cursor-web"),
 		ClaudeUsageMeterInWindow: c("claude-usage-meter"),

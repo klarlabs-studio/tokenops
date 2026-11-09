@@ -42,6 +42,7 @@ const (
 	SignalSourceClaudeCodeCache  = "claude_code_stats_cache"
 	SignalSourceClaudeCodeJSONL  = "claude_code_jsonl"
 	SignalSourceCodexJSONL       = "codex_jsonl"
+	SignalSourceCodexAppServer   = "codex_app_server"
 	SignalSourceCopilot          = "github_copilot"
 	SignalSourceCursor           = "cursor_web"
 	SignalSourceFireworks        = "fireworks_api"
@@ -59,6 +60,7 @@ type SignalInputs struct {
 	ClaudeCodeCacheInWindow  int64
 	ClaudeCodeJSONLInWindow  int64
 	CodexJSONLInWindow       int64
+	CodexAppServerInWindow   int64
 	CopilotInWindow          int64
 	CursorInWindow           int64
 	ClaudeUsageMeterInWindow int64
@@ -123,6 +125,12 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 			Level:  SignalLevelHigh,
 			Source: SignalSourceCodexJSONL,
 			Caveat: "Reads ~/.codex/sessions/**/*.jsonl — Codex CLI's per-turn token_count records. Carries OpenAI's authoritative rate-limit windows, utilization, reset times, and vendor plan type; available windows vary by plan.",
+		}
+	case in.CodexAppServerInWindow > 0:
+		return SignalQuality{
+			Level:  SignalLevelHigh,
+			Source: SignalSourceCodexAppServer,
+			Caveat: "Asks the Codex CLI's own app server for your account's rate limits: the windows, utilization, reset times and reset credits Codex itself shows. Current while Codex is installed and signed in.",
 		}
 	case in.CopilotInWindow > 0:
 		return SignalQuality{
