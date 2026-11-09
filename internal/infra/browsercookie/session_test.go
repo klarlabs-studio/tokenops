@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -130,5 +131,25 @@ func TestHostVariantsIncludeParentDomains(t *testing.T) {
 	}
 	if v := hostVariants("claude.ai"); len(v) != 2 {
 		t.Errorf("a registrable domain has no parent to add: %v", v)
+	}
+}
+
+// A session the browser holds but that does not decrypt with the key
+// given is not "no such cookie": the claude.ai meter said the browser had
+// no session while Chrome held a fresh one, and the operator was told to
+// sign in again, which could not help.
+func TestFindSessionThatDoesNotDecryptSaysSo(t *testing.T) {
+	home := chromeHome(t, "the-browsers-key", [][3]string{
+		{".claude.ai", "sessionKey", "sk-ant-session"},
+		{".claude.ai", "cf_clearance", "clearance"},
+	})
+	_, err := FindSession(context.Background(), home, Session{
+		Hosts: []string{"claude.ai"}, Names: []string{"sessionKey", "cf_clearance"},
+	}, "", countingSecret("another-key", new(int)))
+	if errors.Is(err, ErrNotFound) || !errors.Is(err, ErrUndecryptable) {
+		t.Fatalf("err = %v, want ErrUndecryptable", err)
+	}
+	if !strings.Contains(err.Error(), "Chrome") {
+		t.Errorf("err %q does not name the browser", err)
 	}
 }

@@ -172,6 +172,7 @@ func (b Browser) readSession(ctx context.Context, store string, s Session, secre
 			continue
 		}
 		out := Found{Host: host, Browser: b}
+		var decryptErr error
 		for _, r := range picked {
 			v := r.value
 			if v == "" && len(r.enc) > 0 {
@@ -185,6 +186,9 @@ func (b Browser) readSession(ctx context.Context, store string, s Session, secre
 					return Found{}, fmt.Errorf("browsercookie: keychain secret unavailable: %w", err)
 				}
 				if v, err = decryptChromium(r.enc, deriveChromiumKey(key)); err != nil {
+					if decryptErr == nil {
+						decryptErr = fmt.Errorf("%w (%s: %v)", ErrUndecryptable, r.name, err)
+					}
 					continue
 				}
 			}
@@ -194,6 +198,11 @@ func (b Browser) readSession(ctx context.Context, store string, s Session, secre
 		}
 		if len(out.Cookies) > 0 && proven(toRows(out.Cookies), s) {
 			return out, nil
+		}
+		if decryptErr != nil {
+			// The session is there; reading it failed. Saying "no such
+			// cookie" sent the operator to sign in again, which cannot help.
+			return Found{}, decryptErr
 		}
 	}
 	return Found{}, ErrNotFound
