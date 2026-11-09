@@ -48,6 +48,15 @@ func TestStatusStaleWarningsPreferDaemonHealth(t *testing.T) {
 		t.Errorf("warnings with a refused reader = %q", got)
 	}
 
+	// A session Gemini CLI wrote within the window that nothing ingested:
+	// without the daemon's answer, the count check catches it.
+	session := filepath.Join(home, ".gemini", "tmp", "abc", "chats", "session-1.json")
+	if err := os.MkdirAll(filepath.Dir(session), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(session, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	down := func(string) (mcp.DaemonSources, error) { return mcp.DaemonSources{}, errors.New("401") }
 	got = statusStaleWarnings(context.Background(), nil, cfg, "http://127.0.0.1:1", down)
 	if len(got) != 1 || !strings.Contains(got[0], "ingestion stale [warning]: gemini-cli") {

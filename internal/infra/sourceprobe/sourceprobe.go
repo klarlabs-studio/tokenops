@@ -7,6 +7,7 @@
 package sourceprobe
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -35,56 +36,18 @@ import (
 func All(cfg config.Config) map[string]config.SourceProbe {
 	out := map[string]config.SourceProbe{}
 	if cfg.VendorUsage.CodexJSONL.Enabled {
-		root := cfg.VendorUsage.CodexJSONL.Root
-		out["codex-jsonl"] = func() (time.Time, bool) {
-			if root == "" {
-				r, err := codexjsonl.DefaultRoot()
-				if err != nil {
-					return time.Time{}, false
-				}
-				root = r
-			}
-			return newestJSONLAt(root)
-		}
+		out["codex-jsonl"] = probeRoot(cfg.VendorUsage.CodexJSONL.Root, codexjsonl.DefaultRoot, newestJSONLAt)
 	}
 	if cfg.VendorUsage.ClaudeCodeJSONL.Enabled {
-		root := cfg.VendorUsage.ClaudeCodeJSONL.Root
-		out["claude-code-jsonl"] = func() (time.Time, bool) {
-			if root == "" {
-				r, err := claudecodejsonl.DefaultRoot()
-				if err != nil {
-					return time.Time{}, false
-				}
-				root = r
-			}
-			return newestJSONLAt(root)
-		}
+		out["claude-code-jsonl"] = probeRoot(cfg.VendorUsage.ClaudeCodeJSONL.Root, claudecodejsonl.DefaultRoot, newestJSONLAt)
 	}
 	if cfg.VendorUsage.OpenCode.Enabled {
-		root := cfg.VendorUsage.OpenCode.Root
-		out["opencode"] = func() (time.Time, bool) {
-			if root == "" {
-				r, err := opencode.DefaultRoot()
-				if err != nil {
-					return time.Time{}, false
-				}
-				root = r
-			}
-			return newestOpenCodeMessage(root)
-		}
+		out["opencode"] = probeRoot(cfg.VendorUsage.OpenCode.Root, opencode.DefaultRoot, newestOpenCodeMessage)
 	}
 	if cfg.VendorUsage.GeminiCLI.Enabled {
-		root := cfg.VendorUsage.GeminiCLI.Root
-		out["gemini-cli"] = func() (time.Time, bool) {
-			if root == "" {
-				r, err := geminicli.DefaultRoot()
-				if err != nil {
-					return time.Time{}, false
-				}
-				root = r
-			}
+		out["gemini-cli"] = probeRoot(cfg.VendorUsage.GeminiCLI.Root, geminicli.DefaultRoot, func(root string) (time.Time, bool) {
 			return newestFoundAt([]string{root}, geminicli.FindSessionFiles)
-		}
+		})
 	}
 	if cfg.VendorUsage.Pi.Enabled {
 		root := cfg.VendorUsage.Pi.Root
@@ -96,10 +59,39 @@ func All(cfg config.Config) map[string]config.SourceProbe {
 			if err != nil {
 				return time.Time{}, false
 			}
+			if len(roots) == 0 {
+				// DefaultRoots lists only the roots that exist.
+				return time.Time{}, true
+			}
 			return newestFoundAt(roots, pisessions.FindSessionFiles)
 		}
 	}
 	return out
+}
+
+// probeRoot probes the configured root, or the client's default one.
+//
+// A missing root is unknown when it was configured: a typo and an
+// uninstalled client look alike from here, and only one of them means
+// there is nothing to ingest. A missing default cannot be a typo: the
+// client keeps nothing on this machine, so there is nothing to miss. It
+// was unknown too, and an opencode used once weeks ago and since removed
+// kept every spend figure marked untrusted as a critical, silent source.
+func probeRoot(configured string, defaultRoot func() (string, error), newest func(string) (time.Time, bool)) config.SourceProbe {
+	return func() (time.Time, bool) {
+		if configured != "" {
+			return newest(configured)
+		}
+		root, err := defaultRoot()
+		if err != nil || !filepath.IsAbs(root) {
+			// No home to resolve it under: nothing to tell.
+			return time.Time{}, false
+		}
+		if _, err := os.Stat(root); errors.Is(err, fs.ErrNotExist) {
+			return time.Time{}, true
+		}
+		return newest(root)
+	}
 }
 
 // newestFoundAt reports the modification time of the newest file a
