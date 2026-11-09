@@ -40,9 +40,10 @@ func runAnomalies(ctx context.Context, d anomalies.Deps, dir string, delay, ever
 		return
 	case <-wait.C:
 	}
+	r := &anomalies.Runner{Deps: d, Dir: dir}
 	run := func() {
 		start := time.Now()
-		s, err := anomalies.Run(ctx, d, dir, start)
+		s, err := r.Run(ctx, start)
 		if err != nil {
 			logger.Warn("spend anomalies not stored", "err", err)
 			return
