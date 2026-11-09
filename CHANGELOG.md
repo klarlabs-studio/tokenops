@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.118.15 - 2026-11-09
+
+### Fixed
+
+- **daemon:** the glance's event cache holds a month of prompt events in less memory, so the daemon's garbage collector has less to do. It now leaves out nine attributes no reader of the cache asks for (per-turn token splits and record bookkeeping, kept in the payload or never read back); the store keeps them all. A Codex turn's attributes take 696 bytes instead of 1,272, about 160 MB less on a busy machine.
+
 ## 0.118.14 - 2026-11-09
 
 ### Fixed
