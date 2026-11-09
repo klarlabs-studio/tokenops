@@ -160,3 +160,70 @@ func TestRunStoresTheSnapshotAndOffersIt(t *testing.T) {
 		t.Fatalf("snapshot = %+v, %v", back, err)
 	}
 }
+
+// A Runner reads four weeks on its first run of a UTC day and only
+// yesterday and today on the others, with the same answer as Run.
+func TestRunnerReadsTheLastTwoDaysBetweenFullReads(t *testing.T) {
+	var turns []analytics.SessionTurn
+	var charges []analytics.Charge
+	for n := 0; n <= 21; n++ {
+		d := midnightAgo(n)
+		usd := 10.0
+		if n == 0 {
+			usd = 90
+		}
+		turns = append(turns, analytics.SessionTurn{SessionID: "s" + d.Format("0102"), At: d.Add(time.Hour), Provider: "anthropic", Model: "sonnet",
+			Tokens: int64(usd * 1e5), APIEquivalentUSD: usd, Source: "claude-code-jsonl"})
+		charges = append(charges, analytics.Charge{Day: d, Provider: "anthropic", Model: "sonnet", InputTokens: int64(usd * 1e5), ListUSD: usd})
+	}
+	var reads []time.Time
+	d := Deps{
+		Turns: func(_ context.Context, since time.Time) ([]analytics.SessionTurn, error) {
+			reads = append(reads, since)
+			var out []analytics.SessionTurn
+			for _, t := range turns {
+				if !t.At.Before(since) {
+					out = append(out, t)
+				}
+			}
+			return out, nil
+		},
+		Charges: func(_ context.Context, since, _ time.Time) ([]analytics.Charge, error) {
+			var out []analytics.Charge
+			for _, c := range charges {
+				if !c.Day.Before(since) {
+					out = append(out, c)
+				}
+			}
+			return out, nil
+		},
+	}
+	want, err := Run(context.Background(), d, t.TempDir(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(want.Anomalies) == 0 {
+		t.Fatal("the fixture flags nothing; it tests nothing")
+	}
+	r := &Runner{Deps: d, Dir: t.TempDir()}
+	reads = nil
+	for i, at := range []time.Time{now, now.Add(time.Hour), now.Add(2 * time.Hour)} {
+		got, err := r.Run(context.Background(), at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.HistoryDays != want.HistoryDays || len(got.Anomalies) != len(want.Anomalies) || got.Anomalies[0].ID != want.Anomalies[0].ID {
+			t.Fatalf("run %d = %d days %+v; want %d days %+v", i, got.HistoryDays, got.Anomalies, want.HistoryDays, want.Anomalies)
+		}
+	}
+	yesterday := midnightAgo(1)
+	if len(reads) != 3 || !reads[0].Before(midnightAgo(21)) || !reads[1].Equal(yesterday) || !reads[2].Equal(yesterday) {
+		t.Fatalf("reads since %v; want four weeks, then yesterday twice", reads)
+	}
+	if _, err := r.Run(context.Background(), now.Add(24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if last := reads[len(reads)-1]; !last.Before(midnightAgo(20)) {
+		t.Fatalf("the next UTC day read since %v; want four weeks", last)
+	}
+}
