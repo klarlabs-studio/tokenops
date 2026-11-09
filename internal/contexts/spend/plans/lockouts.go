@@ -22,7 +22,8 @@ func LockoutsByDay(rs []QuotaReading, until time.Time) map[string]DayLockouts {
 	asRead := func(time.Time, time.Duration) (float64, bool) { return 1, true }
 	out := map[string]DayLockouts{}
 	var spans [][2]time.Time
-	for _, w := range instancesOf(rs, asRead) {
+	instances := instancesOf(rs, asRead)
+	for _, w := range instances {
 		at, ran := w.exhaustedAt(1)
 		if !ran {
 			continue
@@ -32,6 +33,10 @@ func LockoutsByDay(rs []QuotaReading, until time.Time) map[string]DayLockouts {
 		d.Lockouts++
 		out[day] = d
 		end := w.reset
+		if next, ok := nextOpening(instances, w, at); ok && next.Before(end) {
+			// Reset early, with a credit: the next window was open.
+			end = next
+		}
 		if end.After(until) {
 			end = until
 		}
@@ -54,6 +59,29 @@ func LockoutsByDay(rs []QuotaReading, until time.Time) map[string]DayLockouts {
 		}
 	}
 	return out
+}
+
+// nextOpening is when a window of w's label next showed room after at: the
+// first reading below full of another instance, one with another reset. A
+// reset credit (Codex grants them) opens a fresh window long before the
+// exhausted one's reset, and the time between was not blocked: counting it
+// marked whole days blocked while the operator worked on the new window.
+func nextOpening(instances []windowInstance, w windowInstance, at time.Time) (time.Time, bool) {
+	var next time.Time
+	for _, o := range instances {
+		if o.label != w.label || o.reset.Equal(w.reset) {
+			continue
+		}
+		for _, p := range o.points {
+			if p.at.After(at) && p.demand < 1 {
+				if next.IsZero() || p.at.Before(next) {
+					next = p.at
+				}
+				break
+			}
+		}
+	}
+	return next, !next.IsZero()
 }
 
 // unionSpans merges overlapping spans, earliest first.

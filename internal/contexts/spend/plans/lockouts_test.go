@@ -41,3 +41,31 @@ func TestLockoutsByDay(t *testing.T) {
 		t.Errorf("open window = %+v", got)
 	}
 }
+
+// A window reset early, with a reset credit, ends its lockout when the
+// next window starts, not at the reset the exhausted window named: Codex
+// counted whole days blocked while the operator worked on a fresh window.
+func TestLockoutsByDayEndAtAnEarlyReset(t *testing.T) {
+	base := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
+	weekly := func(at time.Time, used float64, reset time.Time) QuotaReading {
+		return QuotaReading{At: at, Windows: []QuotaWindow{{Label: "weekly", UsedPct: used, ResetsAt: reset, Duration: 7 * 24 * time.Hour}}}
+	}
+	oldReset := base.Add(5*24*time.Hour + 17*time.Hour) // Oct 30 17:00
+	newReset := base.Add(7*24*time.Hour + 7*time.Hour)  // Nov 1 07:00
+	rs := []QuotaReading{
+		weekly(base.Add(5*time.Hour), 90, oldReset),
+		weekly(base.Add(6*time.Hour), 100, oldReset),
+		// A credit: a fresh window from 07:00, used on the days after.
+		weekly(base.Add(7*time.Hour), 0, newReset),
+		weekly(base.Add(2*24*time.Hour), 40, newReset),
+	}
+	got := LockoutsByDay(rs, base.Add(4*24*time.Hour))
+	if d := got["2026-10-25"]; d.Lockouts != 1 || d.BlockedMinutes != 60 {
+		t.Errorf("day of the lockout = %+v, want 1 lockout and the hour until the credit", d)
+	}
+	for _, day := range []string{"2026-10-26", "2026-10-27", "2026-10-28"} {
+		if d := got[day]; d.BlockedMinutes != 0 {
+			t.Errorf("%s = %+v, want nothing blocked on a fresh window", day, d)
+		}
+	}
+}
