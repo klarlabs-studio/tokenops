@@ -31,6 +31,9 @@ import (
 type FinOps struct {
 	// Plans reads the plan bindings, the recorded prompt events (window
 	// readings and turns) and the plan history: plan days and plan advice.
+	// The daemon passes the glance's: its event cache and its advice,
+	// replayed at most hourly, instead of a month read from the store on
+	// every upload.
 	Plans func() headroom.Deps
 	// Waste is the waste report and realized savings for each UTC day from
 	// since's to until, read from turns when it is set.
@@ -96,12 +99,12 @@ func addFinOps(ctx context.Context, f FinOps, turns TurnReader, took func(string
 				u.PlanDays = PlanDays(envs, d.Config.Plans, history, u.Days, now)
 			}
 			done = lap(took, "plan advice")
-			res, err := headroom.Advise(ctx, d, headroom.AdviceQuery{}, now)
+			advice, err := headroom.CachedAdvice(ctx, d, now)
 			done()
 			if err != nil {
 				warnings = append(warnings, "plan advice: "+err.Error())
 			} else {
-				u.PlanAdvice = AdviceRows(res.Providers)
+				u.PlanAdvice = AdviceRows(advice)
 			}
 		}
 	}
