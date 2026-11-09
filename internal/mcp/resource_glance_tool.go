@@ -82,6 +82,10 @@ func renderBoundaryAdvice(advice []bcap.Advice) string {
 
 // resourceGlance is the glance capability in the tool's shape.
 func resourceGlance(ctx context.Context, d PlanDeps) (*resourceGlanceResult, error) {
+	var fromDaemon resourceGlanceResult
+	if d.fromDaemon(ctx, "/api/glance", &fromDaemon) {
+		return &fromDaemon, nil
+	}
 	deps := d.headroomDeps()
 	now := time.Now().UTC()
 	g, err := headroom.ComputeGlance(ctx, deps, now)
