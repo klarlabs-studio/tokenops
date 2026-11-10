@@ -595,7 +595,7 @@ func (g *guard) answered(m domain.Match, id string) (Result, bool, error) {
 	// records what the verifier would have said. Enforced, an approval the
 	// check does not honour is spent unused and recorded, and the
 	// decision goes on waiting.
-	check := checkPresence(g.env, a, id, m.Rule.Name, g.call.SessionID, g.now)
+	check := checkPresence(g.env, a, id, m.Rule, g.call.SessionID, g.now)
 	if mode := g.env.approval(); !check.honoured(mode) {
 		return Result{}, false, g.refuse(m, id, a, check, mode)
 	}
@@ -655,7 +655,8 @@ func (g *guard) settlePrompt(m domain.Match, id string) (bool, error) {
 	}
 	a := boundaryledger.Answer{
 		ID: id, Rule: m.Rule.Name, SessionID: g.call.SessionID, Approved: true,
-		Scope: boundaryledger.ScopeSession, Approver: g.env.user(), Method: "prompt", At: g.now,
+		Scope: boundaryledger.ScopeSession, Approver: g.env.user(), Method: MethodPrompt, At: g.now,
+		ToolUseID: p.ToolUseID,
 	}
 	if err := g.env.Dir.PutAnswer(a); err != nil {
 		return false, err

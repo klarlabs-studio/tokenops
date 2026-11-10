@@ -485,3 +485,45 @@ presence anywhere. Turning presence on stops an unsigned grant made under
 the Secure Enclave for a signature with its own dialog text, so a person
 who approves a dialog they did not start grants what it asked. The grant's
 decision says it was signed in person and how to end it.
+
+## Amendment: an answer's channel is checked (2026-11-10)
+
+§3 and decision 2 let two approvals count under `presence` without a
+signature: one given at Claude Code's permission prompt, and one given by
+a role in the team plane. The pause point recognised both by the method
+the answer file names. That file is written by the user the boundary
+governs, so the name alone says nothing about where an answer came from,
+and an answer that named either channel was honoured where an unsigned
+one is refused.
+
+**What counts now.** Under `presence` and `presence-strict` the pause
+point takes an answer's channel from its own state, not from the answer:
+
+- **`prompt`** counts only when the session has a person at it, the rule
+  is not routed to the team plane, the approval is for the session, and
+  the answer names the tool call the pause point raised its ask on, as
+  the pending decision records it. The answer the pause point writes
+  after reading the prompt back from the transcript carries that call
+  (`tool_use_id`). `presence-strict` still drops every prompt answer.
+- **`team`** counts only on a rule routed to the team plane: an
+  organisation rule that requires an approver role.
+
+Any other answer naming those channels is treated as an answer without a
+valid proof (§3): not honoured, removed, recorded on the decision as
+refused with `prompt_not_asked` or `team_not_routed`, and the refusal the
+agent reads says why. Under `channel` it is honoured as before and the
+decision records what enforcement would refuse, like the other shadow
+outcomes.
+
+**Consequences.** A prompt approval written by an earlier version names no
+call. Under `presence` it is refused once and the pause point asks again.
+A session approved at the prompt and then continued headless has nobody
+at it, so its approval stops counting there and the refusal names
+`tokenops approve`.
+
+**What this is not.** These checks read state the same user can write.
+They narrow what an unsigned answer can claim; they do not prove where it
+came from, which only a signature does. Whether an unsigned channel should
+count at all under enforcement, and where the state it is checked against
+should live, is a separate decision; `presence-strict` already answers it
+for the prompt.
