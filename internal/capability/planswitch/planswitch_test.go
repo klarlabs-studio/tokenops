@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"math"
+	"slices"
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
@@ -19,10 +21,11 @@ func (m *memHistory) Append(bs ...plans.Binding) error {
 }
 
 type fakeRestamper struct {
-	provider string
-	from, to time.Time
-	calls    int
-	metered  int
+	provider     string
+	from, to     time.Time
+	calls        int
+	metered      int
+	spendReports []string
 }
 
 func (f *fakeRestamper) RestampMetered(_ context.Context, provider string, from, to time.Time) (int64, error) {
@@ -31,8 +34,8 @@ func (f *fakeRestamper) RestampMetered(_ context.Context, provider string, from,
 	return 41, nil
 }
 
-func (f *fakeRestamper) RestampPlanIncluded(_ context.Context, provider string, from, to time.Time) (int64, error) {
-	f.provider, f.from, f.to = provider, from, to
+func (f *fakeRestamper) RestampPlanIncluded(_ context.Context, provider string, from, to time.Time, spendReports []string) (int64, error) {
+	f.provider, f.from, f.to, f.spendReports = provider, from, to, spendReports
 	f.calls++
 	return 305, nil
 }
@@ -52,6 +55,35 @@ func TestBackdatedSwitchRecordsAndRestamps(t *testing.T) {
 	// The plan before the first recorded switch is kept.
 	if len(h.h) != 2 || h.h[0].Plan != "gpt-plus" || h.h[1].Plan != "gpt-pro-5x" {
 		t.Fatalf("history = %+v", h.h)
+	}
+}
+
+// The backdated plan covers nothing a spend report recorded: the store is
+// told which sources those are, from the same list the recording rule uses.
+func TestBackdatedSwitchLeavesSpendReportsBilled(t *testing.T) {
+	r := &fakeRestamper{}
+	if _, err := Record(context.Background(), &memHistory{}, r, Change{Provider: "anthropic", Plan: "claude-ultra", From: day(1), Now: day(30)}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(r.spendReports, "vendor-usage-anthropic") || !slices.Equal(r.spendReports, biller.SpendSources()) {
+		t.Fatalf("spend reports left billed = %v, want %v", r.spendReports, biller.SpendSources())
+	}
+}
+
+// Marking usage as covered removes the cost recorded with it. A name the
+// catalog does not hold says nothing about what it covers, so the switch
+// is recorded and the usage is left as it was.
+func TestBackdatedSwitchToAnUnknownPlanRestampsNothing(t *testing.T) {
+	h, r := &memHistory{}, &fakeRestamper{}
+	res, err := Record(context.Background(), h, r, Change{Provider: "openai", Plan: "gpt-pro-5", From: day(1), Now: day(30)})
+	if !errors.Is(err, ErrUnknownPlan) {
+		t.Fatalf("err = %v, want ErrUnknownPlan", err)
+	}
+	if r.calls != 0 || r.metered != 0 || res.Restamped != 0 || res.RestampedTo != "" {
+		t.Fatalf("re-marked usage for a plan nobody knows: restamper %+v, result %+v", r, res)
+	}
+	if len(res.Recorded) == 0 || len(h.h) != len(res.Recorded) {
+		t.Fatalf("the switch was not recorded: result %+v, history %+v", res.Recorded, h.h)
 	}
 }
 

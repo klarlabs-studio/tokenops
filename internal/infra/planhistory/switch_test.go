@@ -2,10 +2,12 @@ package planhistory
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/planswitch"
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -59,6 +61,28 @@ func TestRecordAuditsThroughAGivenStore(t *testing.T) {
 	}
 	entries, err := audit.NewRecorder(store).Query(ctx, audit.Filter{Action: audit.ActionPlanChange})
 	if err != nil || len(entries) != 1 || entries[0].Actor != "codex" {
+		t.Fatalf("audit = %+v, %v", entries, err)
+	}
+}
+
+// A backdated switch to a plan the catalog does not hold is recorded and
+// re-marks nothing. It is a plan change all the same, so it is audited,
+// with the count it changed: none.
+func TestRecordAuditsASwitchThatRestampedNothing(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "events.db"), sqlite.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	now := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
+	out, err := Record(ctx, Switch{Provider: "openai", Plan: "gpt-pro-5", From: now.Add(-24 * time.Hour), Now: now, Store: store})
+	if !errors.Is(err, planswitch.ErrUnknownPlan) || len(out.Recorded) == 0 {
+		t.Fatalf("err = %v, recorded %+v; want the switch recorded and ErrUnknownPlan", err, out.Recorded)
+	}
+	entries, err := audit.NewRecorder(store).Query(ctx, audit.Filter{Action: audit.ActionPlanChange})
+	if err != nil || len(entries) != 1 || entries[0].Details["plan"] != "gpt-pro-5" {
 		t.Fatalf("audit = %+v, %v", entries, err)
 	}
 }

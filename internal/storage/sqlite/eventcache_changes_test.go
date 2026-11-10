@@ -101,7 +101,7 @@ func TestEventCacheRereadsOnlyWhatChanged(t *testing.T) {
 			}
 		}},
 		{"restamp", func() {
-			if _, err := s.RestampPlanIncluded(ctx, "openrouter", month, cacheNow); err != nil {
+			if _, err := s.RestampPlanIncluded(ctx, "openrouter", month, cacheNow, nil); err != nil {
 				t.Fatal(err)
 			}
 		}},
