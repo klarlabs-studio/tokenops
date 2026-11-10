@@ -212,14 +212,11 @@ func readClaudeAt(ctx context.Context, root string, rootErr error, since time.Ti
 	}
 	// Claude Code writes a message once per content block; the message
 	// id is what makes it one turn.
-	seen := map[string]bool{}
+	seen := claudecodejsonl.Messages{}
 	return readFiles(ctx, "Claude Code", files, since, func(f string) error {
 		return claudecodejsonl.ReadFile(f, func(t claudecodejsonl.Turn) error {
-			if t.MessageID != "" {
-				if seen[t.MessageID] {
-					return nil
-				}
-				seen[t.MessageID] = true
+			if !seen.First(t.MessageID) {
+				return nil
 			}
 			add(turn{
 				harness: "Claude Code", model: t.Model, session: t.SessionID, at: t.Timestamp,

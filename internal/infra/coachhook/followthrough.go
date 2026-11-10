@@ -224,9 +224,9 @@ func compactMessage(turns int, ctx, limit int64, verbosity string) string {
 const ceilingShare = 0.95
 
 // automaticCompaction reports whether this Stop's compaction was the
-// client's own rather than the operator's. The boundary entry says so
-// when the transcript tail still holds it; a long compaction summary can
-// push it out, and then a drop that started at the window's ceiling is
+// client's own rather than the operator's. The boundary entry says so.
+// Where the Stop read none (a client that writes none, or an entry that
+// could not be read), a drop that started at the window's ceiling is
 // taken as automatic.
 func automaticCompaction(st *sessionState, model string) bool {
 	switch st.compaction {
