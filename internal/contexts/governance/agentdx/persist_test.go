@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"unsafe"
 )
 
 // A cache saved and loaded by a restarted daemon yields exactly what
@@ -79,4 +80,41 @@ func TestSavedCacheFromAnotherBuildIsNotLoaded(t *testing.T) {
 	if err := NewTranscriptCacheWithFacts(facts).Load(filepath.Join(dir, "none.gob"), "v1+abc"); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("missing save: err = %v", err)
 	}
+}
+
+// A loaded cache shares the strings its records repeat, as a cache read
+// from the transcripts does, instead of holding a copy per record.
+func TestLoadedCacheSharesRepeatedStrings(t *testing.T) {
+	dir := t.TempDir()
+	cc, cx := filepath.Join(dir, "claude"), filepath.Join(dir, "codex")
+	writeFile(t, filepath.Join(cc, "p", "s.jsonl"), turns(cacheEpoch, 4, 0, claudeTurn))
+	first := NewTranscriptCache()
+	scanBoth(t, "first", first, cc, cx, cacheEpoch)
+	saved := filepath.Join(dir, "transcripts.gob")
+	if err := first.Save(saved, "v1"); err != nil {
+		t.Fatal(err)
+	}
+	second := NewTranscriptCache()
+	if err := second.Load(saved, "v1"); err != nil {
+		t.Fatal(err)
+	}
+	var recs []Record
+	for _, e := range second.claude {
+		recs = append(recs, e.records...)
+	}
+	if len(recs) < 2 {
+		t.Fatalf("loaded %d records; want several", len(recs))
+	}
+	held := map[string]*byte{}
+	for _, r := range recs {
+		p := unsafe.StringData(r.SessionID)
+		if first, ok := held[r.SessionID]; ok && first != p {
+			t.Fatalf("records hold their own copy of session %q", r.SessionID)
+		}
+		held[r.SessionID] = p
+	}
+	if len(held) >= len(recs) {
+		t.Fatalf("%d sessions in %d records; the fixture repeats none", len(held), len(recs))
+	}
+	scanBoth(t, "after a load", second, cc, cx, cacheEpoch)
 }
