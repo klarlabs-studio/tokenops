@@ -183,8 +183,8 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(configPath), err)
 	}
-	if err := os.WriteFile(configPath, data, 0o600); err != nil {
-		return fmt.Errorf("write %s: %w", configPath, err)
+	if err := config.WriteFile(configPath, data); err != nil {
+		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(storagePath), 0o700); err != nil {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(storagePath), err)

@@ -3,6 +3,14 @@
 The daemon reads `config.yaml` (path via `--config`) merged with
 `TOKENOPS_*` environment variables; CLI flags win last.
 
+A command or tool that changes a setting writes that setting into the
+file and leaves the rest as it is: your comments, the order, and any key
+this version of TokenOps does not know. The CLI, the MCP server and the
+daemon take a lock (`.config.yaml.lock`, beside the file) for the write
+and replace the file in one step, so two changes at once are both kept.
+Where both changed the same setting, the second is refused and asks to be
+run again.
+
 ## Operating modes
 
 `mode` decides how TokenOps helps you optimize:
