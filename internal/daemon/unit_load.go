@@ -2,9 +2,7 @@ package daemon
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"strconv"
 	"time"
 )
 
@@ -16,44 +14,59 @@ import (
 // replacing the binary. Neither may leave the operator with supervisor
 // commands to type: a reinstall that stops the old daemon and fails to
 // start the new one leaves no ingestion at all.
+//
+// A job the supervisor loaded from another unit file is left as it is,
+// with a *ForeignJobError (see CheckJob).
 func ApplyUnit(kind UnitKind, path string, changed bool) error {
 	switch kind {
 	case UnitLaunchd:
-		domain := "gui/" + strconv.Itoa(os.Getuid())
-		return applyLaunchd(runLaunchctl, time.Sleep, domain, domain+"/"+LaunchdLabel, path, changed, launchdUnloadTimeout)
+		if err := CheckJob(kind, path); err != nil {
+			return err
+		}
+		return applyLaunchd(runLaunchctl, time.Sleep, launchdDomain(), launchdJob(), path, changed, launchdUnloadTimeout)
 	case UnitSystemd:
+		// The manager finds the unit by its name, so only after a reload
+		// does it say which file that name now stands for.
+		if err := systemctl("daemon-reload"); err != nil {
+			return err
+		}
+		if err := CheckJob(kind, path); err != nil {
+			return err
+		}
 		// enable does not restart a unit that is already running, so an
 		// upgrade would keep the old binary; restart starts a stopped one
 		// and replaces a running one.
-		for _, args := range [][]string{
-			{"--user", "daemon-reload"},
-			{"--user", "enable", SystemdName},
-			{"--user", "restart", SystemdName},
-		} {
-			if out, err := exec.Command("systemctl", args...).CombinedOutput(); err != nil { //nolint:gosec // fixed verbs and unit name
-				return fmt.Errorf("systemctl %s: %w (%s)", args[1], err, bytesPreview(out))
-			}
+		if err := systemctl("enable", SystemdName); err != nil {
+			return err
 		}
-		return nil
+		return systemctl("restart", SystemdName)
 	default:
 		return fmt.Errorf("supervisor: cannot load kind %q", kind)
 	}
 }
 
-// DisableUnit unloads the unit. Missing/not-loaded is success.
+func systemctl(args ...string) error {
+	out, err := runSupervisor("systemctl", append([]string{"--user"}, args...)...)
+	if err != nil {
+		return fmt.Errorf("systemctl %s: %w (%s)", args[0], err, bytesPreview(out))
+	}
+	return nil
+}
+
+// DisableUnit unloads the job loaded from the unit at path. Missing or not
+// loaded is success; a job loaded from another unit file is left running,
+// with a *ForeignJobError.
 func DisableUnit(kind UnitKind, path string) error {
-	_ = path
+	if err := CheckJob(kind, path); err != nil {
+		return err
+	}
 	switch kind {
 	case UnitLaunchd:
-		uid := strconv.Itoa(os.Getuid())
-		label := "gui/" + uid + "/" + LaunchdLabel
-		if out, err := exec.Command("launchctl", "bootout", label).CombinedOutput(); err != nil {
-			// launchctl bootout exits non-zero when the service is not loaded.
-			_ = out
-		}
+		// launchctl bootout exits non-zero when the service is not loaded.
+		_, _ = runLaunchctl("bootout", launchdJob())
 		return nil
 	case UnitSystemd:
-		_ = exec.Command("systemctl", "--user", "disable", "--now", SystemdName).Run()
+		_ = systemctl("disable", "--now", SystemdName)
 		return nil
 	default:
 		return fmt.Errorf("supervisor: cannot unload kind %q", kind)
@@ -69,9 +82,15 @@ const launchdUnloadTimeout = 30 * time.Second
 // launchdPollInterval is how often the unload wait re-checks the label.
 const launchdPollInterval = 200 * time.Millisecond
 
-func runLaunchctl(args ...string) ([]byte, error) {
-	return exec.Command("launchctl", args...).CombinedOutput() //nolint:gosec // args are built from fixed verbs, the label and the unit path
+// runSupervisor runs a supervisor command and returns what it printed.
+// Every launchctl and systemctl call goes through it, so a test can see
+// that none is made: the job they address is the one real daemon of
+// whoever runs the tests.
+var runSupervisor = func(name string, args ...string) ([]byte, error) {
+	return exec.Command(name, args...).CombinedOutput() //nolint:gosec // callers pass fixed verbs, the label or unit name, and the unit path
 }
+
+func runLaunchctl(args ...string) ([]byte, error) { return runSupervisor("launchctl", args...) }
 
 // applyLaunchd makes launchd run the unit at path.
 //

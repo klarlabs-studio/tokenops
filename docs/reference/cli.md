@@ -589,7 +589,8 @@ default and also advertises `tokenops.local` over mDNS.
 ```bash
 tokenops daemon install            # write + load
 tokenops daemon install --no-load  # write only
-tokenops daemon status
+tokenops --config FILE daemon install   # the daemon reads FILE
+tokenops daemon status             # the unit, the config its daemon reads, the log
 tokenops daemon restart            # re-read config after a config change
 tokenops daemon uninstall
 ```
@@ -598,6 +599,22 @@ Install and upgrade wait until the supervised process answers `/healthz`
 before reporting success. Supervisor acceptance alone is not treated as a
 running daemon; a failed startup exits non-zero with the status and log path
 to inspect.
+
+**Which config the daemon reads.** The supervisor starts the daemon
+without your shell's flags and environment, so the unit says which config
+it reads. By default that is `~/.config/tokenops/config.yaml`. Install
+with `--config FILE` and the unit starts the daemon with that file; install
+from a shell whose `XDG_CONFIG_HOME` is not `~/.config` and the unit
+carries that directory. `tokenops daemon install` prints the file, and
+`tokenops daemon status` shows it as `Config:`. A unit that pins nothing
+is unchanged, so a reinstall still reports "Already up to date".
+
+**One daemon per user.** launchd and systemd keep one tokenops job per
+user, whatever unit file it was loaded from. `install`, `restart` and
+`uninstall` act on that job only when it was loaded from the unit file
+they address (the default one, or `--path` / `--home`). When it was loaded
+from another unit file they leave it running and say which file it is;
+`tokenops daemon uninstall --path <that file>` removes that one first.
 
 The MCP server your client launches (`tokenops serve`, also left out of
 `--help`) does not ingest. A reboot that kills an unsupervised `start`
@@ -623,6 +640,13 @@ The commands that write config — `plan set/unset`, `provider set/unset`,
 Unsupervised (no unit installed), there is nothing to bounce: those
 commands tell you to Ctrl-C and re-run `tokenops start` instead of
 claiming a restart that did not happen.
+
+They restart the daemon only when it reads the file they wrote. A command
+run with another `--config`, or from a shell with another
+`XDG_CONFIG_HOME`, than the unit was installed with writes a file the
+daemon does not read: it says so, names both files, and leaves the daemon
+running. `tokenops daemon install --config <file>` has the daemon read
+that file.
 
 ### `tokenops status`
 

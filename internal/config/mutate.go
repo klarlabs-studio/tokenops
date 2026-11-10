@@ -15,14 +15,25 @@ import (
 // Every mutation surface (CLI verbs, MCP config tools) targets this
 // file by default so there is one on-disk truth.
 func DefaultPath() (string, error) {
-	if v := os.Getenv("XDG_CONFIG_HOME"); v != "" {
-		return filepath.Join(v, "tokenops", "config.yaml"), nil
+	configHome := os.Getenv("XDG_CONFIG_HOME")
+	if configHome != "" {
+		return DefaultPathIn(configHome, ""), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "tokenops", "config.yaml"), nil
+	return DefaultPathIn("", home), nil
+}
+
+// DefaultPathIn is DefaultPath for a process running with configHome as
+// its XDG_CONFIG_HOME (empty when it has none) and home as its home
+// directory: the file a daemon started with that environment reads.
+func DefaultPathIn(configHome, home string) string {
+	if configHome != "" {
+		return filepath.Join(configHome, "tokenops", "config.yaml")
+	}
+	return filepath.Join(home, ".config", "tokenops", "config.yaml")
 }
 
 // ReadMutable loads a Config from disk WITHOUT applying env overrides.

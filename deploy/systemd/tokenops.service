@@ -8,10 +8,10 @@ After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=__TOKENOPS_BIN__ start
+ExecStart=__TOKENOPS_BIN__ start__TOKENOPS_CONFIG_ARGS__
 Restart=on-failure
 RestartSec=5
-Environment=HOME=__HOME__
+Environment=HOME=__HOME____TOKENOPS_CONFIG_ENV__
 
 [Install]
 WantedBy=default.target

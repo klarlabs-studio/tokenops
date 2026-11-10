@@ -77,7 +77,7 @@ func runAppLoginSetup(cmd *cobra.Command, p providersetup.Provider, opts provide
 		return err
 	}
 	fmt.Fprintf(out, "\nwrote the grant to %s (vendor_usage.grants.%s)\n", path, p.ID)
-	applyRestart(out, opts.restart, false)
+	applyRestart(out, path, opts.restart, false)
 	return nil
 }
 
@@ -101,7 +101,7 @@ func runAppLoginRevoke(cmd *cobra.Command, id string, opts providerSetupOptions)
 		return err
 	}
 	fmt.Fprintf(out, "Revoked: TokenOps no longer reads another application's sign-in for %s (%s).\n", id, path)
-	applyRestart(out, opts.restart, false)
+	applyRestart(out, path, opts.restart, false)
 	return nil
 }
 

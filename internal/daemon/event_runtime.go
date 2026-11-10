@@ -312,14 +312,14 @@ func actionDeps(cfg config.Config, store *sqlite.Store, logger *slog.Logger) fun
 		d := proxy.ActionDeps{
 			ConfigPath: path,
 			Apply: func() (string, func()) {
-				if !UnitInstalled() {
-					return ConfigRestart{}.Note(), nil
+				if r, will := PlanConfigRestart(path); !will {
+					return r.Note(), nil
 				}
 				return "restarting the daemon; the change is live in a few seconds", func() {
 					// Let the answer reach the client before the
 					// supervisor stops this process.
 					time.Sleep(250 * time.Millisecond)
-					if r := RestartForConfig(); r.Err != nil {
+					if r := RestartForConfig(path); r.Err != nil {
 						logger.Warn("restart after a change through the API failed", "err", r.Err)
 					}
 				}

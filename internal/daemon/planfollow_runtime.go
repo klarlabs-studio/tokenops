@@ -126,7 +126,7 @@ func startPlanFollowRuntime(cfg config.Config, store *sqlite.Store, sup *lifecyc
 	if err != nil {
 		return
 	}
-	f := &planFollower{configPath: path, home: home, store: store, apply: applyPlanFollow(logger), logger: logger,
+	f := &planFollower{configPath: path, home: home, store: store, apply: applyPlanFollow(logger, path), logger: logger,
 		now:     func() time.Time { return time.Now().UTC() },
 		running: cfg.EnabledLocalReaders(), present: sourceprobe.PresentLocalReaders}
 	sup.Go("plan-follow", func(ctx context.Context) error {
@@ -143,16 +143,20 @@ func startPlanFollowRuntime(cfg config.Config, store *sqlite.Store, sup *lifecyc
 	})
 }
 
-// applyPlanFollow restarts a supervised daemon so it reads the new config;
-// an unsupervised one says how to.
-func applyPlanFollow(logger *slog.Logger) func() {
+// applyPlanFollow restarts a supervised daemon so it reads the config
+// written at path. An unsupervised one says how to, and so does one whose
+// supervisor starts it with another config.
+func applyPlanFollow(logger *slog.Logger, path string) func() {
 	return func() {
-		if !UnitInstalled() {
-			logger.Warn("the config change is written; restart `tokenops start` to use it")
-			return
-		}
-		if r := RestartForConfig(); r.Err != nil {
+		r := RestartForConfig(path)
+		switch {
+		case r.Err != nil:
 			logger.Warn("restart after a config change failed — run `tokenops daemon restart`", "err", r.Err)
+		case !r.Supervised:
+			logger.Warn("the config change is written; restart `tokenops start` to use it")
+		case !r.Restarted:
+			logger.Warn("the config change is written, and the supervised daemon reads another file; restart `tokenops start` to use it",
+				"written", r.Written, "supervised_reads", r.Reads)
 		}
 	}
 }
