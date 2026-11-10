@@ -168,16 +168,58 @@ func (c *TranscriptCache) Load(path, key string) error {
 	if len(c.claude) > 0 || len(c.codexs) > 0 {
 		return nil
 	}
+	share := recordStrings{}
 	for p, e := range s.Claude {
+		share.records(e.Records)
 		c.claude[p] = &claudeEntry{stamp: fileStamp{size: e.Size, mtime: e.MTime}, since: e.Since,
 			records: e.Records, offset: e.Offset, stopped: e.Stopped}
 	}
 	for p, e := range s.Codex {
 		r := e.Reader
+		share.records(r.Out)
+		share.records(r.EventPrompts)
+		share.records(r.ItemPrompts)
 		c.codexs[p] = &codexEntry{stamp: fileStamp{size: e.Size, mtime: e.MTime}, offset: e.Offset, stopped: e.Stopped,
 			reader: &codexReader{sessionID: r.SessionID, since: r.Since, facts: c.facts, out: r.Out,
 				eventPrompts: r.EventPrompts, itemPrompts: r.ItemPrompts, itemSeen: r.ItemSeen,
 				pendingContext: r.PendingContext, model: r.Model, effort: r.Effort, role: r.Role}}
 	}
 	return nil
+}
+
+// recordStrings hands out one copy of each string of the records it is
+// given. A cache read from the transcripts shares a session's strings
+// (its id, model, tools) between its records, as the reader hands them
+// out; a cache read back from a saved one has a copy per record, half a
+// million records of copies on a busy machine. Loading shares them again.
+// The per-call ids are each record's own and left as they are.
+type recordStrings map[string]string
+
+func (m recordStrings) str(s string) string {
+	if s == "" {
+		return ""
+	}
+	if c, ok := m[s]; ok {
+		return c
+	}
+	m[s] = s
+	return s
+}
+
+func (m recordStrings) records(recs []Record) {
+	for i := range recs {
+		r := &recs[i]
+		r.SessionID = m.str(r.SessionID)
+		r.Kind = RecordKind(m.str(string(r.Kind)))
+		r.ToolName = m.str(r.ToolName)
+		r.FilePath = m.str(r.FilePath)
+		r.Provider = m.str(r.Provider)
+		r.Model = m.str(r.Model)
+		r.Effort = m.str(r.Effort)
+		r.Command = m.str(r.Command)
+		r.CallSignature = m.str(r.CallSignature)
+		r.Harness = Source(m.str(string(r.Harness)))
+		r.Role = m.str(r.Role)
+		r.Facts.Kind = m.str(r.Facts.Kind)
+	}
 }

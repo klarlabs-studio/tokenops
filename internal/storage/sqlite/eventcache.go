@@ -79,6 +79,9 @@ type cachedEvents struct {
 	tail []tailRow
 	// events is ordered as ReadEvents orders: by timestamp, then id.
 	events []cachedEvent
+	// strs shares the events' strings; it is the window's, used under the
+	// cache's lock once the window is in the cache.
+	strs *interner
 }
 
 // cachedEvent is one stored event and the row it was read from.
@@ -262,11 +265,12 @@ func (c *EventCache) fullRead(ctx context.Context, t eventschema.EventType, from
 	if err != nil {
 		return nil, err
 	}
-	events, err := readCachedEvents(ctx, tx, t, from)
+	strs := newInterner()
+	events, err := readCachedEvents(ctx, tx, strs, t, from)
 	if err != nil {
 		return nil, err
 	}
-	return &cachedEvents{floor: from, seq: snap.seq, tail: snap.tail, events: events}, nil
+	return &cachedEvents{floor: from, seq: snap.seq, tail: snap.tail, events: events, strs: strs}, nil
 }
 
 // snapshot is what a read transaction saw of the store's changes.
@@ -369,14 +373,15 @@ func knownThrough(ctx context.Context, q querier, tail []tailRow) (rowid int64, 
 // cachedSelectSQL is selectSQL with each row's rowid first.
 var cachedSelectSQL = strings.Replace(selectSQL, "SELECT", "SELECT rowid,", 1)
 
-// readCachedEvents is readEvents keeping each event's rowid.
-func readCachedEvents(ctx context.Context, q querier, t eventschema.EventType, from int64) ([]cachedEvent, error) {
+// readCachedEvents is readEvents keeping each event's rowid, each event
+// readied for the cache by in.
+func readCachedEvents(ctx context.Context, q querier, in *interner, t eventschema.EventType, from int64) ([]cachedEvent, error) {
 	var out []cachedEvent
 	err := readEventPages(ctx, q, cachedSelectSQL, t, time.Unix(0, from), func(rs *sql.Rows) (*eventschema.Envelope, error) {
 		var e cachedEvent
 		var err error
 		if e.env, err = scanEnvelope(rs, &e.rowid); err == nil {
-			e.env.Attributes = trimCached(e.env.Attributes)
+			in.cached(e.env)
 			out = append(out, e)
 		}
 		return e.env, err
@@ -387,8 +392,9 @@ func readCachedEvents(ctx context.Context, q querier, t eventschema.EventType, f
 	return out, nil
 }
 
-// scanCachedEvents decodes every row of rs, a cachedSelectSQL.
-func scanCachedEvents(rs *sql.Rows) ([]cachedEvent, error) {
+// scanCachedEvents decodes every row of rs, a cachedSelectSQL, each
+// event readied for the cache by in.
+func scanCachedEvents(rs *sql.Rows, in *interner) ([]cachedEvent, error) {
 	var out []cachedEvent
 	for rs.Next() {
 		var e cachedEvent
@@ -396,7 +402,7 @@ func scanCachedEvents(rs *sql.Rows) ([]cachedEvent, error) {
 		if e.env, err = scanEnvelope(rs, &e.rowid); err != nil {
 			return nil, err
 		}
-		e.env.Attributes = trimCached(e.env.Attributes)
+		in.cached(e.env)
 		out = append(out, e)
 	}
 	if err := rs.Err(); err != nil {
@@ -461,7 +467,7 @@ func (ce *cachedEvents) update(ctx context.Context, q querier, t eventschema.Eve
 		if err != nil {
 			return false, fmt.Errorf("sqlite: event cache: changed events: %w", err)
 		}
-		reread, err := scanCachedEvents(rs)
+		reread, err := scanCachedEvents(rs, ce.strs)
 		_ = rs.Close()
 		if err != nil {
 			return false, err
@@ -472,7 +478,7 @@ func (ce *cachedEvents) update(ctx context.Context, q querier, t eventschema.Eve
 	if err != nil {
 		return false, fmt.Errorf("sqlite: event cache: new events: %w", err)
 	}
-	added, err := scanCachedEvents(rs)
+	added, err := scanCachedEvents(rs, ce.strs)
 	_ = rs.Close()
 	if err != nil {
 		return false, err
@@ -545,25 +551,4 @@ func compareCached(a, b cachedEvent) int {
 var uncachedAttributes = []string{
 	"cached_input", "reasoning_output", "sequence", "model_provider", "message_id",
 	"input_uncached", "cache_creation_input", "service_tier", "subagent_tool_use_id",
-}
-
-// trimCached is attrs without uncachedAttributes, in a map sized for what
-// is left: deleting from a Go map does not free its storage.
-func trimCached(attrs map[string]string) map[string]string {
-	drop := 0
-	for _, k := range uncachedAttributes {
-		if _, ok := attrs[k]; ok {
-			drop++
-		}
-	}
-	if drop == 0 {
-		return attrs
-	}
-	out := make(map[string]string, len(attrs)-drop)
-	for k, v := range attrs {
-		if !slices.Contains(uncachedAttributes, k) {
-			out[k] = v
-		}
-	}
-	return out
 }
