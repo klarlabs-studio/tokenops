@@ -260,3 +260,34 @@ func TestEventCacheFullReadDoesNotHoldCoveredReads(t *testing.T) {
 	sameAsStore(t, s, c, eventschema.EventTypePrompt, month, "after the month")
 	sameAsStore(t, s, c, eventschema.EventTypePrompt, twoWeeks, "two weeks after the month")
 }
+
+// A full read that outlasts the idle time ends after the countdown its
+// read started has run out. What it then holds still goes after the idle
+// time: the countdown runs from when the events are held.
+func TestEventCacheEmptiesAfterASlowFullRead(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	idle := 20 * time.Millisecond
+	c := NewEventCache(s, 7*24*time.Hour, idle)
+	c.now = func() time.Time { return cacheNow }
+	c.beforeFullRead = func() { time.Sleep(4 * idle) }
+	if err := s.AppendBatch(ctx, []*eventschema.Envelope{
+		promptAt("new", cacheNow.Add(-time.Hour), eventschema.ProviderAnthropic, 20),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sameAsStore(t, s, c, eventschema.EventTypePrompt, cacheNow.Add(-2*24*time.Hour), "a slow full read")
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		c.mu.Lock()
+		held := len(c.types)
+		c.mu.Unlock()
+		if held == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("events read in after the countdown ran out were kept")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
