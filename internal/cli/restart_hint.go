@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -59,20 +60,28 @@ type restartDeps struct {
 	Supervised bool
 	// Restart performs it.
 	Restart func() error
+	// Reads is the config file the supervised daemon reads and Written the
+	// one the command wrote, set when they are not the same file: the
+	// daemon is then left running, because a restart would bring it back
+	// with the config it had.
+	Reads, Written string
 }
 
-// realRestartDeps binds to this machine.
-func realRestartDeps() restartDeps {
-	return restartDeps{
-		Supervised: daemonSupervised(),
-		Restart: func() error {
-			kind, err := daemon.DetectUnitKind()
-			if err != nil {
-				return err
-			}
-			return daemon.RestartUnit(kind)
-		},
+// realRestartDeps binds to this machine, for a command that wrote the
+// config at written.
+func realRestartDeps(written string) restartDeps {
+	kind, unit, ok := daemon.InstalledUnit()
+	deps := restartDeps{
+		Supervised: ok,
+		Restart:    func() error { return daemon.RestartUnit(kind, unit) },
 	}
+	if reads := daemon.UnitReads(kind, unit); ok && daemon.ReadsAnother(reads, written) {
+		deps.Reads, deps.Written = reads, written
+		if abs, err := filepath.Abs(written); err == nil {
+			deps.Written = abs
+		}
+	}
+	return deps
 }
 
 // applyRestart makes a config write take effect.
@@ -84,11 +93,23 @@ func realRestartDeps() restartDeps {
 // silent-no-op shape this codebase keeps finding elsewhere. So it restarts,
 // and --no-restart is there for someone writing several keys in a row who
 // does not want a bounce per key.
-func applyRestart(w io.Writer, restart, needsMCP bool) {
-	applyRestartWith(w, realRestartDeps(), restart, needsMCP)
+//
+// written is the config file the command wrote. The daemon reads the one
+// its unit gives it, which is not the shell's when --config or
+// XDG_CONFIG_HOME differ: restarting it then changed nothing and said the
+// change was live.
+func applyRestart(w io.Writer, written string, restart, needsMCP bool) {
+	applyRestartWith(w, realRestartDeps(written), restart, needsMCP)
 }
 
 func applyRestartWith(w io.Writer, deps restartDeps, restart, needsMCP bool) {
+	if deps.Supervised && deps.Reads != "" {
+		fmt.Fprintln(w, "note:", daemon.ConfigRestart{Supervised: true, Reads: deps.Reads, Written: deps.Written}.Note())
+		if needsMCP {
+			fmt.Fprintln(w, "note: restart your MCP client to reload its tokenops server")
+		}
+		return
+	}
 	// Nothing supervised means nothing to bounce. Say what to do by hand
 	// rather than report a restart that did not happen.
 	if !restart || !deps.Supervised {

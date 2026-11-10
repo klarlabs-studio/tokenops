@@ -146,7 +146,7 @@ OpenAI-compatible endpoint.`,
 				"set providers.%s = %s%s\nwrote %s\n",
 				name, url, presetNote, path,
 			)
-			applyRestart(cmd.OutOrStdout(), !noRestartFlag, false)
+			applyRestart(cmd.OutOrStdout(), path, !noRestartFlag, false)
 			return nil
 		},
 	}
@@ -184,7 +184,7 @@ func newProviderUnsetCmd() *cobra.Command {
 				"removed providers.%s\nwrote %s\n",
 				name, path,
 			)
-			applyRestart(cmd.OutOrStdout(), !noRestartFlag, false)
+			applyRestart(cmd.OutOrStdout(), path, !noRestartFlag, false)
 			return nil
 		},
 	}

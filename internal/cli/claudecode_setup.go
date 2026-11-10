@@ -85,7 +85,7 @@ func enableClaudeCodeSource(out io.Writer, configPath string, restart, keychain 
 	}
 	fmt.Fprintf(out, "\nwrote %s (vendor_usage.claude_code_oauth)\n", path)
 	fmt.Fprintln(out, "The daemon reads it every 10 minutes alongside the status line and the claude.ai meter; the newest reading of each window wins.")
-	applyRestart(out, restart, false)
+	applyRestart(out, path, restart, false)
 	return nil
 }
 

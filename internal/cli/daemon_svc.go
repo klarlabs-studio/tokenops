@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ installable form of deploy/launchd and deploy/systemd.
 
   tokenops daemon install            # write + load the unit
   tokenops daemon install --no-load  # write only
+  tokenops --config FILE daemon install   # the daemon reads FILE
   tokenops daemon status
   tokenops daemon restart           # re-read config after a config change
   tokenops daemon uninstall`,
@@ -70,6 +72,33 @@ func (f daemonFlags) resolve() (daemon.UnitKind, string, string, string, error) 
 	return kind, bin, home, path, nil
 }
 
+// unitSpec is what the unit is rendered from: the binary and the home, and
+// the config this shell uses when a daemon started by the supervisor would
+// not find it by itself. The supervisor starts the daemon without the
+// shell's flags and environment, so a --config or an XDG_CONFIG_HOME the
+// unit does not carry leaves the daemon on another config than the one
+// every later command writes.
+func (f daemonFlags) unitSpec(rf *rootFlags, bin, home string) (daemon.UnitSpec, error) {
+	spec := daemon.UnitSpec{Bin: bin, Home: home}
+	if rf != nil && rf.configPath != "" {
+		abs, err := filepath.Abs(rf.configPath)
+		if err != nil {
+			return spec, fmt.Errorf("config path: %w", err)
+		}
+		if _, err := loadConfig(rf); err != nil {
+			return spec, fmt.Errorf("a daemon would not start with %s: %w", abs, err)
+		}
+		spec.Config = abs
+	}
+	// A --home is another home than this shell's (another account's, a
+	// test's): this shell's config directory says nothing about it.
+	if dir := os.Getenv("XDG_CONFIG_HOME"); f.home == "" && filepath.IsAbs(dir) &&
+		!daemon.SameFile(dir, filepath.Join(home, ".config")) {
+		spec.ConfigHome = filepath.Clean(dir)
+	}
+	return spec, nil
+}
+
 // applyUnit has the supervisor run the unit. A var so tests can fail it
 // without a real supervisor.
 var applyUnit = daemon.ApplyUnit
@@ -87,7 +116,7 @@ var (
 // OS_REASON_CODESIGNING, "spawn failed") and left the daemon down, while the
 // next start of the same file worked; the Homebrew hook that runs this
 // cannot fail the upgrade, so without the retry nobody saw it.
-func confirmStartedOrRetry(cmd *cobra.Command, rf *rootFlags, kind daemon.UnitKind) error {
+func confirmStartedOrRetry(cmd *cobra.Command, rf *rootFlags, kind daemon.UnitKind, unit string) error {
 	err := confirmDaemonStarted(cmd, rf)
 	if err == nil {
 		return nil
@@ -98,7 +127,7 @@ func confirmStartedOrRetry(cmd *cobra.Command, rf *rootFlags, kind daemon.UnitKi
 		return err
 	case <-time.After(startRetryPause):
 	}
-	if rerr := restartUnit(kind); rerr != nil {
+	if rerr := restartUnit(kind, unit); rerr != nil {
 		return errors.Join(err, fmt.Errorf("retry: %w", rerr))
 	}
 	return confirmDaemonStarted(cmd, rf)
@@ -115,12 +144,19 @@ func newDaemonInstallCmd(rf *rootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			body, err := daemon.RenderUnit(kind, bin, home)
+			spec, err := f.unitSpec(rf, bin, home)
+			if err != nil {
+				return err
+			}
+			body, err := daemon.RenderUnit(kind, spec)
 			if err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "Installing %s unit using binary:\n  %s\n", kind, bin)
+			if reads := daemon.UnitConfigPath(kind, body); reads != "" {
+				fmt.Fprintf(out, "The daemon reads its config from:\n  %s\n", reads)
+			}
 			if f.dryRun {
 				fmt.Fprintf(out, "\n--dry-run: would write %s\n\n%s", path, body)
 				if !strings.HasSuffix(body, "\n") {
@@ -144,6 +180,12 @@ func newDaemonInstallCmd(rf *rootFlags) *cobra.Command {
 				return nil
 			}
 			if err := applyUnit(kind, path, changed); err != nil {
+				// The supervisor's daemon belongs to another unit and was
+				// not touched: nothing stopped, so there is nothing to
+				// warn about beyond the refusal itself.
+				if errors.As(err, new(*daemon.ForeignJobError)) {
+					return err
+				}
 				// Applying the unit replaces the running daemon, so a
 				// failure here can leave none at all. Exit non-zero: a
 				// caller that took 0 as success would never learn
@@ -152,7 +194,7 @@ func newDaemonInstallCmd(rf *rootFlags) *cobra.Command {
 				fmt.Fprintln(out, "Run `tokenops daemon install` again; `tokenops daemon status` shows its state.")
 				return fmt.Errorf("start %s unit: %w", kind, err)
 			}
-			if err := confirmStartedOrRetry(cmd, rf, kind); err != nil {
+			if err := confirmStartedOrRetry(cmd, rf, kind, path); err != nil {
 				return err
 			}
 			fmt.Fprintln(out, "Running and healthy. `tokenops start` will now survive reboot.")
@@ -223,6 +265,11 @@ func newDaemonStatusCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(out, "Unit:        %s (%o)\n", path, st.Mode().Perm())
+			// The daemon reads the config its unit gives it, which is not
+			// necessarily the one this shell reads and writes.
+			if reads := daemon.UnitReads(kind, path); reads != "" {
+				fmt.Fprintf(out, "Config:      %s\n", reads)
+			}
 			// Name where the supervised daemon actually logs. Operators
 			// otherwise follow ~/.tokenops/daemon.log, which only the MCP
 			// spawn path writes and which can sit stale for months while
@@ -290,7 +337,7 @@ func newDaemonRestartCmd(rf *rootFlags) *cobra.Command {
 				return serr
 			}
 			progress := startActivity(cmd.ErrOrStderr(), "Restarting "+daemon.LaunchdLabel)
-			if err := daemon.RestartUnit(kind); err != nil {
+			if err := daemon.RestartUnit(kind, path); err != nil {
 				progress.failure("Daemon restart failed")
 				return err
 			}
@@ -323,13 +370,16 @@ type daemonStatus struct {
 	OS         string `json:"os"`
 	Unit       string `json:"unit"`
 	Installed  bool   `json:"installed"`
-	Logs       string `json:"logs,omitempty"`
+	// Config is the config file the installed unit's daemon reads.
+	Config string `json:"config,omitempty"`
+	Logs   string `json:"logs,omitempty"`
 }
 
 func daemonStatusOf(kind daemon.UnitKind, bin, path string) daemonStatus {
 	st := daemonStatus{Binary: bin, Supervisor: string(kind), OS: runtime.GOOS, Unit: path}
 	if _, err := os.Stat(path); err == nil {
 		st.Installed = true
+		st.Config = daemon.UnitReads(kind, path)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		st.Logs = daemon.LogPath(kind, home)
