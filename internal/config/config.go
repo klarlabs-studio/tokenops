@@ -117,6 +117,10 @@ type Config struct {
 	// rules evaluated on this machine.
 	Allocation AllocationConfig `yaml:"allocation,omitempty"`
 	Watch      WatchConfig      `yaml:"watch"`
+
+	// readFrom is the file ReadMutable read this config from, as it was
+	// then. WriteMutable works out from it what the caller changed.
+	readFrom *readFile
 }
 
 // ActiveMode reports whether interventions (live routing, spend
