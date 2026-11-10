@@ -80,9 +80,9 @@ func deps() Deps {
 // prompts, paths, file names, model names and session IDs, and checks none
 // of them crossed.
 func TestUploadCarriesNoContent(t *testing.T) {
-	u, warnings := Build(context.Background(), deps(), Options{Days: 14, RepoNames: RepoRemote, ClientVersion: "0.102.0"}, now)
-	if len(warnings) > 0 {
-		t.Fatalf("warnings: %v", warnings)
+	u, notes := Build(context.Background(), deps(), Options{Days: 14, RepoNames: RepoRemote, ClientVersion: "0.102.0"}, now)
+	if len(notes.All()) > 0 {
+		t.Fatalf("notes: %v", notes.All())
 	}
 	if err := u.Validate(); err != nil {
 		t.Fatalf("upload does not validate: %v", err)

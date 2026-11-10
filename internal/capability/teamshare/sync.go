@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/infra/teamclient"
@@ -14,6 +15,7 @@ import (
 type Result struct {
 	Upload   teamwire.Upload
 	Response teamwire.IngestResponse
+	// Warnings name the rows left out of an upload that was sent.
 	Warnings []string
 }
 
@@ -21,6 +23,12 @@ type Result struct {
 // recording the attempt in the state file. It returns teamclient.ErrNotJoined
 // when there is no team to send to, which is the normal state: nothing is
 // sent unless this machine joined.
+//
+// An upload is sent whole or not at all. The server replaces each day an
+// upload covers, so one built while a reader failed would put days with
+// figures missing over days that have them, and report success. Sync
+// returns an *IncompleteError instead and the server keeps what it has;
+// the next upload covers the same days.
 func Sync(ctx context.Context, d Deps, opts Options, statePath string, now time.Time) (Result, error) {
 	st, err := teamclient.Load(statePath)
 	if err != nil {
@@ -34,8 +42,15 @@ func Sync(ctx context.Context, d Deps, opts Options, statePath string, now time.
 	client := teamclient.New(st.URL, st.DeviceToken)
 	opts.Schema = ServerSchema(ctx, client, &st, now)
 	opts.Role = st.Role
-	u, warnings := Build(ctx, d, opts, now)
-	res := Result{Upload: u, Warnings: warnings}
+	u, notes := Build(ctx, d, opts, now)
+	res := Result{Upload: u, Warnings: notes.Dropped}
+	if len(notes.Unread) > 0 {
+		incomplete := &IncompleteError{Unread: notes.Unread}
+		at := now.UTC()
+		st.LastUpload, st.LastResult = &at, "not sent: "+incomplete.reason()
+		saveIfJoined(statePath, st)
+		return res, incomplete
+	}
 	if err := u.Validate(); err != nil {
 		// Never send what the server would refuse; it is a bug here.
 		return res, fmt.Errorf("upload failed validation, not sent: %w", err)
@@ -73,12 +88,33 @@ func Sync(ctx context.Context, d Deps, opts Options, statePath string, now time.
 			st.SchemaCheckedAt = nil
 		}
 	}
-	// The state may have been removed by `tokenops team leave` while the
-	// upload ran; do not resurrect it.
+	saveIfJoined(statePath, st)
+	return res, sendErr
+}
+
+// saveIfJoined records the attempt. The state may have been removed by
+// `tokenops team leave` while the upload ran; it is not resurrected.
+func saveIfJoined(statePath string, st teamclient.State) {
 	if _, err := teamclient.Load(statePath); err == nil {
 		_ = teamclient.Save(statePath, st)
 	}
-	return res, sendErr
+}
+
+// IncompleteError is an upload that was built and not sent, because part
+// of its figures could not be read. Nothing is lost: the server keeps the
+// days as they were, and the next upload reads them again.
+type IncompleteError struct {
+	// Unread names each part that could not be read, with the failure.
+	Unread []string
+}
+
+func (e *IncompleteError) reason() string {
+	return "could not read " + strings.Join(e.Unread, "; ")
+}
+
+func (e *IncompleteError) Error() string {
+	return "team upload not sent: " + e.reason() +
+		". An upload replaces every day it covers, so the team keeps the figures it has until all of it can be read"
 }
 
 // SchemaRecheck is how long the server's max_schema is trusted before it
