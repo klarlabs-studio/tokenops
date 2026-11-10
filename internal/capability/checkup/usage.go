@@ -244,7 +244,7 @@ func readCodex(ctx context.Context, since time.Time, add func(turn)) error {
 			add(turn{
 				harness: "Codex", model: t.Model, session: t.SessionID, at: t.Timestamp,
 				provider: eventschema.ProviderOpenAI,
-				input:    t.InputTokens, cached: t.CachedTokens, output: t.OutputTokens + t.ReasoningTok,
+				input:    t.InputTokens, cached: t.CachedTokens, output: t.OutputTokens,
 			})
 			return nil
 		})
