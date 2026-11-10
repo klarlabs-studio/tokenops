@@ -68,41 +68,35 @@ func finOpsFor(cfg config.Config, store *sqlite.Store, eng *spend.Engine, waste 
 const windowLookback = 7 * 24 * time.Hour
 
 // addFinOps fills u's schema 2 sections and marks it schema 2. A reader
-// that fails leaves its sections empty with a warning; a row that would
-// fail validation is dropped with one, so the buckets are still sent.
-func addFinOps(ctx context.Context, f FinOps, turns TurnReader, took func(string, time.Duration), u *teamwire.Upload, repoOf map[string]string, kindOf kinds, now time.Time) []string {
+// that fails leaves its sections empty and is noted as unread; a row that
+// would fail validation is dropped and noted, so the rest is still sent.
+func addFinOps(ctx context.Context, f FinOps, turns TurnReader, took func(string, time.Duration), u *teamwire.Upload, repoOf map[string]string, kindOf kinds, now time.Time, notes *Notes) {
 	u.Schema = teamwire.SchemaFinOps
 	first, err := time.Parse(teamwire.DayLayout, u.Days[0])
 	if err != nil {
-		return []string{"finops: " + err.Error()}
+		notes.unread("finops", err)
+		return
 	}
 	covered := map[string]bool{}
 	for _, d := range u.Days {
 		covered[d] = true
 	}
-	var warnings []string
 	if f.Plans != nil {
 		d := f.Plans()
 		if d.Config != nil && len(d.Config.Plans) > 0 && d.Reader != nil {
-			var history plans.History
-			if d.PlanHistory != nil {
-				if h, err := d.PlanHistory(); err == nil {
-					history = h
-				}
-			}
 			done := lap(took, "plan days")
-			envs, err := d.Reader.ReadEvents(ctx, eventschema.EventTypePrompt, first.Add(-windowLookback))
+			planDays, err := planDays(ctx, d, first, u.Days, now)
 			done()
 			if err != nil {
-				warnings = append(warnings, "plan days: "+err.Error())
+				notes.unread("plan days", err)
 			} else {
-				u.PlanDays = PlanDays(envs, d.Config.Plans, history, u.Days, now)
+				u.PlanDays = planDays
 			}
 			done = lap(took, "plan advice")
 			advice, err := headroom.CachedAdvice(ctx, d, now)
 			done()
 			if err != nil {
-				warnings = append(warnings, "plan advice: "+err.Error())
+				notes.unread("plan advice", err)
 			} else {
 				u.PlanAdvice = AdviceRows(advice)
 			}
@@ -113,13 +107,33 @@ func addFinOps(ctx context.Context, f FinOps, turns TurnReader, took func(string
 		ds, err := f.Waste(ctx, turns, first, now)
 		done()
 		if err != nil {
-			warnings = append(warnings, "waste: "+err.Error())
+			notes.unread("waste", err)
 		} else {
 			u.Waste = WasteRows(ds, repoOf, kindOf.at, covered)
 			u.Savings = SavingsRows(ds, covered)
 		}
 	}
-	return append(warnings, dropInvalid(u)...)
+	notes.Dropped = append(notes.Dropped, dropInvalid(u)...)
+}
+
+// planDays reads the covered days' plan use. The plan history says which
+// plan each day ran on: without it a day before a plan change would be
+// filed under today's plan, so a history that cannot be read fails the
+// read instead of counting as none.
+func planDays(ctx context.Context, d headroom.Deps, first time.Time, days []string, now time.Time) ([]teamwire.PlanDay, error) {
+	var history plans.History
+	if d.PlanHistory != nil {
+		h, err := d.PlanHistory()
+		if err != nil {
+			return nil, fmt.Errorf("read plan history: %w", err)
+		}
+		history = h
+	}
+	envs, err := d.Reader.ReadEvents(ctx, eventschema.EventTypePrompt, first.Add(-windowLookback))
+	if err != nil {
+		return nil, err
+	}
+	return PlanDays(envs, d.Config.Plans, history, days, now), nil
 }
 
 // dropInvalid removes the rows that would fail validation, saying how

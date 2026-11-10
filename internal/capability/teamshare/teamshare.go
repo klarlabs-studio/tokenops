@@ -130,13 +130,37 @@ func CoveredDays(now time.Time, n int) []string {
 	return out
 }
 
-// Build computes the upload for the days opts covers. A reader that fails
-// leaves its part out rather than failing the upload: a machine without
-// transcripts still uploads its spend.
-func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.Upload, []string) {
+// Notes are what a build has to say about the upload it returns.
+type Notes struct {
+	// Unread names each part whose reader failed, with the failure. The
+	// upload lacks those figures, and the server replaces every day an
+	// upload covers whole (ADR 0012), so sending it would put a day with
+	// part of its figures missing over one that has them: Sync does not.
+	Unread []string
+	// Dropped names the rows left out because they would fail validation.
+	// They are a bug here and are missing from every upload alike, so the
+	// rest is still sent.
+	Dropped []string
+}
+
+// All is every note, the unread parts first.
+func (n Notes) All() []string {
+	return append(append([]string(nil), n.Unread...), n.Dropped...)
+}
+
+func (n *Notes) unread(part string, err error) {
+	n.Unread = append(n.Unread, part+": "+err.Error())
+}
+
+// Build computes the upload for the days opts covers. A reader that is
+// not there leaves its part out: a machine without transcripts still
+// uploads its spend. A reader that fails is named in the notes' Unread,
+// and the upload returned is for showing (`tokenops team preview`), not
+// for sending.
+func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.Upload, Notes) {
 	days := CoveredDays(now, opts.Days)
 	since, _ := time.Parse(teamwire.DayLayout, days[0])
-	var warnings []string
+	var notes Notes
 	var units []sessions.Unit
 	if d.Units != nil {
 		var err error
@@ -144,7 +168,7 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 		units, err = d.Units(since, now)
 		done()
 		if err != nil {
-			warnings = append(warnings, "transcripts: "+err.Error())
+			notes.unread("transcripts", err)
 		}
 	}
 	var turns []analytics.SessionTurn
@@ -155,7 +179,7 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 		all, err := s.prime(ctx, turnSpan(d, opts, since))
 		done()
 		if err != nil {
-			warnings = append(warnings, "event store: "+err.Error())
+			notes.unread("event store", err)
 		}
 		turns, shared = turnsSince(all, since), s.Read
 	}
@@ -175,12 +199,12 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 	}
 	u, kindOf := aggregate(units, turns, repoOf, days, opts.ClientVersion, now)
 	if opts.Schema >= teamwire.SchemaFinOps {
-		warnings = append(warnings, addFinOps(ctx, d.FinOps, shared, opts.Took, &u, repoOf, kindOf, now)...)
+		addFinOps(ctx, d.FinOps, shared, opts.Took, &u, repoOf, kindOf, now, &notes)
 	}
 	if opts.Schema >= teamwire.SchemaSpend {
-		warnings = append(warnings, addSpend(ctx, d, opts, shared, &u, units, turns, repoOf, now)...)
+		addSpend(ctx, d, opts, shared, &u, units, turns, repoOf, now, &notes)
 	}
-	return u, warnings
+	return u, notes
 }
 
 // lap starts timing part of an upload; what it returns reports the time
