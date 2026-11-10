@@ -151,6 +151,23 @@ func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) e
 	return nil
 }
 
+// The usage report is what Anthropic billed the organisation's API keys.
+// A bucket that left its cost source open was stamped as covered by the
+// plan whenever the operator also held a Claude subscription: the spend
+// left billed spend and its tokens were added to the plan's use.
+func TestNewEnvelopeIsBilledPerToken(t *testing.T) {
+	start := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
+	env, ok := NewEnvelope(start, start.Add(time.Hour), UsageResult{
+		Model: "claude-opus-5-5", UncachedInputTokens: 100, OutputTokens: 10,
+	})
+	if !ok {
+		t.Fatal("no envelope for a bucket with usage")
+	}
+	if got := env.Payload.(*eventschema.PromptEvent).CostSource; got != eventschema.CostSourceMetered {
+		t.Errorf("cost source %q, want metered", got)
+	}
+}
+
 // The usage report splits a bucket's input into uncached tokens, cache
 // reads and cache writes by lifetime. Every part is input, and each bills
 // at its own rate, so the event carries the sum with the read and the

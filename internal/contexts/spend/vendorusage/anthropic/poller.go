@@ -272,6 +272,10 @@ func newEnvelope(startsAt, endsAt time.Time, r UsageResult) (*eventschema.Envelo
 			OutputTokens:            r.OutputTokens,
 			TotalTokens:             totalTokens,
 			Status:                  200,
+			// The usage report is what Anthropic billed the organisation's
+			// API keys. A subscription's usage is not in it, so no plan
+			// covers a bucket, whichever plan the operator also holds.
+			CostSource: eventschema.CostSourceMetered,
 			// Attribution: vendor admin-API rows are not per-prompt
 			// attributable to a workflow, but they ARE attributable to the
 			// vendor poller as origin. Stamping AgentID + a synthetic

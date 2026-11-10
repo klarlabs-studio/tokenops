@@ -56,8 +56,9 @@ func (s *planStampSink) AppendBatch(ctx context.Context, envs []*eventschema.Env
 			continue
 		}
 		// A plan covers only its vendor's own endpoint: a turn a gateway
-		// carried runs on an API key, billed per token (ADR 0009).
-		if s.planned[p.Provider] && attribution.PlanApplies(string(p.Provider), env.Attributes["endpoint"]) {
+		// carried runs on an API key, billed per token (ADR 0009). What a
+		// spend report recorded is what the vendor billed, never the plan.
+		if s.planned[p.Provider] && attribution.PlanApplies(string(p.Provider), env.Attributes["endpoint"], env.Source) {
 			p.CostSource = eventschema.CostSourcePlanIncluded
 		}
 	}

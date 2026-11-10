@@ -1,6 +1,7 @@
 package biller
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -48,10 +49,47 @@ func TestEndpointNameAndPlanApplies(t *testing.T) {
 			t.Errorf("EndpointName(%q) = %q, want %q", tc.url, got, tc.want)
 		}
 	}
-	if !PlanApplies("anthropic", "anthropic") || !PlanApplies("anthropic", "") {
+	if !PlanApplies("anthropic", "anthropic", "") || !PlanApplies("anthropic", "", "") {
 		t.Error("the vendor's own endpoint is covered by its plan")
 	}
-	if PlanApplies("anthropic", "fireworks") {
+	if PlanApplies("anthropic", "fireworks", "") {
 		t.Error("a Claude turn through FireRouter runs on an API key, not the plan")
+	}
+}
+
+// A plan covers what the plan's own client used. A spend report reads
+// what the vendor billed an account's API keys, so nothing it records is
+// the plan's, whatever endpoint it names.
+func TestPlanAppliesByTheSourceThatRecordedTheUsage(t *testing.T) {
+	for _, tc := range []struct {
+		name, provider, endpoint, source string
+		want                             bool
+	}{
+		{"a transcript turn on the vendor's endpoint", "anthropic", "anthropic", "claude-code-jsonl", true},
+		{"a transcript turn with no recorded endpoint", "anthropic", "", "claude-code-jsonl", true},
+		{"a transcript turn through a gateway", "anthropic", "fireworks", "claude-code-jsonl", false},
+		{"the plan's own usage meter", "anthropic", "", "claude-usage-meter", true},
+		{"a source the catalog does not know", "anthropic", "", "proxy", true},
+		{"the Admin API usage report", "anthropic", "", "vendor-usage-anthropic", false},
+		{"the Admin API usage report naming the vendor's endpoint", "anthropic", "anthropic", "vendor-usage-anthropic", false},
+	} {
+		if got := PlanApplies(tc.provider, tc.endpoint, tc.source); got != tc.want {
+			t.Errorf("%s: PlanApplies = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestSpendSourcesAreTheCatalogsSpendReports(t *testing.T) {
+	got := SpendSources()
+	if !slices.Contains(got, "vendor-usage-anthropic") {
+		t.Errorf("spend sources %v lack the Anthropic Admin API usage report", got)
+	}
+	for _, tag := range []string{"claude-code-jsonl", "claude-usage-meter", "codex-jsonl"} {
+		if slices.Contains(got, tag) {
+			t.Errorf("%s reads the plan's own client, not a bill", tag)
+		}
+	}
+	if !slices.IsSorted(got) {
+		t.Errorf("spend sources are not in order: %v", got)
 	}
 }
