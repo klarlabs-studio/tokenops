@@ -5,6 +5,7 @@
 package boundaries
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -187,6 +188,12 @@ const (
 )
 
 // Result is what the pause point decided.
+//
+// Guard, Pause and GuardActions may return a Result together with an
+// error. The error then says what could not be read or written around the
+// decision; the Result is still the decision. A rule that matched has
+// decided, and a ledger that cannot be written does not undo it: only a
+// check that could not decide at all lets the call through (ADR 0014 §3).
 type Result struct {
 	Verdict    string
 	Reason     string
@@ -203,19 +210,22 @@ func Pause(rules []domain.Rule, call Call, env Env) (Result, error) {
 // point checks continue and spend before the same tool call — and returns
 // the strictest result: a refusal over a question over nothing.
 func GuardActions(rules []domain.Rule, call Call, env Env, actions ...domain.Action) (Result, error) {
-	var out Result
+	var (
+		out    Result
+		failed []error
+	)
 	for _, a := range actions {
 		c := call
 		c.Action = a
 		res, err := Guard(rules, c, env)
 		if err != nil {
-			return Result{}, err
+			failed = append(failed, err)
 		}
 		if verdictRank(res.Verdict) > verdictRank(out.Verdict) {
 			out = res
 		}
 	}
-	return out, nil
+	return out, errors.Join(failed...)
 }
 
 func verdictRank(v string) int {
@@ -249,28 +259,23 @@ func Guard(rules []domain.Rule, call Call, env Env) (Result, error) {
 	lifted := liftExtras(&v, relevant, call.Action, facts, env)
 	g := &guard{call: call, env: env, evidence: evidence, now: env.now()}
 	g.load()
+	// What follows the evaluation is bookkeeping around a decision already
+	// made. Its failures are reported beside the decision, never instead
+	// of it.
+	var failed []error
 	for _, l := range lifted {
-		if err := g.recordLifted(l); err != nil {
-			return Result{}, err
-		}
+		failed = append(failed, g.recordLifted(l))
 	}
 	matched := make([]string, 0, len(v.Matches))
 	for _, m := range v.Matches {
 		matched = append(matched, m.Rule.Name)
 		if !m.Rule.Enforced() {
-			if err := g.recordOnce(m, eventschema.DecisionStageShadow, eventschema.DecisionApproval{}); err != nil {
-				return Result{}, err
-			}
+			failed = append(failed, g.recordOnce(m, eventschema.DecisionStageShadow, eventschema.DecisionApproval{}))
 		}
 	}
 	res, err := g.bind(v)
-	if err != nil {
-		return Result{}, err
-	}
-	if err := env.Dir.AddMatches(call.SessionID, matched, g.now); err != nil {
-		return Result{}, err
-	}
-	return res, g.save()
+	failed = append(failed, err, env.Dir.AddMatches(call.SessionID, matched, g.now), g.save())
+	return res, errors.Join(failed...)
 }
 
 func forAction(rules []domain.Rule, action domain.Action) []domain.Rule {
@@ -453,6 +458,11 @@ func (g *guard) save() error {
 }
 
 // bind applies the binding match, if any.
+//
+// Once a rule binds, the call goes ahead only on an approval that was
+// read, honoured and, for one step, spent. Everything else, a failure
+// included, leaves what the rule requires: the error is returned beside
+// that verdict.
 func (g *guard) bind(v domain.Verdict) (Result, error) {
 	if v.Binding == nil || v.Binding.Rule.Require.Kind == domain.RequireAllow {
 		return Result{}, nil
@@ -460,22 +470,25 @@ func (g *guard) bind(v domain.Verdict) (Result, error) {
 	m := *v.Binding
 	id := domain.DecisionID(m.Rule.Name, g.call.SessionID)
 	if m.Rule.Require.Kind == domain.RequireDeny {
-		if err := g.recordOnce(m, eventschema.DecisionStageApplied, eventschema.DecisionApproval{}); err != nil {
-			return Result{}, err
-		}
-		return Result{Verdict: VerdictDeny, DecisionID: id, Reason: denyReason(m)}, nil
+		err := g.recordOnce(m, eventschema.DecisionStageApplied, eventschema.DecisionApproval{})
+		return Result{Verdict: VerdictDeny, DecisionID: id, Reason: denyReason(m)}, err
 	}
-	if res, done, err := g.answered(m, id); done || err != nil {
+	res, done, err := g.answered(m, id)
+	if done {
 		return res, err
 	}
+	// An answer that could not be read, spent or set aside is no answer.
+	failed := []error{err}
 	routed := m.Rule.TeamRouted()
 	// Under presence-strict the harness's prompt does not approve, so it
 	// is not asked: the refusal names `tokenops approve`, which signs.
 	prompt := g.env.Attended && !routed && !g.env.approval().Strict()
 	if prompt {
-		if done, err := g.settlePrompt(m, id); done || err != nil {
+		done, err := g.settlePrompt(m, id)
+		if done {
 			return Result{}, err
 		}
+		failed = append(failed, err)
 	}
 	pending := boundaryledger.Pending{
 		ID: id, Rule: m.Rule.Name, Require: m.Rule.Require.String(), Crossed: m.Crossed(),
@@ -499,21 +512,19 @@ func (g *guard) bind(v domain.Verdict) (Result, error) {
 	if prompt {
 		pending.ToolUseID = g.call.ToolUseID
 	}
-	if err := g.env.Dir.PutPending(pending); err != nil {
-		return Result{}, err
-	}
-	if err := g.recordOnce(m, eventschema.DecisionStageProposed, eventschema.DecisionApproval{}); err != nil {
-		return Result{}, err
-	}
+	failed = append(failed,
+		g.env.Dir.PutPending(pending),
+		g.recordOnce(m, eventschema.DecisionStageProposed, eventschema.DecisionApproval{}))
+	err = errors.Join(failed...)
 	if routed {
 		// Whoever is at the keyboard is not necessarily the role the
 		// organisation named, so the prompt does not answer it.
-		return Result{Verdict: VerdictDeny, DecisionID: id, Reason: routedReason(m, id)}, nil
+		return Result{Verdict: VerdictDeny, DecisionID: id, Reason: routedReason(m, id)}, err
 	}
 	if prompt && agentFacing(m.Rule.Action) {
-		return Result{Verdict: VerdictAsk, DecisionID: id, Reason: askReason(m, id) + g.refusedNote()}, nil
+		return Result{Verdict: VerdictAsk, DecisionID: id, Reason: askReason(m, id) + g.refusedNote()}, err
 	}
-	return Result{Verdict: VerdictDeny, DecisionID: id, Reason: g.unattendedReason(m, id)}, nil
+	return Result{Verdict: VerdictDeny, DecisionID: id, Reason: g.unattendedReason(m, id)}, err
 }
 
 // refusedNote says, after a refusal, that an approval was given but not
@@ -567,12 +578,17 @@ func (g *guard) answered(m domain.Match, id string) (Result, bool, error) {
 	}
 	approval := eventschema.DecisionApproval{Approver: a.Approver, Method: a.Method, At: a.At, Rule: a.Rule, Scope: a.Scope}
 	if !a.Approved {
-		if a.Scope == boundaryledger.ScopeOnce {
-			if won, err := g.env.Dir.ConsumeAnswer(id); err != nil || !won {
-				return Result{}, false, err
-			}
+		declined := Result{Verdict: VerdictDeny, DecisionID: id, Reason: declinedReason(m, a.Approver)}
+		if a.Scope != boundaryledger.ScopeOnce {
+			return declined, true, nil
 		}
-		return Result{Verdict: VerdictDeny, DecisionID: id, Reason: declinedReason(m, a.Approver)}, true, nil
+		won, err := g.env.Dir.ConsumeAnswer(id)
+		if err == nil && !won {
+			// A parallel call spent it: this one is asked afresh.
+			return Result{}, false, nil
+		}
+		// A refusal that could not be spent is still the person's no.
+		return declined, true, err
 	}
 	// Under boundary_approval: channel the presence check is in shadow
 	// (ADR 0015 §5): the approval is honoured as before, and the decision
@@ -647,12 +663,12 @@ func (g *guard) settlePrompt(m domain.Match, id string) (bool, error) {
 	approval := eventschema.DecisionApproval{
 		Approver: a.Approver, Method: a.Method, At: a.At, Rule: a.Rule, Scope: a.Scope, Presence: PresenceHarness,
 	}
-	if err := g.record(m, eventschema.DecisionStageAccepted, approval); err != nil {
-		return false, err
-	}
+	// The answer is kept, so the approval holds whether or not its
+	// decision could be recorded.
+	err = g.record(m, eventschema.DecisionStageAccepted, approval)
 	g.session.Recorded[id] = string(eventschema.DecisionStageAccepted)
 	g.changed = true
-	return true, nil
+	return true, err
 }
 
 // recordVendorStop records, on the boundary's decision, that Claude Code
@@ -835,11 +851,13 @@ func CanRefuse(harness string) bool {
 	return false
 }
 
-// RecordFailure records that the pause point could not decide and let
-// the call through, so a broken boundary is visible rather than silently
-// absent (ADR 0014 §3). It is best effort: a ledger that cannot be
-// written is the failure.
-func RecordFailure(call Call, env Env, cause error) {
+// RecordFailure records a check that went wrong, so a broken boundary is
+// visible rather than silently absent (ADR 0014 §3): either the pause
+// point could not decide and let the call through, or it decided (res
+// holds the verdict) and could not finish its bookkeeping. It is best
+// effort, since the ledger may be what failed; FailureNote is the same
+// thing said to the operator, for a point that can show it.
+func RecordFailure(call Call, env Env, res Result, cause error) {
 	if cause == nil {
 		return
 	}
@@ -850,11 +868,33 @@ func RecordFailure(call Call, env Env, cause error) {
 		Correlation: eventschema.Correlation{Decision: domain.DecisionID("_failed", call.SessionID)},
 		Payload: &eventschema.DecisionEvent{
 			Kind: "boundary", Stage: eventschema.DecisionStageFailed,
-			Rationale: "the boundary check failed and the call went ahead (fail open): " + failureClass(cause),
+			Rationale: failureRationale(res, cause),
 			Adapter:   call.Harness + "-hook",
 			Actor:     eventschema.DecisionActor{Harness: call.Harness, SessionID: call.SessionID, AgentID: call.AgentID, User: env.user()},
 		},
 	})
+}
+
+func failureRationale(res Result, cause error) string {
+	if res.Verdict == VerdictNone {
+		return "the boundary check failed and the call went ahead (fail open): " + failureClass(cause)
+	}
+	return "the boundary held the call (" + res.Verdict + ") and could not complete its record: " + failureClass(cause)
+}
+
+// FailureNote is a failed check in the operator's words, for a point that
+// can put a line in front of them: the ledger RecordFailure writes to may
+// be the thing that failed. Empty when nothing failed.
+func FailureNote(res Result, cause error) string {
+	if cause == nil {
+		return ""
+	}
+	if res.Verdict == VerdictNone {
+		return "tokenops: a boundary check could not complete and this step went ahead (" + failureClass(cause) +
+			"). `tokenops boundaries status` shows what is enforced."
+	}
+	return "tokenops: a boundary held this step, but its record could not be written (" + failureClass(cause) +
+		"), so `tokenops approve` may not find it."
 }
 
 // failureClass keeps the cause's message to its first line, which is

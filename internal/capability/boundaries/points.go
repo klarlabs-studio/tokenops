@@ -47,7 +47,8 @@ func scope(parts ...string) string {
 // A route is its own decision, per provider and model pair, so an
 // approval lets that route through: once, or for 24 hours with
 // --session. An evaluation that fails lets the route through and is
-// recorded (fail open).
+// recorded (fail open); a rule that held the route holds it whether or
+// not that could be recorded.
 func RouteCheck(rules func() []Rule, env Env) func(provider eventschema.Provider, from, to, workflowID, agentID string) (bool, string) {
 	return func(provider eventschema.Provider, from, to, workflowID, agentID string) (bool, string) {
 		relevant := forAction(rules(), domain.ActionModelRoute)
@@ -60,10 +61,7 @@ func RouteCheck(rules func() []Rule, env Env) func(provider eventschema.Provider
 			AgentID: agentID, WorkflowID: workflowID,
 		}
 		res, err := Guard(relevant, call, env)
-		if err != nil {
-			RecordFailure(call, env, err)
-			return false, ""
-		}
+		RecordFailure(call, env, res, err)
 		return res.Verdict != VerdictNone, res.Reason
 	}
 }
@@ -86,7 +84,8 @@ func IsShareRefused(err error) bool {
 // CheckShare is the share boundary, asked before figures leave for
 // destination (team or otel). It returns a *ShareRefusedError when a rule
 // holds them, and nil otherwise; an evaluation that fails lets them go
-// and is recorded (fail open), like every other point.
+// and is recorded (fail open), like every other point, while a rule that
+// held them holds them whether or not that could be recorded.
 func CheckShare(rules []domain.Rule, destination string, env Env) error {
 	relevant := forAction(rules, domain.ActionShare)
 	if len(relevant) == 0 {
@@ -97,10 +96,7 @@ func CheckShare(rules []domain.Rule, destination string, env Env) error {
 		Destination: destination, AgentID: PointTokenOps,
 	}
 	res, err := Guard(relevant, call, env)
-	if err != nil {
-		RecordFailure(call, env, err)
-		return nil
-	}
+	RecordFailure(call, env, res, err)
 	if res.Verdict == VerdictNone {
 		return nil
 	}

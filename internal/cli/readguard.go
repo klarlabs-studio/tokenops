@@ -57,6 +57,9 @@ type hookDecision struct {
 		PermissionDecisionReason string `json:"permissionDecisionReason,omitempty"`
 		AdditionalContext        string `json:"additionalContext,omitempty"`
 	} `json:"hookSpecificOutput"`
+	// SystemMessage is a line Claude Code shows the operator, not the
+	// agent.
+	SystemMessage string `json:"systemMessage,omitempty"`
 }
 
 // newReadGuardCmd is the Claude Code Read-dedup hook. Its bare form is the

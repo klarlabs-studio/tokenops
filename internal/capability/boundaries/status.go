@@ -13,6 +13,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
 	"go.klarlabs.de/tokenops/internal/infra/opencodeplugin"
 	"go.klarlabs.de/tokenops/internal/infra/teamclient"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // HookVerb is the command every refusing hook runs; it is also the marker
@@ -127,6 +128,46 @@ type Status struct {
 	// Extras are the extra allowances in force now: boundaries the
 	// operator lifted for a while (`tokenops boundaries extra`).
 	Extras []ExtraView `json:"extras,omitempty"`
+	// Failed is the checks that went wrong in the last day; absent when
+	// none did.
+	Failed *FailedChecks `json:"failed,omitempty"`
+}
+
+// FailedChecks is how often a boundary check went wrong lately: it could
+// not decide and let the step through, or decided and could not record
+// it. Only failures the ledger could still take are counted; one that
+// could not be written is said at the pause point instead.
+type FailedChecks struct {
+	Count  int       `json:"count"`
+	LastAt time.Time `json:"last_at"`
+	// Last is the latest failure, as recorded.
+	Last string `json:"last"`
+}
+
+// failedWindow is how far back status counts failed checks.
+const failedWindow = 24 * time.Hour
+
+// failedChecks counts the failures recorded since now-failedWindow.
+func failedChecks(dir boundaryledger.Dir, now time.Time) *FailedChecks {
+	envs, err := dir.Read()
+	if err != nil {
+		return nil
+	}
+	var out FailedChecks
+	for _, env := range envs {
+		d, ok := env.Payload.(*eventschema.DecisionEvent)
+		if !ok || d.Stage != eventschema.DecisionStageFailed || now.Sub(env.Timestamp) > failedWindow {
+			continue
+		}
+		out.Count++
+		if env.Timestamp.After(out.LastAt) {
+			out.LastAt, out.Last = env.Timestamp, d.Rationale
+		}
+	}
+	if out.Count == 0 {
+		return nil
+	}
+	return &out
 }
 
 // Installed reports, per harness that can refuse, whether its boundary
@@ -207,6 +248,7 @@ func RuleStatuses(rules []domain.Rule, env Env, installed map[string]bool) (Stat
 		out.Presence = &ps
 	}
 	out.Extras = ActiveExtras(env)
+	out.Failed = failedChecks(env.Dir, now)
 	switch {
 	case len(rules) == 0:
 		out.Note = "no boundaries configured; add a boundaries: section to config.yaml"
