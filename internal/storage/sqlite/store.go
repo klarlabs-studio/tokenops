@@ -1050,6 +1050,27 @@ func (s *Store) RestampMetered(ctx context.Context, provider string, from, to ti
 	return res.RowsAffected()
 }
 
+// UncoverSource marks a source's plan-covered prompt events as billed per
+// token, and returns how many it changed. Their cost is cleared, so it is
+// priced when read, like any billed request.
+//
+// It is for a source whose usage no plan covers: a spend report records
+// what the vendor billed, and events it wrote while a plan was bound were
+// stamped as covered. Events on a trial are left alone. It reads the
+// source's events through events_source_ts_idx, so a source with nothing
+// recorded costs nothing.
+func (s *Store) UncoverSource(ctx context.Context, source string) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE events INDEXED BY events_source_ts_idx
+		SET payload = json_remove(json_set(payload, '$.cost_source', 'metered'), '$.cost_usd', '$.cost_measured'),
+		    cost_usd = NULL
+		WHERE source = ? AND type = 'prompt'
+		  AND json_extract(payload, '$.cost_source') = 'plan_included'`, source)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: uncover source: %w", contended(ctx, err))
+	}
+	return res.RowsAffected()
+}
+
 // modelsForQuery reads events_usage_idx alone: it holds type, provider,
 // model and source. Left to choose, the planner walks the provider index
 // instead and reads each prompt event's row for its type and source, which

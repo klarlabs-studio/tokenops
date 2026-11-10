@@ -321,5 +321,5 @@ func shortModel(id string) string {
 // bound to Anthropic (planCovers) and Claude Code goes through Anthropic's
 // own endpoint, since a plan covers nothing a gateway carried (ADR 0009).
 func Covered(planCovers bool, baseURL string) bool {
-	return planCovers && biller.PlanApplies("anthropic", biller.EndpointName(baseURL, "anthropic"))
+	return planCovers && biller.PlanApplies("anthropic", biller.EndpointName(baseURL, "anthropic"), "")
 }

@@ -104,6 +104,55 @@ func TestRestampMeteredIsIdempotent(t *testing.T) {
 	}
 }
 
+// A spend report's events are what the vendor billed. The ones stamped as
+// covered while a plan was bound become billed; another source's covered
+// events, and the report's own trial and billed events, stay as they are.
+func TestUncoverSource(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	t0 := time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC)
+	from := func(source, id string, p *eventschema.PromptEvent) *eventschema.Envelope {
+		env := mustPromptEnvelope(t, id, t0, p)
+		env.Source = source
+		return env
+	}
+	const report = "vendor-usage-anthropic"
+	if err := s.AppendBatch(ctx, []*eventschema.Envelope{
+		from(report, "covered", &eventschema.PromptEvent{Provider: "anthropic", CostSource: eventschema.CostSourcePlanIncluded}),
+		from(report, "trial", &eventschema.PromptEvent{Provider: "anthropic", CostSource: eventschema.CostSourceTrial}),
+		from(report, "billed", &eventschema.PromptEvent{Provider: "anthropic", CostUSD: 0.4, CostMeasured: true}),
+		from("claude-code-jsonl", "plan-turn", &eventschema.PromptEvent{Provider: "anthropic", CostSource: eventschema.CostSourcePlanIncluded}),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.UncoverSource(ctx, report)
+	if err != nil || n != 1 {
+		t.Fatalf("re-marked %d, err %v; want 1", n, err)
+	}
+	got, err := s.Query(ctx, Filter{Type: eventschema.EventTypePrompt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]eventschema.CostSource{
+		"covered":   eventschema.CostSourceMetered,
+		"trial":     eventschema.CostSourceTrial,
+		"billed":    "",
+		"plan-turn": eventschema.CostSourcePlanIncluded,
+	}
+	for _, env := range got {
+		p := env.Payload.(*eventschema.PromptEvent)
+		if p.CostSource != want[env.ID] {
+			t.Errorf("%s: cost source %q, want %q", env.ID, p.CostSource, want[env.ID])
+		}
+		if env.ID == "billed" && (p.CostUSD != 0.4 || !p.CostMeasured) {
+			t.Errorf("billed lost its measured cost: %+v", p)
+		}
+	}
+	if n, _ := s.UncoverSource(ctx, report); n != 0 {
+		t.Errorf("second pass changed %d; the daemon runs this at every start", n)
+	}
+}
+
 func TestReattributeSession(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
