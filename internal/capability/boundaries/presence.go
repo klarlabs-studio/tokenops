@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	infrapresence "go.klarlabs.de/tokenops/internal/infra/presence"
@@ -79,7 +80,8 @@ func (c presenceCheck) honoured(mode presence.Mode) bool {
 // record and for the refusal the agent reads.
 func (c presenceCheck) refusal(mode presence.Mode) presence.Reason {
 	switch {
-	case c.presence == PresenceHarness && mode.Strict():
+	// Under presence-strict no prompt answer counts, asked or not.
+	case mode.Strict() && (c.presence == PresenceHarness || c.wouldRefuse == string(reasonPromptNotAsked)):
 		return reasonHarnessStrict
 	case c.presence == PresenceNotEnrolled:
 		return presence.ReasonNotEnrolled
@@ -89,14 +91,28 @@ func (c presenceCheck) refusal(mode presence.Mode) presence.Reason {
 	return presence.ReasonUnsigned
 }
 
-// reasonHarnessStrict: a prompt approval under presence-strict.
-const reasonHarnessStrict presence.Reason = "harness_not_accepted"
+// Reasons the pause point gives beside the verifier's.
+const (
+	// reasonHarnessStrict: a prompt approval under presence-strict.
+	reasonHarnessStrict presence.Reason = "harness_not_accepted"
+	// reasonPromptNotAsked: an answer that says the harness's prompt
+	// approved, where the pause point raised no prompt it could answer.
+	reasonPromptNotAsked presence.Reason = "prompt_not_asked"
+	// reasonTeamNotRouted: an answer that says the team plane approved a
+	// rule that is not routed to it.
+	reasonTeamNotRouted presence.Reason = "team_not_routed"
+)
 
 // reasonPhrase is a reason in words, including the ones only enforcement
 // gives.
 func reasonPhrase(r presence.Reason) string {
-	if r == reasonHarnessStrict {
+	switch r {
+	case reasonHarnessStrict:
 		return "boundary_approval is presence-strict, so Claude Code's prompt does not approve; only a signed approval does"
+	case reasonPromptNotAsked:
+		return "it says Claude Code's prompt approved, but no prompt for this decision was answered on that call"
+	case reasonTeamNotRouted:
+		return "it says the team plane approved, but this rule is not routed to the team plane"
 	}
 	return r.Phrase()
 }
@@ -112,14 +128,23 @@ func (c presenceCheck) stamp(a eventschema.DecisionApproval) eventschema.Decisio
 // file). It changes nothing about the answer.
 //
 // A prompt approval is harness-attested and a team approval the team
-// plane's; neither carries a proof. With no key enrolled the check reads
-// one missing file and reports not_enrolled, which status says once
-// rather than on every approval.
-func checkPresence(env Env, a boundaryledger.Answer, id, rule, session string, now time.Time) presenceCheck {
+// plane's; neither carries a proof. The answer's word for which it is
+// does not make it so: each counts only where the pause point's own
+// state says that channel could have answered. With no key enrolled the
+// check reads one missing file and reports not_enrolled, which status
+// says once rather than on every approval.
+func checkPresence(env Env, a boundaryledger.Answer, id string, rule domain.Rule, session string, now time.Time) presenceCheck {
 	switch a.Method {
 	case MethodPrompt:
+		if !promptAnswered(env, a, id, rule) {
+			return presenceCheck{presence: PresenceUnverified, wouldRefuse: string(reasonPromptNotAsked)}
+		}
 		return presenceCheck{presence: PresenceHarness}
 	case MethodTeam:
+		// Only a rule routed to the team plane is answered there.
+		if !rule.TeamRouted() {
+			return presenceCheck{presence: PresenceUnverified, wouldRefuse: string(reasonTeamNotRouted)}
+		}
 		return presenceCheck{presence: PresenceTeam}
 	}
 	trust, err := env.presenceDir().Trust(now)
@@ -131,7 +156,7 @@ func checkPresence(env Env, a boundaryledger.Answer, id, rule, session string, n
 	}
 	p, _, _ := env.Dir.GetPending(id)
 	res := presence.Verify(a.Proof, presence.Expect{
-		Decision: id, Rule: rule, Session: session, Scope: a.Scope, Challenge: p.Challenge,
+		Decision: id, Rule: rule.Name, Session: session, Scope: a.Scope, Challenge: p.Challenge,
 		Crossings: a.Crossings, Now: now,
 		Spent: func(fp string) bool { return slices.Contains(p.Spent, fp) },
 	}, trust)
@@ -143,6 +168,19 @@ func checkPresence(env Env, a boundaryledger.Answer, id, rule, session string, n
 		out.spent = a.Proof.Fingerprint()
 	}
 	return out
+}
+
+// promptAnswered reports whether a is an answer the harness's prompt could
+// have given: the session has a person at it, the rule is one the prompt
+// answers, and the answer names the call this decision's ask was raised
+// on, which is what settlePrompt read back from the transcript. An
+// answer file that only says "prompt" is none of that.
+func promptAnswered(env Env, a boundaryledger.Answer, id string, rule domain.Rule) bool {
+	if !env.Attended || rule.TeamRouted() || a.Scope != boundaryledger.ScopeSession || a.ToolUseID == "" {
+		return false
+	}
+	p, ok, err := env.Dir.GetPending(id)
+	return err == nil && ok && p.ToolUseID == a.ToolUseID
 }
 
 // retireChallenge closes the raising a one-step approval answered: the
@@ -180,7 +218,7 @@ func presenceRationale(a eventschema.DecisionApproval) string {
 		return ""
 	}
 	return "; presence check in shadow: with presence enforced this " + a.Method + " approval would not be honoured (" +
-		presence.Reason(a.WouldRefuse).Phrase() + "), and it changed nothing"
+		reasonPhrase(presence.Reason(a.WouldRefuse)) + "), and it changed nothing"
 }
 
 // Presence states status reports.

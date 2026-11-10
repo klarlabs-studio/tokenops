@@ -158,8 +158,10 @@ Since schema 1.6.1 an `approval` may also say what the presence check
 verified; `presence_key` names the key), `harness` (the harness's own
 permission prompt vouched for the person), `team` (the team plane
 answered), `unverified` (enforcement would not honour it; `would_refuse`
-gives the verifier's reason, such as `unsigned`, `wrong_challenge` or
-`expired`) or `not_enrolled` (the machine has no presence key). All three
+gives the reason: the verifier's, such as `unsigned`, `wrong_challenge` or
+`expired`, or the pause point's, `prompt_not_asked` or `team_not_routed`,
+for an answer that names a channel that could not have given it) or
+`not_enrolled` (the machine has no presence key). All three
 are optional and omitted when empty: answers recorded before presence
 checks, and denials, carry none. While presence is in shadow nothing is
 refused for them.

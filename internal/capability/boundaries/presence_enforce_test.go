@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -314,7 +315,8 @@ func TestEnforcedWithoutAKey(t *testing.T) {
 
 // presence keeps Claude Code's prompt (harness-attested); presence-strict
 // drops it: the pause point does not ask there, and a prompt answer on
-// disk is not honoured.
+// disk is not honoured. The answer here is the one the pause point writes
+// after reading the prompt back: it names the call that was asked.
 func TestStrictDropsThePrompt(t *testing.T) {
 	for _, tc := range []struct {
 		mode     presence.Mode
@@ -335,7 +337,7 @@ func TestStrictDropsThePrompt(t *testing.T) {
 		}
 		if err := env.Dir.PutAnswer(boundaryledger.Answer{
 			ID: res.DecisionID, Rule: "session-spend", SessionID: "s1", Approved: true, Scope: boundaryledger.ScopeSession,
-			Approver: "felix", Method: MethodPrompt, At: testNow,
+			Approver: "felix", Method: MethodPrompt, At: testNow, ToolUseID: call("s1").ToolUseID,
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -382,5 +384,103 @@ func TestCancelledDialogIsNotUnavailable(t *testing.T) {
 	f.Fail(presencetest.ExitNoGUI)
 	if _, err := SignApproval(context.Background(), env, s, id, false); !errors.Is(err, ErrPresenceUnavailable) {
 		t.Fatalf("no GUI: %v", err)
+	}
+}
+
+// An answer's own word for where it came from is not enough under
+// enforcement: a prompt answer counts only against an ask the pause point
+// raised at a prompt, and a team answer only on a rule routed to the team
+// plane. Under channel both are honoured as before and the decision
+// records that enforcement would refuse them.
+func TestAnAnswersWordForItsChannelIsChecked(t *testing.T) {
+	asked := call("s1").ToolUseID
+	for _, tc := range []struct {
+		name     string
+		mode     presence.Mode
+		attended bool
+		answer   boundaryledger.Answer
+		reason   presence.Reason
+	}{
+		{"prompt, no call named", presence.ModePresence, true,
+			boundaryledger.Answer{Method: MethodPrompt, Scope: boundaryledger.ScopeSession}, reasonPromptNotAsked},
+		{"prompt, another call", presence.ModePresence, true,
+			boundaryledger.Answer{Method: MethodPrompt, Scope: boundaryledger.ScopeSession, ToolUseID: "tu-other"}, reasonPromptNotAsked},
+		{"prompt, for one step", presence.ModePresence, true,
+			boundaryledger.Answer{Method: MethodPrompt, Scope: boundaryledger.ScopeOnce, ToolUseID: asked}, reasonPromptNotAsked},
+		{"prompt, nobody at the session", presence.ModePresence, false,
+			boundaryledger.Answer{Method: MethodPrompt, Scope: boundaryledger.ScopeSession, ToolUseID: asked}, reasonPromptNotAsked},
+		{"team, a local rule", presence.ModePresence, false,
+			boundaryledger.Answer{Method: MethodTeam, Scope: boundaryledger.ScopeSession}, reasonTeamNotRouted},
+		{"team, a local rule, strict", presence.ModeStrict, false,
+			boundaryledger.Answer{Method: MethodTeam, Scope: boundaryledger.ScopeSession}, reasonTeamNotRouted},
+		{"prompt, channel", presence.ModeChannel, true,
+			boundaryledger.Answer{Method: MethodPrompt, Scope: boundaryledger.ScopeSession}, reasonPromptNotAsked},
+		{"team, channel", presence.ModeChannel, false,
+			boundaryledger.Answer{Method: MethodTeam, Scope: boundaryledger.ScopeSession}, reasonTeamNotRouted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := enforcedEnv(t, tc.mode, tc.attended)
+			s, _ := fakeSigner(t)
+			enrolFake(t, env, s)
+			id := raise(t, env)
+			a := tc.answer
+			a.ID, a.Rule, a.SessionID, a.Approved, a.Approver, a.At = id, "session-spend", "s1", true, "someone", testNow
+			if err := env.Dir.PutAnswer(a); err != nil {
+				t.Fatal(err)
+			}
+			res, err := Guard(rules(t, spendRule("ask", "enforce")), call("s1"), env)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stage, got, _ := lastApproval(t, env, id)
+			if !tc.mode.Enforced() {
+				if res.Verdict != VerdictNone || stage != eventschema.DecisionStageApplied ||
+					got.Presence != PresenceUnverified || got.WouldRefuse != string(tc.reason) {
+					t.Fatalf("channel: %+v, recorded %s %+v", res, stage, got)
+				}
+				return
+			}
+			if res.Verdict == VerdictNone || !strings.Contains(res.Reason, "was given but not honoured") {
+				t.Fatalf("honoured: %+v", res)
+			}
+			if stage != eventschema.DecisionStageProposed || got.Presence != PresenceRefused || got.WouldRefuse != string(tc.reason) {
+				t.Fatalf("recorded %s %+v", stage, got)
+			}
+			if _, ok, _ := env.Dir.GetAnswer(id, env.now()); ok {
+				t.Error("the refused answer is still there to be read again")
+			}
+		})
+	}
+}
+
+// The prompt's own answer still counts under presence: the pause point
+// reads it back from the transcript, writes it naming the asked call, and
+// honours it for the rest of the session.
+func TestAPromptAnswerReadBackHoldsUnderPresence(t *testing.T) {
+	env := enforcedEnv(t, presence.ModePresence, true)
+	s, _ := fakeSigner(t)
+	enrolFake(t, env, s)
+	setCost(t, env, "s1", 25)
+	transcript := filepath.Join(t.TempDir(), "t.jsonl")
+	r := rules(t, spendRule("ask", "enforce"))
+	c := call("s1")
+	c.TranscriptPath = transcript
+	first, err := Guard(r, c, env)
+	if err != nil || first.Verdict != VerdictAsk {
+		t.Fatalf("first = %+v, %v", first, err)
+	}
+	result := `{"message":{"content":[{"type":"tool_result","tool_use_id":"` + c.ToolUseID + `","content":"ok"}]}}` + "\n"
+	if err := os.WriteFile(transcript, []byte(result), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, next := range []string{"tu-2", "tu-3"} {
+		c.ToolUseID = next
+		if res, err := Guard(r, c, env); err != nil || res.Verdict != VerdictNone {
+			t.Fatalf("%s after yes at the prompt = %+v, %v", next, res, err)
+		}
+	}
+	_, a, _ := lastApproval(t, env, first.DecisionID)
+	if a.Method != MethodPrompt || a.Presence != PresenceHarness || a.WouldRefuse != "" {
+		t.Fatalf("approval = %+v", a)
 	}
 }

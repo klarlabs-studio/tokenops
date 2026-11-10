@@ -220,6 +220,10 @@ type Answer struct {
 	Approver  string    `json:"approver"`
 	Method    string    `json:"method"`
 	At        time.Time `json:"at"`
+	// ToolUseID is the call the harness's prompt was raised on, on an
+	// answer read back from that prompt: the pause point honours it only
+	// against the ask it raised there.
+	ToolUseID string `json:"tool_use_id,omitempty"`
 	// Crossings are the figures the approver was shown, which a presence
 	// proof binds by hash.
 	Crossings []boundaries.Crossing `json:"crossings,omitempty"`
