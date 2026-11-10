@@ -62,19 +62,19 @@ func PlacedFor(d uniteconomics.Deps) func(ctx context.Context, turns TurnReader,
 
 // addSpend fills u's schema 3 sections and marks it schema 3, or schema 4
 // with the units' reverted commits when opts allows it. A reader that
-// fails leaves its section empty with a warning.
+// fails leaves its section empty and is noted as unread.
 func addSpend(ctx context.Context, d Deps, opts Options, shared TurnReader, u *teamwire.Upload, units []sessions.Unit,
-	turns []analytics.SessionTurn, repoOf map[string]string, now time.Time) []string {
+	turns []analytics.SessionTurn, repoOf map[string]string, now time.Time, notes *Notes) {
 	u.Schema = teamwire.SchemaSpend
 	first, err := time.Parse(teamwire.DayLayout, u.Days[0])
 	if err != nil {
-		return []string{"spend: " + err.Error()}
+		notes.unread("spend", err)
+		return
 	}
 	covered := map[string]bool{}
 	for _, day := range u.Days {
 		covered[day] = true
 	}
-	var warnings []string
 	u.Spend = SpendRows(turns, repoOf, covered)
 	var placed []uniteconomics.Placed
 	if d.Schema3.Placed != nil {
@@ -82,7 +82,7 @@ func addSpend(ctx context.Context, d Deps, opts Options, shared TurnReader, u *t
 		placed, err = d.Schema3.Placed(ctx, shared, first, now)
 		done()
 		if err != nil {
-			warnings = append(warnings, "units: "+err.Error())
+			notes.unread("units", err)
 		}
 	}
 	labels := map[string]string{}
@@ -106,13 +106,11 @@ func addSpend(ctx context.Context, d Deps, opts Options, shared TurnReader, u *t
 		}
 	}
 	if slices.Contains(teamwire.VendorCostRoles, opts.Role) && d.Schema3.VendorCosts != nil {
-		var w []string
 		done := lap(opts.Took, "vendor cost")
-		u.VendorCosts, w = vendorCostRows(ctx, d.Schema3.VendorCosts(ctx), u.Days, first, now)
+		u.VendorCosts = vendorCostRows(ctx, d.Schema3.VendorCosts(ctx), u.Days, first, now, notes)
 		done()
-		warnings = append(warnings, w...)
 	}
-	return append(warnings, dropInvalidSpend(u)...)
+	notes.Dropped = append(notes.Dropped, dropInvalidSpend(u)...)
 }
 
 // SpendRows sums the covered days' turns by day, repository and provider.
@@ -225,8 +223,9 @@ func UnitRows(tasks []story.Task, turns []analytics.SessionTurn, placed []unitec
 
 // vendorCostRows reads each provider's daily cost over the covered days.
 // A day the vendor has not reported yet (today, usually) is left out
-// rather than sent as 0.
-func vendorCostRows(ctx context.Context, readers map[string]VendorCostReader, days []string, first, now time.Time) ([]teamwire.VendorCost, []string) {
+// rather than sent as 0; a provider whose API could not be asked is noted
+// as unread.
+func vendorCostRows(ctx context.Context, readers map[string]VendorCostReader, days []string, first, now time.Time, notes *Notes) []teamwire.VendorCost {
 	providers := make([]string, 0, len(readers))
 	for p := range readers {
 		providers = append(providers, p)
@@ -235,11 +234,10 @@ func vendorCostRows(ctx context.Context, readers map[string]VendorCostReader, da
 	today := now.UTC().Format(teamwire.DayLayout)
 	end := first.AddDate(0, 0, len(days))
 	var out []teamwire.VendorCost
-	var warnings []string
 	for _, p := range providers {
 		got, err := readers[p](ctx, first, end)
 		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("vendor cost (%s): %v", p, err))
+			notes.unread("vendor cost ("+p+")", err)
 			continue
 		}
 		for _, day := range days {
@@ -248,7 +246,7 @@ func vendorCostRows(ctx context.Context, readers map[string]VendorCostReader, da
 			}
 		}
 	}
-	return out, warnings
+	return out
 }
 
 func repoOr(repo string) string {

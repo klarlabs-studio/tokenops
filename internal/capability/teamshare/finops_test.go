@@ -226,9 +226,9 @@ func finopsDeps() Deps {
 // A schema 2 upload is built from the same machine full of prompts and
 // paths as schema 1, and carries none of them either.
 func TestSchema2UploadCarriesNoContent(t *testing.T) {
-	u, warnings := Build(context.Background(), finopsDeps(), Options{Days: 14, RepoNames: RepoRemote, Schema: teamwire.SchemaFinOps}, now)
-	if len(warnings) > 0 {
-		t.Fatalf("warnings: %v", warnings)
+	u, notes := Build(context.Background(), finopsDeps(), Options{Days: 14, RepoNames: RepoRemote, Schema: teamwire.SchemaFinOps}, now)
+	if len(notes.All()) > 0 {
+		t.Fatalf("notes: %v", notes.All())
 	}
 	if u.Schema != teamwire.SchemaFinOps || len(u.PlanDays) == 0 || len(u.Waste) == 0 || len(u.Savings) == 0 {
 		t.Fatalf("schema 2 upload = %+v", u)

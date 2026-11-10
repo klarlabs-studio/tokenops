@@ -54,10 +54,10 @@ func vendorReaders() map[string]VendorCostReader {
 // A schema 3 upload is built from the same machine full of prompts,
 // paths, model names and session IDs, and carries none of them either.
 func TestSchema3UploadCarriesNoContent(t *testing.T) {
-	u, warnings := Build(context.Background(), spendDeps(),
+	u, notes := Build(context.Background(), spendDeps(),
 		Options{Days: 14, RepoNames: RepoRemote, Schema: teamwire.SchemaSpend, Role: "owner"}, now)
-	if len(warnings) > 0 {
-		t.Fatalf("warnings: %v", warnings)
+	if len(notes.All()) > 0 {
+		t.Fatalf("notes: %v", notes.All())
 	}
 	if u.Schema != teamwire.SchemaSpend || len(u.Spend) == 0 || len(u.Units) == 0 || len(u.VendorCosts) == 0 {
 		t.Fatalf("schema 3 upload = %+v", u)
@@ -146,9 +146,9 @@ func TestVendorCostOnlyForOwnersAndAdmins(t *testing.T) {
 	}
 	d.Schema3.VendorCosts = func(context.Context) map[string]VendorCostReader { return readers }
 	opts.Role = "owner"
-	u, warnings := Build(context.Background(), d, opts, now)
-	if len(u.VendorCosts) != 2 || len(warnings) != 1 || !strings.Contains(warnings[0], "openai") {
-		t.Errorf("vendor costs %+v, warnings %v", u.VendorCosts, warnings)
+	u, notes := Build(context.Background(), d, opts, now)
+	if len(u.VendorCosts) != 2 || len(notes.Unread) != 1 || !strings.Contains(notes.Unread[0], "openai") {
+		t.Errorf("vendor costs %+v, notes %+v", u.VendorCosts, notes)
 	}
 }
 

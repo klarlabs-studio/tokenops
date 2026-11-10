@@ -65,9 +65,9 @@ func TestUploadFromPromptFactsMatchesUploadFromText(t *testing.T) {
 		t.Helper()
 		d := deps()
 		d.Units = units
-		u, warnings := Build(context.Background(), d, Options{Days: 14, RepoNames: RepoRemote, ClientVersion: "0.119.0"}, now)
-		if len(warnings) > 0 {
-			t.Fatalf("warnings: %v", warnings)
+		u, notes := Build(context.Background(), d, Options{Days: 14, RepoNames: RepoRemote, ClientVersion: "0.119.0"}, now)
+		if len(notes.All()) > 0 {
+			t.Fatalf("notes: %v", notes.All())
 		}
 		u.BatchID = "" // a fresh id per upload
 		raw, err := json.Marshal(u)

@@ -42,9 +42,9 @@ func TestUploadReadsTheTurnsOnce(t *testing.T) {
 		placedGot = len(ts)
 		return nil, err
 	}
-	u, warnings := Build(context.Background(), d, Options{Days: 14, Schema: teamwire.SchemaSpend}, now)
-	if len(warnings) > 0 {
-		t.Fatalf("warnings: %v", warnings)
+	u, notes := Build(context.Background(), d, Options{Days: 14, Schema: teamwire.SchemaSpend}, now)
+	if len(notes.All()) > 0 {
+		t.Fatalf("notes: %v", notes.All())
 	}
 	if len(reads) != 1 || !reads[0].Equal(first.AddDate(0, 0, -avoidable.CalibrationDays)) {
 		t.Fatalf("turn reads = %v, want one from %s", reads, first.AddDate(0, 0, -avoidable.CalibrationDays))
@@ -89,8 +89,8 @@ func TestUploadTimesEachPart(t *testing.T) {
 	var parts []string
 	opts := Options{Days: 14, RepoNames: RepoRemote, Schema: teamwire.SchemaSpend, Role: "owner",
 		Took: func(part string, _ time.Duration) { parts = append(parts, part) }}
-	if _, warnings := Build(context.Background(), spendDeps(), opts, now); len(warnings) > 0 {
-		t.Fatalf("warnings: %v", warnings)
+	if _, notes := Build(context.Background(), spendDeps(), opts, now); len(notes.All()) > 0 {
+		t.Fatalf("notes: %v", notes.All())
 	}
 	want := []string{"transcripts", "turns", "repositories", "plan days", "plan advice", "waste", "units of work", "vendor cost"}
 	if !slices.Equal(parts, want) {

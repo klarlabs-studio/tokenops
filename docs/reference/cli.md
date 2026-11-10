@@ -178,7 +178,7 @@ tokenops team create --server <url>  # sign up with GitHub, start an organisatio
 tokenops team join <url> <invite>   # enrol with an invite; the URL comes with it
 tokenops team preview          # exactly what the next upload holds; sends nothing
 tokenops team preview --json   # the upload byte for byte
-tokenops team sync             # upload now (the daemon does it hourly)
+tokenops team sync             # upload now (the daemon does it hourly); nothing is sent when part of it could not be read
 tokenops team status           # who may see your individual figures, and who looked
 tokenops team web              # single-use sign-in link to the web view
 tokenops team leave            # revoke this machine and erase its figures

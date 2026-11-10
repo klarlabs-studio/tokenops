@@ -314,9 +314,14 @@ func newTeamPreviewCmd(rf *rootFlags) *cobra.Command {
 				}
 				opts := teamOptions(cfg)
 				opts.Schema, opts.Role = teamwire.SchemaVersion, st.Role
-				full, warnings := teamshare.Build(ctx, d, opts, now)
+				full, notes := teamshare.Build(ctx, d, opts, now)
 				sent := full.ForServer(schema)
 				if jsonOut {
+					// The JSON is the upload as it is sent, and one with a
+					// part unread is not sent.
+					if len(notes.Unread) > 0 {
+						return &teamshare.IncompleteError{Unread: notes.Unread}
+					}
 					return writeControlJSON(cmd, sent)
 				}
 				out := cmd.OutOrStdout()
@@ -329,8 +334,16 @@ func newTeamPreviewCmd(rf *rootFlags) *cobra.Command {
 				writeUpload(out, sent)
 				writeFinOps(out, full, finOpsNote(joined, sent.Schema))
 				writeSpend(out, full, spendNote(joined, sent.Schema))
-				for _, w := range warnings {
+				for _, w := range notes.Dropped {
 					fmt.Fprintln(out, "warning:", w)
+				}
+				if len(notes.Unread) > 0 {
+					fmt.Fprintln(out)
+					for _, w := range notes.Unread {
+						fmt.Fprintln(out, "could not read", w)
+					}
+					fmt.Fprintln(out, "An upload replaces every day it covers, so this one would not be sent: the team keeps the figures it has until all of it can be read.")
+					return nil
 				}
 				fmt.Fprintln(out, "\n--json prints the upload byte for byte as it is sent.")
 				return nil

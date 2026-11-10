@@ -105,6 +105,11 @@ const teamRecentDays = 2
 // differently), the first of each UTC day (prices and late reads settle)
 // and the one after a failure cover all the days; the others only the
 // last two. The server replaces only the days an upload names.
+//
+// An upload that was not sent because part of it could not be read
+// (teamshare.IncompleteError) changes nothing here: the server has what it
+// had, and the next upload owes the days this one did. Widening it to
+// every day would make a read that ran out of time run out sooner.
 type teamCadence struct {
 	// full is when the last full upload succeeded; zero when none has.
 	full time.Time
@@ -122,6 +127,9 @@ func (c *teamCadence) days(now time.Time, n int) int {
 
 // done notes how the upload at now, covering days of the full n, ended.
 func (c *teamCadence) done(now time.Time, days, n int, err error) {
+	if errors.As(err, new(*teamshare.IncompleteError)) {
+		return
+	}
 	c.failed = err != nil
 	if err == nil && days == n {
 		c.full = now
@@ -146,6 +154,7 @@ func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Opt
 	}
 	res, err := teamshare.Sync(ctx, deps, opts, path, start)
 	took := slog.Group("took", append([]any{slog.Duration("total", time.Since(start).Round(time.Millisecond))}, parts...)...)
+	var incomplete *teamshare.IncompleteError
 	switch {
 	case errors.Is(err, teamclient.ErrNotJoined):
 		return err
@@ -155,6 +164,11 @@ func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Opt
 		// Billing, not a fault: say so plainly, and keep trying hourly so
 		// uploads resume on their own once a subscription starts.
 		logger.Info("team uploads paused by the organisation's billing", "detail", err.Error())
+	case errors.As(err, &incomplete):
+		// An upload replaces every day it covers, so one with a part
+		// missing is held back: the team keeps the figures it has.
+		logger.Warn("team upload not sent: part of the figures could not be read; the next one reads these days again",
+			"unread", incomplete.Unread, took)
 	case err != nil:
 		// The error names the server's refusal; it never carries the
 		// device token or any figure.
@@ -165,7 +179,7 @@ func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Opt
 			"note", "derived figures only; see tokenops team preview")
 	}
 	for _, w := range res.Warnings {
-		logger.Warn("team upload: part of the figures could not be read", "detail", w)
+		logger.Warn("team upload: rows that failed validation were left out", "detail", w)
 	}
 	return err
 }

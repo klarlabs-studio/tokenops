@@ -1,6 +1,6 @@
 # ADR 0012 — The team plane: hosted, derived figures only, aggregate by default
 
-- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*.
+- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*; amended 2026-11-10: an upload with a part unread is not sent, see *An upload is sent whole* under *Upload schema 2*.
 - **Date:** 2026-10-08
 - **Deciders:** TokenOps maintainers
 - **Related:** issue #250, ADR 0004 (local-first; no BI product), ADR 0010 §5 (the API's privacy line)
@@ -195,6 +195,19 @@ pointer to a number, and a flag is a boolean.
 Day replacement is unchanged: an upload replaces each day in `days`
 whole, the new sections included. A covered day with no row in a section
 had none.
+
+**An upload is sent whole (amended 2026-11-10).** Because a day is
+replaced whole, an upload whose figures are incomplete erases what the
+server held. So the client sends an upload only when every part of it
+was read: the transcripts, the event store, the plan events and history,
+the waste report, the units of work and each configured vendor's cost.
+When one fails (a locked store, a read that ran out of time, a vendor's
+API that refused) nothing is sent, the server keeps the days as they
+were, `tokenops team status` and the daemon's log name the part, and the
+next upload reads the same days again. `tokenops team preview` shows what
+was read and says it would not be sent. A row that fails validation is
+still dropped with a warning and the rest sent: it is missing from every
+upload alike.
 
 **Negotiation.** `Me` gains `max_schema`, the newest upload format a
 server accepts. A server that omits it reads schema 1. The client asks
