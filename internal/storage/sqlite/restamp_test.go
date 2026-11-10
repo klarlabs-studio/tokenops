@@ -22,7 +22,7 @@ func TestRestampPlanIncluded(t *testing.T) {
 	if err := s.AppendBatch(ctx, envs); err != nil {
 		t.Fatal(err)
 	}
-	n, err := s.RestampPlanIncluded(ctx, "openai", t0.Add(-time.Hour), t0.Add(time.Hour))
+	n, err := s.RestampPlanIncluded(ctx, "openai", t0.Add(-time.Hour), t0.Add(time.Hour), nil)
 	if err != nil || n != 2 {
 		t.Fatalf("restamped %d, err %v; want 2", n, err)
 	}
@@ -41,8 +41,58 @@ func TestRestampPlanIncluded(t *testing.T) {
 		}
 	}
 	// Idempotent.
-	if n, _ := s.RestampPlanIncluded(ctx, "openai", t0.Add(-time.Hour), t0.Add(time.Hour)); n != 0 {
+	if n, _ := s.RestampPlanIncluded(ctx, "openai", t0.Add(-time.Hour), t0.Add(time.Hour), nil); n != 0 {
 		t.Errorf("second pass changed %d", n)
+	}
+}
+
+// A backdated plan covers what the plan covers when usage is recorded, and
+// nothing else. A turn a gateway carried ran on an API key, a spend report
+// is what the vendor billed, and a cost the recorder stated is a charge
+// that cannot be worked out again once removed: each keeps what it had.
+func TestRestampPlanIncludedLeavesWhatThePlanDoesNotCover(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	t0 := time.Date(2026, 9, 26, 15, 0, 0, 0, time.UTC)
+	event := func(id, source, endpoint string, p *eventschema.PromptEvent) *eventschema.Envelope {
+		p.Provider, p.TotalTokens = "openai", 100
+		env := mustPromptEnvelope(t, id, t0, p)
+		env.Source = source
+		if endpoint != "" {
+			env.Attributes = map[string]string{"endpoint": endpoint}
+		}
+		return env
+	}
+	if err := s.AppendBatch(ctx, []*eventschema.Envelope{
+		event("no-endpoint", "codex-jsonl", "", &eventschema.PromptEvent{}),
+		event("own-endpoint", "codex-jsonl", "openai", &eventschema.PromptEvent{CostSource: eventschema.CostSourceMetered}),
+		event("priced-from-the-card", "proxy", "", &eventschema.PromptEvent{CostUSD: 0.18, CostMeasured: true}),
+		event("through-a-gateway", "codex-jsonl", "openrouter", &eventschema.PromptEvent{CostSource: eventschema.CostSourceMetered}),
+		event("spend-report", "openai-admin", "", &eventschema.PromptEvent{CostSource: eventschema.CostSourceMetered}),
+		event("cost-the-recorder-stated", "opencode", "openai", &eventschema.PromptEvent{CostUSD: 0.42, CostSource: eventschema.CostSourceMetered}),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	covered := map[string]bool{"no-endpoint": true, "own-endpoint": true, "priced-from-the-card": true}
+	n, err := s.RestampPlanIncluded(ctx, "openai", t0.Add(-time.Hour), t0.Add(time.Hour), []string{"fireworks-usage", "openai-admin"})
+	if err != nil || n != int64(len(covered)) {
+		t.Fatalf("restamped %d, err %v; want %d", n, err, len(covered))
+	}
+	got, err := s.Query(ctx, Filter{Type: eventschema.EventTypePrompt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 6 {
+		t.Fatalf("read %d events, want 6", len(got))
+	}
+	for _, env := range got {
+		p := env.Payload.(*eventschema.PromptEvent)
+		if (p.CostSource == eventschema.CostSourcePlanIncluded) != covered[env.ID] {
+			t.Errorf("%s: cost source %q", env.ID, p.CostSource)
+		}
+		if env.ID == "cost-the-recorder-stated" && p.CostUSD != 0.42 {
+			t.Errorf("the stated cost is %v, want the 0.42 the recorder gave", p.CostUSD)
+		}
 	}
 }
 

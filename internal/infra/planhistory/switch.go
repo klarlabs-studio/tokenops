@@ -65,13 +65,12 @@ func Record(ctx context.Context, s Switch) (Outcome, error) {
 		Price: s.Price, Currency: s.Currency, SpendLimitUSD: s.SpendLimitUSD,
 	})
 	out.Result = res
-	if err != nil {
-		return out, err
-	}
-	if store != nil {
+	// A switch that was recorded is audited, also when re-marking earlier
+	// usage then failed or was refused.
+	if store != nil && (err == nil || len(res.Recorded) > 0) {
 		s.audit(ctx, store, res)
 	}
-	return out, nil
+	return out, err
 }
 
 // store is the event store to restamp and audit through: the one given,

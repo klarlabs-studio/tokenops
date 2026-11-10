@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -42,6 +43,10 @@ func recordPlanChange(ctx context.Context, out io.Writer, sw planhistory.Switch,
 	res, err := planhistory.Record(ctx, sw)
 	if res.StoreErr != nil {
 		fmt.Fprintf(out, "warning: event store unavailable, so earlier usage was not re-marked: %v\n", res.StoreErr)
+	}
+	if errors.Is(err, planswitch.ErrUnknownPlan) {
+		fmt.Fprintf(out, "warning: %s is not in the plan catalog, so earlier usage was not re-marked\n", plan)
+		return nil
 	}
 	if err != nil {
 		return err

@@ -1008,21 +1008,40 @@ func (s *Store) LastEventBySource(ctx context.Context) (map[string]time.Time, er
 	return out, nil
 }
 
-// RestampPlanIncluded marks a provider's metered prompt events in
-// [from, to) as covered by a plan, and returns how many it changed.
+// RestampPlanIncluded marks the metered prompt events of provider in
+// [from, to) that a plan for it covers as covered, and returns how many
+// it changed.
 //
 // Cost is otherwise fixed when an event is recorded, from the plan bound
 // at that moment. This is the one deliberate exception (ADR 0008): an
 // operator who tells TokenOps they were on a plan all along corrects the
 // usage it recorded as billed while no plan was bound. Events already
 // plan-covered or on a trial are left alone.
-func (s *Store) RestampPlanIncluded(ctx context.Context, provider string, from, to time.Time) (int64, error) {
+//
+// So is what the plan does not cover, by the rule used when usage is
+// recorded (biller.PlanApplies): usage that went through another endpoint
+// (ADR 0009) and usage one of spendReports recorded, which is what the
+// vendor billed. An event whose recorder stated its cost, rather than
+// pricing it from the rate card, also stays billed: the vendor charged
+// that amount, and once removed it cannot be worked out again. A cost
+// priced from the rate card is cleared with the mark, since it can be.
+func (s *Store) RestampPlanIncluded(ctx context.Context, provider string, from, to time.Time, spendReports []string) (int64, error) {
+	args := []any{provider, from.UTC().UnixNano(), to.UTC().UnixNano(), provider}
+	notReported := ""
+	if len(spendReports) > 0 {
+		notReported = ` AND coalesce(source, '') NOT IN (?` + strings.Repeat(", ?", len(spendReports)-1) + `)`
+		for _, r := range spendReports {
+			args = append(args, r)
+		}
+	}
 	res, err := s.db.ExecContext(ctx, `UPDATE events
 		SET payload = json_remove(json_set(payload, '$.cost_source', 'plan_included'), '$.cost_usd', '$.cost_measured'),
 		    cost_usd = NULL
 		WHERE type = 'prompt' AND provider = ? AND timestamp_ns >= ? AND timestamp_ns < ?
-		  AND coalesce(json_extract(payload, '$.cost_source'), '') IN ('', 'metered')`,
-		provider, from.UTC().UnixNano(), to.UTC().UnixNano())
+		  AND coalesce(json_extract(payload, '$.cost_source'), '') IN ('', 'metered')
+		  AND coalesce(json_extract(attributes, '$.endpoint'), '') IN ('', ?)
+		  AND NOT (coalesce(cost_usd, 0) > 0 AND coalesce(json_extract(payload, '$.cost_measured'), 0) = 0)`+notReported,
+		args...)
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: restamp: %w", contended(ctx, err))
 	}

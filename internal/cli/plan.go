@@ -71,7 +71,9 @@ previous workflow of editing the MCP host's JSON env block.
 Every switch is recorded with the date it took effect, so reports over a
 past period use the plan in force then. --since backdates a switch and
 re-marks the provider's usage recorded as billed per token since that
-date as covered by the plan.
+date as covered by the plan. Usage the plan does not cover stays billed:
+turns that went through another endpoint, what a spend report recorded,
+and turns whose recorder stated their cost.
 
 When Claude Code or Codex reports a plan (its account tier, its
 plan_type), TokenOps binds that plan on its own and tells you. A plan you

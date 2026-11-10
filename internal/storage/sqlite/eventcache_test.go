@@ -111,7 +111,7 @@ func TestEventCacheAnswersAsTheStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("re-attribution")
-	if _, err := s.RestampPlanIncluded(ctx, "openrouter", month, cacheNow); err != nil {
+	if _, err := s.RestampPlanIncluded(ctx, "openrouter", month, cacheNow, nil); err != nil {
 		t.Fatal(err)
 	}
 	check("restamp")

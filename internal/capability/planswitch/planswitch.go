@@ -5,7 +5,8 @@
 // recorded with the date it took effect, so a report over a past period
 // uses the plan in force then (ADR 0008). A switch backdated with a
 // start date also corrects the usage recorded as billed per token in
-// between: the operator is saying they were on the plan all along.
+// between, where the plan covers it: the operator is saying they were on
+// the plan all along.
 package planswitch
 
 import (
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
@@ -26,8 +28,11 @@ type History interface {
 
 // Restamper re-marks recorded usage as covered by a plan, or as billed
 // per token for a plan that covers nothing (usage-based Enterprise).
+// Marking as covered leaves what a plan never covers: usage through
+// another endpoint, usage one of spendReports recorded, and usage with a
+// cost its recorder stated.
 type Restamper interface {
-	RestampPlanIncluded(ctx context.Context, provider string, from, to time.Time) (int64, error)
+	RestampPlanIncluded(ctx context.Context, provider string, from, to time.Time, spendReports []string) (int64, error)
 	RestampMetered(ctx context.Context, provider string, from, to time.Time) (int64, error)
 }
 
@@ -46,6 +51,12 @@ type Result struct {
 // wrong.
 var ErrFuture = errors.New("planswitch: the start date is in the future")
 
+// ErrUnknownPlan reports a backdated switch to a plan the catalog does not
+// hold. The switch is recorded, and earlier usage is left as it was: what
+// such a plan covers is not known, and marking usage as covered removes
+// the cost recorded with it.
+var ErrUnknownPlan = errors.New("planswitch: the plan is not in the catalog, so earlier usage was not re-marked")
+
 // Change is one plan switch: provider moves from Previous to Plan from
 // From on, paying Price in Currency per month when the operator gave it.
 type Change struct {
@@ -61,9 +72,10 @@ type Change struct {
 // Record writes a switch of provider from previous to plan, effective
 // from `from`. When from is before now and the new plan is not empty,
 // usage since then is re-marked to match the plan: covered for a
-// subscription, billed per token for a plan billed at API rates.
-// A nil restamper skips that step (no event store), which the caller
-// reports.
+// subscription, as far as the plan covers it, and billed per token for a
+// plan billed at API rates. A nil restamper skips that step (no event
+// store), which the caller reports. A plan the catalog does not hold is
+// recorded and re-marks nothing (ErrUnknownPlan).
 func Record(ctx context.Context, h History, r Restamper, c Change) (Result, error) {
 	provider, plan, from, now := c.Provider, c.Plan, c.From, c.Now
 	if from.After(now) {
@@ -84,11 +96,17 @@ func Record(ctx context.Context, h History, r Restamper, c Change) (Result, erro
 	if plan == "" || r == nil || !from.Before(now) {
 		return res, nil
 	}
-	restamp, to := r.RestampPlanIncluded, "plan_included"
-	if !plans.Covers(plan) {
-		restamp, to = r.RestampMetered, "metered"
+	if _, known := plans.Lookup(plan); !known {
+		return res, ErrUnknownPlan
 	}
-	n, err := restamp(ctx, provider, from, now)
+	var n int64
+	to := "plan_included"
+	if plans.Covers(plan) {
+		n, err = r.RestampPlanIncluded(ctx, provider, from, now, biller.SpendSources())
+	} else {
+		to = "metered"
+		n, err = r.RestampMetered(ctx, provider, from, now)
+	}
 	if err != nil {
 		return res, err
 	}
