@@ -182,11 +182,14 @@ turn — the figure is there to make the size of the drag legible.
 
 ## Privacy
 
-The hook reads only the **tail** (~256 KiB) of your local transcript jsonl to
-find the turns added since the last Stop. It never reads the whole file and
-never sends anything off your machine. State is a tiny per-session counter
-(cumulative $, the highest alert fired, and a dedup timestamp) plus an
-append-only ledger under `~/.tokenops/coach-hook/`.
+The hook reads what your local transcript jsonl gained since the last Stop, to
+find the turns added. A session's first Stop reads the file from its start;
+later ones read from where the last left off. A message Claude Code wrote as
+several lines counts once, and history a resumed or forked session copied in
+from the session it came from is not counted again. Nothing is sent off your
+machine. State is a tiny per-session counter (cumulative $, the highest alert
+fired, a dedup timestamp and a read offset) plus an append-only ledger under
+`~/.tokenops/coach-hook/`.
 
 ## Fail-open guarantee
 

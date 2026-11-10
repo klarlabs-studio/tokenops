@@ -13,6 +13,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexhome"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -97,6 +98,9 @@ type turnLine struct {
 	// still a turn, just one the window cannot place.
 	Timestamp string `json:"timestamp"`
 	Message   struct {
+		// ID is the same on every line Claude Code writes for one
+		// message, and so is the usage.
+		ID    string `json:"id"`
 		Model string `json:"model"`
 		Usage struct {
 			InputTokens              int64 `json:"input_tokens"`
@@ -184,6 +188,8 @@ func computeTurnStatsRoot(root string, opts ExtractOptions) (TurnStats, error) {
 		defer func() { _ = f.Close() }()
 		scanner := bufio.NewScanner(f)
 		scanner.Buffer(make([]byte, 0, 64*1024), turnsScanBufSize)
+		// A message is one turn however many lines it was written as.
+		seen := claudecodejsonl.Messages{}
 		for scanner.Scan() {
 			var t turnLine
 			if jsonErr := json.Unmarshal(scanner.Bytes(), &t); jsonErr != nil {
@@ -198,6 +204,9 @@ func computeTurnStatsRoot(root string, opts ExtractOptions) (TurnStats, error) {
 			u := t.Message.Usage
 			if u.InputTokens == 0 && u.OutputTokens == 0 &&
 				u.CacheReadInputTokens == 0 && u.CacheCreationInputTokens == 0 {
+				continue
+			}
+			if !seen.First(t.Message.ID) {
 				continue
 			}
 			s.TotalTurns++

@@ -9,9 +9,9 @@
 // each quietly compounds into thousands of dollars while no single turn ever
 // looks alarming. Phase 1's flat per-turn threshold missed exactly that shape.
 //
-// The hook reads only the *tail* of the local transcript jsonl (never the whole
-// multi-MB file, never anything off-machine), sums the full API-equivalent cost
-// of the new turns since it last looked, keeps a tiny per-session counter in
+// The hook reads what the local transcript jsonl gained since it last looked
+// (the whole file once, on a session's first Stop; never anything off-machine),
+// sums the full API-equivalent cost of the new turns, keeps a tiny per-session counter in
 // ~/.tokenops/coach-hook/, and latches each budget-fraction alert so it fires
 // once. It is a pure coach: it never blocks, never forces the agent to keep
 // going, and fails open on every error — a coach must never disrupt the session.
@@ -41,8 +41,8 @@ func DefaultTiers() []float64 { return []float64{0.50, 0.75, 1.00} }
 
 // Evaluate is the coach's decision + side effects for one Stop event. dir is
 // the state/ledger root (defaults to ~/.tokenops/coach-hook when empty). It
-// loads session state, reads the tail of transcriptPath, sums the full
-// API-equivalent cost of every turn newer than the dedup marker into the
+// loads session state, reads transcriptPath from where the last Stop left
+// off, sums the full API-equivalent cost of every turn newer than the dedup marker into the
 // session's cumulative spend, and — if that spend has crossed a budget-fraction
 // boundary not yet alerted — nudges at the single highest such boundary
 // (latching it). now is injected for tests. It never returns an error: on any

@@ -172,6 +172,9 @@ type rawEntry struct {
 	// Claude Code stamps it on assistant entries.
 	Effort  string `json:"effort"`
 	Message struct {
+		// ID is the same on every entry Claude Code writes for one
+		// message: one per content block, each repeating the usage.
+		ID      string          `json:"id"`
 		Role    string          `json:"role"`
 		Model   string          `json:"model"`
 		Content json.RawMessage `json:"content"`
@@ -311,7 +314,7 @@ func appendTranscriptLine(out []Record, line []byte, since time.Time, withText b
 	case "assistant":
 		turn := base
 		turn.Kind = KindAssistantTurn
-		turn.RequestID = e.RequestID
+		turn.RequestID = firstNonEmpty(e.RequestID, e.Message.ID)
 		turn.Model = e.Message.Model
 		turn.Effort = normEffort(e.Effort)
 		turn.InputTokens = e.Message.Usage.InputTokens +

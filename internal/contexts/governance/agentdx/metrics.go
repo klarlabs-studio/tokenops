@@ -104,8 +104,12 @@ type Record struct {
 	Role string
 	// CallID pairs a KindToolUse with its KindToolResult.
 	CallID string
-	// RequestID groups the assistant entries one model request wrote
-	// (Claude Code's requestId). Empty when the client records none.
+	// RequestID groups the assistant entries one model request wrote:
+	// Claude Code writes one per content block, each repeating the
+	// request's usage, so a reader that counts turns or sums tokens takes
+	// a request at its first entry. It is Claude Code's requestId, or the
+	// message id when an entry has none. Empty when the client records
+	// neither, and such an entry is a turn of its own.
 	RequestID string
 	// DurationMs is the turn's duration as the harness measured it, for
 	// KindTurnEnd. Zero when it was not recorded.

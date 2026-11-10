@@ -1,6 +1,10 @@
 package agentdx
 
-import "fmt"
+import (
+	"fmt"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
+)
 
 // ContextBand is one slice of the context-size range, with the friction
 // measured while the window was that full.
@@ -116,6 +120,7 @@ func ComputeContextCurve(records []Record) []ContextBand {
 		unit       *acc
 		unitTurns  int
 		unitFiles  map[string]bool
+		requests   = claudecodejsonl.Messages{}
 		// Bounded lookback over recent call signatures, kept PER SESSION.
 		//
 		// Bounded, because unbounded history makes the repeat rate a proxy
@@ -154,7 +159,8 @@ func ComputeContextCurve(records []Record) []ContextBand {
 			if r.InputTokens > 0 {
 				curContext = r.InputTokens
 			}
-			if unit != nil {
+			// A request written as several entries is one turn.
+			if first := requests.First(r.RequestID); unit != nil && first {
 				unitTurns++
 			}
 		case KindPrompt:

@@ -241,3 +241,39 @@ func TestScan_NoLogsIsEmpty(t *testing.T) {
 		t.Errorf("empty root should yield empty report: %+v", rep)
 	}
 }
+
+// Claude Code writes a message as one line per content block, each
+// repeating the message's usage. The tokens were used once; what each
+// line holds still counts.
+func TestScan_AMessageInSeveralLinesIsUsedOnce(t *testing.T) {
+	line := func(block map[string]any) map[string]any {
+		return map[string]any{
+			"timestamp": "2026-06-02T10:00:00Z",
+			"message": map[string]any{
+				"id":      "msg_1",
+				"role":    "assistant",
+				"usage":   map[string]any{"input_tokens": 1000, "cache_read_input_tokens": 200, "output_tokens": 10},
+				"content": []any{block},
+			},
+		}
+	}
+	root := writeSession(t, []map[string]any{
+		line(text("thinking it over")),
+		line(text("the answer")),
+		line(toolUse("t1", "Read", map[string]any{"file_path": "/x"})),
+	})
+	rep, _, err := Scan(formatter.DefaultFormatters(), Options{Root: root}, time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Timeline) != 1 {
+		t.Fatalf("want one weekly bucket, got %+v", rep.Timeline)
+	}
+	w := rep.Timeline[0]
+	if w.InputTokens != 1200 || w.OutputTokens != 10 {
+		t.Errorf("tokens in=%d out=%d, want 1200/10: one message in three lines", w.InputTokens, w.OutputTokens)
+	}
+	if w.ProseBytes != int64(len("thinking it over")+len("the answer")) {
+		t.Errorf("prose bytes = %d, want both lines' text", w.ProseBytes)
+	}
+}

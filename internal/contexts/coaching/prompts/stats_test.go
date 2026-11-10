@@ -196,3 +196,28 @@ func TestComputeTurnStatsFiltersTurnsByTimestamp(t *testing.T) {
 		t.Errorf("turns = %d, want the in-window turn and the unstamped one", stats.TotalTurns)
 	}
 }
+
+// Claude Code writes a message as one line per content block, each
+// repeating the message's usage. It is one turn.
+func TestComputeTurnStatsCountsAMessageOnce(t *testing.T) {
+	dir := t.TempDir()
+	lines := []string{
+		`{"type":"assistant","sessionId":"s","message":{"id":"m1","usage":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":1000}}}`,
+		`{"type":"assistant","sessionId":"s","message":{"id":"m1","usage":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":1000}}}`,
+		`{"type":"assistant","sessionId":"s","message":{"id":"m1","usage":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":1000}}}`,
+		`{"type":"assistant","sessionId":"s","message":{"id":"m2","usage":{"input_tokens":300,"output_tokens":10}}}`,
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sess.jsonl"), []byte(joinNL(lines)), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	stats, err := ComputeTurnStats(ExtractOptions{Root: dir, Source: SourceClaudeCode})
+	if err != nil {
+		t.Fatalf("ComputeTurnStats: %v", err)
+	}
+	if stats.TotalTurns != 2 {
+		t.Errorf("turns = %d; want 2: m1 is one message in three lines", stats.TotalTurns)
+	}
+	if stats.AvgInputTokens != 700 || stats.AvgOutputTokens != 30 {
+		t.Errorf("AvgInput = %.0f, AvgOutput = %.0f; want 700 and 30", stats.AvgInputTokens, stats.AvgOutputTokens)
+	}
+}
