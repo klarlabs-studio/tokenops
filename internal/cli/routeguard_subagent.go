@@ -61,8 +61,8 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 	requested, _ := in.ToolInput["model"].(string)
 	// A boundary is the owner's limit set before work starts (ADR 0014):
 	// it is checked before anything here may move the call.
-	if res := subagentBoundary(cmd, cfg, in, requested); res.Verdict != bcap.VerdictNone {
-		return writeBoundaryVerdict(cmd.OutOrStdout(), res)
+	if res, failed := subagentBoundary(cmd, cfg, in, requested); res.Verdict != bcap.VerdictNone {
+		return writeBoundaryVerdict(cmd.OutOrStdout(), res, bcap.FailureNote(res, failed))
 	}
 	catalog := routeCatalog(cfg)
 	// The model policy is the operator's rule, not the coach's advice, so
@@ -261,7 +261,7 @@ func proposalResolutions(outcomes []routeguard.ProposalOutcome) []coachcap.Resol
 // subagentBoundary evaluates the subagent_model boundaries for the model
 // the subagent would run on: the one it names, or the session's own when
 // it inherits.
-func subagentBoundary(cmd *cobra.Command, cfg config.Config, in agentToolInput, requested string) bcap.Result {
+func subagentBoundary(cmd *cobra.Command, cfg config.Config, in agentToolInput, requested string) (bcap.Result, error) {
 	model := requested
 	if model == "" || strings.EqualFold(model, "inherit") {
 		model = latestTranscriptModel(in.TranscriptPath)

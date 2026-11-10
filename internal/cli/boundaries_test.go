@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -158,12 +160,56 @@ func TestBoundaryHookAttendedAsks(t *testing.T) {
 
 func TestBoundaryHookFailsOpenOnABrokenConfig(t *testing.T) {
 	home := boundaryHome(t, "boundaries: [ {name: x, action: deploy, require: ask} ]\n", 25)
-	if d := runBoundaryHook(t); d.HookSpecificOutput.PermissionDecision != "" {
+	d := runBoundaryHook(t)
+	if d.HookSpecificOutput.PermissionDecision != "" {
 		t.Fatalf("a broken config refused the call: %+v", d)
+	}
+	if !strings.Contains(d.SystemMessage, "went ahead") || !strings.Contains(d.SystemMessage, "config unreadable") {
+		t.Errorf("the operator was not told: %q", d.SystemMessage)
 	}
 	envs := ledger(t, home)
 	if len(envs) != 1 || envs[0].Payload.(*eventschema.DecisionEvent).Stage != eventschema.DecisionStageFailed {
 		t.Fatalf("the failure was not recorded: %d entries", len(envs))
+	}
+	// The other harnesses read the verdict alone, so their output stays
+	// as it was: nothing, when the call goes ahead.
+	for _, client := range []string{"codex", "opencode"} {
+		if d := runBoundaryHook(t, "--client", client); d.SystemMessage != "" || d.HookSpecificOutput.HookEventName != "" {
+			t.Errorf("%s got more than a verdict: %+v", client, d)
+		}
+	}
+}
+
+func TestBoundariesStatusShowsFailedChecks(t *testing.T) {
+	home := boundaryHome(t, spendBoundary, 0)
+	env := bcap.Env{Dir: boundaryledger.Dir(filepath.Join(home, ".tokenops", "boundaries"))}
+	bcap.RecordFailure(bcap.Call{SessionID: "s1", Harness: bcap.HarnessClaudeCode}, env, bcap.Result{}, errors.New("evaluation timed out"))
+	out, err := runCLI(t, nil, "boundaries", "status")
+	if err != nil || !strings.Contains(out, "1 boundary check(s) went wrong in the last day") || !strings.Contains(out, "evaluation timed out") {
+		t.Fatalf("status = %q, %v", out, err)
+	}
+}
+
+// A rule that matched has decided: a ledger that cannot take the record
+// does not let the call through, and the operator is told where the
+// failed ledger cannot hide it.
+func TestBoundaryHookHoldsWhenItsLedgerCannotBeWritten(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SESSION_ATTENDED", "0")
+	for _, tc := range []struct{ require, verdict string }{{"deny", "deny"}, {"ask", "deny"}} {
+		t.Run(tc.require, func(t *testing.T) {
+			rule := strings.Replace(spendBoundary, "require: ask", "require: "+tc.require, 1) + "    stage: enforce\n"
+			home := boundaryHome(t, rule, 25)
+			if err := os.WriteFile(filepath.Join(home, ".tokenops", "boundaries"), []byte("not a directory"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			d := runBoundaryHook(t)
+			if d.HookSpecificOutput.PermissionDecision != tc.verdict || d.HookSpecificOutput.PermissionDecisionReason == "" {
+				t.Fatalf("decision = %+v", d.HookSpecificOutput)
+			}
+			if !strings.Contains(d.SystemMessage, "held this step") {
+				t.Errorf("the operator was not told: %q", d.SystemMessage)
+			}
+		})
 	}
 }
 

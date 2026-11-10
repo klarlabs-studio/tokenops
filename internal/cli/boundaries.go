@@ -61,8 +61,12 @@ enforced deny rule refuses.
 
 It reads ids and the tool's name; the tool's input is hashed for the loop
 breaker and never kept. A shell command that starts another agent (codex,
-gemini, cursor-agent, copilot) also reads that agent's plan headroom. It fails open: any error or timeout lets the call
-through and is recorded.
+gemini, cursor-agent, copilot) also reads that agent's plan headroom.
+
+A check that cannot decide (an unreadable config, a timeout) lets the call
+through. A rule that matched keeps its verdict even when the record of it
+cannot be written. Either failure is recorded, shown by 'tokenops
+boundaries status', and on Claude Code said to the operator at the call.
 
 Install it with 'tokenops hooks install --boundary'.`,
 		Args: cobra.NoArgs,
@@ -131,23 +135,40 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 	env := bcap.Env{Attended: harness == bcap.HarnessClaudeCode && sessionAttended()}
 	cfg, err := loadConfig(rf)
 	if err != nil {
-		bcap.RecordFailure(call, env, fmt.Errorf("config unreadable: %w", err))
-		return nil
+		// With no rules to read nothing can be held; the operator is told
+		// here, since no rule is left to say so.
+		cause := fmt.Errorf("config unreadable: %w", err)
+		bcap.RecordFailure(call, env, bcap.Result{}, cause)
+		return writeBoundaryVerdict(cmd.OutOrStdout(), bcap.Result{}, failureNote(harness, bcap.Result{}, cause))
 	}
 	env.Approval = cfg.ApprovalMode()
-	res := guardWithTimeout(cmd.Context(), cfg, call, env, bcap.Pause)
+	res, failed := guardWithTimeout(cmd.Context(), cfg, call, env, bcap.Pause)
 	if harness == bcap.HarnessCodex && res.Verdict == bcap.VerdictAsk {
 		// Codex rejects permissionDecision "ask" as unsupported and runs
 		// the call: an ask that reached here would let it through.
 		res.Verdict = bcap.VerdictDeny
 	}
-	return writeBoundaryVerdict(cmd.OutOrStdout(), res)
+	return writeBoundaryVerdict(cmd.OutOrStdout(), res, failureNote(harness, res, failed))
 }
 
-// guardWithTimeout runs the evaluation, letting the call through when it
-// fails or overruns. Both are recorded.
+// failureNote is a failed check as a line for the operator, on the
+// harness whose hook output has a place for one. The ledger the failure
+// is also recorded in may be what failed, so this is the copy that cannot
+// be lost with it. Codex and opencode read the verdict alone, and their
+// output is left as it was.
+func failureNote(harness string, res bcap.Result, failed error) string {
+	if harness != bcap.HarnessClaudeCode {
+		return ""
+	}
+	return bcap.FailureNote(res, failed)
+}
+
+// guardWithTimeout runs the evaluation and returns its verdict with what
+// went wrong, if anything; both are recorded. A check that fails or
+// overruns before it decided lets the call through. One that decided and
+// then failed to record it keeps its verdict.
 func guardWithTimeout(ctx context.Context, cfg config.Config, call bcap.Call, env bcap.Env,
-	eval func([]bcap.Rule, bcap.Call, bcap.Env) (bcap.Result, error)) bcap.Result {
+	eval func([]bcap.Rule, bcap.Call, bcap.Env) (bcap.Result, error)) (bcap.Result, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -164,24 +185,23 @@ func guardWithTimeout(ctx context.Context, cfg config.Config, call bcap.Call, en
 	}()
 	select {
 	case a := <-done:
-		if a.err != nil {
-			bcap.RecordFailure(call, env, a.err)
-			return bcap.Result{}
-		}
-		return a.res
+		bcap.RecordFailure(call, env, a.res, a.err)
+		return a.res, a.err
 	case <-ctx.Done():
-		bcap.RecordFailure(call, env, errors.New("evaluation timed out"))
-		return bcap.Result{}
+		err := errors.New("evaluation timed out")
+		bcap.RecordFailure(call, env, bcap.Result{}, err)
+		return bcap.Result{}, err
 	}
 }
 
-// writeBoundaryVerdict prints the PreToolUse decision, or nothing when the
-// call goes ahead untouched.
-func writeBoundaryVerdict(w io.Writer, res bcap.Result) error {
-	if res.Verdict == bcap.VerdictNone {
+// writeBoundaryVerdict prints the PreToolUse decision, with note as a
+// line for the operator, or nothing when the call goes ahead untouched
+// and there is nothing to say.
+func writeBoundaryVerdict(w io.Writer, res bcap.Result, note string) error {
+	if res.Verdict == bcap.VerdictNone && note == "" {
 		return nil
 	}
-	out := hookDecision{}
+	out := hookDecision{SystemMessage: note}
 	out.HookSpecificOutput.HookEventName = "PreToolUse"
 	out.HookSpecificOutput.PermissionDecision = res.Verdict
 	out.HookSpecificOutput.PermissionDecisionReason = res.Reason
@@ -277,6 +297,10 @@ func writeBoundariesStatus(w io.Writer, st bcap.Status) {
 	}
 	if st.Presence != nil {
 		fmt.Fprintf(w, "\napproval: %s\n", st.Presence.Note)
+	}
+	if f := st.Failed; f != nil {
+		fmt.Fprintf(w, "\n%d boundary check(s) went wrong in the last day, last %s: %s\n",
+			f.Count, f.LastAt.Local().Format("2006-01-02 15:04"), f.Last)
 	}
 	for _, e := range st.Extras {
 		fmt.Fprintf(w, "\nextra allowance until %s: %s lifted by %s", e.Until.Local().Format("15:04"), strings.Join(e.Rules, ", "), e.Granter)
