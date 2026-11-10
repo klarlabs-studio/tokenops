@@ -3,6 +3,8 @@ package agentdx
 import (
 	"sort"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 )
 
 // Unit is one operator instruction and everything the agent did before
@@ -211,9 +213,12 @@ func sessionUnits(records []Record) []Unit {
 		inUnit bool
 		edited map[string]bool
 		// lastEdited is the file the current editing episode belongs to.
-		lastEdited   string
-		seenTool     map[string]bool
-		seenFile     map[string]bool
+		lastEdited string
+		seenTool   map[string]bool
+		seenFile   map[string]bool
+		// requests tells a request's first entry from the ones that
+		// repeat it, across the whole session.
+		requests     = claudecodejsonl.Messages{}
 		lastInputTok int64
 		// Turns per model and per effort, so the unit takes the one
 		// that served most of it.
@@ -270,12 +275,18 @@ func sessionUnits(records []Record) []Unit {
 			models, efforts = map[string]int{}, map[string]int{}
 			inUnit = true
 		case KindAssistantTurn:
+			first := requests.First(r.RequestID)
 			if !inUnit {
 				continue
 			}
-			cur.Turns++
 			cur.End = r.At
 			timing.turn(r)
+			// The entries after a request's first repeat its usage: they
+			// are not further turns.
+			if !first {
+				continue
+			}
+			cur.Turns++
 			if r.Model != "" {
 				models[r.Model]++
 			}

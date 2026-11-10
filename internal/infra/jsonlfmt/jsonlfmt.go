@@ -120,6 +120,9 @@ func EstTokens(b int64) int64 {
 type rawLine struct {
 	Timestamp string `json:"timestamp"`
 	Message   struct {
+		// ID is the same on every line Claude Code writes for one
+		// message, and so is the usage.
+		ID      string          `json:"id"`
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
 		Usage   *rawUsage       `json:"usage"`
@@ -303,6 +306,8 @@ func scanFile(path string, st *scanState) bool {
 	// token cap would silently skip exactly the big outputs fmt cares about.
 	br := bufio.NewReaderSize(f, 1<<20)
 	parsed := false
+	// A message's tokens count once, however many lines it was written as.
+	seen := claudecodejsonl.Messages{}
 
 	for {
 		line, err := readLongLine(br)
@@ -322,7 +327,7 @@ func scanFile(path string, st *scanState) bool {
 		// Bucket per-turn usage tokens before the content-shape gate, so a
 		// turn's tokens count even when its content isn't a block array.
 		st.curPeriod = weekKey(rl.Timestamp)
-		if u := rl.Message.Usage; u != nil {
+		if u := rl.Message.Usage; u != nil && seen.First(rl.Message.ID) {
 			if b := st.bucket(); b != nil {
 				b.InputTokens += u.InputTokens + u.CacheReadTokens + u.CacheCreationTokens
 				b.OutputTokens += u.OutputTokens
