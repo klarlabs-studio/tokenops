@@ -97,6 +97,11 @@ func TestSetBudgetLeavesHardWindowsToTheTerminal(t *testing.T) {
 		"delete":        {BudgetUpdate: config.BudgetUpdate{Name: "team"}, Delete: true},
 		"rescope":       {BudgetUpdate: config.BudgetUpdate{Name: "team", WorkflowID: "elsewhere"}},
 		"remove window": {BudgetUpdate: config.BudgetUpdate{Name: "team"}, RemoveWindow: "daily"},
+		// The stored budget is found by its trimmed name, so the check
+		// has to look it up the same way.
+		"soften, padded name": {BudgetUpdate: config.BudgetUpdate{Name: "team ", Mode: "soft"}},
+		"raise, padded name":  {BudgetUpdate: config.BudgetUpdate{Name: "\tteam\n", LimitUSD: 1000}},
+		"delete, padded name": {BudgetUpdate: config.BudgetUpdate{Name: " team"}, Delete: true},
 	} {
 		if _, err := SetBudget(path, req); !IsInput(err) || !strings.Contains(err.Error(), "terminal") {
 			t.Errorf("%s: err = %v; want it refused, pointing at the terminal", name, err)

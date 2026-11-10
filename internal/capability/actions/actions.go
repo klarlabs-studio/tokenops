@@ -12,6 +12,7 @@ package actions
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"go.klarlabs.de/tokenops/internal/config"
 )
@@ -101,6 +102,10 @@ type BudgetChange struct {
 // terminal; here a budget can be made hard, which starts in shadow, but
 // not loosened.
 func SetBudget(path string, req BudgetRequest) (BudgetChange, error) {
+	// One name for the check and the write: the upsert trims it, so a
+	// padded name must not slip past the hard-window check and then land
+	// on the budget it names.
+	req.Name = strings.TrimSpace(req.Name)
 	cfg, err := edit(path, func(c *config.Config) error {
 		for _, b := range c.Budgets {
 			if b.Name == req.Name && b.HasHardWindow() {
