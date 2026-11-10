@@ -42,6 +42,12 @@ is all TokenOps knew about plans.
      applies only when the operator states they were on the plan all
      along.
    - It is idempotent. It never touches trial usage or other providers.
+   - It re-marks only what the plan covers, by the rule used when usage
+     is recorded (ADR 0009): not a turn that went through another
+     endpoint, and not what a spend report recorded. A turn whose
+     recorder stated its cost also stays billed, because that charge
+     cannot be worked out again once removed. A plan the catalog does
+     not hold is recorded and re-marks nothing.
    - It is written to the audit log (`plan_change`, with the count).
    - Unsetting is never backdated. Re-marking plan-covered usage as
      billed would invent charges the vendor may not have made.
