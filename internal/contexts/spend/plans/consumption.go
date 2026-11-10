@@ -255,7 +255,7 @@ func spendInWindow(ctx context.Context, reader EventReader, provider string, now
 		}
 		// The plan's limit counts only what went through the vendor's
 		// own endpoint; a gateway's turn ran on an API key (ADR 0009).
-		if ownEndpointOnly && !biller.PlanApplies(provider, env.Attributes["endpoint"]) {
+		if ownEndpointOnly && !biller.PlanApplies(provider, env.Attributes["endpoint"], env.Source) {
 			continue
 		}
 		if p.CostUSD > 0 || price == nil || !perRequest(env) {

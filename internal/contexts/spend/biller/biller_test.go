@@ -105,7 +105,7 @@ func TestEndpointCatalogPaths(t *testing.T) {
 		}
 	}
 	// The coding plan covers its own endpoint; the pay-as-you-go API does not.
-	if !PlanApplies("zai", EndpointName("https://api.z.ai/api/anthropic", "")) || PlanApplies("zai", EndpointName("https://api.z.ai/api/paas/v4", "")) {
+	if !PlanApplies("zai", EndpointName("https://api.z.ai/api/anthropic", ""), "") || PlanApplies("zai", EndpointName("https://api.z.ai/api/paas/v4", ""), "") {
 		t.Error("z.ai plan coverage follows the path")
 	}
 }

@@ -201,6 +201,35 @@ func TestCorrectOpencodeRenamesRawProviderIDs(t *testing.T) {
 	})
 }
 
+// The Admin API usage report is what Anthropic billed the organisation's
+// API keys. With a Claude subscription bound, its buckets were stamped as
+// covered by the plan. The plan's own turns stay covered.
+func TestCorrectSpendReportsUncoversWhatAReportRecorded(t *testing.T) {
+	ctx := context.Background()
+	store := openStore(t)
+	const report = "vendor-usage-anthropic"
+	if err := store.AppendBatch(ctx, []*eventschema.Envelope{
+		turn("bucket", report, "", "anthropic", "claude-opus-5-5"),
+		turn("plan-turn", claudecodejsonl.SourceTag, "s", "anthropic", "claude-opus-5-5"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := CorrectSpendReports(ctx, store)
+	if err != nil || len(got) != 1 || got[0].Source != report || got[0].Provider != "anthropic" || got[0].Events != 1 {
+		t.Fatalf("corrections %+v, err %v", got, err)
+	}
+	if again, _ := CorrectSpendReports(ctx, store); len(again) != 0 {
+		t.Errorf("second pass corrected %+v", again)
+	}
+	assertTurns(t, store, map[string]struct {
+		provider eventschema.Provider
+		source   eventschema.CostSource
+	}{
+		"bucket":    {eventschema.ProviderAnthropic, eventschema.CostSourceMetered},
+		"plan-turn": {eventschema.ProviderAnthropic, eventschema.CostSourcePlanIncluded},
+	})
+}
+
 func assertTurns(t *testing.T, store *sqlite.Store, want map[string]struct {
 	provider eventschema.Provider
 	source   eventschema.CostSource

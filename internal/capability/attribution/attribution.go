@@ -1,6 +1,7 @@
 // Package attribution corrects which provider bills usage recorded before
-// TokenOps knew the endpoint it went through (ADR 0009), and answers
-// whether a plan covers a turn at all.
+// TokenOps knew the endpoint it went through (ADR 0009), re-marks usage a
+// spend report recorded as covered by a plan, and answers whether a plan
+// covers a turn at all.
 //
 // The corrections are TokenOps' own: they run at daemon start without
 // asking, each one is audited, and a second pass changes nothing.
@@ -13,6 +14,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
@@ -40,10 +42,13 @@ type Correction struct {
 	Reason string
 }
 
-// PlanApplies reports whether a plan for provider covers a turn that went
-// through endpoint: a plan covers only its vendor's own endpoint, and a
-// turn a gateway carried runs on an API key, billed per token.
-func PlanApplies(provider, endpoint string) bool { return biller.PlanApplies(provider, endpoint) }
+// PlanApplies reports whether a plan for provider covers usage that source
+// recorded as going through endpoint: a plan covers only its vendor's own
+// endpoint, since a turn a gateway carried runs on an API key, and nothing
+// a spend report recorded, since that is what the vendor billed.
+func PlanApplies(provider, endpoint, source string) bool {
+	return biller.PlanApplies(provider, endpoint, source)
+}
 
 // record writes a correction to the audit log.
 func record(ctx context.Context, store *sqlite.Store, target string, details map[string]any) {
@@ -168,7 +173,7 @@ func CorrectCodex(ctx context.Context, cfg config.Config, store *sqlite.Store) (
 			}
 			for _, model := range models {
 				to := string(biller.ForCodexTurn(id, base, model))
-				uncover := !cfg.PlanCovers(to) || !biller.PlanApplies(to, endpoint)
+				uncover := !cfg.PlanCovers(to) || !biller.PlanApplies(to, endpoint, codexjsonl.SourceTag)
 				n, err := store.ReattributeSession(ctx, codexjsonl.SourceTag, session, model, from, to, endpoint, uncover)
 				if err != nil {
 					return nil, err
@@ -225,6 +230,51 @@ func CorrectOpencode(ctx context.Context, store *sqlite.Store) ([]Correction, er
 			Reason: "opencode turns were recorded under the client's provider ID, not the provider that bills them"}
 		record(ctx, store, string(to), map[string]any{"from": from, "to": string(to), "endpoint": endpoint, "calls": n, "reason": c.Reason})
 		out = append(out, c)
+	}
+	return out, nil
+}
+
+// Uncovered is one spend report's recorded usage re-marked from covered
+// by a plan to billed.
+type Uncovered struct {
+	// Source is the spend report that recorded the usage.
+	Source string
+	// Provider is the vendor whose bill it reports.
+	Provider string
+	// Events is how many records changed.
+	Events int64
+	// Reason says why, as the audit log records it.
+	Reason string
+}
+
+// CorrectSpendReports re-marks usage a spend report recorded as covered
+// by a plan. Such a report is what the vendor billed an account's API
+// keys, so no plan covers it (biller.PlanApplies). Its events left their
+// cost source open, and with a plan bound to the vendor they were stamped
+// as covered: the spend left billed spend and its tokens counted as the
+// plan's use.
+func CorrectSpendReports(ctx context.Context, store *sqlite.Store) ([]Uncovered, error) {
+	if store == nil {
+		return nil, nil
+	}
+	var out []Uncovered
+	for _, tag := range biller.SpendSources() {
+		n, err := store.UncoverSource(ctx, tag)
+		if err != nil {
+			return out, err
+		}
+		if n == 0 {
+			continue
+		}
+		u := Uncovered{Source: tag, Events: n,
+			Reason: "a spend report is what the vendor billed, and its usage was recorded as covered by the plan"}
+		if src, ok := providers.ForSource(tag); ok {
+			u.Provider = string(src.Provider)
+		}
+		record(ctx, store, u.Provider, map[string]any{
+			"source": tag, "restamped": n, "restamped_to": "metered", "reason": u.Reason,
+		})
+		out = append(out, u)
 	}
 	return out, nil
 }

@@ -12,8 +12,9 @@ import (
 )
 
 // correctAttribution runs the ADR 0009 corrections at start: Claude Code
-// turns a gateway served, Codex turns on a custom model_provider, and
-// opencode turns under a raw provider ID. Each logs what it moved; a
+// turns a gateway served, Codex turns on a custom model_provider, opencode
+// turns under a raw provider ID, and usage a spend report recorded as
+// covered by a plan. Each logs what it moved; a
 // failure is logged and never stops the daemon, and the next start
 // tries again.
 func correctAttribution(ctx context.Context, cfg config.Config, store *sqlite.Store, routes *routehistory.Tracker, logger *slog.Logger) {
@@ -35,4 +36,13 @@ func correctAttribution(ctx context.Context, cfg config.Config, store *sqlite.St
 	logCorrections("codex", cs, err)
 	cs, err = attribution.CorrectOpencode(ctx, store)
 	logCorrections("opencode", cs, err)
+
+	uncovered, err := attribution.CorrectSpendReports(ctx, store)
+	for _, u := range uncovered {
+		logger.Info("re-marked usage a spend report recorded as covered by a plan as billed",
+			"source", u.Source, "provider", u.Provider, "events", u.Events, "reason", u.Reason)
+	}
+	if err != nil {
+		logger.Warn("spend report correction failed; will retry at next start", "err", err)
+	}
 }

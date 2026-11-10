@@ -268,7 +268,7 @@ func (p *Poller) visitor(ctx context.Context) func(Turn) error {
 func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eventschema.Envelope {
 	provider := biller.ForCodexTurn(t.ModelProvider, baseURL, t.Model)
 	endpoint := codexEndpoint(t.ModelProvider, baseURL)
-	if provider != eventschema.ProviderOpenAI || !biller.PlanApplies(string(provider), endpoint) {
+	if provider != eventschema.ProviderOpenAI || !biller.PlanApplies(string(provider), endpoint, SourceTag) {
 		costSource = eventschema.CostSourceMetered
 	}
 	inputTokens := t.InputTokens

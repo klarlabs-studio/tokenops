@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
 // Endpoint names, as recorded on each turn (attribute "endpoint").
@@ -40,14 +42,50 @@ func EndpointName(baseURL, vendor string) string {
 	return EndpointGateway
 }
 
-// PlanApplies reports whether a turn billed by provider through endpoint
-// is covered by that provider's plan. A plan covers only turns that went
-// through the vendor's own endpoint with the plan's login. Through a
-// gateway, a vendor's model runs on an API key the gateway passes on
-// (FireRouter's x-anthropic-api-key), which the vendor bills per token
-// whatever plan the operator holds.
-func PlanApplies(provider, endpoint string) bool {
+// PlanApplies reports whether provider's plan covers usage that source
+// recorded as going through endpoint. It is the one answer to "is this
+// covered by the plan": the readers that stamp a turn, the daemon's sink,
+// the corrections of recorded usage and the plan's own tallies all ask it.
+//
+// A plan covers only turns that went through the vendor's own endpoint
+// with the plan's login. Through a gateway, a vendor's model runs on an
+// API key the gateway passes on (FireRouter's x-anthropic-api-key), which
+// the vendor bills per token whatever plan the operator holds.
+//
+// Nor does a plan cover what a spend report recorded. Such a source reads
+// what the vendor billed an account's API keys (Anthropic's Admin API
+// usage report), and a subscription's usage is not in it.
+//
+// endpoint is empty for usage with no recorded endpoint, which went to
+// the vendor. source is the tag of the source that recorded the usage,
+// and empty when the question is about a route rather than a record.
+func PlanApplies(provider, endpoint, source string) bool {
+	if spendSources[source] {
+		return false
+	}
 	return endpoint == "" || endpoint == provider
+}
+
+// spendSources is every source that reports what an account was billed.
+var spendSources = func() map[string]bool {
+	out := map[string]bool{}
+	for _, s := range providers.Sources() {
+		if s.Kind == providers.Spend {
+			out[s.Tag] = true
+		}
+	}
+	return out
+}()
+
+// SpendSources lists the sources that report what an account was billed,
+// in order. Usage one of them recorded is never covered by a plan.
+func SpendSources() []string {
+	out := make([]string, 0, len(spendSources))
+	for tag := range spendSources {
+		out = append(out, tag)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Route is one stretch of a harness pointing at an endpoint.

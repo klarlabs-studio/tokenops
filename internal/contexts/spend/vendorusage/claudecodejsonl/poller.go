@@ -256,7 +256,7 @@ func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eve
 	// The Anthropic plan covers only Claude turns through Anthropic's own
 	// endpoint. A gateway's own model is not Anthropic's, and a Claude turn
 	// through a gateway runs on an API key Anthropic bills per token.
-	if provider != eventschema.ProviderAnthropic || !biller.PlanApplies(string(provider), endpoint) {
+	if provider != eventschema.ProviderAnthropic || !biller.PlanApplies(string(provider), endpoint, SourceTag) {
 		costSource = eventschema.CostSourceMetered
 	}
 	inputTokens := t.InputTokens + t.CacheReadInputTokens + t.CacheCreationInputTokens
