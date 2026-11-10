@@ -195,6 +195,9 @@ func (c *EventCache) ReadEvents(ctx context.Context, t eventschema.EventType, si
 		// next read brings this one up to date from its own snapshot.
 		c.fullReads++
 		c.types[t] = fresh
+		// The countdown this read started may have run out while the
+		// full read ran; these events are held from now.
+		c.touch()
 		out := fresh.since(from)
 		c.mu.Unlock()
 		return out, nil
