@@ -259,8 +259,9 @@ func (p *Poller) visitor(ctx context.Context) func(Turn) error {
 }
 
 // newEnvelope maps a Codex Turn to a PromptEvent envelope. Provider
-// is OpenAI. InputTokens rolls cached + uncached + reasoning so the
-// total cost calc reflects Codex's billing surface. The rate_limits
+// is OpenAI. Codex's input_tokens includes the cached input and its
+// output_tokens includes the reasoning (total_tokens is their sum), so
+// both breakdowns ride as attributes and neither is added. The rate_limits
 // block is serialized into Attributes so the signal_quality classifier
 // (and a future Codex-aware session_budget tool) can read it without
 // re-parsing the source file.
@@ -271,7 +272,7 @@ func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eve
 		costSource = eventschema.CostSourceMetered
 	}
 	inputTokens := t.InputTokens
-	totalTokens := inputTokens + t.OutputTokens + t.ReasoningTok
+	totalTokens := inputTokens + t.OutputTokens
 	h := sha256.Sum256([]byte("codex-jsonl|" + t.SessionID + "|" + strconv.Itoa(t.RecordSequence)))
 	attrs := map[string]string{
 		// One event per token_count record (assistant turn), not per
@@ -313,7 +314,7 @@ func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eve
 			RequestModel:      t.Model,
 			InputTokens:       inputTokens,
 			CachedInputTokens: t.CachedTokens,
-			OutputTokens:      t.OutputTokens + t.ReasoningTok,
+			OutputTokens:      t.OutputTokens,
 			TotalTokens:       totalTokens,
 			SessionID:         t.SessionID,
 			// AgentID + WorkflowID mirror the Claude Code attribution

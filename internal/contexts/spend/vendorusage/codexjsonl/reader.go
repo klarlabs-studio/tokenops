@@ -48,12 +48,13 @@ import (
 // is used (not total) so each emitted envelope represents the delta
 // for a single turn — additive aggregation in the store stays correct.
 type Turn struct {
-	Timestamp      time.Time
-	SessionID      string
-	Model          string
-	InputTokens    int64
-	CachedTokens   int64
-	OutputTokens   int64
+	Timestamp    time.Time
+	SessionID    string
+	Model        string
+	InputTokens  int64
+	CachedTokens int64
+	OutputTokens int64
+	// ReasoningTok is the part of OutputTokens spent reasoning.
 	ReasoningTok   int64
 	TotalTokens    int64
 	ContextWindow  int64

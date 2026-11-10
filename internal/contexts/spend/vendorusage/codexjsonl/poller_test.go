@@ -69,7 +69,7 @@ func TestNewEnvelopeCarriesRateLimitsInAttributes(t *testing.T) {
 		InputTokens:  100,
 		OutputTokens: 20,
 		ReasoningTok: 5,
-		TotalTokens:  125,
+		TotalTokens:  120,
 		RateLimits: RateLimits{
 			PrimaryUsedPercent:     10.0,
 			PrimaryWindowMinutes:   300,
@@ -89,8 +89,13 @@ func TestNewEnvelopeCarriesRateLimitsInAttributes(t *testing.T) {
 	if pe.Provider != eventschema.ProviderOpenAI {
 		t.Errorf("provider = %s", pe.Provider)
 	}
-	if pe.OutputTokens != 25 {
-		t.Errorf("OutputTokens should sum output + reasoning (20+5=25); got %d", pe.OutputTokens)
+	// Codex counts reasoning inside output_tokens (total = input + output),
+	// so it is a breakdown of the output, not an addition to it.
+	if pe.OutputTokens != 20 || pe.TotalTokens != 120 {
+		t.Errorf("output = %d, total = %d; want 20 and 120 (reasoning is part of output)", pe.OutputTokens, pe.TotalTokens)
+	}
+	if env.Attributes["reasoning_output"] != "5" {
+		t.Errorf("reasoning_output attr = %q", env.Attributes["reasoning_output"])
 	}
 	if env.Attributes["plan_type"] != "plus" {
 		t.Errorf("plan_type attr missing")
