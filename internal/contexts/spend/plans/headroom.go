@@ -191,10 +191,13 @@ func computeHeadroomFor(p Plan, in HeadroomInputs) HeadroomReport {
 	report := computeWindowHeadroom(p, in)
 	report.Allowances = in.Allowances
 	// The busiest window the vendor reports decides the risk: a weekly
-	// limit can block while the 5-hour window is nearly empty.
+	// limit can block while the 5-hour window is nearly empty. A window
+	// that is not current is listed and decides nothing.
 	if len(in.VendorWindows) > 0 {
 		report.Windows = in.VendorWindows
-		report.OverageRisk = worstRisk(report.OverageRisk, classifyWindowRisk(in.VendorWindows[0].UsedPct))
+		if w, ok := Busiest(in.VendorWindows, in.Now); ok {
+			report.OverageRisk = worstRisk(report.OverageRisk, classifyWindowRisk(w.UsedPct))
+		}
 	}
 	return report
 }

@@ -53,7 +53,9 @@ func readPlan(ctx context.Context, cfg config.Config, provider eventschema.Provi
 		out.Quota = &coachhook.Quota{Provider: string(provider), Window: w, All: cur.Windows, Burn: burn}
 		return out
 	}
-	if at, ok := headroom.LastReadingAt(ctx, store, provider); ok && out.Flat {
+	// A reading can be fresh and still hold no window: each has reset since.
+	// That is not a source that stopped, so nothing is said to be lost.
+	if at, ok := headroom.LastReadingAt(ctx, store, provider); ok && out.Flat && now.Sub(at) > headroom.LiveFreshness {
 		out.Lost = readingLost(provider, now.Sub(at))
 	}
 	return out

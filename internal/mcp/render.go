@@ -88,6 +88,11 @@ func renderBudgetSummary(b budgetSummaryRow) string {
 		// Every window the vendor reported, as shares left.
 		fmt.Fprintf(&s, "| Window | Left | Resets in |\n|---|---|---|\n")
 		for _, w := range b.Windows {
+			if w.Lapsed {
+				// Its share is the last window's.
+				fmt.Fprintf(&s, "| %s | reset since it was last read | |\n", w.Name)
+				continue
+			}
 			fmt.Fprintf(&s, "| %s | %.0f%% | %s |\n", w.Name, max(0, 100-w.UsedPct), w.ResetsIn)
 		}
 		fmt.Fprintf(&s, "\n| Metric | Value |\n|---|---|\n")

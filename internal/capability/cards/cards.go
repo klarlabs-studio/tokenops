@@ -282,6 +282,10 @@ type metric struct {
 	// stale is how old the reading is when its source has stopped; zero
 	// when it is current.
 	stale time.Duration
+	// lapsed is how old the reading is when the window has reset since;
+	// zero when it has not. Its share is the last window's and is not
+	// shown: nothing has read the one that followed.
+	lapsed time.Duration
 	// blocked words a spend limit that blocks requests ("Blocked until 1
 	// Nov"); empty when it does not.
 	blocked string
@@ -301,6 +305,9 @@ func metrics(r plans.HeadroomReport) []metric {
 		m := metric{title: windowTitle(w.Name), pct: w.UsedPct, reset: humanReset(w.ResetsIn), pace: w.Pace}
 		if w.Stale {
 			m.stale = max(time.Minute, time.Since(w.ObservedAt))
+		}
+		if w.Lapsed {
+			m = metric{title: m.title, lapsed: max(time.Minute, time.Since(w.ObservedAt))}
 		}
 		out = append(out, m)
 	}
@@ -497,6 +504,13 @@ func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, late 
 		if i > 0 {
 			out = append(out, side(""))
 		}
+		if m.lapsed > 0 {
+			out = append(out, side(spread(p.paint(porcelain, clip(m.title, inner-10)), p.paint(muted, "not read"))))
+			for _, l := range wrap("Reset since it was read "+humanDuration(m.lapsed)+" ago", inner) {
+				out = append(out, side(p.paint(muted, l)))
+			}
+			continue
+		}
 		used := p.paint(levelColor(m.pct), fmt.Sprintf("%.0f%% left", math.Max(0, 100-m.pct)))
 		out = append(out, side(spread(p.paint(porcelain, clip(m.title, inner-10)), used)))
 		out = append(out, side(p.paint(line, "[ ")+p.bar(m.pct, inner-4)+p.paint(line, " ]")))
@@ -634,11 +648,14 @@ func costFor(opt Options, r plans.HeadroomReport) *spending.ProviderCost {
 	return nil
 }
 
-// busiest is a plan's fullest measure, to order the cards.
+// busiest is a plan's fullest measure, to order the cards. A window that
+// has reset since its reading is not one: its share is the last window's.
 func busiest(r plans.HeadroomReport) float64 {
 	m := r.SpendPct
 	for _, w := range r.Windows {
-		m = math.Max(m, w.UsedPct)
+		if !w.Lapsed {
+			m = math.Max(m, w.UsedPct)
+		}
 	}
 	return math.Max(m, r.WindowPct)
 }
@@ -665,6 +682,11 @@ func brief(reports []plans.HeadroomReport, opt Options, p painter) string {
 		for i, m := range ms {
 			if i > 0 {
 				name = ""
+			}
+			if m.lapsed > 0 {
+				fmt.Fprintf(&b, "%-*s  %-16s %5s  %-8s  %s\n", planW, name, clip(m.title, 16), "—", "",
+					p.paint(muted, "reset since read "+humanDuration(m.lapsed)+" ago"))
+				continue
 			}
 			used := p.paint(levelColor(m.pct), fmt.Sprintf("%4.0f%%", math.Max(0, 100-m.pct)))
 			pace, tone := briefPace(m.pace)

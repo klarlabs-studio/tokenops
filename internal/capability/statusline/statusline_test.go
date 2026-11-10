@@ -158,3 +158,20 @@ func TestRenderCacheCountdown(t *testing.T) {
 		t.Errorf("the warning is not coloured: %q", line)
 	}
 }
+
+// A window whose reset has passed is not shown: its share is the window
+// before, which the client repeats until its next response.
+func TestRenderLeavesOutAWindowThatHasReset(t *testing.T) {
+	in := full()
+	in.Color = false
+	in.Windows[0] = Window{Label: "5h", UsedPct: 97, ResetsAt: now.Add(-time.Minute)}
+	out := strings.Join(Render(in), "\n")
+	if strings.Contains(out, "5h") || strings.Contains(out, "3% left") || !strings.Contains(out, "wk 59% left") {
+		t.Errorf("%s", out)
+	}
+	// With no reset named, nothing says the window is over.
+	in.Windows[0].ResetsAt = time.Time{}
+	if out := strings.Join(Render(in), "\n"); !strings.Contains(out, "5h 3% left") {
+		t.Errorf("%s", out)
+	}
+}

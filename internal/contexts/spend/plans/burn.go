@@ -68,7 +68,7 @@ func AssessBurn(cur QuotaReading, long, short *QuotaReading, now time.Time) Burn
 	}
 	var v BurnVerdict
 	for _, w := range cur.Windows {
-		if w.UsedPct >= 100 || w.UsedPct <= 0 || w.Duration <= 0 || !w.ResetsAt.After(cur.At) {
+		if w.UsedPct >= 100 || w.UsedPct <= 0 || w.Duration <= 0 || !w.ResetsAt.After(now) {
 			continue
 		}
 		longAt, longBurn, ok := projectBurn(w, cur.At, long, BurnLongLookback)

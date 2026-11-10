@@ -51,7 +51,9 @@ func LiveWindow(ctx context.Context, cfg config.Config, r AttributeReader, provi
 }
 
 // LiveWindows returns every window of the newest fresh reading for the plan
-// bound to provider, or none under the same conditions as LiveWindow.
+// bound to provider, or none under the same conditions as LiveWindow. A
+// window that has reset since the reading is left out: a fresh reading can
+// still be of a window that ended a minute ago.
 func LiveWindows(ctx context.Context, cfg config.Config, r AttributeReader, provider eventschema.Provider, now time.Time) []plans.QuotaWindow {
 	if r == nil {
 		return nil
@@ -74,7 +76,7 @@ func LiveWindows(ctx context.Context, cfg config.Config, r AttributeReader, prov
 	if len(newest) == 0 {
 		return nil
 	}
-	return plans.QuotaWindowsFromAttributes(provider, plans.MergeReadings(newest))
+	return plans.OpenAt(plans.QuotaWindowsFromAttributes(provider, plans.MergeReadings(newest)), now)
 }
 
 // LastReadingAt is when provider's newest window reading was recorded, at
@@ -128,6 +130,10 @@ func Burn(ctx context.Context, cfg config.Config, r HistoryReader, provider even
 	}
 	cur, ok := readingBetween(ctx, r, provider, now.Add(-LiveFreshness), now)
 	if !ok {
+		return plans.QuotaReading{}, plans.BurnVerdict{}
+	}
+	// A window that has reset since the reading is not the current one.
+	if cur.Windows = plans.OpenAt(cur.Windows, now); len(cur.Windows) == 0 {
 		return plans.QuotaReading{}, plans.BurnVerdict{}
 	}
 	lookback := func(d time.Duration) *plans.QuotaReading {

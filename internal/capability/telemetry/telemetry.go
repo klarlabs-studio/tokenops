@@ -46,6 +46,12 @@ func Gauges(in Inputs) []otlp.Gauge {
 		spendUsed := otlp.Gauge{Name: "tokenops.plan.spend.utilization", Unit: "%", Description: "Spend against a plan's limit this period"}
 		for _, r := range in.Glance.Headroom.Reports {
 			for _, w := range r.Windows {
+				if w.Stale || w.Lapsed {
+					// A gauge says what the share is now, and cannot say
+					// that its reading has stopped or its window has
+					// reset: no point is the honest one.
+					continue
+				}
 				attrs := map[string]string{"provider": r.Provider, "plan": r.PlanName, "window": w.Name}
 				used.Points = append(used.Points, otlp.Point{Attrs: attrs, Value: w.UsedPct})
 				if w.Pace != nil {

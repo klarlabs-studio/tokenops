@@ -152,6 +152,16 @@ func TestOrderAndLayout(t *testing.T) {
 			t.Errorf("brief=%v: the busiest plan is not first:\n%s", brief, out)
 		}
 	}
+	// A window that has reset since its reading does not put its plan
+	// first: the share it held is the last window's.
+	g := sample()
+	g.Headroom.Reports[0].Windows[0] = plans.VendorWindow{Name: "5h", UsedPct: 99, Lapsed: true, ObservedAt: time.Now().Add(-time.Hour)}
+	for _, brief := range []bool{false, true} {
+		out := Render(g, Options{Width: 80, Brief: brief})
+		if codex, claude := strings.Index(out, "Codex"), strings.Index(out, "Claude"); codex > claude {
+			t.Errorf("brief=%v: a plan is first on a window that has reset:\n%s", brief, out)
+		}
+	}
 	for width, want := range map[int]int{40: 1, 80: 2, 86: 2, 130: 3} {
 		if perRow, cw := layout(width); perRow != want || cw < minCardWidth || cw > maxCardWidth {
 			t.Errorf("layout(%d) = %d × %d, want %d per row", width, perRow, cw, want)
@@ -186,6 +196,16 @@ func TestBriefAndUnconfigured(t *testing.T) {
 	}
 	if out := Render(stale, Options{Width: 130}); !strings.Contains(out, "Reading from 20h 0m ago") {
 		t.Errorf("card stale:\n%s", out)
+	}
+	// A window that has reset since its reading shows no share: the one
+	// it had is the last window's.
+	lapsed := sample()
+	lapsed.Headroom.Reports[0].Windows[0] = plans.VendorWindow{Name: "5h", UsedPct: 73, Lapsed: true, ObservedAt: time.Now().Add(-50 * time.Hour)}
+	for _, brief := range []bool{true, false} {
+		out := Render(lapsed, Options{Brief: brief, Width: 130})
+		if strings.Contains(out, "27%") || !strings.Contains(out, "2d 2h ago") || !strings.Contains(out, "Session") {
+			t.Errorf("brief=%v: a reset window:\n%s", brief, out)
+		}
 	}
 	var g headroom.Glance
 	g.Headroom.Unconfigured = "bind a plan"
