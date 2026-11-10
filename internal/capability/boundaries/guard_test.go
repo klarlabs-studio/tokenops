@@ -386,7 +386,7 @@ func TestNoRuleReadsNothing(t *testing.T) {
 
 func TestRecordFailureIsVisible(t *testing.T) {
 	env := testEnv(t, false)
-	RecordFailure(call("s1"), env, errors.New("disk full\nsecond line"))
+	RecordFailure(call("s1"), env, Result{}, errors.New("disk full\nsecond line"))
 	envs, err := env.Dir.Read()
 	if err != nil || len(envs) != 1 {
 		t.Fatalf("ledger = %d, %v", len(envs), err)

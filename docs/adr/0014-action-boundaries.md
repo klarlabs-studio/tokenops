@@ -342,3 +342,30 @@ option:
   loosen a local rule. Neither crosses into an approval request. A member
   on an older TokenOps refuses a document using them and keeps the version
   it holds, as for any rule it cannot parse.
+
+## A decided call stays decided (amended 2026-11-10)
+
+Decision 3 says a broken or slow evaluator fails open. As built, that
+covered every error, including one raised after a rule had matched: a
+ledger that could not take the record let the call through, whatever the
+rule required. The fail-open rule is narrowed to what it was written for.
+
+- **Could not decide: the call goes ahead.** An unreadable config, a
+  timeout, or a failure before any rule matched lets the call through, as
+  before.
+- **Decided: the verdict stands.** Once a rule has matched, its
+  requirement holds whether or not the decision, the pending record or the
+  session state could be written. The guard returns the verdict together
+  with the error. This holds at every point: the pause point, route-guard,
+  the proxy's route check and `share`.
+- **An approval that cannot be read or spent is not an approval.** An
+  answer file that does not parse, a one-off answer that cannot be
+  consumed, and a refused answer that cannot be set aside all leave the
+  rule's requirement in place. An approval that was read, honoured and
+  spent still lets the call through if only its record failed.
+- **A failure is said where it can be seen.** It is recorded as before,
+  now saying whether the call was held or went ahead;
+  `tokenops boundaries status` counts the last day's failures and shows
+  the latest; and on Claude Code the pause point says it to the operator
+  at the call, since the ledger may be what failed. Codex and opencode read
+  the verdict alone, so there the record and status are the only places.

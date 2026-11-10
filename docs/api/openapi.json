@@ -141,6 +141,22 @@
                       },
                       "type": "array"
                     },
+                    "failed": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "count": {
+                          "type": "integer"
+                        },
+                        "last": {
+                          "type": "string"
+                        },
+                        "last_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "note": {
                       "type": "string"
                     },
