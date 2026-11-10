@@ -72,7 +72,7 @@ running.`,
 			if want == config.ModeActive {
 				fmt.Fprintln(out, "note: active mode runs inside the daemon — without one, nothing intervenes")
 			}
-			applyRestart(out, !noRestartFlag, true)
+			applyRestart(out, path, !noRestartFlag, true)
 			return nil
 		},
 	}
@@ -159,7 +159,7 @@ func newPreferredModelSetCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "set preferred_models.%s = %s\nwrote %s\n", args[0], args[1], path)
-			applyRestart(cmd.OutOrStdout(), !noRestartFlag, true)
+			applyRestart(cmd.OutOrStdout(), path, !noRestartFlag, true)
 			return nil
 		},
 	}
@@ -193,7 +193,7 @@ func newPreferredModelUnsetCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "removed preferred_models.%s\nwrote %s\n", args[0], path)
-			applyRestart(cmd.OutOrStdout(), !noRestartFlag, true)
+			applyRestart(cmd.OutOrStdout(), path, !noRestartFlag, true)
 			return nil
 		},
 	}
@@ -402,7 +402,7 @@ proxy rewrites matching live requests.`,
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "%s rule %s: %s -> %s\nwrote %s\n",
 				verb, rule.Provider, rule.FromModel, rule.ToModel, path)
-			applyRestart(cmd.OutOrStdout(), !noRestartFlag, true)
+			applyRestart(cmd.OutOrStdout(), path, !noRestartFlag, true)
 			return nil
 		},
 	}
@@ -447,7 +447,7 @@ func newRoutingRuleUnsetCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "removed rule %s: %s\nwrote %s\n", args[0], args[1], path)
-			applyRestart(cmd.OutOrStdout(), !noRestartFlag, true)
+			applyRestart(cmd.OutOrStdout(), path, !noRestartFlag, true)
 			return nil
 		},
 	}

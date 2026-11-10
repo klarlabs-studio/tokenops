@@ -111,7 +111,7 @@ func runProviderSetup(cmd *cobra.Command, p providersetup.Provider, opts provide
 	if browser != "" {
 		fmt.Fprintf(out, "The daemon re-reads the session from %s when %s refuses the stored one, without ever showing a prompt.\n", browser, p.Name)
 	}
-	applyRestart(out, opts.restart, false)
+	applyRestart(out, path, opts.restart, false)
 	return nil
 }
 
@@ -260,7 +260,7 @@ func runGatewaySetup(cmd *cobra.Command, p providersetup.Provider, opts provider
 		return err
 	}
 	fmt.Fprintf(out, "\nwrote %s (the key is stored there and sent only to %s)\n", path, base)
-	applyRestart(out, opts.restart, false)
+	applyRestart(out, path, opts.restart, false)
 	return nil
 }
 
@@ -328,7 +328,7 @@ func runChainSetup(cmd *cobra.Command, p providersetup.Provider, opts providerSe
 		return err
 	}
 	fmt.Fprintf(out, "\nwrote %s: the daemon reads the credential the same way as it polls, and stores none\n", path)
-	applyRestart(out, opts.restart, false)
+	applyRestart(out, path, opts.restart, false)
 	return nil
 }
 

@@ -1,11 +1,6 @@
 package daemon
 
-import (
-	"fmt"
-	"os"
-	"os/exec"
-	"strconv"
-)
+import "fmt"
 
 // restartArgv is the command that restarts an already-installed unit.
 //
@@ -19,8 +14,7 @@ func restartArgv(kind UnitKind) ([]string, error) {
 		// kickstart -k is the only launchd verb that stops a running job
 		// and starts it again. Plain kickstart against a live job does
 		// nothing at all.
-		label := "gui/" + strconv.Itoa(os.Getuid()) + "/" + LaunchdLabel
-		return []string{"launchctl", "kickstart", "-k", label}, nil
+		return []string{"launchctl", "kickstart", "-k", launchdJob()}, nil
 	case UnitSystemd:
 		return []string{"systemctl", "--user", "restart", SystemdName}, nil
 	default:
@@ -28,18 +22,23 @@ func restartArgv(kind UnitKind) ([]string, error) {
 	}
 }
 
-// RestartUnit restarts the supervised daemon so it re-reads its config.
+// RestartUnit restarts the daemon supervised from the unit at path so it
+// re-reads its config. A job the supervisor loaded from another unit file
+// is left running, with a *ForeignJobError.
 //
 // The daemon loads config once at boot, so every command that writes config
 // has to tell the operator to restart it. Until now none of them named a
 // command to run, which left "restart the daemon" as an instruction the
 // operator had to work out for themselves.
-func RestartUnit(kind UnitKind) error {
+func RestartUnit(kind UnitKind, path string) error {
 	argv, err := restartArgv(kind)
 	if err != nil {
 		return err
 	}
-	out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput() //nolint:gosec // argv is built from a closed set of kinds
+	if err := CheckJob(kind, path); err != nil {
+		return err
+	}
+	out, err := runSupervisor(argv[0], argv[1:]...)
 	if err != nil {
 		return fmt.Errorf("%s: %w (%s)", argv[0], err, bytesPreview(out))
 	}

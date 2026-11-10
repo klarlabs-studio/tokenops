@@ -384,7 +384,7 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		"%s vendor_usage.%s\nwrote %s\n",
 		action, sourceConfigKey(source), path,
 	)
-	applyRestart(cmd.OutOrStdout(), !f.noRestart, false)
+	applyRestart(cmd.OutOrStdout(), path, !f.noRestart, false)
 	fmt.Fprintln(cmd.OutOrStdout(), "then: `tokenops vendor-usage status`")
 	return nil
 }

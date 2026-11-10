@@ -98,3 +98,28 @@ var errTestRestart = errTest("launchctl: kickstart failed")
 type errTest string
 
 func (e errTest) Error() string { return string(e) }
+
+// The daemon reads the config its unit gives it. A command that wrote
+// another file must not restart it and report the change live.
+func TestADaemonThatReadsAnotherConfigIsNotRestarted(t *testing.T) {
+	deps := restartDeps{
+		Supervised: true,
+		Restart:    func() error { t.Fatal("restarted a daemon that does not read the file written"); return nil },
+		Reads:      "/home/ada/.config/tokenops/config.yaml",
+		Written:    "/data/cfg/tokenops/config.yaml",
+	}
+	for _, restart := range []bool{true, false} {
+		var buf bytes.Buffer
+		applyRestartWith(&buf, deps, restart, true)
+		out := buf.String()
+		for _, want := range []string{deps.Reads, deps.Written, "not live",
+			"tokenops daemon install --config " + deps.Written, "restart your MCP client"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("restart=%v: output does not say %q:\n%s", restart, want, out)
+			}
+		}
+		if strings.Contains(out, "restarted the daemon") || strings.Contains(out, "tokenops daemon restart") {
+			t.Errorf("restart=%v: output offers a restart that would change nothing:\n%s", restart, out)
+		}
+	}
+}

@@ -273,7 +273,7 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	// serve watches config.yaml and swaps its snapshot in-process, so only the
 	// ingestion daemon needs a restart. Asking the operator to restart their
 	// MCP host here was both unnecessary and disruptive.
-	applyRestart(out, opts.restart, false)
+	applyRestart(out, path, opts.restart, false)
 	return nil
 }
 

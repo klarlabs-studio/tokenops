@@ -420,5 +420,9 @@ func gapCounts(store *sqlite.Store) func(context.Context, time.Time, time.Time) 
 }
 
 // applyConfigRestart restarts the supervised daemon after an MCP tool writes
-// config, so an agent's change is live without a command nobody ran.
-func applyConfigRestart() string { return daemon.RestartForConfig().Note() }
+// config, so an agent's change is live without a command nobody ran. The
+// tools write the default config file.
+func applyConfigRestart() string {
+	written, _ := defaultConfigPath()
+	return daemon.RestartForConfig(written).Note()
+}

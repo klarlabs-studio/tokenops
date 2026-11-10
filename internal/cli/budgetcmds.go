@@ -212,7 +212,7 @@ limit, apart from any cap the provider sets on your account.`,
 			for _, rule := range shadow {
 				fmt.Fprintf(cmd.OutOrStdout(), "the hard window is boundary %s, in shadow: it records what it would do and stops nothing until `tokenops boundaries promote %s`\n", rule, rule)
 			}
-			applyRestart(cmd.OutOrStdout(), !noRestartFlag, false)
+			applyRestart(cmd.OutOrStdout(), path, !noRestartFlag, false)
 			return nil
 		},
 	}
@@ -266,7 +266,7 @@ func newBudgetUnsetCmd() *cobra.Command {
 					return err
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "removed the %s window of budget %q\nwrote %s\n", strings.ToLower(window), args[0], path)
-				applyRestart(cmd.OutOrStdout(), !noRestartFlag, false)
+				applyRestart(cmd.OutOrStdout(), path, !noRestartFlag, false)
 				return nil
 			}
 			if !cfg.RemoveBudget(args[0]) {
@@ -277,7 +277,7 @@ func newBudgetUnsetCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "removed budget %q\nwrote %s\n", args[0], path)
-			applyRestart(cmd.OutOrStdout(), !noRestartFlag, false)
+			applyRestart(cmd.OutOrStdout(), path, !noRestartFlag, false)
 			return nil
 		},
 	}

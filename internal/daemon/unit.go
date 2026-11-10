@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	_ "embed"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -70,28 +71,97 @@ func DefaultUnitPath(kind UnitKind, home string) string {
 	}
 }
 
-// RenderUnit fills the launchd/systemd template with the resolved binary
-// path and home directory. Empty bin/home is an error so a placeholder
-// never reaches disk.
-func RenderUnit(kind UnitKind, bin, home string) (string, error) {
-	if bin == "" || strings.Contains(bin, "__TOKENOPS_BIN__") {
+// UnitSpec is what a unit is rendered from.
+type UnitSpec struct {
+	// Bin is the tokenops binary the unit starts, Home the home directory
+	// the daemon runs with.
+	Bin, Home string
+	// Config is the config file the daemon is started with (--config).
+	// Empty leaves it to the daemon's default: tokenops/config.yaml in
+	// ConfigHome, or in Home's .config.
+	Config string
+	// ConfigHome is the XDG_CONFIG_HOME the daemon runs with, for an
+	// operator whose config directory is not Home's .config. A supervisor
+	// starts the daemon without the shell's environment, so a daemon whose
+	// unit does not carry it reads another config than the one the CLI
+	// writes.
+	ConfigHome string
+}
+
+// RenderUnit fills the launchd/systemd template from spec. An empty binary
+// or home is an error so a placeholder never reaches disk.
+//
+// A spec with no Config and no ConfigHome renders the unit as it was
+// before either existed, so an installed unit only changes for an
+// operator who pins one.
+func RenderUnit(kind UnitKind, spec UnitSpec) (string, error) {
+	if spec.Bin == "" || strings.Contains(spec.Bin, "__TOKENOPS_BIN__") {
 		return "", fmt.Errorf("supervisor: binary path is empty")
 	}
-	if home == "" || strings.Contains(home, "__HOME__") {
+	if spec.Home == "" || strings.Contains(spec.Home, "__HOME__") {
 		return "", fmt.Errorf("supervisor: home directory is empty")
+	}
+	for name, v := range map[string]string{"config file": spec.Config, "config directory": spec.ConfigHome} {
+		if v == "" {
+			continue
+		}
+		if !filepath.IsAbs(v) || strings.ContainsAny(v, "\n\r\x00") || strings.Contains(v, "__TOKENOPS_") {
+			return "", fmt.Errorf("supervisor: the %s %q is not a path a unit can carry; give it in full", name, v)
+		}
 	}
 	tmpl, err := unitTemplate(kind)
 	if err != nil {
 		return "", err
 	}
+	args, env := pinnedConfig(kind, spec)
 	body := strings.NewReplacer(
-		"__TOKENOPS_BIN__", bin,
-		"__HOME__", home,
+		"__TOKENOPS_BIN__", spec.Bin,
+		"__TOKENOPS_CONFIG_ARGS__", args,
+		"__TOKENOPS_CONFIG_ENV__", env,
+		"__HOME__", spec.Home,
 	).Replace(tmpl)
-	if strings.Contains(body, "__TOKENOPS_BIN__") || strings.Contains(body, "__HOME__") {
+	if strings.Contains(body, "__TOKENOPS_") || strings.Contains(body, "__HOME__") {
 		return "", fmt.Errorf("supervisor: unfilled placeholder in %s unit", kind)
 	}
 	return body, nil
+}
+
+// pinnedConfig is what the unit adds to the daemon's arguments and to its
+// environment for the config spec pins; both empty when it pins none.
+func pinnedConfig(kind UnitKind, spec UnitSpec) (args, env string) {
+	switch kind {
+	case UnitLaunchd:
+		if spec.Config != "" {
+			args = "\n    <string>--config</string>\n    <string>" + xmlText(spec.Config) + "</string>"
+		}
+		if spec.ConfigHome != "" {
+			env = "\n    <key>XDG_CONFIG_HOME</key>\n    <string>" + xmlText(spec.ConfigHome) + "</string>"
+		}
+	case UnitSystemd:
+		if spec.Config != "" {
+			args = " --config " + systemdQuote(spec.Config, true)
+		}
+		if spec.ConfigHome != "" {
+			env = "\nEnvironment=" + systemdQuote("XDG_CONFIG_HOME="+spec.ConfigHome, false)
+		}
+	}
+	return args, env
+}
+
+func xmlText(s string) string {
+	var b strings.Builder
+	_ = xml.EscapeText(&b, []byte(s))
+	return b.String()
+}
+
+// systemdQuote writes s as one quoted word of a unit file. systemd expands
+// % everywhere, and $ in a command line.
+func systemdQuote(s string, command bool) string {
+	pairs := []string{`\`, `\\`, `"`, `\"`, `%`, `%%`}
+	if command {
+		pairs = append(pairs, `$`, `$$`)
+	}
+	return `"` + strings.NewReplacer(pairs...).Replace(s) + `"`
 }
 
 func unitTemplate(kind UnitKind) (string, error) {

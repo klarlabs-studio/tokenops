@@ -18,7 +18,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>__TOKENOPS_BIN__</string>
-    <string>start</string>
+    <string>start</string>__TOKENOPS_CONFIG_ARGS__
   </array>
 
   <key>KeepAlive</key>
@@ -29,7 +29,7 @@
   <key>EnvironmentVariables</key>
   <dict>
     <key>HOME</key>
-    <string>__HOME__</string>
+    <string>__HOME__</string>__TOKENOPS_CONFIG_ENV__
     <key>PATH</key>
     <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>

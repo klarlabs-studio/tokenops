@@ -143,7 +143,7 @@ US list price.`,
 					fmt.Fprintf(cmd.ErrOrStderr(), "warning: plan history not updated: %v\n", err)
 				}
 			}
-			applyRestart(cmd.OutOrStdout(), !noRestartFlag, true)
+			applyRestart(cmd.OutOrStdout(), path, !noRestartFlag, true)
 			return nil
 		},
 	}
@@ -199,7 +199,7 @@ func newPlanUnsetCmd() *cobra.Command {
 				"removed plans.%s\nwrote %s\n",
 				provider, path,
 			)
-			applyRestart(cmd.OutOrStdout(), !noRestartFlag, true)
+			applyRestart(cmd.OutOrStdout(), path, !noRestartFlag, true)
 			return nil
 		},
 	}

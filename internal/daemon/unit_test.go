@@ -10,7 +10,7 @@ import (
 func TestRenderUnitFillsPlaceholders(t *testing.T) {
 	bin := "/opt/homebrew/bin/tokenops"
 	home := "/Users/ada"
-	body, err := RenderUnit(UnitLaunchd, bin, home)
+	body, err := RenderUnit(UnitLaunchd, UnitSpec{Bin: bin, Home: home})
 	if err != nil {
 		t.Fatalf("render launchd: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestRenderUnitFillsPlaceholders(t *testing.T) {
 		t.Fatalf("launchd unit missing log path:\n%s", body)
 	}
 
-	sys, err := RenderUnit(UnitSystemd, bin, home)
+	sys, err := RenderUnit(UnitSystemd, UnitSpec{Bin: bin, Home: home})
 	if err != nil {
 		t.Fatalf("render systemd: %v", err)
 	}
@@ -40,18 +40,99 @@ func TestRenderUnitFillsPlaceholders(t *testing.T) {
 }
 
 func TestRenderUnitRejectsEmptyPaths(t *testing.T) {
-	if _, err := RenderUnit(UnitLaunchd, "", "/tmp"); err == nil {
+	if _, err := RenderUnit(UnitLaunchd, UnitSpec{Home: "/tmp"}); err == nil {
 		t.Fatal("expected error for empty binary")
 	}
-	if _, err := RenderUnit(UnitSystemd, "/bin/tokenops", ""); err == nil {
+	if _, err := RenderUnit(UnitSystemd, UnitSpec{Bin: "/bin/tokenops"}); err == nil {
 		t.Fatal("expected error for empty home")
+	}
+}
+
+// A unit that pins no config is the unit it was before a unit could pin
+// one, to the byte: an installed unit only changes for an operator who
+// pins something, and everyone else stays "Already up to date".
+func TestRenderUnitWithNothingPinnedAddsNothing(t *testing.T) {
+	spec := UnitSpec{Bin: "/usr/bin/tokenops", Home: "/home/ada"}
+	for kind, tmpl := range map[UnitKind]string{UnitLaunchd: launchdTemplate, UnitSystemd: systemdTemplate} {
+		got, err := RenderUnit(kind, spec)
+		if err != nil {
+			t.Fatalf("%s: %v", kind, err)
+		}
+		// The template with the two config placeholders taken out is the
+		// template as it was.
+		was := strings.NewReplacer(
+			"__TOKENOPS_CONFIG_ARGS__", "", "__TOKENOPS_CONFIG_ENV__", "",
+			"__TOKENOPS_BIN__", spec.Bin, "__HOME__", spec.Home,
+		).Replace(tmpl)
+		if got != was {
+			t.Errorf("%s unit changed with nothing pinned:\n%s", kind, got)
+		}
+		if strings.Contains(got, "--config") || strings.Contains(got, "XDG_CONFIG_HOME") {
+			t.Errorf("%s unit pins a config nobody gave:\n%s", kind, got)
+		}
+	}
+	launchd, _ := RenderUnit(UnitLaunchd, spec)
+	for _, want := range []string{"    <string>start</string>\n  </array>", "    <string>/home/ada</string>\n    <key>PATH</key>"} {
+		if !strings.Contains(launchd, want) {
+			t.Errorf("launchd unit lost %q:\n%s", want, launchd)
+		}
+	}
+	systemd, _ := RenderUnit(UnitSystemd, spec)
+	for _, want := range []string{"ExecStart=/usr/bin/tokenops start\n", "Environment=HOME=/home/ada\n"} {
+		if !strings.Contains(systemd, want) {
+			t.Errorf("systemd unit lost %q:\n%s", want, systemd)
+		}
+	}
+}
+
+func TestRenderUnitPinsTheConfig(t *testing.T) {
+	spec := UnitSpec{Bin: "/usr/bin/tokenops", Home: "/home/ada", Config: "/etc/tokenops/a&b.yaml", ConfigHome: "/data/50%"}
+	launchd, err := RenderUnit(UnitLaunchd, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"    <string>start</string>\n    <string>--config</string>\n    <string>/etc/tokenops/a&amp;b.yaml</string>\n  </array>",
+		"    <key>XDG_CONFIG_HOME</key>\n    <string>/data/50%</string>\n    <key>PATH</key>",
+	} {
+		if !strings.Contains(launchd, want) {
+			t.Errorf("launchd unit missing %q:\n%s", want, launchd)
+		}
+	}
+	systemd, err := RenderUnit(UnitSystemd, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"ExecStart=/usr/bin/tokenops start --config \"/etc/tokenops/a&b.yaml\"\n",
+		"Environment=HOME=/home/ada\nEnvironment=\"XDG_CONFIG_HOME=/data/50%%\"\n",
+	} {
+		if !strings.Contains(systemd, want) {
+			t.Errorf("systemd unit missing %q:\n%s", want, systemd)
+		}
+	}
+}
+
+// A path a unit cannot carry is refused, not written into one: a relative
+// path means another file to a daemon started elsewhere, and a line break
+// would start a new directive.
+func TestRenderUnitRejectsAConfigItCannotCarry(t *testing.T) {
+	for _, bad := range []string{"config.yaml", "./cfg/config.yaml", "/etc/a\nExecStartPre=/bin/x", "/etc/a\rb", "/etc/a\x00b", "/etc/__TOKENOPS_BIN__"} {
+		for _, kind := range []UnitKind{UnitLaunchd, UnitSystemd} {
+			if _, err := RenderUnit(kind, UnitSpec{Bin: "/usr/bin/tokenops", Home: "/home/ada", Config: bad}); err == nil {
+				t.Errorf("%s: config %q was rendered", kind, bad)
+			}
+			if _, err := RenderUnit(kind, UnitSpec{Bin: "/usr/bin/tokenops", Home: "/home/ada", ConfigHome: bad}); err == nil {
+				t.Errorf("%s: config directory %q was rendered", kind, bad)
+			}
+		}
 	}
 }
 
 func TestWriteUnitIs0600AndIdempotentCompare(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "tokenops.service")
-	body, err := RenderUnit(UnitSystemd, "/usr/bin/tokenops", "/home/ada")
+	body, err := RenderUnit(UnitSystemd, UnitSpec{Bin: "/usr/bin/tokenops", Home: "/home/ada"})
 	if err != nil {
 		t.Fatal(err)
 	}
