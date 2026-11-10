@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.118.18 - 2026-11-10
+
+### Fixed
+
+- **daemon:** the daemon holds about a quarter less memory, and its garbage collector walks millions fewer objects. The glance's event cache gave each of a month's prompt events its own attribute map and strings, though a session's turns repeat the same plan and window readings: on a busy machine 350,000 events carry fewer than 70,000 different sets. Events with the same attributes now share one map and one copy of each string, taking the cache from 443 MB to 246 MB. A transcript cache restored at start shares its records' strings the same way a fresh read does, from 215 MB to 177 MB.
+
 ## 0.118.17 - 2026-11-09
 
 ### Fixed
