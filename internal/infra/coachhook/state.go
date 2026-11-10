@@ -12,8 +12,8 @@ import (
 // CumulativeUSD is the running API-equivalent spend; MaxFiredFraction latches
 // the highest budget fraction already alerted (so each tier fires once);
 // LastCountedTS is the ISO timestamp of the most recent turn already summed,
-// the dedup marker that keeps repeated Stops from double-counting turns still
-// present in the tail window.
+// the dedup marker that keeps repeated Stops from double-counting the turns a
+// Stop reads again.
 type sessionState struct {
 	CumulativeUSD    float64 `json:"cumulative_usd"`
 	MaxFiredFraction float64 `json:"max_fired_fraction"`
@@ -22,6 +22,12 @@ type sessionState struct {
 	// subagent transcripts, by file name: a subagent's turns interleave
 	// with the session's in time, so one marker would skip them.
 	SubagentCountedTS map[string]string `json:"subagent_counted_ts,omitempty"`
+	// ReadFrom is where the next Stop starts reading the transcript: the
+	// offset of the first line of the newest turn this one saw.
+	// SubagentReadFrom is the same for each subagent transcript. They
+	// only bound the read; the markers decide what counts.
+	ReadFrom         int64            `json:"read_from,omitempty"`
+	SubagentReadFrom map[string]int64 `json:"subagent_read_from,omitempty"`
 	// LastNudgeAt and Nudges are what the quiet policy is measured
 	// against: when the coach last spoke in this session, and how often.
 	// Absent on state written before the policy existed, which reads as

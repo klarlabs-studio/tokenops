@@ -27,7 +27,13 @@ type transcriptLine struct {
 	CompactMetadata struct {
 		Trigger string `json:"trigger"`
 	} `json:"compactMetadata"`
-	Message struct {
+	// SessionID names the session that wrote the line. History copied in
+	// from another session keeps that session's name.
+	SessionID string `json:"session_id"`
+	Message   struct {
+		// ID is the same on every line of one message: Claude Code
+		// writes a line per content block and repeats the usage on each.
+		ID    string `json:"id"`
 		Model string `json:"model"`
 		Usage *usage `json:"usage"`
 	} `json:"message"`
