@@ -44,7 +44,8 @@ import (
 type eventRuntime struct {
 	Store *sqlite.Store
 	// GlanceEvents is the cache of events the glance, findings, OTel
-	// gauges and window-pressure probe read; nil without a store.
+	// gauges, window-pressure probe and scorecard read; nil without a
+	// store.
 	GlanceEvents *sqlite.EventCache
 	// Plans is what every reader of the plans reads through: the glance
 	// events and one plan-advice cache. Each reader built its own, so the
@@ -215,14 +216,20 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 	}
 }
 
-// newGlanceEvents is the EventCache the plan routes read: the glance reads
-// weeks of events in full, and between two of the menu bar's polls only a
-// few arrive. Nil without a store.
+// glanceEventsSpan is how far back the daemon's event cache holds events:
+// the furthest any of its readers asks by default, which is the scorecard
+// (its week and the four weeks before), and a day so that the window a
+// scorecard read yesterday still covers today's.
+const glanceEventsSpan = spending.ScorecardReach + 24*time.Hour
+
+// newGlanceEvents is the EventCache the plan routes and the scorecard
+// read: the glance reads weeks of events in full, and between two of the
+// menu bar's polls only a few arrive. Nil without a store.
 func newGlanceEvents(store *sqlite.Store) *sqlite.EventCache {
 	if store == nil {
 		return nil
 	}
-	return sqlite.NewEventCache(store, 0, 0)
+	return sqlite.NewEventCache(store, glanceEventsSpan, 0)
 }
 
 // warmGlanceEvents reads into events, in the background, the prompt events

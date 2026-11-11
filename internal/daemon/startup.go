@@ -362,7 +362,7 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("analytics handlers: %w", err)
 	}
-	s.opts = append(s.opts, proxy.WithAnalytics(analyticsH.WithConfig(s.cfg)))
+	s.opts = append(s.opts, proxy.WithAnalytics(analyticsH.WithConfig(s.cfg).WithEvents(s.glanceEvents())))
 	s.opts = append(s.opts, proxy.WithAudit(proxy.NewAuditHandlers(store)))
 	return nil
 }
@@ -598,6 +598,14 @@ func (s *startup) shutdown() error {
 		},
 		running: s.sup.Running,
 	})
+}
+
+// glanceEvents is the daemon's cache of events; nil without one.
+func (s *startup) glanceEvents() *sqlite.EventCache {
+	if s.events == nil {
+		return nil
+	}
+	return s.events.GlanceEvents
 }
 
 // pressureEvents is what the window-pressure probe reads: the glance's

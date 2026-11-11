@@ -2,18 +2,23 @@ package spending
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/tools"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
-	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
+
+// scorecardDefaultDays is the period a scorecard grades when none is
+// asked for.
+const scorecardDefaultDays = 7
+
+// ScorecardReach is how far back a scorecard of the default period reads:
+// the period and the baseline it is compared with. A cache of events
+// meant to serve it holds at least this.
+const ScorecardReach = (scorecardDefaultDays + scorecard.BaselineDays) * 24 * time.Hour
 
 // ScorecardParams selects the scorecard's window and operator overrides.
 type ScorecardParams struct {
@@ -33,6 +38,13 @@ type ScorecardParams struct {
 	// Allocation are the allocation rules; with Spend, the scorecard
 	// shows how much of the period's spend they tag.
 	Allocation []allocation.Rule
+	// Events is what the wedge KPIs read the period's events through;
+	// the store when nil. A process that outlives one scorecard passes a
+	// cache of them, so each scorecard does not decode five weeks again.
+	Events scorecard.EventReader
+	// AgentFacts is what earlier scorecards read of the transcripts, so
+	// this one reads only what was written since; nil reads them all.
+	AgentFacts *AgentFacts
 }
 
 // ScorecardReport is the scorecard answer, named here so adapters can
@@ -46,6 +58,10 @@ type ScorecardReport = scorecard.Scorecard
 // The CLI used to be the only surface that added the agent KPIs, so the
 // MCP tool and /api/scorecard graded the same week on four fewer
 // metrics. Every surface now asks this function.
+//
+// It reads the period and the four weeks before it. What that costs is
+// the caller's to keep: p.Events and p.AgentFacts hold the events and the
+// transcripts between two scorecards.
 func Scorecard(ctx context.Context, store *sqlite.Store, p ScorecardParams) *ScorecardReport {
 	now := p.Now
 	if now.IsZero() {
@@ -53,15 +69,17 @@ func Scorecard(ctx context.Context, store *sqlite.Store, p ScorecardParams) *Sco
 	}
 	days := p.SinceDays
 	if days <= 0 {
-		days = 7
+		days = scorecardDefaultDays
 	}
-	var reader scorecard.EventReader
+	reader := p.Events
 	var (
 		units []scorecard.UnitCost
 		alloc *scorecard.AllocationCoverage
 	)
 	if store != nil {
-		reader = store
+		if reader == nil {
+			reader = store
+		}
 		if p.Spend != nil {
 			agg := NewAggregator(store, p.Spend)
 			since := now.Add(-time.Duration(days) * 24 * time.Hour)
@@ -74,7 +92,16 @@ func Scorecard(ctx context.Context, store *sqlite.Store, p ScorecardParams) *Sco
 		}
 	}
 	since := now.Add(-time.Duration(days) * 24 * time.Hour)
-	agent, agentBase := agentKPIs(p.TranscriptRoot, since.AddDate(0, 0, -scorecard.BaselineDays), since)
+	facts, factsCtx := p.AgentFacts, ctx
+	if facts == nil {
+		facts = &AgentFacts{}
+	} else {
+		// What is read is kept for the next scorecard, so a caller that
+		// stopped waiting does not stop the read: a first read cut short
+		// would start again from nothing each time it was asked for.
+		factsCtx = context.WithoutCancel(ctx)
+	}
+	agent, agentBase := facts.kpis(factsCtx, p.TranscriptRoot, since.AddDate(0, 0, -scorecard.BaselineDays), since, now)
 	return scorecard.Build(ctx, reader, scorecard.BuildParams{
 		UnitCosts:          units,
 		Allocation:         alloc,
@@ -103,93 +130,6 @@ func scorecardUnitCosts(r uniteconomics.Report) []scorecard.UnitCost {
 			c.PerUnitUSD = *v
 		}
 		out = append(out, c)
-	}
-	return out
-}
-
-// agentKPIs derives the KPIs the event store cannot: CGR and RGR need
-// prompt text, TCS and DAR need tool results. It reads the transcripts
-// once from baselineSince and returns the KPIs for the period (from
-// since) and for the operator's own baseline before it. Either is a zero
-// value, with no *Computed flag set, when it holds no prompts.
-func agentKPIs(root string, baselineSince, since time.Time) (period, baseline scorecard.AgentKPIInputs) {
-	extracted, err := prompts.Extract(prompts.ExtractOptions{Root: root, Since: baselineSince, Opencode: opencodestore.Store{}})
-	if err != nil || len(extracted) == 0 {
-		return period, baseline
-	}
-	var nowPrompts, basePrompts []prompts.UserPrompt
-	for _, p := range extracted {
-		if p.Timestamp.Before(since) {
-			basePrompts = append(basePrompts, p)
-		} else {
-			nowPrompts = append(nowPrompts, p)
-		}
-	}
-	var nowTools, baseTools []tools.ToolEvent
-	if toolEvs, err := tools.Extract(tools.ExtractOptions{Root: root, Since: baselineSince}); err == nil {
-		for _, e := range toolEvs {
-			if e.Timestamp.Before(since) {
-				baseTools = append(baseTools, e)
-			} else {
-				nowTools = append(nowTools, e)
-			}
-		}
-	}
-	return agentKPIsFrom(nowPrompts, nowTools), agentKPIsFrom(basePrompts, baseTools)
-}
-
-// agentKPIsFrom is the agent KPIs of one window's prompts and tool calls.
-func agentKPIsFrom(ps []prompts.UserPrompt, toolEvs []tools.ToolEvent) scorecard.AgentKPIInputs {
-	if len(ps) == 0 {
-		return scorecard.AgentKPIInputs{}
-	}
-	f := prompts.Analyze(withoutLoopSentinels(ps))
-	if f.TotalPrompts == 0 {
-		return scorecard.AgentKPIInputs{}
-	}
-	out := scorecard.AgentKPIInputs{
-		ConfirmationGateRatePct:  100.0 * float64(f.Acknowledgements) / float64(f.TotalPrompts),
-		ConfirmationGateComputed: true,
-		RegenerateRatePct:        100.0 * float64(f.Regenerates) / float64(f.TotalPrompts),
-		RegenerateComputed:       true,
-	}
-	if len(toolEvs) > 0 {
-		ts := tools.Analyze(toolEvs)
-		if ts.TotalToolCalls > 0 {
-			out.ToolSuccessRatePct = ts.SuccessRate
-			out.ToolSuccessComputed = true
-			out.DestructiveRatePct = ts.DestructiveRate
-			out.DestructiveComputed = true
-		}
-	}
-	return out
-}
-
-// loopSentinelRepeats is the gap between "I typed continue twice" (real
-// steering) and an autonomous /loop that fired dozens of times.
-const loopSentinelRepeats = 5
-
-// withoutLoopSentinels drops `continue` / `proceed` / `keep going`
-// prompts that repeat more than loopSentinelRepeats times in one session.
-// Those are /loop pacing sentinels (the harness waking the agent), not
-// human acknowledgements, and counting them in CGR penalises autonomous
-// workflows.
-func withoutLoopSentinels(in []prompts.UserPrompt) []prompts.UserPrompt {
-	type key struct{ session, text string }
-	sentinel := map[string]bool{"continue": true, "proceed": true, "keep going": true}
-	counts := map[key]int{}
-	for _, p := range in {
-		if lc := strings.ToLower(strings.TrimSpace(p.Text)); sentinel[lc] {
-			counts[key{p.SessionID, lc}]++
-		}
-	}
-	out := make([]prompts.UserPrompt, 0, len(in))
-	for _, p := range in {
-		lc := strings.ToLower(strings.TrimSpace(p.Text))
-		if sentinel[lc] && counts[key{p.SessionID, lc}] > loopSentinelRepeats {
-			continue
-		}
-		out = append(out, p)
 	}
 	return out
 }
