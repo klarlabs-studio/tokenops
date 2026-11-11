@@ -1,5 +1,5 @@
 {
-  "history_points": 1,
+  "history_points": 0,
   "forecast": [],
-  "note": "insufficient history (need ≥2 daily buckets)"
+  "note": "insufficient history (need ≥2 whole days before today)"
 }

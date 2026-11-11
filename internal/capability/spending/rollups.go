@@ -132,25 +132,30 @@ type ForecastReport struct {
 	// ForecastTokens projects tokens over the same horizon. A flat-rate
 	// plan bills nothing, so the cost series is a flat zero and the token
 	// series is the only one a chart can plot meaningfully.
-	ForecastTokens []Prediction    `json:"forecast_tokens"`
-	History        []analytics.Row `json:"history"`
-	HistoryPoints  int             `json:"history_points"`
-	HorizonDays    int             `json:"horizon_days"`
+	ForecastTokens []Prediction `json:"forecast_tokens"`
+	// History is the days as they were recorded: only the days that have
+	// events, and today as far as it has run.
+	History []analytics.Row `json:"history"`
+	// HistoryPoints is the whole days the projection was made from, a day
+	// with no events counting as one at zero. Today is not one of them.
+	HistoryPoints int `json:"history_points"`
+	HorizonDays   int `json:"horizon_days"`
 }
 
 // Forecast projects horizonDays ahead from the thirty days before now.
 func Forecast(ctx context.Context, agg Aggregator, horizonDays int, currency string, now time.Time) (ForecastReport, error) {
-	rows, err := agg.AggregateBy(ctx, Window{Since: now.Add(-forecastLookback)}, analytics.BucketDay, analytics.GroupNone)
+	since := now.Add(-forecastLookback)
+	rows, err := agg.AggregateBy(ctx, Window{Since: since}, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
 		return ForecastReport{}, err
 	}
-	cost, tokens := Project(rows, horizonDays)
+	p := Project(rows, horizonDays, since, now)
 	return ForecastReport{
 		Currency:       currency,
-		Forecast:       cost,
-		ForecastTokens: tokens,
+		Forecast:       p.Cost,
+		ForecastTokens: p.Tokens,
 		History:        rows,
-		HistoryPoints:  len(rows),
+		HistoryPoints:  p.Days,
 		HorizonDays:    horizonDays,
 	}, nil
 }

@@ -120,9 +120,9 @@ func TestSpendToolsCharacterization(t *testing.T) {
 }
 
 // TestForecastCharacterizationShortHistory pins the answer for a store too
-// young to project.
+// young to project: its one event is today's, and today is not history.
 func TestForecastCharacterizationShortHistory(t *testing.T) {
-	srv := analyticsServer(t, metered("only", time.Now().UTC().Add(-time.Hour), "claude-haiku-4-5", 1_000, 0.01))
+	srv := analyticsServer(t, metered("only", time.Now().UTC(), "claude-haiku-4-5", 1_000, 0.01))
 	assertGolden(t, "spend/forecast_short.json", execTool(t, srv, "tokenops_forecast", nil))
 }
 

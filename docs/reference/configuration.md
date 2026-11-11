@@ -773,9 +773,14 @@ writes the safe loss-level tuning back to this config locally. The
 
 `budgets` define calendar-window (UTC) spend limits. In `mode: active`
 the daemon evaluates them every `watch.interval` against actual spend
-plus a Holt forecast for the remainder of the window, logging
+plus a forecast of what is left of the window, logging
 `threshold_reached` and `forecast_breach` alerts (deduplicated per
-window). A budget whose window reaches its limit also raises one
+window). The forecast is the rest of today and each day up to the
+window's end, nothing past it. A day is expected to bring what its day of
+the week brought over the last 30 days, a day with no spend counting as
+zero, so a weekend that is always quiet forecasts nothing; with less than
+two weeks of history every day is expected to bring the average day.
+Today so far is not part of that history. A budget whose window reaches its limit also raises one
 `budget.exceeded` domain event for that window, recorded in the audit
 log; warnings and forecasts do not, and a restart does not record it
 again. The watcher

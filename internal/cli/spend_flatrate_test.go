@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
 )
@@ -28,6 +29,7 @@ func flatRateView() spendView {
 			{At: time.Now(), Value: 0, Lower: 0, Upper: 0},
 			{At: time.Now(), Value: 0, Lower: 0, Upper: 0},
 		},
+		ForecastNote:  spending.NoteAllZero,
 		HideSparkline: true,
 	}
 }
@@ -75,6 +77,21 @@ func TestSpendTextReplacesAnAllZeroUSDForecastWithAReason(t *testing.T) {
 	}
 	if !strings.Contains(out, "No USD forecast") {
 		t.Errorf("want the reason stated rather than silence:\n%s", out)
+	}
+}
+
+// Two days on which nothing is ever spent forecast zero as well. The
+// history was billed, so that is the answer and not a missing one.
+func TestSpendTextTabulatesAZeroForecastOfABilledHistory(t *testing.T) {
+	v := flatRateView()
+	v.ForecastNote = ""
+	var buf bytes.Buffer
+	if err := writeSpendText(&buf, v); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Forecast (next 2 points)") || strings.Contains(out, "No USD forecast") {
+		t.Errorf("want the zero forecast tabulated and not called plan-covered:\n%s", out)
 	}
 }
 
