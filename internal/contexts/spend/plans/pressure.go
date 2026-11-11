@@ -120,7 +120,7 @@ func WindowPressure(vendor string, windows []VendorWindow, now time.Time) *Press
 	var best *Pressure
 	for _, w := range windows {
 		label, ok := pressureLabels[w.Name]
-		if !ok || w.Stale || (!w.ResetsAt.IsZero() && !w.ResetsAt.After(now)) {
+		if !ok || !w.Current(now) {
 			continue
 		}
 		before, pressed := w.Pressed(now)

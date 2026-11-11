@@ -106,9 +106,10 @@ func measures(g glanceView) []measure {
 	for _, r := range g.PlanHeadroom.Reports {
 		name := shortName(r.Provider)
 		for _, w := range r.Windows {
-			if w.Stale {
-				// The last share read before its source stopped: alerting on
-				// it would announce a change nobody measured.
+			if w.Stale || w.Lapsed {
+				// The last share read before its source stopped, or before
+				// the window reset: alerting on it would announce a change
+				// nobody measured.
 				continue
 			}
 			out = append(out, measure{

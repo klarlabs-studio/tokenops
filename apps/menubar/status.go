@@ -50,6 +50,9 @@ type window struct {
 	NotStarted bool  `json:"not_started"`
 	Pace       *pace `json:"pace"`
 	Stale      bool  `json:"stale"`
+	// Lapsed is a window that has reset since its reading: UsedPct is the
+	// share of the window that is over, and nothing has read this one.
+	Lapsed bool `json:"lapsed"`
 }
 
 // pace is the daemon's verdict on a window (plans.WindowPace).
@@ -148,6 +151,12 @@ func reportStatus(r report) (status, []string) {
 		lines []string
 	)
 	for _, w := range r.Windows {
+		if w.Lapsed {
+			// Its share is the last window's: it is named, and measures
+			// nothing.
+			lines = append(lines, fmt.Sprintf("%s · %s reset since it was last read", name, w.Name))
+			continue
+		}
 		line := fmt.Sprintf("%s · %s %.0f%% left", name, w.Name, left(w.UsedPct))
 		switch {
 		case w.NotStarted:

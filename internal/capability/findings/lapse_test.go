@@ -61,6 +61,7 @@ func TestQuotaFoldsExpiringAllowancesIntoTheLapseFinding(t *testing.T) {
 		wantLapses int
 		title      []string
 		action     string
+		notAction  string
 	}{
 		{
 			name: "folded into a lapsing week",
@@ -74,6 +75,15 @@ func TestQuotaFoldsExpiringAllowancesIntoTheLapseFinding(t *testing.T) {
 				Allowances: &plans.Allowances{Available: 2, Items: []plans.Allowance{credit(2 * time.Hour), credit(20 * time.Hour)}}},
 			wantLapses: 1, title: []string{"Codex", "2 reset credits expire within 20h 0m unused", "first in 2h 0m"},
 			action: "85%",
+		},
+		{
+			// The week has reset since its reading: what the credit would
+			// give back is not known, and the old share is not quoted.
+			name: "a week that has reset since its reading",
+			report: plans.HeadroomReport{Provider: "openai",
+				Windows:    []plans.VendorWindow{{Name: "week", UsedPct: 85, Duration: 7 * 24 * time.Hour, Lapsed: true}},
+				Allowances: &plans.Allowances{Available: 1, Items: []plans.Allowance{credit(2 * time.Hour)}}},
+			wantLapses: 1, title: []string{"1 reset credit expires in 2h 0m unused"}, notAction: "85%",
 		},
 		{
 			name: "expiring after the horizon",
@@ -120,6 +130,9 @@ func TestQuotaFoldsExpiringAllowancesIntoTheLapseFinding(t *testing.T) {
 			}
 			if tc.action != "" && !strings.Contains(f.Action, tc.action) {
 				t.Errorf("action %q lacks %q", f.Action, tc.action)
+			}
+			if tc.notAction != "" && strings.Contains(f.Action+f.Evidence, tc.notAction) {
+				t.Errorf("finding quotes %q: %q / %q", tc.notAction, f.Action, f.Evidence)
 			}
 		})
 	}

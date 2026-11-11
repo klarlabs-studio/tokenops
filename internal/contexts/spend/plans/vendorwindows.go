@@ -41,6 +41,41 @@ type VendorWindow struct {
 	// Stale is a window from a polling source that has fallen silent, so
 	// its share is no longer known to be current.
 	Stale bool `json:"stale,omitempty"`
+	// Lapsed is a window whose reset has passed since its reading. UsedPct
+	// is the share of the window that is over; how much of the one that
+	// followed is used is unknown until something reads it, so ResetsAt,
+	// ResetsIn and Pace are empty.
+	Lapsed bool `json:"lapsed,omitempty"`
+}
+
+// Current reports whether w's share describes the window as it is at now:
+// its source has not fallen silent and the window has not reset since the
+// reading. Whatever decides or advises from a share asks this first; a
+// window that is not current is shown as such and decides nothing.
+//
+// The reset is checked against the clock as well as the flag, because a
+// report made before the reset can still be held after it.
+func (w VendorWindow) Current(now time.Time) bool {
+	return !w.Stale && !w.Over(now)
+}
+
+// Over reports whether the window w measured has ended: it had reset by
+// the time it was read out, or its reset has passed since.
+func (w VendorWindow) Over(now time.Time) bool {
+	return w.Lapsed || (!w.ResetsAt.IsZero() && !w.ResetsAt.After(now))
+}
+
+// Busiest is the window with the highest share among those current at now:
+// the one that binds the plan. ok is false when none is current.
+func Busiest(ws []VendorWindow, now time.Time) (VendorWindow, bool) {
+	var best VendorWindow
+	found := false
+	for _, w := range ws {
+		if w.Current(now) && (!found || w.UsedPct > best.UsedPct) {
+			best, found = w, true
+		}
+	}
+	return best, found
 }
 
 // PolledSources are the window sources that read on a schedule whether or
@@ -339,11 +374,13 @@ func codexLimitName(attrs map[string]string, limit string) string {
 	return limit
 }
 
+// setReset gives w the reset its reading names, or marks it lapsed when
+// that reset has passed.
 func setReset(w *VendorWindow, raw string, now time.Time) {
-	if raw == "" {
-		return
-	}
-	if in := parseResetsIn(raw, now); in > 0 {
+	switch in, lapsed := resetIn(raw, now); {
+	case lapsed:
+		w.Lapsed = true
+	case in > 0:
 		w.ResetsAt = now.Add(in).UTC()
 		w.ResetsIn = in.Round(time.Minute).String()
 	}

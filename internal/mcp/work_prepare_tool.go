@@ -143,7 +143,7 @@ func prepareTips(d RoutingAdviceDeps, in prepareWorkInput, workflowID string, re
 	if headroom != nil {
 		for _, r := range headroom.Reports {
 			for _, w := range r.Windows {
-				if w.Stale || w.NotStarted {
+				if w.Stale || w.Lapsed || w.NotStarted {
 					continue
 				}
 				pw := coachcap.PrepareWindow{Name: r.Provider + " " + w.Name + " window", UsedPct: w.UsedPct, ResetsIn: w.ResetsIn}

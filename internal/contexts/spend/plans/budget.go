@@ -269,27 +269,35 @@ func (b *SessionBudget) setEstimatedReset(started time.Time, window time.Duratio
 }
 
 // computeFromVendorWindows advises from every window the vendor reported:
-// the busiest one is the binding constraint, so it sets the share, the
-// reset and the action, and the others are listed alongside.
+// the busiest current one is the binding constraint, so it sets the share,
+// the reset and the action, and the others are listed alongside. When none
+// is current there is no share to advise from, and the advice says so
+// rather than repeat the last one read.
 func computeFromVendorWindows(planName string, p Plan, in SessionBudgetInputs) SessionBudget {
-	w := in.VendorWindows[0]
-	pct := clampPct(w.UsedPct)
 	out := SessionBudget{
 		PlanName:          planName,
 		Display:           p.Display,
 		Provider:          p.Provider,
-		WindowDuration:    w.Duration.String(),
-		WindowPct:         math.Round(pct*100) / 100,
-		Confidence:        ConfidenceHigh,
-		RecommendedAction: recommendActionByPct(pct),
+		Confidence:        ConfidenceLow,
+		RecommendedAction: ActionUnknown,
 		SignalQuality:     ClassifySignal(in.Signal),
 		Windows:           in.VendorWindows,
-		Note:              "shares are the vendor's reported meter; the " + w.Name + " window is the busiest",
+		Note:              "no window has a current reading: each has reset since it was read, or its source has stopped",
 	}
 	if in.Authoritative != nil {
 		out.VendorPlanType = in.Authoritative.VendorPlanType
 	}
-	if !w.ResetsAt.IsZero() && w.ResetsAt.After(in.Now) {
+	w, ok := Busiest(in.VendorWindows, in.Now)
+	if !ok {
+		return out
+	}
+	pct := clampPct(w.UsedPct)
+	out.WindowDuration = w.Duration.String()
+	out.WindowPct = math.Round(pct*100) / 100
+	out.Confidence = ConfidenceHigh
+	out.RecommendedAction = recommendActionByPct(pct)
+	out.Note = "shares are the vendor's reported meter; the " + w.Name + " window is the busiest"
+	if !w.ResetsAt.IsZero() {
 		d := w.ResetsAt.Sub(in.Now)
 		out.windowResetsInDur = d
 		out.WindowResetsIn = d.Round(time.Minute).String()

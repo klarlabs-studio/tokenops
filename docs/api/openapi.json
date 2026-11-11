@@ -4036,6 +4036,9 @@
                                     "duration_ns": {
                                       "type": "integer"
                                     },
+                                    "lapsed": {
+                                      "type": "boolean"
+                                    },
                                     "name": {
                                       "type": "string"
                                     },
@@ -4317,6 +4320,9 @@
                                   "properties": {
                                     "duration_ns": {
                                       "type": "integer"
+                                    },
+                                    "lapsed": {
+                                      "type": "boolean"
                                     },
                                     "name": {
                                       "type": "string"
@@ -5226,6 +5232,9 @@
                                 "duration_ns": {
                                   "type": "integer"
                                 },
+                                "lapsed": {
+                                  "type": "boolean"
+                                },
                                 "name": {
                                   "type": "string"
                                 },
@@ -5389,6 +5398,9 @@
                               "properties": {
                                 "duration_ns": {
                                   "type": "integer"
+                                },
+                                "lapsed": {
+                                  "type": "boolean"
                                 },
                                 "name": {
                                   "type": "string"

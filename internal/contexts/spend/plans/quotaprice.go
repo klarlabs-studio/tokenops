@@ -109,7 +109,7 @@ func BindingPrice(vendor string, windows []VendorWindow, now time.Time) *QuotaPr
 	var best *QuotaPrice
 	for _, w := range windows {
 		label, ok := pressureLabels[w.Name]
-		if !ok || w.Stale || (!w.ResetsAt.IsZero() && !w.ResetsAt.After(now)) {
+		if !ok || !w.Current(now) {
 			continue
 		}
 		p := w.Price(now)

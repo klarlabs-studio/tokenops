@@ -14,12 +14,12 @@ import (
 func TestVendorWindowsKeepsEachCodexLimitApart(t *testing.T) {
 	now := time.Date(2026, 10, 28, 9, 0, 0, 0, time.UTC)
 	def := &eventschema.Envelope{Source: "codex-jsonl", Timestamp: now.Add(-5 * time.Minute), Attributes: map[string]string{
-		"primary_used_pct": "14.00", "primary_window_min": "10080", "primary_resets_at": "1791607286",
+		"primary_used_pct": "14.00", "primary_window_min": "10080", "primary_resets_at": "1793607286",
 		"secondary_used_pct": "0.00", "secondary_window_min": "0", "secondary_resets_at": "0",
 	}}
 	spark := &eventschema.Envelope{Source: "codex-jsonl", Timestamp: now.Add(-time.Minute), Attributes: map[string]string{
 		"limit_id": "codex_secondary", "limit_name": "Example Model",
-		"primary_used_pct": "7.00", "primary_window_min": "300", "primary_resets_at": "1791600000",
+		"primary_used_pct": "7.00", "primary_window_min": "300", "primary_resets_at": "1793200000",
 		"secondary_used_pct": "0.00", "secondary_window_min": "0", "secondary_resets_at": "0",
 	}}
 	r := authFakeReader{events: []*eventschema.Envelope{def, spark}}
@@ -44,7 +44,7 @@ func TestVendorWindowsKeepsEachCodexLimitApart(t *testing.T) {
 func TestVendorWindowsNamesACodexLimitByItsIDWhenNoNameIsSent(t *testing.T) {
 	now := time.Date(2026, 10, 28, 9, 0, 0, 0, time.UTC)
 	spark := &eventschema.Envelope{Source: "codex-app-server", Timestamp: now.Add(-time.Minute), Attributes: map[string]string{
-		"limit_id": "codex_other", "primary_used_pct": "30.00", "primary_window_min": "10080", "primary_resets_at": "1791607286",
+		"limit_id": "codex_other", "primary_used_pct": "30.00", "primary_window_min": "10080", "primary_resets_at": "1793607286",
 	}}
 	got := VendorWindows(context.Background(), authFakeReader{events: []*eventschema.Envelope{spark}}, eventschema.ProviderOpenAI, now)
 	if len(got) != 1 || got[0].Name != "week (codex_other)" {
@@ -58,10 +58,10 @@ func TestLatestAuthoritativeWindowIgnoresOtherCodexLimits(t *testing.T) {
 	now := time.Date(2026, 10, 28, 9, 0, 0, 0, time.UTC)
 	p, _ := Lookup("gpt-plus") // openai, 5h window
 	def := env(now.Add(-10*time.Minute), map[string]string{
-		"primary_used_pct": "40.00", "primary_window_min": "300", "primary_resets_at": "1791600000",
+		"primary_used_pct": "40.00", "primary_window_min": "300", "primary_resets_at": "1793200000",
 	})
 	spark := env(now.Add(-time.Minute), map[string]string{
-		"limit_id": "codex_secondary", "primary_used_pct": "95.00", "primary_window_min": "300", "primary_resets_at": "1791600000",
+		"limit_id": "codex_secondary", "primary_used_pct": "95.00", "primary_window_min": "300", "primary_resets_at": "1793200000",
 	})
 	w := LatestAuthoritativeWindow(context.Background(), authFakeReader{events: []*eventschema.Envelope{def, spark}}, eventschema.ProviderOpenAI, p, now)
 	if w == nil || w.UsedPct != 40 {

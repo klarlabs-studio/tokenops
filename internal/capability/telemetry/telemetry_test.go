@@ -79,3 +79,18 @@ func TestGauges(t *testing.T) {
 		t.Error("no readings made gauges")
 	}
 }
+
+// A gauge says what a share is now. A window whose source has stopped, or
+// that has reset since its reading, has no such figure, so it has no point.
+func TestNoGaugeForAWindowThatIsNotCurrent(t *testing.T) {
+	var g headroom.Glance
+	g.Headroom.Reports = []plans.HeadroomReport{{Provider: "openai", PlanName: "gpt-pro-5x", Windows: []plans.VendorWindow{
+		{Name: "5h", UsedPct: 90, Lapsed: true},
+		{Name: "day", UsedPct: 80, Stale: true},
+		{Name: "week", UsedPct: 40},
+	}}}
+	points := byName(Gauges(Inputs{Glance: &g}))["tokenops.plan.window.utilization"].Points
+	if len(points) != 1 || points[0].Attrs["window"] != "week" || points[0].Value != 40 {
+		t.Errorf("points %+v, want the week alone", points)
+	}
+}

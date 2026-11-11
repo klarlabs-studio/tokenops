@@ -72,6 +72,18 @@ func TestAccountWideSpendIsNamedAsTheAccounts(t *testing.T) {
 	}
 }
 
+// A window whose source stopped, or that has reset since its reading, is
+// not measured: its share would raise an alert about a window nobody read.
+func TestAWindowThatIsNotCurrentIsNotMeasured(t *testing.T) {
+	g := glanceView{}
+	g.PlanHeadroom.Reports = []report{{Provider: "openai", Windows: []window{
+		{Name: "5h", UsedPct: 96, Lapsed: true}, {Name: "day", UsedPct: 96, Stale: true}, {Name: "week", UsedPct: 40},
+	}}}
+	if ms := measures(g); len(ms) != 1 || ms[0].used != 40 {
+		t.Errorf("measures %+v, want the week alone", ms)
+	}
+}
+
 // The body says when the window comes back, and, while it is still
 // running, when it runs out at this pace.
 func TestAlertBodies(t *testing.T) {

@@ -137,9 +137,9 @@ func TestAssembleHeadroomInputsCarriesEverySource(t *testing.T) {
 // fall back to the plan's nominal window length.
 func TestParseResetsInReadsClaudeResetTimes(t *testing.T) {
 	now := time.Date(2026, 9, 19, 17, 0, 0, 0, time.UTC)
-	got := parseResetsIn("2026-09-19T20:00:00.048431+00:00", now)
+	got, lapsed := resetIn("2026-09-19T20:00:00.048431+00:00", now)
 	want := 3*time.Hour + 48431*time.Microsecond
-	if got != want {
+	if got != want || lapsed {
 		t.Errorf("resets in %s, want %s", got, want)
 	}
 }

@@ -78,6 +78,15 @@ func TestReadPlanSaysWhyTheReadingIsLost(t *testing.T) {
 	if !r.Flat || r.Lost != "" {
 		t.Errorf("never set up: %+v", r)
 	}
+	// A reading three minutes old whose window reset a minute ago is not a
+	// source that stopped: there is no window to read, and nothing is lost.
+	reset := meterStore(t, now.Add(-3*time.Minute), map[string]string{
+		"five_hour_kind": "session", "five_hour_used_pct": "97.00", "five_hour_reset_at": now.Add(-time.Minute).Format(time.RFC3339Nano),
+	}, "claude-usage-meter")
+	r = readPlan(context.Background(), config.Config{Plans: max, Storage: config.StorageConfig{Enabled: true, Path: reset}}, eventschema.ProviderAnthropic, now)
+	if r.Quota != nil || !r.Flat || r.Lost != "" {
+		t.Errorf("reset since its reading: %+v", r)
+	}
 	payg := map[string]string{"anthropic": "pay-as-you-go"}
 	if r = readPlan(context.Background(), config.Config{Plans: payg, Storage: config.StorageConfig{Enabled: true, Path: stale}}, eventschema.ProviderAnthropic, now); r.Flat || r.Lost != "" {
 		t.Errorf("pay as you go: %+v", r)

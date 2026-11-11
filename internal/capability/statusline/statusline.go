@@ -133,9 +133,12 @@ func Render(in Input) []string {
 		}
 		parts = append(parts, m)
 	}
-	if w, ok := tightest(in.Windows); ok {
+	// A window whose reset has passed holds the last window's share: the
+	// client repeats it until its next response, so it is left out.
+	windows := running(in.Windows, in.Now)
+	if w, ok := tightest(windows); ok {
 		s := p.leftBar(w.UsedPct, 6) + " " + window(p, w, in.Now)
-		for _, o := range in.Windows {
+		for _, o := range windows {
 			if o.Label != w.Label {
 				s += sep + window(p, o, in.Now)
 			}
@@ -234,6 +237,18 @@ func tightest(ws []Window) (Window, bool) {
 		}
 	}
 	return best, found
+}
+
+// running is the windows that have not reset since they were reported. One
+// that names no reset is kept: nothing says it is over.
+func running(ws []Window, now time.Time) []Window {
+	var out []Window
+	for _, w := range ws {
+		if w.ResetsAt.IsZero() || w.ResetsAt.After(now) {
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 func window(p painter, w Window, now time.Time) string {
