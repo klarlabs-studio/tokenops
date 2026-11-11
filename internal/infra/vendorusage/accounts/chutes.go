@@ -49,7 +49,7 @@ func (c Chutes) Read(ctx context.Context, key string) (usage.Reading, error) {
 		d    time.Duration
 		c    *capped
 	}{{"4h", 4 * time.Hour, resp.FourHour}, {"month", 30 * 24 * time.Hour, resp.Monthly}} {
-		if w.c == nil || w.c.Uncapped || !w.c.Cap.ok || w.c.Cap.v <= 0 {
+		if w.c == nil || w.c.Uncapped || !w.c.Cap.ok || w.c.Cap.v <= 0 || !w.c.Usage.ok {
 			continue
 		}
 		r.Windows = append(r.Windows, usage.Window{Name: w.name, UsedPct: pct(w.c.Usage.v, w.c.Cap.v), Duration: w.d, ResetsAt: parseTime(w.c.ResetAt)})

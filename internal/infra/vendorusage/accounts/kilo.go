@@ -155,9 +155,15 @@ func kiloPass(e kiloEntry) (usage.Window, bool) {
 	if !s.BaseCreditsUSD.ok {
 		return usage.Window{}, false
 	}
-	total := max(0, s.BaseCreditsUSD.v) + max(0, s.BonusUSD.v)
+	total := max(0, s.BaseCreditsUSD.v)
+	if s.BonusUSD.ok { // a pass without a bonus names none
+		total += max(0, s.BonusUSD.v)
+	}
 	used := 100.0 // a pass with no credits is spent
 	if total > 0 {
+		if !s.UsageUSD.ok {
+			return usage.Window{}, false
+		}
 		used = clampPct(pct(max(0, s.UsageUSD.v), total))
 	}
 	reset := parseTime(s.NextBillingAt)

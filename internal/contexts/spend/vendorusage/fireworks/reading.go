@@ -136,6 +136,9 @@ type Reading struct {
 	UsedUSD float64
 	// LimitUSD is the cap it is spent against, 0 when there is none.
 	LimitUSD float64
+	// LimitUnknown is the cap not having been read: LimitUSD is then 0
+	// without saying there is none.
+	LimitUnknown bool
 	// LimitReached is Fireworks saying requests are blocked by the cap.
 	LimitReached bool
 	// BlockedUntil is when a member blocked by their cap may send again

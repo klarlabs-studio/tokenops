@@ -54,10 +54,15 @@ func (h HuggingFace) Read(ctx context.Context, key string) (usage.Reading, error
 	if err := getJSON(ctx, h.HTTP, u, key, &resp); err != nil {
 		return usage.Reading{}, err
 	}
-	if resp.Usage == nil || resp.Usage.Inference == nil || !resp.Usage.Inference.Used.ok {
+	if resp.Usage == nil || resp.Usage.Inference == nil {
 		return usage.Reading{}, errors.New("accounts: huggingface billing: unrecognised answer")
 	}
+	// What is billed is what was used beyond what the plan includes: both
+	// are needed.
 	inf := resp.Usage.Inference
+	if !inf.Used.ok || !inf.Included.ok {
+		return usage.Reading{}, errors.New("accounts: huggingface billing: unrecognised answer")
+	}
 	r := usage.Reading{Scope: "account", HasUsed: true, UsedUSD: math.Max(0, inf.Used.v-inf.Included.v) / 1e9}
 	if inf.Limit.ok && inf.Limit.v > 0 {
 		r.LimitUSD = inf.Limit.v / 1e9

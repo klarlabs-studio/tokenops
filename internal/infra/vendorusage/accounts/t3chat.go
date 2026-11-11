@@ -71,21 +71,29 @@ func (t T3Chat) Read(ctx context.Context, key string) (usage.Reading, error) {
 		return usage.Reading{}, errors.New("accounts: t3chat getCustomerData: unrecognised answer")
 	}
 	r := usage.Reading{Scope: "account", Subscription: true}
-	four, _ := data["usageFourHourPercentage"].(float64)
-	reset := t3ChatTime(data["usageFourHourNextResetAt"])
-	if reset.IsZero() {
-		reset = t3ChatTime(data["usageWindowNextResetAt"])
+	// A window is shown for a share the answer gives: one it leaves out is
+	// not a window at 0%.
+	if four, ok := data["usageFourHourPercentage"].(float64); ok {
+		reset := t3ChatTime(data["usageFourHourNextResetAt"])
+		if reset.IsZero() {
+			reset = t3ChatTime(data["usageWindowNextResetAt"])
+		}
+		r.Windows = append(r.Windows, usage.Window{Name: "4h", Duration: 4 * time.Hour, UsedPct: clampPct(four), ResetsAt: reset})
 	}
-	r.Windows = append(r.Windows, usage.Window{Name: "4h", Duration: 4 * time.Hour, UsedPct: clampPct(four), ResetsAt: reset})
 	month, ok := data["usageMonthPercentage"].(float64)
 	if !ok {
-		month, _ = data["usagePeriodPercentage"].(float64)
+		month, ok = data["usagePeriodPercentage"].(float64)
 	}
-	var end time.Time
-	if sub, ok := data["subscription"].(map[string]any); ok {
-		end = t3ChatTime(sub["currentPeriodEnd"])
+	if ok {
+		var end time.Time
+		if sub, ok := data["subscription"].(map[string]any); ok {
+			end = t3ChatTime(sub["currentPeriodEnd"])
+		}
+		r.Windows = append(r.Windows, usage.Window{Name: "month", UsedPct: clampPct(month), ResetsAt: end})
 	}
-	r.Windows = append(r.Windows, usage.Window{Name: "month", UsedPct: clampPct(month), ResetsAt: end})
+	if len(r.Windows) == 0 {
+		return usage.Reading{}, errors.New("accounts: t3chat getCustomerData: no usage share in the answer")
+	}
 	return r, nil
 }
 

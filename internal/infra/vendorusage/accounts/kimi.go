@@ -46,6 +46,7 @@ type kimiRatio struct {
 type kimiCount struct {
 	Limit     number `json:"limit"`
 	Used      number `json:"used"`
+	Remaining number `json:"remaining"`
 	ResetTime string `json:"resetTime"`
 }
 
@@ -139,12 +140,20 @@ func kimiLegacyWindows(resp kimiAnswer) ([]usage.Window, error) {
 }
 
 // kimiCountWindow is a window from a count; a zero or absent limit has
-// no window.
+// no window, and neither has a count that gives no use: what is used, or
+// failing that the limit less what remains.
 func kimiCountWindow(name string, d time.Duration, c kimiCount) (usage.Window, bool) {
 	if !c.Limit.ok || c.Limit.v <= 0 {
 		return usage.Window{}, false
 	}
-	return usage.Window{Name: name, UsedPct: clampPct(pct(c.Used.v, c.Limit.v)), Duration: d, ResetsAt: parseTime(c.ResetTime)}, true
+	used := c.Used
+	if !used.ok && c.Remaining.ok {
+		used = number{v: c.Limit.v - c.Remaining.v, ok: true}
+	}
+	if !used.ok {
+		return usage.Window{}, false
+	}
+	return usage.Window{Name: name, UsedPct: clampPct(pct(used.v, c.Limit.v)), Duration: d, ResetsAt: parseTime(c.ResetTime)}, true
 }
 
 // kimiUnit is a legacy duration in its time unit.

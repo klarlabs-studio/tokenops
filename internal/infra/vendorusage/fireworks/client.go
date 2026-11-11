@@ -232,7 +232,8 @@ func blocked(raw map[string]json.RawMessage, now time.Time) (bool, time.Time) {
 }
 
 // AccountMonth reads the account's spend this month (UTC) and its monthly
-// spend limit, 0 when it has none.
+// spend limit, 0 when it has none. A limit that could not be read is
+// LimitUnknown, not an account without one.
 func (c *Client) AccountMonth(ctx context.Context, account string, now time.Time) (usage.Reading, error) {
 	now = now.UTC()
 	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -257,14 +258,28 @@ func (c *Client) AccountMonth(ctx context.Context, account string, now time.Time
 			Name  string `json:"name"`
 			Value string `json:"value"`
 		} `json:"quotas"`
+		NextPageToken string `json:"nextPageToken"`
 	}
-	if err := c.do(ctx, base+"/quotas", url.Values{"pageSize": {"200"}}, &quotas, nil); err == nil {
+	// Only a quota list read whole says the account has no spend limit: a
+	// failed read, a list cut short and a value that is no number say
+	// nothing about it.
+	found := false
+	if err := c.do(ctx, base+"/quotas", url.Values{"pageSize": {"200"}}, &quotas, nil); err != nil {
+		r.LimitUnknown = true
+	} else {
 		for _, qt := range quotas.Quotas {
-			if qt.Name == SpendQuotaName || strings.HasSuffix(qt.Name, "/"+SpendQuotaName) {
-				r.LimitUSD, _ = strconv.ParseFloat(qt.Value, 64)
+			if qt.Name != SpendQuotaName && !strings.HasSuffix(qt.Name, "/"+SpendQuotaName) {
+				continue
 			}
+			found = true
+			limit, err := strconv.ParseFloat(qt.Value, 64)
+			r.LimitUSD, r.LimitUnknown = limit, err != nil
+		}
+		if !found && quotas.NextPageToken != "" {
+			r.LimitUnknown = true
 		}
 	}
+	// A failed account read claims no block: the spend still stands.
 	var acct struct {
 		SuspendState string `json:"suspendState"`
 	}

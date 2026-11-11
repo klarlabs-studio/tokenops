@@ -92,7 +92,7 @@ func (n Notion) Read(ctx context.Context, key string) (usage.Reading, error) {
 		now = n.Now
 	}
 	r := usage.Reading{Scope: "account"}
-	if w := status.Rolling; w != nil && w.Used != nil && w.Limit != nil && w.Limit.v > 0 {
+	if w := status.Rolling; w != nil && w.Used != nil && w.Limit != nil && w.Used.ok && w.Limit.ok && w.Limit.v > 0 {
 		d := notionDuration(w.Window)
 		win := usage.Window{Name: windowName(d), Duration: d, UsedPct: clampPct(pct(w.Used.v, w.Limit.v))}
 		if d == 0 {
@@ -103,7 +103,7 @@ func (n Notion) Read(ctx context.Context, key string) (usage.Reading, error) {
 		}
 		r.Windows = append(r.Windows, win)
 	}
-	if w := status.Billing; w != nil && w.Used != nil && w.Limit != nil && w.Limit.v > 0 {
+	if w := status.Billing; w != nil && w.Used != nil && w.Limit != nil && w.Used.ok && w.Limit.ok && w.Limit.v > 0 {
 		r.Windows = append(r.Windows, usage.Window{Name: "month", UsedPct: clampPct(pct(w.Used.v, w.Limit.v)), ResetsAt: w.PeriodMs.t})
 	}
 	r.Subscription = len(r.Windows) > 0

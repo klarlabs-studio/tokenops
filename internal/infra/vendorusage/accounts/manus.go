@@ -65,10 +65,12 @@ func (m Manus) Read(ctx context.Context, key string) (usage.Reading, error) {
 	if credits.Total.ok {
 		r.Credits, r.CreditsUnit, r.HasCredits = credits.Total.v, "credits", true
 	}
-	if monthly := credits.ProMonthly.v; monthly > 0 {
+	// A window needs both its allowance and what is left of it: an
+	// allowance alone is not one that is used up.
+	if monthly := credits.ProMonthly.v; credits.ProMonthly.ok && credits.Periodic.ok && monthly > 0 {
 		r.Windows = append(r.Windows, usage.Window{Name: "month", UsedPct: clampPct(pct(monthly-credits.Periodic.v, monthly))})
 	}
-	if most := credits.MaxRefresh.v; most > 0 {
+	if most := credits.MaxRefresh.v; credits.MaxRefresh.ok && credits.Refresh.ok && most > 0 {
 		r.Windows = append(r.Windows, usage.Window{Name: "day", Duration: 24 * time.Hour,
 			UsedPct: clampPct(pct(most-credits.Refresh.v, most)), ResetsAt: manusTime(credits.NextRefresh)})
 	}

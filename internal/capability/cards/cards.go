@@ -386,6 +386,8 @@ func details(r plans.HeadroomReport, cost *spending.ProviderCost, late bool, use
 		out = append(out, detail{"This month", money(r.SpendUSD) + " / " + money(r.SpendLimitUSD), porcelain})
 	case r.SpendUSD > 0 && r.StaleSpend():
 		out = append(out, detail{"This month", lastRead(money(r.SpendUSD), ago), warnC})
+	case r.SpendUSD > 0 && r.SpendLimitUnknown:
+		out = append(out, detail{"This month", money(r.SpendUSD) + ", limit not read", porcelain})
 	case r.SpendUSD > 0:
 		out = append(out, detail{"This month", money(r.SpendUSD) + ", no limit", porcelain})
 	}

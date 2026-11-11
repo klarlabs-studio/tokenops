@@ -43,8 +43,11 @@ type HeadroomReport struct {
 	// (usage-based Enterprise), where the limit is money the org set
 	// rather than a rate-limit window the vendor publishes.
 	SpendLimitUSD float64 `json:"spend_limit_usd,omitempty"`
-	SpendUSD      float64 `json:"spend_usd,omitempty"`
-	SpendPct      float64 `json:"spend_pct,omitempty"`
+	// SpendLimitUnknown is the vendor's limit not having been read: no
+	// SpendLimitUSD then is not an account without a limit.
+	SpendLimitUnknown bool    `json:"spend_limit_unknown,omitempty"`
+	SpendUSD          float64 `json:"spend_usd,omitempty"`
+	SpendPct          float64 `json:"spend_pct,omitempty"`
 	// SpendSource says where the spend figures came from: "vendor" when
 	// the vendor reported both spend and limit, "estimate" when spend was
 	// recomputed from token counts against the configured limit.
@@ -439,6 +442,7 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 		// The vendor's own figures: the amount it will bill against the
 		// limit it enforces. No rate factor — they are already the rate.
 		report.SpendUSD, report.SpendLimitUSD, report.SpendSource = v.UsedUSD, v.LimitUSD, "vendor"
+		report.SpendLimitUnknown = v.LimitUnknown && v.LimitUSD <= 0
 		report.SpendScope, report.SpendScopeLabel = v.Scope, AccountScopeLabel(v.Scope, v.AccountID)
 		if v.Scope == "account" {
 			report.SpendScopeReason = v.ScopeReason
@@ -463,6 +467,9 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 		}
 		if v.LimitUSD <= 0 {
 			report.Note = "no spend limit is set on the account, so there is no percentage"
+			if report.SpendLimitUnknown {
+				report.Note = "the account's spend limit could not be read, so there is no percentage"
+			}
 			if days := report.SpendTrailingDays; days > 0 {
 				report.Note = fmt.Sprintf("spend is the vendor's figure for the last %d days; ", days) + report.Note
 			}

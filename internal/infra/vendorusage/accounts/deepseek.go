@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -26,7 +27,7 @@ func (DeepSeek) Source() string                 { return "deepseek-account" }
 
 func (d DeepSeek) Read(ctx context.Context, key string) (usage.Reading, error) {
 	var resp struct {
-		IsAvailable  bool `json:"is_available"`
+		IsAvailable  *bool `json:"is_available"`
 		BalanceInfos []struct {
 			Currency     string `json:"currency"`
 			TotalBalance string `json:"total_balance"`
@@ -35,7 +36,11 @@ func (d DeepSeek) Read(ctx context.Context, key string) (usage.Reading, error) {
 	if err := getJSON(ctx, d.HTTP, base(d.BaseURL, "https://api.deepseek.com")+"/user/balance", key, &resp); err != nil {
 		return usage.Reading{}, err
 	}
-	r := usage.Reading{Scope: "account", LimitReached: !resp.IsAvailable}
+	if resp.IsAvailable == nil && resp.BalanceInfos == nil {
+		return usage.Reading{}, errors.New("accounts: deepseek balance: unrecognised answer")
+	}
+	// Only an account the answer calls unavailable is stopped.
+	r := usage.Reading{Scope: "account", LimitReached: resp.IsAvailable != nil && !*resp.IsAvailable}
 	for _, b := range resp.BalanceInfos {
 		if b.Currency != "USD" {
 			continue

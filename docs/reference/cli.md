@@ -1398,6 +1398,12 @@ until you bind another plan.
   until 1 Nov" (your local date) and the API carries `limit_reached` and
   `blocked_until`. A figure whose reader has stopped announces no block:
   it says what was spent when it was read (`spend_stale`).
+- **A limit that could not be read.** An account with no spend limit
+  shows its spend with "no limit". When the limit could not be read (the
+  call failed, or the answer held no number), the card and
+  `tokenops plan` say "limit not read" and the API carries
+  `spend_limit_unknown`. The spend is still the vendor's figure; there is
+  no percentage until the limit is read.
 - **Calls** go to `api.fireworks.ai` only. Turn them off with
   `tokenops vendor-usage enable fireworks --disable`.
 

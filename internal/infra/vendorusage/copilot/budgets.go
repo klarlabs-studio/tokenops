@@ -93,7 +93,7 @@ func (c *BudgetClient) OrgBudgets(ctx context.Context, org string) ([]Budget, er
 				Entity   string   `json:"budget_entity_name"`
 				User     string   `json:"user"`
 				SKU      string   `json:"budget_product_sku"`
-				Amount   float64  `json:"budget_amount"`
+				Amount   *float64 `json:"budget_amount"`
 				Consumed *float64 `json:"consumed_amount"`
 				Stops    bool     `json:"prevent_further_usage"`
 			} `json:"budgets"`
@@ -103,8 +103,13 @@ func (c *BudgetClient) OrgBudgets(ctx context.Context, org string) ([]Budget, er
 			return out, err
 		}
 		for _, b := range body.Budgets {
+			if b.Amount == nil {
+				// GitHub writes a budget of nothing as 0. One with no
+				// amount is not a cap of $0, and not a cap to report.
+				continue
+			}
 			out = append(out, Budget{ID: b.ID, Scope: b.Scope, Entity: b.Entity, User: b.User, SKU: b.SKU,
-				Amount: b.Amount, Consumed: b.Consumed, Stops: b.Stops})
+				Amount: *b.Amount, Consumed: b.Consumed, Stops: b.Stops})
 		}
 		if !body.HasNext || len(body.Budgets) == 0 {
 			return out, nil

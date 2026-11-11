@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
@@ -25,13 +26,17 @@ func (Moonshot) Source() string                 { return "moonshot-account" }
 func (m Moonshot) Read(ctx context.Context, key string) (usage.Reading, error) {
 	var resp struct {
 		Data struct {
-			AvailableBalance float64 `json:"available_balance"`
+			AvailableBalance number `json:"available_balance"`
 		} `json:"data"`
 		Status bool `json:"status"`
 	}
 	if err := getJSON(ctx, m.HTTP, base(m.BaseURL, "https://api.moonshot.ai")+"/v1/users/me/balance", key, &resp); err != nil {
 		return usage.Reading{}, err
 	}
+	// An answer without the balance is not an account at zero.
 	b := resp.Data.AvailableBalance
-	return usage.Reading{Scope: "account", BalanceUSD: b, HasBalance: true, LimitReached: b <= 0}, nil
+	if !b.ok {
+		return usage.Reading{}, errors.New("accounts: moonshot balance: no available_balance in the answer")
+	}
+	return usage.Reading{Scope: "account", BalanceUSD: b.v, HasBalance: true, LimitReached: b.v <= 0}, nil
 }

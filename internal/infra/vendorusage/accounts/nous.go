@@ -93,10 +93,10 @@ func jwtExpiry(key string) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	var claims struct {
-		Exp float64 `json:"exp"`
+		Exp number `json:"exp"`
 	}
-	if json.Unmarshal(payload, &claims) != nil || claims.Exp <= 0 {
+	if json.Unmarshal(payload, &claims) != nil || !claims.Exp.ok || claims.Exp.v <= 0 {
 		return time.Time{}, false
 	}
-	return time.Unix(int64(claims.Exp), 0), true
+	return time.Unix(int64(claims.Exp.v), 0), true
 }

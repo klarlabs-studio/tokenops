@@ -48,7 +48,7 @@ var bifrostDurations = map[string]time.Duration{
 func (g Bifrost) Read(ctx context.Context, root, key string) (usage.Reading, error) {
 	hc := g.HTTP
 	var resp struct {
-		IsActive bool `json:"is_active"`
+		IsActive *bool `json:"is_active"`
 		Budgets  []struct {
 			MaxLimit      number `json:"max_limit"`
 			CurrentUsage  number `json:"current_usage"`
@@ -60,10 +60,12 @@ func (g Bifrost) Read(ctx context.Context, root, key string) (usage.Reading, err
 	if err := getGateway(ctx, hc, root+"/api/governance/virtual-keys/quota", "x-bf-vk", key, &resp); err != nil {
 		return usage.Reading{}, err
 	}
-	r := usage.Reading{Scope: "key", LimitReached: !resp.IsActive}
+	// Only a key the answer calls inactive is stopped: an answer without
+	// the field says nothing about it.
+	r := usage.Reading{Scope: "key", LimitReached: resp.IsActive != nil && !*resp.IsActive}
 	for _, b := range resp.Budgets {
-		if !b.MaxLimit.ok || b.MaxLimit.v <= 0 {
-			continue
+		if !b.MaxLimit.ok || b.MaxLimit.v <= 0 || !b.CurrentUsage.ok {
+			continue // a budget without its usage is not a budget at 0%
 		}
 		d := bifrostDurations[b.ResetDuration]
 		w := usage.Window{Name: "budget (" + b.ResetDuration + ")", UsedPct: pct(b.CurrentUsage.v, b.MaxLimit.v), Duration: d}

@@ -54,7 +54,7 @@ func (d DevPass) Read(ctx context.Context, key string) (usage.Reading, error) {
 		r := usage.Reading{Scope: "key", UsedUSD: p.Usage.v, HasUsed: p.Usage.ok}
 		if p.Limit.ok && p.Limit.v > 0 {
 			r.LimitUSD = p.Limit.v
-			r.LimitReached = p.Usage.v >= p.Limit.v
+			r.LimitReached = p.Usage.ok && p.Usage.v >= p.Limit.v
 		}
 		return r, nil
 	case "lite", "pro", "max":
@@ -63,10 +63,10 @@ func (d DevPass) Read(ctx context.Context, key string) (usage.Reading, error) {
 	}
 	r := usage.Reading{Scope: "account", Subscription: true}
 	// A zero allowance has no percentage to show.
-	if p.CreditsLimit.ok && p.CreditsLimit.v > 0 {
+	if p.CreditsLimit.ok && p.CreditsLimit.v > 0 && p.CreditsUsed.ok {
 		r.Windows = append(r.Windows, usage.Window{Name: "month", UsedPct: clampPct(pct(p.CreditsUsed.v, p.CreditsLimit.v))})
 	}
-	if p.PremiumWeeklyLimit.ok && p.PremiumWeeklyLimit.v > 0 {
+	if p.PremiumWeeklyLimit.ok && p.PremiumWeeklyLimit.v > 0 && p.PremiumCreditsUsed.ok {
 		// The premium window opens with the first premium request; an
 		// inactive one has no reset.
 		r.Windows = append(r.Windows, usage.Window{Name: "premium week", UsedPct: clampPct(pct(p.PremiumCreditsUsed.v, p.PremiumWeeklyLimit.v)),

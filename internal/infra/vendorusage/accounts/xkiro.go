@@ -62,7 +62,7 @@ func (x XKiro) Read(ctx context.Context, key string) (usage.Reading, error) {
 	// plan null is pay-as-you-go, where the wallet is the only limit.
 	r := usage.Reading{Scope: "account", Subscription: resp.Plan != nil}
 	for _, w := range resp.Windows {
-		if !w.WindowSec.ok || !w.CapUSD.ok || w.CapUSD.v <= 0 {
+		if !w.WindowSec.ok || !w.CapUSD.ok || w.CapUSD.v <= 0 || !w.SpentUSD.ok {
 			continue
 		}
 		d := time.Duration(w.WindowSec.v) * time.Second

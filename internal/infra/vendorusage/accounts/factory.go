@@ -172,8 +172,11 @@ func (c factoryClient) read(ctx context.Context, bearer, cookie string) (usage.R
 		name string
 		pool *factoryPool
 	}{{"standard", sub.Usage.Standard}, {"premium", sub.Usage.Premium}} {
-		if p.pool != nil {
-			r.Windows = append(r.Windows, usage.Window{Name: p.name, UsedPct: p.pool.percent(), ResetsAt: sub.Usage.End.t})
+		if p.pool == nil {
+			continue
+		}
+		if used, ok := p.pool.percent(); ok {
+			r.Windows = append(r.Windows, usage.Window{Name: p.name, UsedPct: used, ResetsAt: sub.Usage.End.t})
 		}
 	}
 	if len(r.Windows) == 0 {
@@ -254,25 +257,28 @@ type factoryPool struct {
 
 // percent is the share of the pool used: Factory's ratio when it is one,
 // else the tokens against the allowance (an allowance above 1e12 is
-// unlimited, shown against 100M tokens as CodexBar does).
-func (p *factoryPool) percent() float64 {
+// unlimited, shown against 100M tokens as CodexBar does). A pool with
+// neither has no share: it is not a pool at 0%.
+func (p *factoryPool) percent() (float64, bool) {
 	used, allowance := max(0, p.UserTokens.v), p.Allowance.v
 	reliable := allowance > 0 && allowance <= 1e12
 	if p.Ratio.ok && !(p.Ratio.v == 0 && used > 0 && reliable) {
 		switch {
 		case p.Ratio.v >= -0.001 && p.Ratio.v <= 1.001:
-			return clampPct(p.Ratio.v * 100)
+			return clampPct(p.Ratio.v * 100), true
 		case !reliable && p.Ratio.v >= -0.1 && p.Ratio.v <= 100.1:
-			return clampPct(p.Ratio.v)
+			return clampPct(p.Ratio.v), true
 		}
 	}
 	switch {
+	case !p.UserTokens.ok || !p.Allowance.ok:
+		return 0, false
 	case allowance > 1e12:
-		return clampPct(used / 1e8 * 100)
+		return clampPct(used / 1e8 * 100), true
 	case allowance <= 0:
-		return 0
+		return 0, true
 	}
-	return clampPct(pct(used, allowance))
+	return clampPct(pct(used, allowance)), true
 }
 
 // jwtSubject is a JWT's sub claim, unverified: it only names the user in

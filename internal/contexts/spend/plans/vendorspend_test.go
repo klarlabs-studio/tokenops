@@ -144,6 +144,51 @@ func TestParseResetsInReadsClaudeResetTimes(t *testing.T) {
 	}
 }
 
+// A reader that could not read the account's limit says so. The spend
+// stands, with no share and no risk, and headroom does not say the
+// account has no limit.
+func TestVendorSpendWithALimitThatWasNotRead(t *testing.T) {
+	attrs := map[string]string{
+		"billing": "per_token", "scope": "account", "account_id": "acme", "extra_usage_used": "15.00",
+		"extra_usage_limit": "0.00", "extra_usage_currency": "USD", "extra_usage_limit_reached": "false",
+	}
+	read := func() (*VendorSpend, HeadroomReport) {
+		e := &eventschema.Envelope{
+			Type: eventschema.EventTypePrompt, Timestamp: vsNow.Add(-time.Minute), Source: "fireworks-usage",
+			Attributes: attrs, Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderFireworks},
+		}
+		v := LatestVendorSpend(context.Background(), staticReader{e}, eventschema.ProviderFireworks, vsNow)
+		if v == nil {
+			t.Fatal("no vendor spend")
+		}
+		return v, computeSpendHeadroom(Plan{Name: "payg"}, HeadroomInputs{VendorSpend: v, Now: vsNow})
+	}
+	v, report := read()
+	if v.LimitUnknown || report.Note != "no spend limit is set on the account, so there is no percentage" {
+		t.Errorf("a limit read as none: unknown %v, note %q", v.LimitUnknown, report.Note)
+	}
+	attrs["extra_usage_limit_unknown"] = "true"
+	v, report = read()
+	if !v.LimitUnknown || v.UsedUSD != 15 {
+		t.Fatalf("vendor spend = %+v", v)
+	}
+	if report.Note != "the account's spend limit could not be read, so there is no percentage" {
+		t.Errorf("note = %q", report.Note)
+	}
+	if report.SpendUSD != 15 || report.SpendPct != 0 || report.OverageRisk != RiskUnknown || report.LimitReached {
+		t.Errorf("report %+v", report)
+	}
+	if !report.SpendLimitUnknown {
+		t.Error("the report does not say the limit was not read")
+	}
+	// A limit that stands beside the mark is the limit: the spend has a
+	// share of it, and the report does not call it unread.
+	attrs["extra_usage_limit"] = "60.00"
+	if _, report = read(); report.SpendLimitUnknown || report.SpendPct != 25 || report.Note != "" {
+		t.Errorf("a limit beside the mark: unknown %v, %v%%, note %q", report.SpendLimitUnknown, report.SpendPct, report.Note)
+	}
+}
+
 // A vendor that reports spend over a trailing period (xAI's last 30 days)
 // keeps the period, and headroom says whose figure, for which days, it is.
 func TestVendorSpendOverATrailingPeriod(t *testing.T) {

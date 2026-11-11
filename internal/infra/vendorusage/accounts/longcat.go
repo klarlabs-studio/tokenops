@@ -72,9 +72,9 @@ func (l LongCat) Read(ctx context.Context, key string) (usage.Reading, error) {
 	// other paths.
 	if postJSON(ctx, l.HTTP, host+"/api/pay/quota/metering/token-packs/summary", header, map[string]any{}, &envelope) == nil &&
 		longCatUnwrap(envelope, host, &summary) == nil &&
-		summary.Lot != nil && strings.EqualFold(summary.Lot.Status, "ACTIVE") && summary.Lot.Total.v > 0 {
+		summary.Lot != nil && strings.EqualFold(summary.Lot.Status, "ACTIVE") &&
+		summary.Lot.Total.ok && summary.Lot.Total.v > 0 && summary.Lot.Consumed.ok {
 		total, used = summary.Lot.Total, summary.Lot.Consumed
-		used.ok = true
 	} else {
 		var legacy struct {
 			Usage *struct {
@@ -97,20 +97,19 @@ func (l LongCat) Read(ctx context.Context, key string) (usage.Reading, error) {
 		if !total.ok {
 			return usage.Reading{}, errors.New("accounts: longcat tokenUsage: unrecognised answer")
 		}
-		if !used.ok {
+		if !used.ok && available.ok {
 			used = number{v: total.v - available.v, ok: true}
-			if !available.ok {
-				used.v = 0
-			}
 		}
 	}
 	r := usage.Reading{Scope: "account"}
-	left := 0.0
-	if total.v > 0 {
+	// What is left of the lot is known when there is no lot or its use is
+	// known: a lot whose use the answer does not give is not an unused one.
+	left, leftKnown := 0.0, total.ok && total.v <= 0
+	if total.ok && used.ok && total.v > 0 {
 		u := max(0, used.v)
 		r.Subscription = true
 		r.Windows = []usage.Window{{Name: "tokens", UsedPct: clampPct(pct(u, total.v))}}
-		left = max(0, total.v-u)
+		left, leftKnown = max(0, total.v-u), true
 		r.Credits, r.CreditsUnit, r.HasCredits = left, "tokens", true
 	}
 	var fuel struct {
@@ -129,7 +128,7 @@ func (l LongCat) Read(ctx context.Context, key string) (usage.Reading, error) {
 		if !seen && fuel.Total.ok {
 			remaining = fuel.Total.v
 		}
-		if remaining > 0 {
+		if remaining > 0 && leftKnown {
 			r.Credits, r.CreditsUnit, r.HasCredits = left+remaining, "tokens", true
 		}
 	}

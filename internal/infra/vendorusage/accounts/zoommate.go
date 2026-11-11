@@ -88,7 +88,7 @@ func (z ZoomMate) Read(ctx context.Context, key string) (usage.Reading, error) {
 	}
 	s := resp.Data.Status
 	r := usage.Reading{Scope: "account"}
-	if s.Unlimited || s.Cap.v <= 0 {
+	if s.Unlimited || !s.Cap.ok || s.Cap.v <= 0 || !s.Used.ok {
 		return r, nil
 	}
 	var d time.Duration

@@ -58,9 +58,9 @@ func (d Doubao) Read(ctx context.Context, credential string) (usage.Reading, err
 	var coding struct {
 		Result struct {
 			QuotaUsage []struct {
-				Level          string  `json:"Level"`
-				Percent        number  `json:"Percent"`
-				ResetTimestamp float64 `json:"ResetTimestamp"`
+				Level          string `json:"Level"`
+				Percent        number `json:"Percent"`
+				ResetTimestamp stamp  `json:"ResetTimestamp"`
 			} `json:"QuotaUsage"`
 		} `json:"Result"`
 	}
@@ -73,16 +73,16 @@ func (d Doubao) Read(ctx context.Context, credential string) (usage.Reading, err
 		if !ok || !q.Percent.ok {
 			continue
 		}
-		r.Windows = append(r.Windows, usage.Window{Name: windowName(dur), UsedPct: clampPct(q.Percent.v), Duration: dur, ResetsAt: unixTime(q.ResetTimestamp)})
+		r.Windows = append(r.Windows, usage.Window{Name: windowName(dur), UsedPct: clampPct(q.Percent.v), Duration: dur, ResetsAt: q.ResetTimestamp.t})
 	}
 	if len(r.Windows) > 0 {
 		return r, nil
 	}
 	var agent struct {
 		Result map[string]*struct {
-			Quota     float64 `json:"Quota"`
-			Used      float64 `json:"Used"`
-			ResetTime float64 `json:"ResetTime"`
+			Quota     number `json:"Quota"`
+			Used      number `json:"Used"`
+			ResetTime stamp  `json:"ResetTime"`
 		} `json:"Result"`
 	}
 	if err := d.call(ctx, root, "GetAFPUsage", ak, sk, region, &agent); err != nil {
@@ -97,10 +97,10 @@ func (d Doubao) Read(ctx context.Context, credential string) (usage.Reading, err
 		d   time.Duration
 	}{{"AFPFiveHour", 5 * time.Hour}, {"AFPWeekly", 7 * 24 * time.Hour}, {"AFPMonthly", 30 * 24 * time.Hour}} {
 		q := agent.Result[w.key]
-		if q == nil || q.Quota <= 0 {
+		if q == nil || !q.Quota.ok || q.Quota.v <= 0 || !q.Used.ok {
 			continue
 		}
-		r.Windows = append(r.Windows, usage.Window{Name: windowName(w.d), UsedPct: clampPct(pct(q.Used, q.Quota)), Duration: w.d, ResetsAt: unixTime(q.ResetTime / 1000)})
+		r.Windows = append(r.Windows, usage.Window{Name: windowName(w.d), UsedPct: clampPct(pct(q.Used.v, q.Quota.v)), Duration: w.d, ResetsAt: q.ResetTime.t})
 	}
 	if len(r.Windows) == 0 {
 		return usage.Reading{Scope: "account"}, nil
@@ -155,14 +155,6 @@ func doubaoCredential(c string) (ak, sk, region string, ok bool) {
 		region = strings.TrimSpace(parts[2])
 	}
 	return ak, sk, region, ak != "" && sk != ""
-}
-
-// unixTime is a Unix time in seconds; zero or less is none.
-func unixTime(s float64) time.Time {
-	if s <= 0 {
-		return time.Time{}
-	}
-	return time.Unix(int64(s), 0).UTC()
 }
 
 // volcengineSign signs req with Volcengine's V4 scheme for the "ark"

@@ -99,13 +99,21 @@ func (m MiMo) Read(ctx context.Context, cookie string) (usage.Reading, error) {
 		} `json:"monthUsage"`
 	}
 	if raw, err := get("tokenPlan/usage"); err == nil && json.Unmarshal(raw, &plan) == nil && !detail.Expired &&
-		plan.MonthUsage != nil && len(plan.MonthUsage.Items) > 0 && plan.MonthUsage.Items[0].Limit.v > 0 {
+		plan.MonthUsage != nil && len(plan.MonthUsage.Items) > 0 {
+		// The share is the plan's own figure, or the tokens used against
+		// the limit. A plan that gives neither has no window.
 		item := plan.MonthUsage.Items[0]
-		w := usage.Window{Name: "month", UsedPct: clampPct(item.Percent.v * 100)}
-		if end := timeOf(detail.CurrentPeriodEnd); !end.IsZero() {
-			w.ResetsAt, w.Duration = end, end.Sub(end.AddDate(0, -1, 0)).Round(time.Hour)
+		share, known := item.Percent.v*100, item.Percent.ok
+		if !known && item.Used.ok {
+			share, known = pct(item.Used.v, item.Limit.v), true
 		}
-		r.Subscription, r.Windows = true, []usage.Window{w}
+		if item.Limit.ok && item.Limit.v > 0 && known {
+			w := usage.Window{Name: "month", UsedPct: clampPct(share)}
+			if end := timeOf(detail.CurrentPeriodEnd); !end.IsZero() {
+				w.ResetsAt, w.Duration = end, end.Sub(end.AddDate(0, -1, 0)).Round(time.Hour)
+			}
+			r.Subscription, r.Windows = true, []usage.Window{w}
+		}
 	}
 	return r, nil
 }

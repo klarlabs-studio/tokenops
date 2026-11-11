@@ -334,9 +334,12 @@ type VendorSpend struct {
 	// month; 0 is the month.
 	UsedPeriod time.Duration
 	// BalanceUSD is prepaid credit left, when HasBalance.
-	BalanceUSD   float64
-	HasBalance   bool
-	LimitUSD     float64
+	BalanceUSD float64
+	HasBalance bool
+	LimitUSD   float64
+	// LimitUnknown is the reader not having read the limit: LimitUSD is
+	// then 0 without saying the account has none.
+	LimitUnknown bool
 	LimitReached bool
 	Source       string
 	// Scope says whose spend UsedUSD is, when the reader says: "account"
@@ -410,6 +413,7 @@ func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventsc
 		BalanceUSD:   balance,
 		HasBalance:   hasBalance,
 		LimitUSD:     limit,
+		LimitUnknown: best.Attributes["extra_usage_limit_unknown"] == "true",
 		LimitReached: best.Attributes["extra_usage_limit_reached"] == "true",
 		Scope:        best.Attributes["scope"],
 		AccountID:    best.Attributes["account_id"],
