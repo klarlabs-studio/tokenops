@@ -9106,6 +9106,9 @@
                           "guardrail": {
                             "type": "string"
                           },
+                          "inferred": {
+                            "type": "boolean"
+                          },
                           "method": {
                             "type": "string"
                           },

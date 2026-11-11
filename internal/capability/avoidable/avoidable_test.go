@@ -122,9 +122,16 @@ func TestBuildPricesEachClassInBothCurrencies(t *testing.T) {
 	if got := class(r, waste.ClassAbandoned); got.Tokens != 3_000-200-rebuild.Tokens || got.Sessions != 1 {
 		t.Errorf("abandoned = %+v", got)
 	}
+	// The total is the classes that observed waste; abandonment is
+	// inferred from an absence, shown and not counted.
 	var sum int64
 	for _, c := range r.Classes {
-		sum += c.Tokens
+		if c.Inferred != (c.Class == waste.ClassAbandoned) {
+			t.Errorf("%s inferred = %v", c.Class, c.Inferred)
+		}
+		if !c.Inferred {
+			sum += c.Tokens
+		}
 		if c.Method == "" || c.Name == "" {
 			t.Errorf("%s has no method or name", c.Class)
 		}
@@ -305,15 +312,20 @@ func TestBilledIsOnlyWhatWasBilledPerUse(t *testing.T) {
 		}
 	}
 	r := Build(in)
-	if math.Abs(r.Avoidable.BilledUSD-6) > 1e-9 {
-		t.Errorf("billed = %v, want 6", r.Avoidable.BilledUSD)
-	}
-	var classes float64
+	// The $6 the classes bill between them; the part the abandonment
+	// inference holds is not in the avoidable total.
+	var classes, observed float64
 	for _, c := range r.Classes {
 		classes += c.BilledUSD
+		if !c.Inferred {
+			observed += c.BilledUSD
+		}
 	}
-	if math.Abs(classes-r.Avoidable.BilledUSD) > 1e-9 {
-		t.Errorf("classes bill %v, total %v", classes, r.Avoidable.BilledUSD)
+	if math.Abs(classes-6) > 1e-9 {
+		t.Errorf("classes bill %v, want 6", classes)
+	}
+	if math.Abs(observed-r.Avoidable.BilledUSD) > 1e-9 || r.Avoidable.BilledUSD >= 6 {
+		t.Errorf("avoidable billed %v, want the observed classes' %v", r.Avoidable.BilledUSD, observed)
 	}
 	if got := class(r, waste.ClassOverTiered); got.BilledUSD != 0 {
 		t.Errorf("plan session billed: %+v", got)
@@ -331,5 +343,42 @@ func TestBilledIsOnlyWhatWasBilledPerUse(t *testing.T) {
 	}
 	if r := Build(in); r.Avoidable.BilledUSD != 0 {
 		t.Errorf("plan-covered usage billed %v", r.Avoidable.BilledUSD)
+	}
+}
+
+// A session with no commit and no outcome may have been research, a
+// review or a question: its tokens are shown under their class and kept
+// out of what the report calls avoidable, its headline and the
+// guardrail it would make the next one.
+func TestAbandonmentIsShownNotCounted(t *testing.T) {
+	in := fixture()
+	in.Steps = []savings.Step{
+		step(learning.CapabilitySessionBudget, "inform", learning.StageShadow, false),
+		step(learning.CapabilityRouting, "models", learning.StageShadow, false),
+	}
+	r := Build(in)
+	lost := class(r, waste.ClassAbandoned)
+	if lost.Tokens <= 0 || !lost.Inferred {
+		t.Fatalf("abandoned = %+v, want its tokens shown, marked inferred", lost)
+	}
+	var observed int64
+	for _, c := range r.Classes {
+		if !c.Inferred {
+			observed += c.Tokens
+		}
+	}
+	if r.Avoidable.Tokens != observed {
+		t.Errorf("avoidable %d, want the observed classes' %d", r.Avoidable.Tokens, observed)
+	}
+	if strings.Contains(r.Headline, "abandoned") {
+		t.Errorf("headline names the inferred class: %q", r.Headline)
+	}
+	for _, g := range r.Guardrails {
+		if g.Capability == learning.CapabilitySessionBudget && (g.Tokens != 0 || len(g.Classes) != 0) {
+			t.Errorf("the session budget addresses %+v from an inference", g)
+		}
+	}
+	if r.Next != nil && r.Next.Capability == learning.CapabilitySessionBudget {
+		t.Errorf("next guardrail chosen on inferred waste: %+v", r.Next)
 	}
 }

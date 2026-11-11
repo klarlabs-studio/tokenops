@@ -109,12 +109,18 @@ func writeWasteReport(out io.Writer, r avoidable.Report) {
 	writeAmountRow(out, "avoidable", r.Avoidable, of)
 
 	fmt.Fprintf(out, "\n  %-32s %8s %9s %7s %6s  %s\n", "CLASS", "TOKENS", "API $", "WINDOW", "TURNS", "GUARDRAIL")
+	inferred := false
 	for _, c := range r.Classes {
 		guard := "none yet"
 		if c.Guardrail != "" {
 			guard = savings.CapabilityName(c.Guardrail)
 		}
-		fmt.Fprintf(out, "  %-32s %8s %9s %7s %6d  %s\n", c.Name, humanCount(c.Tokens), usd(c.APIEquivalentUSD),
+		name := c.Name
+		if c.Inferred {
+			name += " *"
+			inferred = inferred || c.Tokens > 0
+		}
+		fmt.Fprintf(out, "  %-32s %8s %9s %7s %6d  %s\n", name, humanCount(c.Tokens), usd(c.APIEquivalentUSD),
 			windowPct(c.WindowShare), c.Turns, guard)
 		for _, k := range c.Causes {
 			name := k.Name
@@ -125,6 +131,10 @@ func writeWasteReport(out io.Writer, r avoidable.Report) {
 				windowPct(k.WindowShare), k.Turns)
 			writeLikely(out, k)
 		}
+	}
+	if inferred {
+		fmt.Fprintln(out, "\n  * inferred from no commit and no outcome, which research, a review or a question also")
+		fmt.Fprintln(out, "    leave: shown, not counted as avoidable")
 	}
 
 	rz := r.Realized
