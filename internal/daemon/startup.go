@@ -3,9 +3,7 @@ package daemon
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -41,6 +39,9 @@ type startup struct {
 	// transcripts is the transcript cache the session analysis and the
 	// team upload share.
 	transcripts *sessions.TranscriptCache
+	// transcriptsSaved is when the cache's file last held what the cache
+	// held: the restore at start, or never.
+	transcriptsSaved time.Time
 	// restart ends the run with a cause; the binary watch uses it to stop
 	// the daemon when its binary has been replaced.
 	restart context.CancelCauseFunc
@@ -202,54 +203,10 @@ func (s *startup) startSupervision(ctx context.Context) error {
 	// far back as the longest of them reads: two caches held the same
 	// days twice, and the daemon's heap outgrew its memory limit.
 	s.transcripts = sessions.NewSharedTranscriptCache(transcriptKeep(s.cfg))
-	loadTranscripts(s.transcripts, transcriptsPath(), transcriptsKey(), s.logger)
+	if loadTranscripts(s.transcripts, transcriptsPath(), transcriptsKey(), s.logger) {
+		s.transcriptsSaved = time.Now()
+	}
 	return nil
-}
-
-// transcriptsPath is where the shared transcript cache is saved across
-// restarts.
-func transcriptsPath() string { return filepath.Join(findings.DefaultDir(), "transcripts.gob") }
-
-// transcriptsKey names this build for the saved transcript cache: another
-// build may read the transcripts differently, so it reads them again. A
-// development build, which names no commit, saves nothing.
-func transcriptsKey() string {
-	if version.Commit == "" || version.Commit == "unknown" {
-		return ""
-	}
-	return version.Version + "+" + version.Commit
-}
-
-// loadTranscripts fills the cache from the last run's save: without it,
-// the first scans after a start, which every upgrade and login does, read
-// every transcript of two weeks again, minutes of several cores.
-func loadTranscripts(c *sessions.TranscriptCache, path, key string, logger *slog.Logger) {
-	if key == "" {
-		return
-	}
-	start := time.Now()
-	err := c.Load(path, key)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-	case err != nil:
-		logger.Info("transcript cache not restored; the first scans read the transcripts", "reason", err.Error())
-	default:
-		logger.Info("transcript cache restored", "files", c.Len(), "took", time.Since(start).Round(time.Millisecond))
-	}
-}
-
-// saveTranscripts saves the cache for the next start, once nothing reads
-// through it any more.
-func saveTranscripts(c *sessions.TranscriptCache, path, key string, logger *slog.Logger) {
-	if c == nil || key == "" {
-		return
-	}
-	start := time.Now()
-	if err := c.Save(path, key); err != nil {
-		logger.Warn("transcript cache not saved; the next start reads the transcripts", "err", err)
-		return
-	}
-	logger.Info("transcript cache saved", "files", c.Len(), "took", time.Since(start).Round(time.Millisecond))
 }
 
 // transcriptKeep is how far back the shared transcript cache holds: the
@@ -481,6 +438,10 @@ func (s *startup) startBackgroundRefreshers(context.Context) error {
 
 	// The findings' session analysis is too slow to run per answer.
 	startSessionFindingsRuntime(s.transcripts, s.sup, s.logger)
+
+	// What those scans read is kept for a start that follows no clean
+	// stop.
+	startTranscriptSaveRuntime(s.transcripts, s.transcriptsSaved, s.sup, s.logger)
 
 	// So is spend anomaly detection, which reads four weeks of turns.
 	startAnomalyRuntime(s.cfg, s.components, s.sup, s.logger)

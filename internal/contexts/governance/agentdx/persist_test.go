@@ -5,7 +5,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -56,7 +58,53 @@ func TestSavedCacheResumesWithoutReading(t *testing.T) {
 	scanBoth(t, "grown after a load", second, cc, cx, cacheEpoch)
 }
 
-func TestSavedCacheFromAnotherBuildIsNotLoaded(t *testing.T) {
+// A save made while the daemon runs waits for a scan and holds the next
+// one off: a scan drops the records before its floor in place, in the
+// very records a save is writing. The race detector is what fails here.
+func TestSaveWhileScanning(t *testing.T) {
+	dir := t.TempDir()
+	cc := filepath.Join(dir, "claude")
+	writeFile(t, filepath.Join(cc, "p", "s.jsonl"), turns(cacheEpoch, 300, 0, claudeTurn))
+	var hours atomic.Int64
+	c := NewTranscriptCache(KeepFrom(func() time.Time { return cacheEpoch.Add(time.Duration(hours.Load()) * time.Hour) }))
+	scan := func() int {
+		recs, err := Extract(ExtractOptions{Root: cc, Since: cacheEpoch.Add(250 * time.Hour), IncludeScratch: true, Cache: c})
+		if err != nil {
+			t.Error(err)
+		}
+		return len(recs)
+	}
+	want := scan()
+	saved := filepath.Join(dir, "transcripts.gob")
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for h := range int64(200) {
+			// The floor moves on, so each scan drops an hour of records.
+			hours.Store(h)
+			if got := scan(); got != want {
+				t.Errorf("floor at hour %d: %d records, want %d", h, got, want)
+				return
+			}
+		}
+	}()
+	for saving := true; saving; {
+		select {
+		case <-done:
+			saving = false
+		default:
+		}
+		if err := c.Save(saved, "r1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	loaded := NewTranscriptCache()
+	if err := loaded.Load(saved, "r1"); err != nil || loaded.Len() != 1 {
+		t.Fatalf("the last save loads %d files, %v", loaded.Len(), err)
+	}
+}
+
+func TestSavedCacheFilledByOtherCodeIsNotLoaded(t *testing.T) {
 	dir := t.TempDir()
 	cc := filepath.Join(dir, "claude")
 	writeFile(t, filepath.Join(cc, "p", "s.jsonl"), turns(cacheEpoch, 2, 0, claudeTurn))
@@ -66,18 +114,18 @@ func TestSavedCacheFromAnotherBuildIsNotLoaded(t *testing.T) {
 		t.Fatal(err)
 	}
 	saved := filepath.Join(dir, "transcripts.gob")
-	if err := c.Save(saved, "v1+abc"); err != nil {
+	if err := c.Save(saved, "r1"); err != nil {
 		t.Fatal(err)
 	}
 	for name, load := range map[string]func() error{
-		"another build":         func() error { return NewTranscriptCacheWithFacts(facts).Load(saved, "v2+def") },
-		"a cache without facts": func() error { return NewTranscriptCache().Load(saved, "v1+abc") },
+		"other reading code":    func() error { return NewTranscriptCacheWithFacts(facts).Load(saved, "r2") },
+		"a cache without facts": func() error { return NewTranscriptCache().Load(saved, "r1") },
 	} {
 		if err := load(); !errors.Is(err, ErrSavedCacheStale) {
 			t.Errorf("%s: err = %v; want ErrSavedCacheStale", name, err)
 		}
 	}
-	if err := NewTranscriptCacheWithFacts(facts).Load(filepath.Join(dir, "none.gob"), "v1+abc"); !errors.Is(err, os.ErrNotExist) {
+	if err := NewTranscriptCacheWithFacts(facts).Load(filepath.Join(dir, "none.gob"), "r1"); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("missing save: err = %v", err)
 	}
 }
