@@ -436,7 +436,11 @@ func writeSpendText(w io.Writer, v spendView) error {
 		}
 	}
 
-	if len(v.Forecast) > 0 && !spending.AllZero(v.Forecast) {
+	// A history that cost nothing has no dollar forecast to show. A zero
+	// forecast from a history that did cost something is an answer, and
+	// is tabulated: nothing is expected on those days.
+	unbilled := len(v.Forecast) > 0 && spending.AllZero(v.Forecast) && v.ForecastNote != ""
+	if len(v.Forecast) > 0 && !unbilled {
 		fmt.Fprintf(w, "\nForecast (next %d points):\n", len(v.Forecast))
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(tw, "WHEN\tEXPECTED\tLOW\tHIGH")
@@ -453,7 +457,7 @@ func writeSpendText(w io.Writer, v spendView) error {
 		}
 	}
 
-	if len(v.Forecast) > 0 && spending.AllZero(v.Forecast) {
+	if unbilled {
 		fmt.Fprintln(w, "\nNo USD forecast: this window is plan-covered, so every historical point is $0 "+
 			"and a forecast of it would be seven rows of zero with confidence bands. The token forecast below is the real one.")
 	}

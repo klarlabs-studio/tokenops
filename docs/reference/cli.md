@@ -112,7 +112,7 @@ old it is. `tokenops glance --findings` lists every finding, and
 never prompt or file text.
 
 **Unusual spend.** Every hour the daemon forecasts today and yesterday from
-the four weeks before (Holt's method, as the spend forecast) and
+the four weeks before (Holt's method) and
 flags a day whose spend, or usage at API prices, is above the forecast's
 95% band by at least $5 and 25%. Nothing is flagged until there are 10
 days of history, and at most one day's finding shows per day, spend before
@@ -692,6 +692,18 @@ them and a line naming the rate used:
 Usage is priced in dollars because vendors publish rate cards in dollars,
 so a converted figure moves with the exchange rate even when usage does
 not. Plans are prorated by day across switches.
+
+#### Forecast
+
+`--forecast` projects the whole days ahead, starting tomorrow, from the
+whole days of the last 30. Today is still running, so it is neither
+history nor forecast. A day with no spend counts as a day at zero. Each
+day ahead is expected to bring what its day of the week brought (the mean
+of those days, once there are two weeks of history; the mean of all days
+before that), with a 95% band from how far the days fell from that. The
+forecast needs two whole days. When none of them cost anything, as on a
+flat-rate plan, there is no dollar forecast and the token forecast is the
+one to read.
 
 #### Who used it
 

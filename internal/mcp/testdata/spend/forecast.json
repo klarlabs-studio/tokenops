@@ -1,44 +1,44 @@
 {
   "horizon_days": 3,
-  "history_points": 5,
+  "history_points": 6,
   "forecast": [
     {
       "At": "<T>",
-      "Value": 0.3,
-      "Lower": 0.3,
-      "Upper": 0.3
+      "Value": 1,
+      "Lower": 0,
+      "Upper": 2.270225177
     },
     {
       "At": "<T>",
-      "Value": 0,
+      "Value": 1,
       "Lower": 0,
-      "Upper": 0
+      "Upper": 2.270225177
     },
     {
       "At": "<T>",
-      "Value": 0,
+      "Value": 1,
       "Lower": 0,
-      "Upper": 0
+      "Upper": 2.270225177
     }
   ],
   "forecast_tokens": [
     {
       "At": "<T>",
-      "Value": 50000,
-      "Lower": 50000,
-      "Upper": 50000
+      "Value": 166666.666666667,
+      "Lower": 0,
+      "Upper": 378370.862814657
     },
     {
       "At": "<T>",
-      "Value": 0,
+      "Value": 166666.666666667,
       "Lower": 0,
-      "Upper": 0
+      "Upper": 378370.862814657
     },
     {
       "At": "<T>",
-      "Value": 0,
+      "Value": 166666.666666667,
       "Lower": 0,
-      "Upper": 0
+      "Upper": 378370.862814657
     }
   ],
   "currency": "USD"
