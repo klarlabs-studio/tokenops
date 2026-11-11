@@ -332,3 +332,20 @@ func TestAWindowThatHasResetIsNoFinding(t *testing.T) {
 		t.Errorf("a plan with no running window was offered as roomy: %q", f.Action)
 	}
 }
+
+// A window slow on average but running out at the last hour's rate is
+// warned about, as the coach warns: one forecast. A window too early to
+// project is not.
+func TestRunOutAtTheRecentRate(t *testing.T) {
+	g := glance()
+	g.Headroom.Reports[0].Windows[0].Pace = &plans.WindowPace{Status: plans.PaceBehind, DeltaPct: -10,
+		RunsOutIn: 3 * time.Hour, Basis: plans.BasisRecent}
+	r := Compute(Inputs{Glance: g})
+	if len(r.Findings) != 1 || r.Findings[0].Title != "Codex's weekly window runs out in 3h 0m at the last hour's rate" {
+		t.Fatalf("findings %+v", r.Findings)
+	}
+	g.Headroom.Reports[0].Windows[0].Pace = &plans.WindowPace{Status: plans.PaceAhead, DeltaPct: 30, TooEarly: true}
+	if r := Compute(Inputs{Glance: g}); len(r.Findings) != 0 {
+		t.Errorf("too early, still warned: %+v", r.Findings)
+	}
+}
