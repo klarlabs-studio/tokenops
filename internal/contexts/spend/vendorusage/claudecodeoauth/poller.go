@@ -9,6 +9,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/heartbeat"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 )
@@ -38,7 +39,8 @@ type PollerOptions struct {
 }
 
 // Poller reads the plan's windows on a schedule and publishes each new
-// reading. The token lives in memory only.
+// reading, and an unchanged one again every heartbeat.Every, so its newest
+// reading is never old while it works. The token lives in memory only.
 type Poller struct {
 	bus  events.Bus
 	opts PollerOptions
@@ -47,7 +49,8 @@ type Poller struct {
 	creds        Credentials
 	blockedUntil time.Time
 	deniedAt     time.Time
-	lastKey      string
+	// kept is the last reading stored and when.
+	kept heartbeat.Keeper
 }
 
 // NewPoller returns a poller publishing to bus.
@@ -111,15 +114,18 @@ func (p *Poller) Scan(ctx context.Context) {
 	}
 	env := claudeusagemeter.NewReading(SourceTag, now.UTC(), "", usage)
 	key := readingKey(env.Attributes)
-	if key == p.lastKey {
+	if !p.kept.Due(key, now) {
 		return
 	}
-	p.lastKey = key
+	heartbeat.Stamp(env.Attributes, p.opts.Interval)
 	if p.bus != nil {
 		if err := p.bus.PublishWait(ctx, env); err != nil {
+			// Not remembered: the next poll offers it again.
 			p.opts.Logger.Warn("claude-code-oauth: reading not stored", "err", err)
+			return
 		}
 	}
+	p.kept.Stored(key, now)
 }
 
 // credentials returns the token in hand, re-reading the stores when there
@@ -168,7 +174,7 @@ func (p *Poller) fail(err error) {
 func (p *Poller) succeed() { p.opts.Health.Succeeded(p.opts.Now()) }
 
 // readingKey identifies a reading's content, so an unchanged one is not
-// stored again.
+// stored again before its heartbeat is due.
 func readingKey(attrs map[string]string) string {
 	return claudeusagemeter.AttributesKey(attrs)
 }

@@ -315,9 +315,19 @@ func metrics(r plans.HeadroomReport) []metric {
 		out = append(out, metric{title: windowTitle(windowLabel(r.WindowDuration)), pct: r.WindowPct, reset: humanReset(r.WindowResetsIn)})
 	}
 	if r.SpendLimitUSD > 0 {
-		out = append(out, metric{title: spendTitle(r), pct: r.SpendPct, blocked: blockedLine(r)})
+		m := metric{title: spendTitle(r), pct: r.SpendPct, blocked: blockedLine(r)}
+		if r.StaleSpend() {
+			m.stale = r.SpendReadAgo(time.Now())
+		}
+		out = append(out, m)
 	}
 	return out
+}
+
+// lastRead words a figure from a reader that has stopped: the figure, and
+// how long ago it was read.
+func lastRead(figure string, ago time.Duration) string {
+	return figure + ", read " + humanDuration(ago) + " ago"
 }
 
 // blockedLine words a spend limit the vendor enforces by blocking
@@ -367,16 +377,25 @@ func details(r plans.HeadroomReport, cost *spending.ProviderCost, late bool, use
 			out = append(out, detail{"Covered by plan", coveredTokens(*u.CoveragePct), porcelain})
 		}
 	}
+	// A figure whose reader has stopped is what was read then: it is
+	// shown as that, in the tone of a reading that is not current. With a
+	// limit, the bar above already says so.
+	ago := r.SpendReadAgo(time.Now())
 	switch {
 	case r.SpendLimitUSD > 0:
 		out = append(out, detail{"This month", money(r.SpendUSD) + " / " + money(r.SpendLimitUSD), porcelain})
+	case r.SpendUSD > 0 && r.StaleSpend():
+		out = append(out, detail{"This month", lastRead(money(r.SpendUSD), ago), warnC})
 	case r.SpendUSD > 0:
 		out = append(out, detail{"This month", money(r.SpendUSD) + ", no limit", porcelain})
 	}
 	if r.SpendScopeLabel != "" && r.SpendUSD > 0 {
 		out = append(out, detail{"Covers", r.SpendScopeLabel, porcelain})
 	}
-	if r.BalanceUSD != nil {
+	switch {
+	case r.BalanceUSD != nil && ago > 0:
+		out = append(out, detail{"Credit left", lastRead(money(*r.BalanceUSD), ago), warnC})
+	case r.BalanceUSD != nil:
 		out = append(out, detail{"Credit left", money(*r.BalanceUSD), okC})
 	}
 	if risk := strings.ToUpper(r.OverageRisk); risk == "MEDIUM" || risk == "HIGH" {

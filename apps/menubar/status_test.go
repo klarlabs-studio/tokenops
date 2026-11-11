@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image/png"
 	"math"
 	"net/http"
@@ -370,5 +371,26 @@ func TestCostsReadThe30DaysEveryTenMinutes(t *testing.T) {
 	m.costs(context.Background(), g)
 	if month != 2 {
 		t.Errorf("30 days older than %v were not read again", monthEvery)
+	}
+}
+
+// A spend figure whose reader has stopped is the last one read: the
+// tooltip says so and the gauge shows no level for it.
+func TestStatusMarksASpendFigureItsReaderStoppedReplacing(t *testing.T) {
+	at := func(stale bool, source string) status {
+		return statusOf([]byte(fmt.Sprintf(`{"plan_headroom":{"reports":[{"provider":"fireworks","display":"Pay as you go",
+		 "spend_usd":96,"spend_limit_usd":100,"spend_pct":96,"spend_source":%q,"spend_stale":%v}]}}`, source, stale)), "")
+	}
+	st := at(true, "vendor")
+	if !st.Stale || !strings.Contains(st.Tooltip, "Fireworks · $96.00 of $100.00 when last read: its reader has stopped") {
+		t.Errorf("status %+v", st)
+	}
+	if gaugeLevel(st) != gaugeUnknown {
+		t.Errorf("gauge level %d for a figure nobody read", gaugeLevel(st))
+	}
+	for name, st := range map[string]status{"current": at(false, "vendor"), "an old balance beside a current spend": at(true, "estimate")} {
+		if st.Stale || strings.Contains(st.Tooltip, "last read") || gaugeLevel(st) == gaugeUnknown {
+			t.Errorf("%s: status %+v", name, st)
+		}
 	}
 }

@@ -353,3 +353,77 @@ func TestPayAsYouGoShowsItsLimitAsThePlan(t *testing.T) {
 		t.Errorf("pay as you go shows a share on a plan it does not have:\n%s", out)
 	}
 }
+
+// A spend figure whose reader has stopped is shown as the old reading it
+// is, on the card and in the brief table, and never as what is spent now.
+func TestCardMarksASpendFigureItsReaderStoppedReplacing(t *testing.T) {
+	read := time.Now().Add(-26 * time.Hour)
+	stale := plans.HeadroomReport{Provider: "fireworks", Display: "Pay as you go",
+		SpendUSD: 96, SpendLimitUSD: 100, SpendPct: 96, SpendSource: "vendor",
+		SpendStale: true, SpendReadAt: &read}
+	var g headroom.Glance
+	g.Headroom.Reports = []plans.HeadroomReport{stale}
+	if out := Render(g, Options{Width: 130}); !strings.Contains(out, "Reading from 1d 2h ago") {
+		t.Errorf("card does not say the spend figure is old:\n%s", out)
+	}
+	if out := Render(g, Options{Width: 130, Brief: true}); !strings.Contains(out, "1d 2h old") {
+		t.Errorf("brief table does not say the spend figure is old:\n%s", out)
+	}
+
+	current := stale
+	current.SpendStale, current.SpendReadAt = false, nil
+	g.Headroom.Reports = []plans.HeadroomReport{current}
+	for _, brief := range []bool{false, true} {
+		if out := Render(g, Options{Width: 130, Brief: brief}); strings.Contains(out, "Reading from") || strings.Contains(out, " old") {
+			t.Errorf("a current figure reads as old (brief %v):\n%s", brief, out)
+		}
+	}
+}
+
+// Without a limit there is no bar to mark: the figure itself says when it
+// was read. A stale balance beside a current local estimate marks the
+// balance alone.
+func TestCardMarksOldFiguresThatHaveNoBar(t *testing.T) {
+	read := time.Now().Add(-5 * time.Hour)
+	balance := 12.5
+	for name, tc := range map[string]struct {
+		r       plans.HeadroomReport
+		want    []string
+		wantNot []string
+	}{
+		"vendor spend, no limit": {
+			r: plans.HeadroomReport{Provider: "fireworks", Display: "Pay as you go", SpendUSD: 40,
+				SpendSource: "vendor", SpendStale: true, SpendReadAt: &read},
+			want:    []string{"$40.00, read 5h 0m ago"},
+			wantNot: []string{"no limit"},
+		},
+		"prepaid balance": {
+			r: plans.HeadroomReport{Provider: "deepseek", Display: "Pay as you go", SpendUSD: 3,
+				SpendSource: "estimate", BalanceUSD: &balance, SpendStale: true, SpendReadAt: &read},
+			want:    []string{"$12.50, read 5h 0m ago", "$3.00, no limit"},
+			wantNot: []string{"$3.00, read"},
+		},
+		"both current": {
+			r: plans.HeadroomReport{Provider: "deepseek", Display: "Pay as you go", SpendUSD: 3,
+				SpendSource: "estimate", BalanceUSD: &balance},
+			want:    []string{"$12.50", "$3.00, no limit"},
+			wantNot: []string{"read "},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var g headroom.Glance
+			g.Headroom.Reports = []plans.HeadroomReport{tc.r}
+			out := Render(g, Options{Width: 130})
+			for _, want := range tc.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("card lacks %q:\n%s", want, out)
+				}
+			}
+			for _, not := range tc.wantNot {
+				if strings.Contains(out, not) {
+					t.Errorf("card has %q:\n%s", not, out)
+				}
+			}
+		})
+	}
+}

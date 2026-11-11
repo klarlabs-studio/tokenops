@@ -179,10 +179,11 @@ func TestMonthlyReadingPastItsResetIsNoReading(t *testing.T) {
 // An account reader's window lapses the same way.
 func TestAccountWindowPastItsResetIsLapsed(t *testing.T) {
 	now := time.Date(2026, 11, 9, 9, 0, 0, 0, time.UTC)
-	e := &eventschema.Envelope{Source: "vendor-account", Timestamp: now.Add(-30 * time.Hour), Payload: &eventschema.PromptEvent{Provider: "zai"},
+	// Read half an hour ago, twenty minutes before the 5h window reset.
+	e := &eventschema.Envelope{Source: "vendor-account", Timestamp: now.Add(-30 * time.Minute), Payload: &eventschema.PromptEvent{Provider: "zai"},
 		Attributes: map[string]string{
 			"window_0_name": "5h", "window_0_used_pct": "80", "window_0_duration_min": "300",
-			"window_0_reset_at": now.Add(-26 * time.Hour).Format(time.RFC3339),
+			"window_0_reset_at": now.Add(-10 * time.Minute).Format(time.RFC3339),
 			"window_1_name":     "week", "window_1_used_pct": "20", "window_1_duration_min": "10080",
 			"window_1_reset_at": now.Add(72 * time.Hour).Format(time.RFC3339),
 		}}

@@ -3980,6 +3980,10 @@
                               "spend_pct": {
                                 "type": "number"
                               },
+                              "spend_read_at": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
                               "spend_scope": {
                                 "type": "string"
                               },
@@ -3991,6 +3995,9 @@
                               },
                               "spend_source": {
                                 "type": "string"
+                              },
+                              "spend_stale": {
+                                "type": "boolean"
                               },
                               "spend_trailing_days": {
                                 "type": "integer"
@@ -5176,6 +5183,10 @@
                           "spend_pct": {
                             "type": "number"
                           },
+                          "spend_read_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
                           "spend_scope": {
                             "type": "string"
                           },
@@ -5187,6 +5198,9 @@
                           },
                           "spend_source": {
                             "type": "string"
+                          },
+                          "spend_stale": {
+                            "type": "boolean"
                           },
                           "spend_trailing_days": {
                             "type": "integer"

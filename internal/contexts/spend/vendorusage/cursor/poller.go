@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/heartbeat"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -37,11 +39,15 @@ type PollerOptions struct {
 	// the daemon passes the HTTP client from
 	// internal/infra/vendorusage/cursor.
 	NewClient func(cookie, userID string) UsageSource
+	// Now is the clock a reading is stamped with; nil is time.Now.
+	Now func() time.Time
 }
 
-// Poller fetches one usage snapshot per tick and emits one envelope for
-// the weekly pool or the billing cycle, or, from the legacy endpoint, one
-// per model row so per-model aggregation in the store stays clean.
+// Poller fetches one usage snapshot per tick and stores one reading of
+// it: the weekly pool, the billing cycle, or, from the legacy endpoint,
+// the request allowance. A reading that differs from the last one stored
+// is stored, and an unchanged one again every heartbeat.Every, so the
+// newest reading is never old while the poller works.
 type Poller struct {
 	bus  events.Bus
 	opts PollerOptions
@@ -51,7 +57,8 @@ type Poller struct {
 	publishes   int64
 	lastErr     error
 	lastErrTime time.Time
-	lastSeenKey string // dedup key per response, prevents same-snapshot double-emit
+	// kept is the last reading stored and when.
+	kept heartbeat.Keeper
 }
 
 func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
@@ -60,6 +67,9 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 	}
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
+	}
+	if opts.Now == nil {
+		opts.Now = time.Now
 	}
 	return &Poller{bus: bus, opts: opts}
 }
@@ -131,54 +141,55 @@ func (p *Poller) scan(ctx context.Context) {
 		return
 	}
 	p.recordSuccess()
-	// Build a dedup key from the response contents + start-of-month
-	// (Cursor doesn't expose a freshness timestamp). Same snapshot →
-	// same key → skip emit.
-	key := snapshotKey(resp)
-	p.mu.Lock()
-	if key != "" && key == p.lastSeenKey {
-		p.mu.Unlock()
-		return
-	}
-	p.lastSeenKey = key
-	p.mu.Unlock()
-	ts := time.Now().UTC()
-	var envs []*eventschema.Envelope
-	switch {
-	case resp.Pool != nil:
-		envs = append(envs, poolEnvelope(ts, p.opts.UserID, resp))
-	case resp.Summary != nil:
-		envs = append(envs, summaryEnvelope(ts, p.opts.UserID, resp.Summary))
-	default:
-		for model, m := range resp.Models {
-			envs = append(envs, newEnvelope(ts, p.opts.UserID, resp.StartOfMonth, model, m))
-		}
-	}
 	if p.bus == nil {
 		return
 	}
-	for _, env := range envs {
-		p.publishWait(ctx, env)
+	// Cursor names no time for its figures, so the reading's content says
+	// whether it changed.
+	now := p.opts.Now().UTC()
+	key := snapshotKey(resp)
+	if !p.kept.Due(key, now) {
+		return
+	}
+	var env *eventschema.Envelope
+	switch {
+	case resp.Pool != nil:
+		env = poolEnvelope(now, p.opts.UserID, resp)
+	case resp.Summary != nil:
+		env = summaryEnvelope(now, p.opts.UserID, resp.Summary)
+	default:
+		env = requestsEnvelope(now, p.opts.UserID, resp)
+	}
+	if env == nil {
+		return
+	}
+	heartbeat.Stamp(env.Attributes, p.opts.Interval)
+	// Remembered once the store has taken it: remembered before, a reading
+	// the store refused was not stored until the figures changed.
+	if p.publishWait(ctx, env) {
+		p.kept.Stored(key, now)
 	}
 }
 
 func (p *Poller) recordErr(err error) {
-	p.opts.Health.Failed(err, time.Now())
+	now := p.opts.Now()
+	p.opts.Health.Failed(err, now)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lastErr = err
-	p.lastErrTime = time.Now()
+	p.lastErrTime = now
 }
 
 func (p *Poller) recordSuccess() {
-	p.opts.Health.Succeeded(time.Now())
+	p.opts.Health.Succeeded(p.opts.Now())
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lastErr = nil
 }
 
 // snapshotKey builds a stable string that changes only when the
-// observed numbers do — used for poll-level dedup.
+// observed numbers do: what says whether a reading differs from the last
+// one stored.
 func snapshotKey(resp *UsageResponse) string {
 	h := sha256.New()
 	_, _ = fmt.Fprintf(h, "som=%s|", resp.StartOfMonth)
@@ -189,67 +200,67 @@ func snapshotKey(resp *UsageResponse) string {
 		r, _ := s.Read()
 		_, _ = fmt.Fprintf(h, "summary=%s|%.4f/%.0f/%.0f/%t|", s.BillingCycleEnd, r.UsedPct, r.UsedCents, r.LimitCents, r.IsUnlimited)
 	}
-	// Map iteration order isn't deterministic; we don't need order
-	// stability here because the hash collapses any permutation of
-	// the same content to the same digest is not guaranteed... so
-	// sort keys.
-	keys := make([]string, 0, len(resp.Models))
-	for k := range resp.Models {
-		keys = append(keys, k)
-	}
-	// Sort in a tiny inline pass to avoid pulling in sort.
-	for i := 1; i < len(keys); i++ {
-		for j := i; j > 0 && keys[j-1] > keys[j]; j-- {
-			keys[j-1], keys[j] = keys[j], keys[j-1]
-		}
-	}
-	for _, k := range keys {
+	for _, k := range modelNames(resp) {
 		m := resp.Models[k]
 		_, _ = fmt.Fprintf(h, "%s=%d/%d|", k, m.NumRequests, m.MaxRequestUsage)
 	}
 	return hex.EncodeToString(h.Sum(nil)[:8])
 }
 
-// newEnvelope wraps one (model, snapshot) pair as a PromptEvent.
-// NumRequests is rolled into TotalTokens as a coarse proxy — Cursor
-// bills by request count not tokens; the future Cursor-aware
-// session_budget should read the exact counts from Attributes.
-func newEnvelope(ts time.Time, userID, startOfMonth, model string, m ModelUsage) *eventschema.Envelope {
-	h := sha256.Sum256([]byte("cursor-web|" + userID + "|" + startOfMonth + "|" + model + "|" + fmt.Sprintf("%d", m.NumRequests)))
-	attrs := map[string]string{
-		// Monthly per-model usage snapshot, not a user message —
-		// plan window math must not count it.
-		"granularity":       "monthly_snapshot",
-		"user_id":           userID,
-		"start_of_month":    startOfMonth,
-		"num_requests":      fmt.Sprintf("%d", m.NumRequests),
-		"max_request_usage": fmt.Sprintf("%d", m.MaxRequestUsage),
+// modelNames is the legacy answer's rows by name, in order: a map has
+// none of its own.
+func modelNames(resp *UsageResponse) []string {
+	names := make([]string, 0, len(resp.Models))
+	for name := range resp.Models {
+		names = append(names, name)
 	}
-	// A row without an allowance has no share: it carried -1, which the
-	// monthly reading took for the plan's.
-	if m.MaxRequestUsage > 0 {
-		attrs["used_pct"] = fmt.Sprintf("%.2f", 100.0*float64(m.NumRequests)/float64(m.MaxRequestUsage))
-	}
-	return &eventschema.Envelope{
-		ID:            "cur-" + hex.EncodeToString(h[:8]),
-		SchemaVersion: eventschema.SchemaVersion,
-		Type:          eventschema.EventTypePrompt,
-		Timestamp:     ts,
-		Source:        SourceTag,
-		Attributes:    attrs,
-		Payload: &eventschema.PromptEvent{
-			Provider:     eventschema.ProviderCursor,
-			RequestModel: model,
-			Status:       200,
-		},
-	}
+	slices.Sort(names)
+	return names
 }
 
-// Request models of the snapshots that are not a model's row.
-const (
-	planModel = "cursor-plan"
-	poolModel = "cursor-weekly-pool"
-)
+// requestsEnvelope is the legacy answer's reading: the request allowance
+// of the plan, which is the row with an allowance, and the busiest when
+// several have one. It is nil when no row has an allowance: such an answer
+// says nothing about the plan.
+//
+// Each row used to be stored as an event of its own carrying the row's
+// name as its model, so every changed count was counted as a request to
+// that model (#549), and the monthly reading took whichever row the store
+// returned first.
+func requestsEnvelope(ts time.Time, userID string, resp *UsageResponse) *eventschema.Envelope {
+	var (
+		busiest string
+		share   float64
+	)
+	for _, name := range modelNames(resp) {
+		m := resp.Models[name]
+		if m.MaxRequestUsage <= 0 {
+			continue
+		}
+		if s := 100 * float64(m.NumRequests) / float64(m.MaxRequestUsage); busiest == "" || s > share {
+			busiest, share = name, s
+		}
+	}
+	if busiest == "" {
+		return nil
+	}
+	m := resp.Models[busiest]
+	attrs := map[string]string{
+		// A monthly usage snapshot, not a user message: plan window math
+		// must not count it.
+		"granularity":       "monthly_snapshot",
+		"user_id":           userID,
+		"usage_source":      "usage",
+		"allowance_of":      busiest,
+		"num_requests":      strconv.Itoa(m.NumRequests),
+		"max_request_usage": strconv.Itoa(m.MaxRequestUsage),
+		"used_pct":          fmt.Sprintf("%.2f", share),
+	}
+	if resp.StartOfMonth != "" {
+		attrs["start_of_month"] = resp.StartOfMonth
+	}
+	return snapshotEnvelope(ts, userID, "requests", attrs)
+}
 
 // summaryEnvelope is the billing cycle's reading from usage-summary: the
 // share used (used_pct, which the monthly headroom reads, with the cycle's
@@ -277,7 +288,7 @@ func summaryEnvelope(ts time.Time, userID string, s *Summary) *eventschema.Envel
 	if r.IsUnlimited {
 		attrs["unlimited"] = "true"
 	}
-	return snapshotEnvelope(ts, userID, planModel, s.BillingCycleEnd+"|"+attrs["used_pct"]+"|"+attrs["used_cents"], attrs)
+	return snapshotEnvelope(ts, userID, "plan", attrs)
 }
 
 // poolEnvelope is the weekly pool, written as an account reader writes a
@@ -302,11 +313,19 @@ func poolEnvelope(ts time.Time, userID string, resp *UsageResponse) *eventschema
 	if resp.Summary != nil {
 		attrs["membership_type"] = resp.Summary.MembershipType
 	}
-	return snapshotEnvelope(ts, userID, poolModel, attrs["window_0_reset_at"]+"|"+attrs["window_0_used_pct"], attrs)
+	return snapshotEnvelope(ts, userID, "pool", attrs)
 }
 
-func snapshotEnvelope(ts time.Time, userID, model, key string, attrs map[string]string) *eventschema.Envelope {
-	h := sha256.Sum256([]byte("cursor-web|" + userID + "|" + model + "|" + key))
+// snapshotEnvelope is a reading of one kind taken at ts: no model and no
+// tokens, so usage queries never count it as a request (#549).
+//
+// Its ID is made from the time it was taken. Made from the figures, as it
+// was, a reading stored again was the same event to the store, which keeps
+// the first of each ID: the figures of an idle account kept the time they
+// were first seen, and a reading that returned to an earlier value was
+// never stored at all.
+func snapshotEnvelope(ts time.Time, userID, kind string, attrs map[string]string) *eventschema.Envelope {
+	h := sha256.Sum256([]byte("cursor-web|" + userID + "|" + kind + "|" + strconv.FormatInt(ts.UnixNano(), 10)))
 	return &eventschema.Envelope{
 		ID:            "cur-" + hex.EncodeToString(h[:8]),
 		SchemaVersion: eventschema.SchemaVersion,
@@ -314,28 +333,20 @@ func snapshotEnvelope(ts time.Time, userID, model, key string, attrs map[string]
 		Timestamp:     ts,
 		Source:        SourceTag,
 		Attributes:    attrs,
-		Payload: &eventschema.PromptEvent{
-			Provider:     eventschema.ProviderCursor,
-			RequestModel: model,
-			Status:       200,
-		},
+		Payload:       &eventschema.PromptEvent{Provider: eventschema.ProviderCursor, Status: 200},
 	}
 }
 
-// publishWait hands env to the bus and waits for room rather than letting
-// it be dropped. Ingestion marks each row seen before publishing, so a
-// dropped envelope is never revisited: the loss is permanent, silent, and
-// reproduces identically on every restart. Waiting costs a backfill some
-// wall-clock and costs the operator nothing.
-func (p *Poller) publishWait(ctx context.Context, env *eventschema.Envelope) {
-	if env == nil {
-		return
-	}
+// publishWait hands env to the bus, waiting for room rather than letting
+// it be dropped, and reports whether the bus took it. A reading it did not
+// take is not remembered as stored, so the next poll offers it again.
+func (p *Poller) publishWait(ctx context.Context, env *eventschema.Envelope) bool {
 	if err := p.bus.PublishWait(ctx, env); err != nil {
 		p.opts.Logger.Warn("usage event not stored", "err", err)
-		return
+		return false
 	}
 	p.mu.Lock()
 	p.publishes++
 	p.mu.Unlock()
+	return true
 }

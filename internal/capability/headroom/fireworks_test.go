@@ -9,6 +9,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/fireworks"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/heartbeat"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -174,5 +175,54 @@ func TestPrepaidBalanceShows(t *testing.T) {
 		if tc.risk != "" && r.OverageRisk != tc.risk {
 			t.Errorf("%s: risk %s", name, r.OverageRisk)
 		}
+	}
+}
+
+// A vendor figure whose reader has stopped keeps its note on a plan found
+// from the reading: that the figure is old says more than how to bind
+// another plan, through the real store.
+func TestInferredPayAsYouGoKeepsTheNoteOfAnOldFigure(t *testing.T) {
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "e.db"), sqlite.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	now := time.Date(2026, 11, 10, 15, 0, 0, 0, time.UTC)
+	if err := store.AppendBatch(ctx, []*eventschema.Envelope{
+		{
+			ID: "turn", SchemaVersion: eventschema.SchemaVersion, Type: eventschema.EventTypePrompt,
+			Timestamp: now.Add(-time.Hour), Source: "test", Attributes: map[string]string{"granularity": "assistant_turn"},
+			Payload: &eventschema.PromptEvent{Provider: "deepseek", CostUSD: 2, CostSource: eventschema.CostSourceMetered},
+		},
+		{
+			// A balance read five hours ago by a reader that said it would
+			// be back within the hour.
+			ID: "balance", SchemaVersion: eventschema.SchemaVersion, Type: eventschema.EventTypePrompt,
+			Timestamp: now.Add(-5 * time.Hour), Source: "deepseek", Attributes: map[string]string{
+				"extra_usage_limit": "0", "extra_usage_currency": "USD", "billing": "per_token", "balance_usd": "7.50",
+				heartbeat.Attr: "55",
+			},
+			Payload: &eventschema.PromptEvent{Provider: "deepseek"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := headroom.Compute(ctx, headroom.Deps{Config: cfgWith(nil), Reader: storeReader{store}}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Reports) != 1 {
+		t.Fatalf("reports %+v", got.Reports)
+	}
+	r := got.Reports[0]
+	if !r.SpendStale || r.SpendReadAt == nil || !r.SpendReadAt.Equal(now.Add(-5*time.Hour)) || r.BalanceUSD == nil || *r.BalanceUSD != 7.5 {
+		t.Errorf("the balance is not shown as an old one: %+v", r)
+	}
+	if r.SpendUSD != 2 || r.SpendSource != "estimate" || r.StaleSpend() {
+		t.Errorf("the spend beside it is the local one, which is current: %+v", r)
+	}
+	if want := "the vendor's prepaid balance is 5h old: its reader has stopped, so what is left now is unknown"; r.Note != want {
+		t.Errorf("note %q, want %q", r.Note, want)
 	}
 }

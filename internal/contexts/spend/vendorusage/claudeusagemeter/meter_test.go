@@ -3,6 +3,7 @@ package claudeusagemeter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -224,6 +225,8 @@ func TestUsageRefusesAShapeItCannotRead(t *testing.T) {
 type captureBus struct {
 	mu        sync.Mutex
 	envelopes []*eventschema.Envelope
+	// refuse is how many PublishWait calls to refuse before taking one.
+	refuse int
 }
 
 func (b *captureBus) Publish(env *eventschema.Envelope) {
@@ -424,6 +427,13 @@ func TestNewEnvelopeWritesOnlyReportedBlocks(t *testing.T) {
 }
 
 func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	b.mu.Lock()
+	if b.refuse > 0 {
+		b.refuse--
+		b.mu.Unlock()
+		return errors.New("the store is busy")
+	}
+	b.mu.Unlock()
 	b.Publish(env)
 	return nil
 }

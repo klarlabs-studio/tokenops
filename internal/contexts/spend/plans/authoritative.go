@@ -15,7 +15,9 @@ import (
 // already store their own reported "% of limit used" (+ reset time) in
 // event attributes; this is where the prediction finally reads them
 // instead of extrapolating from a message count. Returns nil when no
-// snapshot is available, so callers fall back to the heuristic.
+// snapshot is available, when the window it measured has reset, and when
+// its reader has stopped (see ReadingStale), so callers fall back to the
+// heuristic.
 func LatestAuthoritativeWindow(ctx context.Context, reader EventReader, provider eventschema.Provider, p Plan, now time.Time) *AuthoritativeWindow {
 	if provider == eventschema.ProviderOpenAI {
 		return latestCodexWindow(ctx, reader, p, now)
@@ -46,7 +48,7 @@ func LatestAuthoritativeWindow(ctx context.Context, reader EventReader, provider
 			best = e
 		}
 	}
-	if best == nil {
+	if best == nil || ReadingStale(best, now) {
 		return nil
 	}
 	pct, err := strconv.ParseFloat(best.Attributes[usedKey], 64)
@@ -101,7 +103,7 @@ func latestCodexWindow(ctx context.Context, reader EventReader, p Plan, now time
 			best = e
 		}
 	}
-	if best == nil {
+	if best == nil || ReadingStale(best, now) {
 		return nil
 	}
 
@@ -217,7 +219,7 @@ func latestCursorMonthly(ctx context.Context, reader EventReader, now time.Time)
 			best = e
 		}
 	}
-	if best == nil {
+	if best == nil || ReadingStale(best, now) {
 		return nil
 	}
 	pct, err := strconv.ParseFloat(best.Attributes["used_pct"], 64)
@@ -239,17 +241,21 @@ func latestCursorMonthly(ctx context.Context, reader EventReader, now time.Time)
 // 0, as every bucket of an organisation seat reports) says 100% remaining
 // of nothing. Of the capped buckets, the busiest is the one that stops
 // work. A poll with no capped bucket has no monthly share (see
-// LatestUnmeteredSeat).
+// LatestUnmeteredSeat), and neither has one whose reader has stopped.
 func latestCopilotMonthly(ctx context.Context, reader EventReader, now time.Time) *AuthoritativeWindow {
 	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-35*24*time.Hour))
 	if err != nil {
 		return nil
 	}
 	var newest time.Time
+	var newestPoll *eventschema.Envelope
 	for _, e := range events {
 		if e != nil && e.Attributes["percent_remaining"] != "" && e.Timestamp.After(newest) {
-			newest = e.Timestamp
+			newest, newestPoll = e.Timestamp, e
 		}
+	}
+	if ReadingStale(newestPoll, now) {
+		return nil
 	}
 	var best *AuthoritativeWindow
 	for _, e := range events {
@@ -347,6 +353,9 @@ type VendorSpend struct {
 	// the vendor says; zero otherwise.
 	BlockedUntil time.Time
 	At           time.Time
+	// Stale is a figure whose reader has stopped replacing it (see
+	// ReadingStale): what was spent at At, not what is spent now.
+	Stale bool
 }
 
 // LatestVendorSpend returns the newest vendor-reported spend for provider
@@ -354,7 +363,7 @@ type VendorSpend struct {
 // reports it for Anthropic, the Fireworks reader for Fireworks. A reading
 // from an earlier month describes a limit that has since reset, so it is
 // not used; neither is one in a currency other than USD, which headroom
-// reports in.
+// reports in. A reading whose reader has stopped is returned marked Stale.
 func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) *VendorSpend {
 	best := latestSpendReading(ctx, reader, now, func(e *eventschema.Envelope) bool {
 		return readingProvider(e) == provider
@@ -406,6 +415,7 @@ func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventsc
 		AccountID:    best.Attributes["account_id"],
 		Source:       source,
 		At:           best.Timestamp,
+		Stale:        ReadingStale(best, now),
 	}
 }
 

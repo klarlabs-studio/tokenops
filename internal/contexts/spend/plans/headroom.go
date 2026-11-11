@@ -69,6 +69,13 @@ type HeadroomReport struct {
 	// limit; BlockedUntil is when they may resume, when it says.
 	LimitReached bool       `json:"limit_reached,omitempty"`
 	BlockedUntil *time.Time `json:"blocked_until,omitempty"`
+	// SpendStale is set when the vendor's figures (the spend when
+	// SpendSource is "vendor", the prepaid balance otherwise) are from a
+	// reader that has stopped: they are shown as last read, the Note says
+	// how old they are, and neither the risk nor LimitReached is decided
+	// from them. SpendReadAt is when they were read.
+	SpendStale  bool       `json:"spend_stale,omitempty"`
+	SpendReadAt *time.Time `json:"spend_read_at,omitempty"`
 
 	// SignalQuality types the trust the operator can place in this
 	// report. When the report is built from MCP-ping activity only,
@@ -436,13 +443,24 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 		if v.Scope == "account" {
 			report.SpendScopeReason = v.ScopeReason
 		}
+		report.SpendTrailingDays = int(v.UsedPeriod / (24 * time.Hour))
+		if v.Stale {
+			// What was spent when the reader stopped: more may have been
+			// since, and a limit reached then may have been raised.
+			at := v.At
+			report.SpendStale, report.SpendReadAt = true, &at
+			report.Note = staleSpendNote("spend figure", "spent", v.At, in.Now)
+			if v.LimitUSD > 0 {
+				report.SpendPct = math.Round(v.UsedUSD/v.LimitUSD*10000) / 100
+			}
+			return report
+		}
 		reached := v.LimitReached && (v.BlockedUntil.IsZero() || v.BlockedUntil.After(in.Now))
 		report.LimitReached = reached
 		if reached && !v.BlockedUntil.IsZero() {
 			until := v.BlockedUntil
 			report.BlockedUntil = &until
 		}
-		report.SpendTrailingDays = int(v.UsedPeriod / (24 * time.Hour))
 		if v.LimitUSD <= 0 {
 			report.Note = "no spend limit is set on the account, so there is no percentage"
 			if days := report.SpendTrailingDays; days > 0 {
@@ -466,6 +484,17 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 	if v := in.VendorSpend; v != nil && v.HasBalance {
 		// A prepaid account stops at an empty balance, whatever was set.
 		switch {
+		case v.Stale:
+			// The balance when the reader stopped: it may have been
+			// spent, or topped up, since.
+			at := v.At
+			report.SpendStale, report.SpendReadAt = true, &at
+			report.Note = staleSpendNote("prepaid balance", "left", v.At, in.Now)
+			if in.SpendLimitUSD > 0 {
+				report.SpendPct = math.Round(spend/in.SpendLimitUSD*10000) / 100
+				report.OverageRisk = classifyWindowRisk(report.SpendPct)
+			}
+			return report
 		case v.LimitReached || v.BalanceUSD <= 0:
 			report.OverageRisk = RiskHigh
 			report.Note = "the vendor reports the prepaid balance as used up"
@@ -484,6 +513,23 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 	report.SpendPct = math.Round(spend/in.SpendLimitUSD*10000) / 100
 	report.OverageRisk = classifyWindowRisk(report.SpendPct)
 	return report
+}
+
+// staleSpendNote says that a vendor figure is from a reader that has
+// stopped, and how old it is.
+func staleSpendNote(figure, what string, at, now time.Time) string {
+	return fmt.Sprintf("the vendor's %s is %s old: its reader has stopped, so what is %s now is unknown", figure, readingAge(now.Sub(at)), what)
+}
+
+// readingAge words how old a reading is: "40m", "20h", "3d".
+func readingAge(d time.Duration) string {
+	switch {
+	case d >= 48*time.Hour:
+		return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
+	case d >= time.Hour:
+		return fmt.Sprintf("%dh", int(d/time.Hour))
+	}
+	return fmt.Sprintf("%dm", max(1, int(d/time.Minute)))
 }
 
 // estimatedResetIn is how long until a rolling window resets when the vendor
@@ -513,4 +559,18 @@ func setEstimatedReset(r *HeadroomReport, started time.Time, window time.Duratio
 	r.WindowResetsAt = now.Add(d).UTC()
 	r.WindowResetsIn = d.Round(time.Minute).String()
 	r.WindowResetEstimated = true
+}
+
+// StaleSpend reports whether the spend r shows is the vendor's figure from
+// a reader that has stopped: what was spent when it was read, which
+// nothing is to be decided from.
+func (r HeadroomReport) StaleSpend() bool { return r.SpendStale && r.SpendSource == "vendor" }
+
+// SpendReadAgo is how long ago the vendor's stale figures were read at
+// now; zero when they are current.
+func (r HeadroomReport) SpendReadAgo(now time.Time) time.Duration {
+	if !r.SpendStale || r.SpendReadAt == nil {
+		return 0
+	}
+	return max(time.Minute, now.Sub(*r.SpendReadAt))
 }

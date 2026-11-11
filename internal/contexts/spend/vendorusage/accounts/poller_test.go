@@ -2,16 +2,25 @@ package accounts
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-type captureBus struct{ got []*eventschema.Envelope }
+type captureBus struct {
+	got []*eventschema.Envelope
+	// refuse is how many PublishWait calls to refuse before taking one.
+	refuse int
+}
 
 func (b *captureBus) Publish(env *eventschema.Envelope) { b.got = append(b.got, env) }
 func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	if b.refuse > 0 {
+		b.refuse--
+		return errors.New("the store is busy")
+	}
 	b.got = append(b.got, env)
 	return nil
 }

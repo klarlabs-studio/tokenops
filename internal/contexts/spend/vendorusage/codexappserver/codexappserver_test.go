@@ -127,6 +127,8 @@ func TestPoller(t *testing.T) {
 type recordingBus struct {
 	mu  sync.Mutex
 	got []*eventschema.Envelope
+	// refuse is how many PublishWait calls to refuse before taking one.
+	refuse int
 }
 
 func (b *recordingBus) Publish(env *eventschema.Envelope) {
@@ -136,6 +138,10 @@ func (b *recordingBus) Publish(env *eventschema.Envelope) {
 }
 
 func (b *recordingBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	if b.refuse > 0 {
+		b.refuse--
+		return errors.New("the store is busy")
+	}
 	b.Publish(env)
 	return nil
 }

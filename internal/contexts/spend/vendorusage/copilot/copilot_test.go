@@ -82,6 +82,8 @@ func sourceFor(f fakeSource) func(string) UserSource {
 type captureBus struct {
 	mu        sync.Mutex
 	envelopes []*eventschema.Envelope
+	// refuse is how many PublishWait calls to refuse before taking one.
+	refuse int
 }
 
 func (b *captureBus) Publish(env *eventschema.Envelope) {
@@ -97,9 +99,8 @@ func (b *captureBus) PublishedCount() int64 {
 func (b *captureBus) DroppedCount() int64         { return 0 }
 func (b *captureBus) Close(_ time.Duration) error { return nil }
 
-// Each quota_snapshots key yields one envelope, and the plan one more. Re-running the same
-// poll within the same response timestamp must be a no-op (server
-// data hasn't changed yet).
+// Each quota_snapshots key yields one envelope, and the plan one more. An
+// unchanged record polled again at once stores nothing.
 func TestPollerEmitsOneEnvelopePerSnapshotAndDedupes(t *testing.T) {
 	bus := &captureBus{}
 	p := NewPoller(bus, PollerOptions{
@@ -117,7 +118,7 @@ func TestPollerEmitsOneEnvelopePerSnapshotAndDedupes(t *testing.T) {
 	}
 	p.scan(context.Background())
 	if got := bus.PublishedCount(); got != 3 {
-		t.Errorf("same timestamp_utc must dedupe; total %d", got)
+		t.Errorf("an unchanged record was stored again at once; total %d", got)
 	}
 }
 
@@ -139,6 +140,13 @@ func TestPollerRecordsLastError(t *testing.T) {
 }
 
 func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	b.mu.Lock()
+	if b.refuse > 0 {
+		b.refuse--
+		b.mu.Unlock()
+		return errors.New("the store is busy")
+	}
+	b.mu.Unlock()
 	b.Publish(env)
 	return nil
 }
