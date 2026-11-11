@@ -2,6 +2,7 @@ package agentdx
 
 import (
 	"fmt"
+	"math"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 )
@@ -113,14 +114,22 @@ func ComputeContextCurve(records []Record) []ContextBand {
 		return -1
 	}
 
-	// Walk in order, carrying the context size the session had reached so
-	// each instruction is attributed to the window it actually ran in.
+	// Walk in order, carrying the context size each session had reached
+	// so each instruction is attributed to the window it actually ran in.
+	//
+	// Per session, because sessions run side by side: a subagent's small
+	// context or a second terminal's large one, carried across, put an
+	// instruction in a band it never ran in, and a turn of one session
+	// counted toward another's open instruction.
+	type session struct {
+		context int64
+		unit    *acc
+		turns   int
+		files   map[string]bool
+	}
 	var (
-		curContext int64
-		unit       *acc
-		unitTurns  int
-		unitFiles  map[string]bool
-		requests   = claudecodejsonl.Messages{}
+		sessions = map[string]*session{}
+		requests = claudecodejsonl.Messages{}
 		// Bounded lookback over recent call signatures, kept PER SESSION.
 		//
 		// Bounded, because unbounded history makes the repeat rate a proxy
@@ -145,56 +154,63 @@ func ComputeContextCurve(records []Record) []ContextBand {
 		}
 		return w.seen(sig)
 	}
-	closeUnit := func() {
-		if unit == nil {
+	closeUnit := func(s *session) {
+		if s.unit == nil {
 			return
 		}
-		unit.turns = append(unit.turns, float64(unitTurns))
-		unit = nil
+		s.unit.turns = append(s.unit.turns, float64(s.turns))
+		s.unit = nil
 	}
 
 	for _, r := range sortedByTime(records) {
+		s := sessions[r.SessionID]
+		if s == nil {
+			s = &session{}
+			sessions[r.SessionID] = s
+		}
 		switch r.Kind {
 		case KindAssistantTurn:
 			if r.InputTokens > 0 {
-				curContext = r.InputTokens
+				s.context = r.InputTokens
 			}
 			// A request written as several entries is one turn.
-			if first := requests.First(r.RequestID); unit != nil && first {
-				unitTurns++
+			if first := requests.First(r.RequestID); s.unit != nil && first {
+				s.turns++
 			}
 		case KindPrompt:
-			closeUnit()
-			idx := bandIndex(curContext)
+			closeUnit(s)
+			idx := bandIndex(s.context)
 			if idx < 0 {
 				continue
 			}
-			unit = &accs[idx]
-			unitTurns = 0
-			unitFiles = map[string]bool{}
-			unit.prompts++
+			s.unit = &accs[idx]
+			s.turns = 0
+			s.files = map[string]bool{}
+			s.unit.prompts++
 			if r.Rejects {
-				unit.rejects++
+				s.unit.rejects++
 			}
 		case KindToolUse:
-			idx := bandIndex(curContext)
+			idx := bandIndex(s.context)
 			if idx >= 0 && r.CallSignature != "" {
 				accs[idx].callsSeen++
 				if sawCall(r.SessionID, r.CallSignature) {
 					accs[idx].repeats++
 				}
 			}
-			if unit == nil || !isEdit(r.ToolName) || r.FilePath == "" {
+			if s.unit == nil || !isEdit(r.ToolName) || r.FilePath == "" {
 				continue
 			}
-			unit.edits++
-			if unitFiles[r.FilePath] {
-				unit.rework++
+			s.unit.edits++
+			if s.files[r.FilePath] {
+				s.unit.rework++
 			}
-			unitFiles[r.FilePath] = true
+			s.files[r.FilePath] = true
 		}
 	}
-	closeUnit()
+	for _, s := range sessions {
+		closeUnit(s)
+	}
 
 	out := make([]ContextBand, 0, len(contextBounds))
 	for i, b := range contextBounds {
@@ -268,11 +284,17 @@ func DegradationNote(bands []ContextBand) string {
 	if loN == 0 || hiN == 0 {
 		return ""
 	}
+	if loN < minCallsPerHalf || hiN < minCallsPerHalf {
+		return fmt.Sprintf(
+			"Too few calls to compare (%d below %s, %d above; %d each are needed): "+
+				"whether the agent drifts at large contexts is not yet known.",
+			loN, splitLabel, hiN, minCallsPerHalf)
+	}
 	if loRate <= 0 {
 		return ""
 	}
 	rise := (hiRate/loRate - 1) * 100
-	if rise < minRepeatRisePct {
+	if rise < minRepeatRisePct || !aboveChance(loRate, loN, hiRate, hiN) {
 		return fmt.Sprintf(
 			"No clear drift: the agent re-issues a recent call %.1f%% of the time below %s "+
 				"and %.1f%% above — inside the noise for this corpus.",
@@ -295,7 +317,29 @@ const (
 	// calls, but a tool that names small differences as findings teaches
 	// its operator to distrust the ones that matter.
 	minRepeatRisePct = 25.0
+	// minCallsPerHalf is the fewest calls each half needs before the two
+	// are compared at all. A note used to follow from one call above the
+	// split: a single repeat there read as the agent losing track.
+	minCallsPerHalf = 500
 )
+
+// aboveChance reports whether the higher rate (percentages over hiN
+// calls) exceeds the lower (over loN) by more than chance explains: a
+// one-sided two-proportion z-test at 95%. The counts minCallsPerHalf
+// asks for are where the normal approximation holds.
+func aboveChance(loRate float64, loN int, hiRate float64, hiN int) bool {
+	p1, p2 := loRate/100, hiRate/100
+	n1, n2 := float64(loN), float64(hiN)
+	pooled := (p1*n1 + p2*n2) / (n1 + n2)
+	se := math.Sqrt(pooled * (1 - pooled) * (1/n1 + 1/n2))
+	if se == 0 {
+		return p2 > p1
+	}
+	return (p2-p1)/se > oneSidedZ95
+}
+
+// oneSidedZ95 is the standard normal's 95th percentile.
+const oneSidedZ95 = 1.6448536269514722
 
 // splitHalves aggregates repeat rates below and at/above splitAt.
 func splitHalves(bands []ContextBand) (loRate float64, loN int, hiRate float64, hiN int) {
