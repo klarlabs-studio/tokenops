@@ -49,7 +49,8 @@ func (e DefaultModelEnv) retracted(from, to string) bool {
 // while the plan is pressed, the operator's own default again once it is
 // not, or once the power is lowered. Below autonomous, and wherever the
 // operator set the model themselves, it advises /model instead, once per
-// pressed window. It returns what to tell the operator, "" for nothing.
+// pressed window. It returns what to tell the operator, "" for nothing: a
+// change to the default is told at every verbosity, advice not at quiet.
 func ReconcileDefaultModel(e DefaultModelEnv) string {
 	cur, res := modellever.Current(e.Paths)
 	if cur != nil && res.Status == modellever.StatusEdited {
@@ -64,7 +65,7 @@ func ReconcileDefaultModel(e DefaultModelEnv) string {
 			if err != nil || r.Status != modellever.StatusReverted {
 				return ""
 			}
-			return quietOr(e.Verbosity, "tokenops: new Claude Code sessions start on your own default model again (starting them lower was retracted: quality dropped; `tokenops explain moves`).")
+			return "tokenops: new Claude Code sessions start on your own default model again (starting them lower was retracted: quality dropped; `tokenops explain moves`)."
 		}
 		if hold || !defaultModelReasonPassed(e, cur) {
 			return ""
@@ -73,7 +74,7 @@ func ReconcileDefaultModel(e DefaultModelEnv) string {
 		if err != nil || r.Status != modellever.StatusReverted {
 			return ""
 		}
-		return quietOr(e.Verbosity, fmt.Sprintf("tokenops: new Claude Code sessions start on your own default model again (%s).", revertWhy(e)))
+		return fmt.Sprintf("tokenops: new Claude Code sessions start on your own default model again (%s).", revertWhy(e))
 	}
 	if e.Pressure == nil || e.Rung == config.AutonomyOff {
 		return ""
@@ -92,9 +93,11 @@ func ReconcileDefaultModel(e DefaultModelEnv) string {
 		}, e.Now)
 		if err == nil && r.Status == modellever.StatusApplied {
 			RecordMoveBecause(e.Ledger, e.Now, id, e.Session, config.PowerModels, DefaultModelKind, e.SessionModel, target, e.Pressure.Evidence())
-			return quietOr(e.Verbosity, fmt.Sprintf(
+			// A change to the operator's settings is said at every
+			// verbosity: quiet silences advice, not what TokenOps did.
+			return fmt.Sprintf(
 				"tokenops: %s, so new Claude Code sessions will start on %s. This one keeps %s: /model %s switches it now. To stop: `tokenops coach set models advise`.",
-				e.Pressure.Why(), alias, e.SessionModel, alias))
+				e.Pressure.Why(), alias, e.SessionModel, alias)
 		}
 		if err != nil || r.Status != modellever.StatusYours {
 			return ""

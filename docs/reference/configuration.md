@@ -42,7 +42,7 @@ tokenops init --preset autopilot # on a new machine (a new config gets advise)
 | `observe` | off | off | off | off | quiet | records what it would say or do; says and does nothing |
 | `advise` | advise | advise | advise | advise | normal | tells you what you could do better; changes nothing |
 | `guided` | advise | autonomous | ask | advise | normal | refuses redundant re-reads, asks before moving subagents |
-| `autopilot` | advise | autonomous | autonomous | autonomous | quiet | acts on its own and stays quiet, including where agents compact |
+| `autopilot` | advise | autonomous | autonomous | autonomous | quiet | acts on its own, says each thing it did in a line, and gives no other advice |
 
 Asking an agent works the same way: the `tokenops_coach` tool takes
 `preset` and runs the same command. Tuning one power afterwards is fine;
@@ -78,6 +78,7 @@ cheaper model that fits it), and **context** (when the agent compacts).
 | The read-guard case | never | once per session | once per session |
 | Model advice | only when the model is two tiers or more above the work | once per kind of work per session | every applicable turn |
 | Compact tip (20 turns above the compaction line) | never | once until the next compaction | once until the next compaction, with what compacting would keep context near |
+| A model TokenOps changed (a subagent moved, new sessions' default set or restored) | one line, each time | one line, each time | the line with its reason and how to stop it |
 
 #### The coach stands down where the vendor speaks
 

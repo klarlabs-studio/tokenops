@@ -121,7 +121,8 @@ func TestDefaultModelAdvisesOverTheOperatorsModel(t *testing.T) {
 	}
 }
 
-// ask and advise only advise; off does nothing; quiet says nothing.
+// ask and advise only advise; off does nothing. Quiet silences the
+// advice, but a change to the operator's default is always told.
 func TestDefaultModelBelowAutonomous(t *testing.T) {
 	for _, rung := range []string{config.AutonomyAsk, config.AutonomyAdvise} {
 		e, settings := defaultModelFixture(t, `{}`)
@@ -137,8 +138,19 @@ func TestDefaultModelBelowAutonomous(t *testing.T) {
 	}
 	e, settings = defaultModelFixture(t, `{}`)
 	e.Verbosity = config.VerbosityQuiet
-	if msg := coachcap.ReconcileDefaultModel(e); msg != "" || settings()["model"] != "sonnet" {
-		t.Errorf("quiet: %q %v", msg, settings())
+	if msg := coachcap.ReconcileDefaultModel(e); !strings.Contains(msg, "will start on sonnet") || settings()["model"] != "sonnet" {
+		t.Errorf("quiet switch: %q %v", msg, settings())
+	}
+	// Once switched, the revert is told at quiet too.
+	e.Pressure = nil
+	e.Known = true
+	if msg := coachcap.ReconcileDefaultModel(e); !strings.Contains(msg, "your own default model again") || settings()["model"] != nil {
+		t.Errorf("quiet revert: %q %v", msg, settings())
+	}
+	e, settings = defaultModelFixture(t, `{}`)
+	e.Rung, e.Verbosity = config.AutonomyAdvise, config.VerbosityQuiet
+	if msg := coachcap.ReconcileDefaultModel(e); msg != "" || settings()["model"] != nil {
+		t.Errorf("quiet advice: %q %v", msg, settings())
 	}
 }
 
