@@ -17,7 +17,7 @@ import (
 func newSpendWasteCmd(rf *rootFlags) *cobra.Command {
 	var (
 		dbPath, sinceFlag string
-		jsonOut           bool
+		jsonOut, local    bool
 	)
 	cmd := &cobra.Command{
 		Use:   "waste",
@@ -39,7 +39,11 @@ func newSpendWasteCmd(rf *rootFlags) *cobra.Command {
 Each token is counted in at most one class. Every figure is in
 API-equivalent dollars and, with a flat-rate plan's window readings, as a
 share of the plan's window. Beside it: what the coach's interventions
-realized, and the guardrails ranked by how ready their evidence is.`,
+realized, and the guardrails ranked by how ready their evidence is.
+
+The running daemon keeps the repositories' history between reports, so
+waste asks it; with --local, --db or no daemon answering, it computes the
+report here.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := loadConfig(rf)
@@ -58,6 +62,16 @@ realized, and the guardrails ranked by how ready their evidence is.`,
 				}
 			}
 			ctx := cmd.Context()
+			if dbPath == "" && !local {
+				var r avoidable.Report
+				if askDaemon(ctx, cfg, "/api/spend/waste?"+sinceQuery(since), reportDaemonWait, &r) {
+					if jsonOut {
+						return writeControlJSON(cmd, r)
+					}
+					writeWasteReport(cmd.OutOrStdout(), r)
+					return nil
+				}
+			}
 			store, err := openStoreForRead(ctx, path)
 			if err != nil {
 				return fmt.Errorf("open event store: %w", err)
@@ -78,7 +92,8 @@ realized, and the guardrails ranked by how ready their evidence is.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to config.storage.path)")
+	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to config.storage.path); computes the report here")
+	cmd.Flags().BoolVar(&local, "local", false, "compute the report here instead of asking the running daemon")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "start of the period (RFC3339 or duration such as 7d); default the last 7 days")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd

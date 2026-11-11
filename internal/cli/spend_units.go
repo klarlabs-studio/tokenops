@@ -18,7 +18,7 @@ import (
 func newSpendUnitsCmd(rf *rootFlags) *cobra.Command {
 	var (
 		dbPath, sinceFlag string
-		jsonOut           bool
+		jsonOut, local    bool
 	)
 	cmd := &cobra.Command{
 		Use:   "units",
@@ -34,7 +34,11 @@ func newSpendUnitsCmd(rf *rootFlags) *cobra.Command {
     plan's longest window (an estimate from your own windows)
 
 Each is set against the four weeks before the period. The joins are
-heuristics, so the work no unit took is listed by why.`,
+heuristics, so the work no unit took is listed by why.
+
+The running daemon keeps the repositories' history between reports, so
+units asks it; with --local, --db or no daemon answering, it computes the
+report here.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := loadConfig(rf)
@@ -53,6 +57,16 @@ heuristics, so the work no unit took is listed by why.`,
 				}
 			}
 			ctx := cmd.Context()
+			if dbPath == "" && !local {
+				var r uniteconomics.Report
+				if askDaemon(ctx, cfg, "/api/spend/units?"+sinceQuery(since), reportDaemonWait, &r) {
+					if jsonOut {
+						return writeControlJSON(cmd, r)
+					}
+					writeUnitReport(cmd.OutOrStdout(), r)
+					return nil
+				}
+			}
 			store, err := openStoreForRead(ctx, path)
 			if err != nil {
 				return fmt.Errorf("open event store: %w", err)
@@ -76,7 +90,8 @@ heuristics, so the work no unit took is listed by why.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to config.storage.path)")
+	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to config.storage.path); computes the report here")
+	cmd.Flags().BoolVar(&local, "local", false, "compute the report here instead of asking the running daemon")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "start of the period (RFC3339 or duration such as 7d); default the last 7 days")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd

@@ -17,12 +17,14 @@ import (
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
-func TestWriteUnitReport(t *testing.T) {
+// unitsFixture is a period's unit report: commits, a revert, a merged
+// pull request and work before the period.
+func unitsFixture() uniteconomics.Report {
 	t0 := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
 	turn := func(at time.Duration, usd float64) analytics.SessionTurn {
 		return analytics.SessionTurn{SessionID: "a", At: t0.Add(at), Provider: "anthropic", Tokens: 1000, APIEquivalentUSD: usd, Priced: true}
 	}
-	r := uniteconomics.Build(uniteconomics.Inputs{
+	return uniteconomics.Build(uniteconomics.Inputs{
 		Since: t0, Until: t0.Add(7 * 24 * time.Hour),
 		Dirs:   map[string]sessiondirs.Dir{"a": {CWD: "/w/app"}},
 		RootOf: map[string]string{"/w/app": "/w/app"},
@@ -34,6 +36,10 @@ func TestWriteUnitReport(t *testing.T) {
 		PRsOf: map[string][]gitlog.PR{"/w/app": {{Number: 2, MergedAt: t0.Add(2 * time.Hour)}}},
 		Turns: []analytics.SessionTurn{turn(-10*24*time.Hour, 10), turn(0, 5), turn(3*time.Hour, 1)},
 	})
+}
+
+func TestWriteUnitReport(t *testing.T) {
+	r := unitsFixture()
 	var b bytes.Buffer
 	writeUnitReport(&b, r)
 	out := b.String()
