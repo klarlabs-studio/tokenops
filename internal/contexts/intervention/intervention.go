@@ -53,6 +53,10 @@ type Verdict struct {
 	// Samples is how many executions the comparison ran over. A verdict
 	// from one run is not a verdict.
 	Samples int `json:"samples"`
+	// Interval is where the true difference lies at its confidence, for
+	// a randomised comparison that had per-execution figures; Observed is
+	// its point estimate. Nil otherwise.
+	Interval *Interval `json:"interval,omitempty"`
 	// Caveat explains a harm, or why nothing could be concluded.
 	Caveat string    `json:"caveat,omitempty"`
 	At     time.Time `json:"at,omitzero"`
@@ -127,6 +131,12 @@ type Comparison struct {
 	Intervention measurement.Value
 	// Samples is how many executions each side covers.
 	Samples int
+	// BaselineValues and InterventionValues are the per-execution
+	// figures Baseline and Intervention average: what a difference is
+	// tested with. Without them a randomised comparison concludes
+	// nothing about consumption. They are inputs, not part of a report.
+	BaselineValues     []float64 `json:"-"`
+	InterventionValues []float64 `json:"-"`
 	// BaselineOutcomes and InterventionOutcomes are how those
 	// executions ended.
 	BaselineOutcomes     Outcomes
@@ -134,11 +144,10 @@ type Comparison struct {
 	At                   time.Time
 }
 
-// minSamples is the fewest executions a verdict may rest on.
-//
-// The number is a judgement, not a statistical test: it exists to stop
-// one lucky run being reported as a win. A real power calculation
-// belongs here once there is enough data to calibrate it against.
+// minSamples is the fewest executions a verdict may rest on. It is a
+// floor under the tests below, not a substitute for them: five
+// executions a side were once enough for a verdict on a difference of
+// means, whatever their spread.
 const minSamples = 5
 
 // materialDelta is the fraction of the baseline a difference must reach
@@ -147,7 +156,8 @@ const minSamples = 5
 const materialDelta = 0.02
 
 // outcomeTolerance is how far the success rate may fall before a
-// consumption win is judged harm. Small on purpose: work that fails is
+// consumption win is judged harm, provided the counts tell the fall from
+// chance. Small on purpose: work that fails is
 // work that gets done again, so a drop in success is usually more
 // expensive than the tokens it saved.
 const outcomeTolerance = 0.05
@@ -182,7 +192,18 @@ func Judge(c Comparison) Verdict {
 	// judging on consumption first would report it as a win.
 	baseRate, baseRated := c.BaselineOutcomes.SuccessRate()
 	withRate, withRated := c.InterventionOutcomes.SuccessRate()
-	if baseRated && withRated && withRate < baseRate-outcomeTolerance {
+	fell := baseRated && withRated && withRate < baseRate-outcomeTolerance
+	if fell && !c.InterventionOutcomes.fellFrom(c.BaselineOutcomes) {
+		// A fall these counts cannot tell from chance is not harm, and
+		// not a reason to call the consumption a saving either.
+		v.Observed = measurement.Measured(base-with, c.Intervention.Source())
+		v.Caveat = fmt.Sprintf(
+			"success rate went from %.0f%% to %.0f%%, which %d and %d assessed executions "+
+				"cannot tell from chance; nothing is concluded while it may be harm",
+			baseRate*100, withRate*100, c.BaselineOutcomes.assessed(), c.InterventionOutcomes.assessed())
+		return v
+	}
+	if fell {
 		v.Outcome = Harmed
 		v.Observed = measurement.Measured(base-with, c.Intervention.Source())
 		v.Caveat = fmt.Sprintf(
@@ -215,18 +236,51 @@ func Judge(c Comparison) Verdict {
 		return v
 	}
 
-	if base != 0 && math.Abs(delta)/math.Abs(base) < materialDelta {
+	// The difference is tested on the executions, not read off the two
+	// means: session spend varies far more than any saving, and a
+	// difference of means over a handful of sessions is mostly that
+	// variation.
+	diff, in, ok := meanDifference(c.BaselineValues, c.InterventionValues)
+	if !ok {
+		v.Caveat = "the per-execution figures were not recorded, so the difference cannot be " +
+			"told from the variation between executions"
+		return v
+	}
+	v.Observed = measurement.Measured(diff, c.Intervention.Source())
+	v.Interval = &in
+	material := materialDelta * math.Abs(base)
+	switch {
+	case in.Low >= -material && in.High <= material:
+		// Whatever the difference is, it is too small to matter.
 		v.Outcome = NoEffect
-		return v
-	}
-	if delta > 0 {
+	case in.Low > 0 && diff >= material:
 		v.Outcome = Improved
-		return v
+	case in.High < 0 && -diff >= material:
+		v.Outcome = Harmed
+		v.Caveat = "the intervention consumed more than the baseline"
+	case in.Excludes(0):
+		v.Caveat = fmt.Sprintf(
+			"the difference, %.4g, is not chance, but at %.0f%% confidence it lies between %.4g and %.4g: "+
+				"whether it is large enough to matter is not yet known; more executions would narrow it",
+			diff, in.Level*100, in.Low, in.High)
+	default:
+		v.Caveat = fmt.Sprintf(
+			"the difference, %.4g, cannot be told from no difference: at %.0f%% confidence it lies "+
+				"between %.4g and %.4g; more executions would narrow it",
+			diff, in.Level*100, in.Low, in.High)
 	}
-	v.Outcome = Harmed
-	v.Caveat = "the intervention consumed more than the baseline"
 	return v
 }
+
+// fellFrom reports whether o's success rate is below base's by more than
+// chance explains: the interval of the difference lies below zero.
+func (o Outcomes) fellFrom(base Outcomes) bool {
+	in, ok := proportionDifference(o.successes(), float64(o.assessed()), base.successes(), float64(base.assessed()))
+	return ok && in.High < 0
+}
+
+// successes counts a partial as half, as SuccessRate does.
+func (o Outcomes) successes() float64 { return float64(o.Achieved) + 0.5*float64(o.Partial) }
 
 // observationalCaveat explains why a difference is not a finding.
 const observationalCaveat = "the cohorts were not assigned — executions were split by " +
