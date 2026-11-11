@@ -100,6 +100,18 @@ var ackSet = map[string]struct{}{
 	"yes please": {}, "do it": {}, "go ahead": {}, "keep going": {},
 }
 
+// IsAcknowledgement reports whether text is pure confirmation steering:
+// one of the few words that only tell the agent to go on.
+func IsAcknowledgement(text string) bool {
+	_, ok := ackSet[strings.ToLower(strings.TrimSpace(text))]
+	return ok
+}
+
+// IsRegenerate reports whether text rejects what the agent just produced.
+func IsRegenerate(text string) bool {
+	return regenerateRE.MatchString(strings.TrimSpace(text))
+}
+
 // vagueDirectiveSet matches short, scope-free directive prompts.
 // These force the agent to invent scope — flagged separately from
 // pure acks so the rewrite template can be specific ("fix X" not
@@ -176,7 +188,7 @@ func Analyze(prompts []UserPrompt) Findings {
 		}
 
 		lc := strings.ToLower(txt)
-		if _, ok := ackSet[lc]; ok {
+		if IsAcknowledgement(txt) {
 			acks++
 			if len(ackSamples) < 3 {
 				ackSamples = append(ackSamples, sample(txt))
@@ -197,7 +209,7 @@ func Analyze(prompts []UserPrompt) Findings {
 		if nc < 60 && strings.Contains(txt, "?") {
 			shortQs++
 		}
-		if regenerateRE.MatchString(txt) {
+		if IsRegenerate(txt) {
 			f.Regenerates++
 			if len(f.RegenerateSamples) < 3 {
 				f.RegenerateSamples = append(f.RegenerateSamples, sample(txt))
