@@ -69,7 +69,8 @@ var (
 var APICatalog = []RouteDoc{
 	// Plans (ADR 0010 slice 1).
 	{Method: "GET", Path: "/api/glance", Summary: "Session budgets, plan headroom and a ranked insight in one call", Response: headroom.GlancePayload{}},
-	{Method: "GET", Path: "/api/findings", Summary: "What the coach and the session analysis observed, ranked, with what to do", Response: findings.Report{}},
+	{Method: "GET", Path: "/api/findings", Summary: "What the coach and the session analysis observed, ranked, with what to do",
+		Params: []Param{q("dismissed", "string", "include: also the findings the operator dismissed; left out when omitted")}, Response: findings.Report{}},
 	{Method: "GET", Path: "/api/plans/headroom", Summary: "Every bound plan: usage, the vendor's windows, spend against the limit, risk", Response: headroom.HeadroomPayload{}},
 	{Method: "GET", Path: "/api/plans/session-budget", Summary: "Per plan window: share used, pace, and what to do", Response: headroom.BudgetPayload{}},
 	{Method: "GET", Path: "/api/plans/advice", Summary: "Plan right-sizing: each bound plan's windows replayed against its other tiers, metered overflow and the API at list price; advice only, nothing is switched",
