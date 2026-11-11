@@ -15,14 +15,15 @@ type EventReader = plans.EventReader
 // ReadingNote is what a provider's latest spend reading this month leaves
 // out, in one line: that the vendor blocks requests at the limit and until
 // when (local date), or why an account-wide figure stands in for the
-// operator's own. Empty when neither. `tokenops vendor-usage status`
-// shows it beside the source.
+// operator's own. Empty when neither. A reading whose reader has stopped
+// says nothing about a block now. `tokenops vendor-usage status` shows it
+// beside the source.
 func ReadingNote(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) string {
 	v := plans.LatestVendorSpend(ctx, reader, provider, now)
 	switch {
 	case v == nil:
 		return ""
-	case v.LimitReached && !v.BlockedUntil.IsZero() && v.BlockedUntil.After(now):
+	case !v.Stale && v.LimitReached && !v.BlockedUntil.IsZero() && v.BlockedUntil.After(now):
 		return "blocked until " + v.BlockedUntil.Local().Format("2 Jan") + " by your spend limit"
 	case v.Scope == "account" && v.ScopeReason != "":
 		return "account-wide: " + v.ScopeReason

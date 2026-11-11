@@ -3,12 +3,15 @@ package claudecodeoauth
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/heartbeat"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -55,6 +58,8 @@ func serves(body string) fakeClient {
 type recordingBus struct {
 	mu  sync.Mutex
 	got []*eventschema.Envelope
+	// refuse is how many PublishWait calls to refuse before taking one.
+	refuse int
 }
 
 func (b *recordingBus) Publish(env *eventschema.Envelope) {
@@ -64,6 +69,10 @@ func (b *recordingBus) Publish(env *eventschema.Envelope) {
 }
 
 func (b *recordingBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	if b.refuse > 0 {
+		b.refuse--
+		return errors.New("the store is busy")
+	}
 	b.Publish(env)
 	return nil
 }
@@ -163,5 +172,73 @@ func TestPollerBacksOff(t *testing.T) {
 	p.Scan(context.Background())
 	if calls != 2 {
 		t.Errorf("endpoint called %d times; the 429 should hold the second", calls)
+	}
+}
+
+// An idle account reports the same reading on every poll. It is stored
+// again every heartbeat, under a new ID and time, and says for how long it
+// stands; a reading the store refused is offered again on the next poll.
+func TestPollerKeepsAnUnchangedReadingCurrent(t *testing.T) {
+	at := now
+	bus := &recordingBus{refuse: 1}
+	store := &fakeStore{creds: []Credentials{{AccessToken: "tok", ExpiresAt: now.Add(24 * time.Hour)}}}
+	p := NewPoller(bus, PollerOptions{Stores: []Store{store}, Client: serves(usageBody), Now: func() time.Time { return at }})
+
+	p.Scan(context.Background())
+	if len(bus.got) != 0 {
+		t.Fatalf("a refused reading is in the store: %d", len(bus.got))
+	}
+	// The retry comes a minute later, long before a heartbeat is due.
+	var stored []time.Duration
+	for at = now.Add(time.Minute); at.Before(now.Add(32 * time.Minute)); at = at.Add(5 * time.Minute) {
+		before := len(bus.got)
+		p.Scan(context.Background())
+		if len(bus.got) > before {
+			stored = append(stored, at.Sub(now))
+		}
+	}
+	want := []time.Duration{time.Minute, 11 * time.Minute, 21 * time.Minute, 31 * time.Minute}
+	if !slices.Equal(stored, want) {
+		t.Fatalf("stored at %v, want %v", stored, want)
+	}
+	ids := map[string]bool{}
+	for i, env := range bus.got {
+		if !env.Timestamp.Equal(now.Add(want[i])) {
+			t.Errorf("reading %d carries %s, want %s", i, env.Timestamp, now.Add(want[i]))
+		}
+		// DefaultInterval is 10 minutes: 10 + 3×10.
+		if d, ok := heartbeat.FreshFor(env.Attributes); !ok || d != 40*time.Minute {
+			t.Errorf("reading %d stands for %s (%v), want 40m", i, d, ok)
+		}
+		ids[env.ID] = true
+	}
+	if len(ids) != len(want) {
+		t.Errorf("%d IDs for %d readings: the store keeps the first of each ID", len(ids), len(want))
+	}
+}
+
+// A reading that differs from the last one stored is stored on the poll
+// that reads it, not at the next heartbeat.
+func TestPollerStoresAChangedReadingAtOnce(t *testing.T) {
+	at := now
+	body := usageBody
+	client := fakeClient(func(string, time.Time) (*claudeusagemeter.UsageResponse, error) {
+		return claudeusagemeter.ParseUsage([]byte(body))
+	})
+	bus := &recordingBus{}
+	store := &fakeStore{creds: []Credentials{{AccessToken: "tok", ExpiresAt: now.Add(24 * time.Hour)}}}
+	p := NewPoller(bus, PollerOptions{Stores: []Store{store}, Client: client, Now: func() time.Time { return at }})
+
+	p.Scan(context.Background())
+	at = now.Add(time.Minute)
+	body = strings.Replace(usageBody, `"utilization":10`, `"utilization":11`, 1)
+	p.Scan(context.Background())
+	if len(bus.got) != 2 || bus.got[1].Attributes["five_hour_used_pct"] != "11.00" || !bus.got[1].Timestamp.Equal(at) {
+		t.Fatalf("stored %d readings, want the changed one a minute later", len(bus.got))
+	}
+	at = now.Add(2 * time.Minute)
+	p.Scan(context.Background())
+	if len(bus.got) != 2 {
+		t.Errorf("an unchanged reading stored again a minute later: %d readings", len(bus.got))
 	}
 }

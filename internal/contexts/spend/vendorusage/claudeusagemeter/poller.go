@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/heartbeat"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -56,6 +57,8 @@ type PollerOptions struct {
 	// store, and two warnings, on every poll for as long as nobody signed
 	// in again. nil reads on every refusal.
 	CookieStamp func() string
+	// Now is the clock a reading is stamped with; nil is time.Now.
+	Now func() time.Time
 }
 
 // Session is what a browser holds for claude.ai: the login, the proof it
@@ -69,8 +72,10 @@ type Session struct {
 }
 
 // Poller wraps the cookie-auth claude.ai client with a tick loop and
-// envelope emission. Each reading that differs from the last one published
-// becomes its own event; the newest is what headroom reads.
+// envelope emission. Each reading that differs from the last one stored
+// becomes its own event, and an unchanged one is stored again every
+// heartbeat.Every, so the newest, which is what headroom reads, is never
+// old while the meter works.
 type Poller struct {
 	bus  events.Bus
 	opts PollerOptions
@@ -81,9 +86,9 @@ type Poller struct {
 	publishes   int64
 	lastErr     error
 	lastErrTime time.Time
-	// lastPublished is the attribute set of the last reading published,
-	// so an unchanged reading is not stored again.
-	lastPublished string
+	// kept is the last reading stored and when, so an unchanged reading
+	// is stored again only when its heartbeat is due.
+	kept heartbeat.Keeper
 	// lastUnrecognised is the last set of unreadable blocks reported, so
 	// the warning is logged when it changes rather than every poll.
 	lastUnrecognised string
@@ -101,6 +106,9 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 	}
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
+	}
+	if opts.Now == nil {
+		opts.Now = time.Now
 	}
 	return &Poller{bus: bus, opts: opts, orgID: opts.OrgID}
 }
@@ -277,18 +285,19 @@ func (p *Poller) scan(ctx context.Context) {
 		p.opts.Logger.Debug("claude-usage-meter: Anthropic reports nothing to meter for this org")
 		return
 	}
-	env := newEnvelope(time.Now().UTC(), p.orgID, usage)
+	now := p.opts.Now().UTC()
+	env := newEnvelope(now, p.orgID, usage)
 	key := attrsKey(env.Attributes)
-	p.mu.Lock()
-	if key == p.lastPublished {
-		p.mu.Unlock()
+	if !p.kept.Due(key, now) {
 		return
 	}
-	p.lastPublished = key
-	p.mu.Unlock()
-	if p.bus != nil {
-		p.publishWait(ctx, env)
+	heartbeat.Stamp(env.Attributes, p.opts.Interval)
+	// The reading is remembered once the store has taken it: remembered
+	// before, one the store refused was not stored until it changed.
+	if p.bus != nil && !p.publishWait(ctx, env) {
+		return
 	}
+	p.kept.Stored(key, now)
 }
 
 // resolveOrg picks the organization to meter when config names none. An
@@ -429,20 +438,19 @@ func NewReading(source string, ts time.Time, orgID string, u *UsageResponse) *ev
 	}
 }
 
-// publishWait hands env to the bus and waits for room rather than letting
-// it be dropped. Ingestion marks each row seen before publishing, so a
-// dropped envelope is never revisited: the loss is permanent, silent, and
-// reproduces identically on every restart. Waiting costs a backfill some
-// wall-clock and costs the operator nothing.
-func (p *Poller) publishWait(ctx context.Context, env *eventschema.Envelope) {
+// publishWait hands env to the bus, waiting for room rather than letting
+// it be dropped, and reports whether the bus took it. A reading it did not
+// take is not remembered as stored, so the next poll offers it again.
+func (p *Poller) publishWait(ctx context.Context, env *eventschema.Envelope) bool {
 	if env == nil {
-		return
+		return false
 	}
 	if err := p.bus.PublishWait(ctx, env); err != nil {
 		p.opts.Logger.Warn("usage event not stored", "err", err)
-		return
+		return false
 	}
 	p.mu.Lock()
 	p.publishes++
 	p.mu.Unlock()
+	return true
 }

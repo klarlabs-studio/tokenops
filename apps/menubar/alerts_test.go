@@ -160,3 +160,62 @@ func TestAlertsWhenAPlansReadingStops(t *testing.T) {
 		t.Errorf("back: %q", got)
 	}
 }
+
+// A spend figure whose reader has stopped is not measured: the last
+// figure read would raise an alert about spend nobody read. A balance
+// that is old beside a current spend takes nothing from the measure.
+func TestASpendFigureThatIsNotCurrentIsNotMeasured(t *testing.T) {
+	spend := report{Provider: "fireworks", SpendUSD: 96, SpendLimitUSD: 100, SpendPct: 96, SpendSource: "vendor"}
+	for name, tc := range map[string]struct {
+		stale  bool
+		source string
+		want   int
+	}{
+		"current":                      {false, "vendor", 1},
+		"its reader stopped":           {true, "vendor", 0},
+		"the balance beside it is old": {true, "estimate", 1},
+		"current, the estimate":        {false, "estimate", 1},
+	} {
+		r := spend
+		r.SpendStale, r.SpendSource = tc.stale, tc.source
+		g := glanceView{}
+		g.PlanHeadroom.Reports = []report{r}
+		if ms := measures(g); len(ms) != tc.want {
+			t.Errorf("%s: measures %+v, want %d", name, ms, tc.want)
+		}
+	}
+}
+
+// A plan with a spend limit and no window alerts once that its reading
+// stopped, and once that it is back; the old figure alerts nothing else.
+func TestAlertsWhenASpendReadingStops(t *testing.T) {
+	at := func(stale bool, pct float64) json.RawMessage {
+		return json.RawMessage(fmt.Sprintf(`{"plan_headroom":{"reports":[{"provider":"fireworks",
+		  "spend_usd":%v,"spend_limit_usd":100,"spend_pct":%v,"spend_source":"vendor","spend_stale":%v}]}}`, pct, pct, stale))
+	}
+	var a alerter
+	a.observe(at(false, 50))
+	ns := a.observe(at(true, 99))
+	if got := titles(ns); got != "Fireworks's plan reading stopped" {
+		t.Errorf("stopped: %q", got)
+	}
+	if len(ns) == 1 && ns[0].Body != "Its spend shows the last reading. `tokenops status` names the source that stopped." {
+		t.Errorf("body %q", ns[0].Body)
+	}
+	if got := titles(a.observe(at(true, 99))); got != "" {
+		t.Errorf("repeated: %q", got)
+	}
+	if got := titles(a.observe(at(false, 50))); got != "Fireworks's plan reading is back" {
+		t.Errorf("back: %q", got)
+	}
+
+	// A plan with neither a window nor a limit has no reading to stop.
+	var b alerter
+	none := func(stale bool) json.RawMessage {
+		return json.RawMessage(fmt.Sprintf(`{"plan_headroom":{"reports":[{"provider":"fireworks","spend_usd":3,"spend_source":"vendor","spend_stale":%v}]}}`, stale))
+	}
+	b.observe(none(false))
+	if got := titles(b.observe(none(true))) + titles(b.observe(none(false))); got != "" {
+		t.Errorf("no limit: %q", got)
+	}
+}

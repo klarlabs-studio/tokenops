@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/heartbeat"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -36,12 +37,16 @@ type PollerOptions struct {
 	Now      func() time.Time
 }
 
-// Poller reads every vendor account a key is found for.
+// Poller reads every vendor account a key is found for. A reading that
+// differs from the source's last one is stored, and an unchanged one again
+// every heartbeat.Every, so a source's newest reading is never old while
+// its reader works.
 type Poller struct {
 	bus  events.Bus
 	opts PollerOptions
 	mu   sync.Mutex
-	last map[string]string
+	// kept is each source's last reading stored and when.
+	kept map[string]*heartbeat.Keeper
 	// asked is when each paced reader was last sent a credential.
 	asked map[string]time.Time
 	// recognised caches which gateway each root is, nil for none.
@@ -72,7 +77,7 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 	if opts.Health == nil {
 		opts.Health = func(string) *freshness.Recorder { return nil }
 	}
-	return &Poller{bus: bus, opts: opts, last: map[string]string{}, asked: map[string]time.Time{}, recognised: map[string]recognition{}}
+	return &Poller{bus: bus, opts: opts, kept: map[string]*heartbeat.Keeper{}, asked: map[string]time.Time{}, recognised: map[string]recognition{}}
 }
 
 // Run polls until ctx ends.
@@ -128,7 +133,7 @@ func (p *Poller) Scan(ctx context.Context) {
 		if reading.Empty() {
 			continue
 		}
-		p.publish(ctx, r, NewEnvelope(now, r, reading))
+		p.publish(ctx, r, NewEnvelope(now, r, reading), now)
 	}
 	p.scanGateways(ctx, creds, now)
 }
@@ -219,7 +224,7 @@ func (p *Poller) scanGateways(ctx context.Context, creds []Credential, now time.
 			continue
 		}
 		r := gatewayReader{g}
-		p.publish(ctx, r, NewEnvelope(now, r, reading))
+		p.publish(ctx, r, NewEnvelope(now, r, reading), now)
 	}
 }
 
@@ -291,21 +296,40 @@ func (p *Poller) recognise(ctx context.Context, root string, now time.Time) Gate
 	return found
 }
 
-func (p *Poller) publish(ctx context.Context, r Reader, env *eventschema.Envelope) {
-	key := fmt.Sprint(env.Attributes)
-	p.mu.Lock()
-	unchanged := p.last[r.Source()] == key
-	p.mu.Unlock()
-	if unchanged || p.bus == nil {
+// publish stores r's reading when it differs from the last one stored for
+// its source or that one's heartbeat is due, and writes on it for how long
+// it stands.
+func (p *Poller) publish(ctx context.Context, r Reader, env *eventschema.Envelope, now time.Time) {
+	if p.bus == nil {
 		return
 	}
+	key := fmt.Sprint(env.Attributes)
+	p.mu.Lock()
+	kept := p.kept[r.Source()]
+	if kept == nil {
+		kept = &heartbeat.Keeper{}
+		p.kept[r.Source()] = kept
+	}
+	p.mu.Unlock()
+	if !kept.Due(key, now) {
+		return
+	}
+	heartbeat.Stamp(env.Attributes, p.readEvery(r))
 	if err := p.bus.PublishWait(ctx, env); err != nil {
 		p.opts.Logger.Warn("usage event not stored", "err", err)
 		return
 	}
-	p.mu.Lock()
-	p.last[r.Source()] = key
-	p.mu.Unlock()
+	kept.Stored(key, now)
+}
+
+// readEvery is the longest r's readings are apart while it works: the scan
+// interval, and for a paced reader its own interval and the scan that
+// follows it.
+func (p *Poller) readEvery(r Reader) time.Duration {
+	if paced, ok := r.(Paced); ok {
+		return paced.MinInterval() + p.opts.Interval
+	}
+	return p.opts.Interval
 }
 
 // NewEnvelope stores a reading as a quota snapshot. A per-token account

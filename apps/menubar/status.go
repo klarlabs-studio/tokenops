@@ -38,7 +38,15 @@ type report struct {
 	// (every member together); SpendScopeLabel names it for display.
 	SpendScope      string `json:"spend_scope"`
 	SpendScopeLabel string `json:"spend_scope_label"`
+	// SpendStale with SpendSource "vendor" is a spend figure whose reader
+	// has stopped: what was spent when it was last read.
+	SpendStale  bool   `json:"spend_stale"`
+	SpendSource string `json:"spend_source"`
 }
+
+// staleSpend reports whether the spend r shows is the vendor's figure
+// from a reader that has stopped.
+func (r report) staleSpend() bool { return r.SpendStale && r.SpendSource == "vendor" }
 
 type window struct {
 	Name        string  `json:"name"`
@@ -171,8 +179,12 @@ func reportStatus(r report) (status, []string) {
 		}
 	}
 	if len(r.Windows) == 0 && r.SpendLimitUSD > 0 {
-		lines = append(lines, fmt.Sprintf("%s · $%.2f of $%.2f", name, r.SpendUSD, r.SpendLimitUSD))
-		rs.Pct, rs.Title = r.SpendPct, fmt.Sprintf("%s %.0f%% left", name, left(r.SpendPct))
+		line := fmt.Sprintf("%s · $%.2f of $%.2f", name, r.SpendUSD, r.SpendLimitUSD)
+		if r.staleSpend() {
+			line += " when last read: its reader has stopped"
+		}
+		lines = append(lines, line)
+		rs.Pct, rs.Stale, rs.Title = r.SpendPct, r.staleSpend(), fmt.Sprintf("%s %.0f%% left", name, left(r.SpendPct))
 	}
 	return rs, lines
 }
