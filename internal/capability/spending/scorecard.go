@@ -8,6 +8,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
+	"go.klarlabs.de/tokenops/internal/infra/gitlog"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -45,6 +46,9 @@ type ScorecardParams struct {
 	// AgentFacts is what earlier scorecards read of the transcripts, so
 	// this one reads only what was written since; nil reads them all.
 	AgentFacts *AgentFacts
+	// Repos is what the unit costs resolve repositories and read their
+	// history through; nil resolves and reads them afresh.
+	Repos *gitlog.Repos
 }
 
 // ScorecardReport is the scorecard answer, named here so adapters can
@@ -83,12 +87,12 @@ func Scorecard(ctx context.Context, store *sqlite.Store, p ScorecardParams) *Sco
 		if p.Spend != nil {
 			agg := NewAggregator(store, p.Spend)
 			since := now.Add(-time.Duration(days) * 24 * time.Hour)
-			r, err := uniteconomics.Compute(ctx, uniteconomics.Deps{Turns: commits.TurnsIn(agg, Window{}), Events: store},
+			r, err := uniteconomics.Compute(ctx, uniteconomics.Deps{Turns: commits.TurnsIn(agg, Window{}), Events: store, Repos: p.Repos},
 				since, now)
 			if err == nil {
 				units = scorecardUnitCosts(r)
 			}
-			alloc = allocationCoverage(ctx, agg, p.Allocation, since, now)
+			alloc = allocationCoverage(ctx, agg, p.Repos, p.Allocation, since, now)
 		}
 	}
 	since := now.Add(-time.Duration(days) * 24 * time.Hour)
@@ -136,11 +140,11 @@ func scorecardUnitCosts(r uniteconomics.Report) []scorecard.UnitCost {
 
 // allocationCoverage is how much of [since, now)'s spend the rules tag;
 // nil without rules or when the turns cannot be read.
-func allocationCoverage(ctx context.Context, agg *EventAggregator, rules []allocation.Rule, since, now time.Time) *scorecard.AllocationCoverage {
+func allocationCoverage(ctx context.Context, agg *EventAggregator, repos *gitlog.Repos, rules []allocation.Rule, since, now time.Time) *scorecard.AllocationCoverage {
 	if len(rules) == 0 {
 		return nil
 	}
-	turns, err := allocation.Tagged(ctx, allocation.Deps{Turns: commits.TurnsIn(agg, Window{}), Rules: rules}, since, now)
+	turns, err := allocation.Tagged(ctx, allocation.Deps{Turns: commits.TurnsIn(agg, Window{}), Repos: repos, Rules: rules}, since, now)
 	if err != nil {
 		return nil
 	}

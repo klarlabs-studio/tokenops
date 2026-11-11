@@ -5,6 +5,8 @@ package gitlog
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os/exec"
 	"regexp"
@@ -35,16 +37,84 @@ type Commit struct {
 // revertedSHA reads the commit a revert's body names.
 var revertedSHA = regexp.MustCompile(`This reverts commit ([0-9a-f]{7,40})`)
 
-// Repos resolves directories to repository roots and lists commits,
-// caching both: a month of sessions names the same few repositories many
-// times.
+// Repos resolves directories to repository roots and lists commits and
+// merged pull requests, caching them: a month of sessions names the same
+// few repositories many times, and a process that keeps a Repos asks for
+// the same weeks of history request after request.
+//
+// A directory's root is kept for good, but "not in a repository" only
+// for rootRecheck: a directory may become one. Commits and pull requests
+// are kept with the user and the refs they were read at, and read again
+// when either changed.
+//
+// It is safe for concurrent use.
 type Repos struct {
 	mu    sync.Mutex
-	roots map[string]string
+	roots map[string]rootLookup
+	// commits and prs are each repository's history as last read.
+	commits map[string]*history[Commit]
+	prs     map[string]*history[PR]
+	now     func() time.Time
 }
 
+// rootLookup is what git answered for a directory, and when.
+type rootLookup struct {
+	root string
+	at   time.Time
+}
+
+// rootRecheck is how long "not in a repository" stands before git is
+// asked again.
+const rootRecheck = 10 * time.Minute
+
 // NewRepos returns an empty cache.
-func NewRepos() *Repos { return &Repos{roots: map[string]string{}} }
+func NewRepos() *Repos {
+	return &Repos{roots: map[string]rootLookup{}, commits: map[string]*history[Commit]{},
+		prs: map[string]*history[PR]{}, now: time.Now}
+}
+
+// history is one repository's commits or merged pull requests as last
+// read, oldest first.
+type history[T any] struct {
+	// state is the user they were read for and the refs they were read
+	// at: the same state holds the same history.
+	state string
+	// since is how far back they were read.
+	since time.Time
+	items []T
+	// committed is each item's committer time, which git's --since
+	// selects by.
+	committed []time.Time
+}
+
+// answers reports whether h holds what a read at state from since gives.
+func (h *history[T]) answers(state string, since time.Time) bool {
+	return h != nil && h.state == state && !since.Before(h.since)
+}
+
+// from appends to out, a new slice, the items committed at or after
+// since: what git log --since gives, to the second.
+func (h *history[T]) from(since time.Time, out []T) []T {
+	floor := time.Unix(since.Unix(), 0)
+	for i, at := range h.committed {
+		if !at.Before(floor) {
+			out = append(out, h.items[i])
+		}
+	}
+	return out
+}
+
+// refState is what a repository's history is read at: every ref and what
+// it points to, hashed. A commit, a fetch, a merge, a rebase or a branch
+// deleted changes it.
+func refState(ctx context.Context, root, email string) (string, error) {
+	out, err := git(ctx, root, "for-each-ref", "--format=%(refname) %(objectname) %(symref)")
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256([]byte(email + "\x00" + out))
+	return hex.EncodeToString(sum[:]), nil
+}
 
 const gitTimeout = 10 * time.Second
 
@@ -60,9 +130,9 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 // longer exists).
 func (r *Repos) Root(ctx context.Context, dir string) string {
 	r.mu.Lock()
-	if root, ok := r.roots[dir]; ok {
+	if l, ok := r.roots[dir]; ok && (l.root != "" || r.now().Sub(l.at) < rootRecheck) {
 		r.mu.Unlock()
-		return root
+		return l.root
 	}
 	r.mu.Unlock()
 	root, err := git(ctx, dir, "rev-parse", "--show-toplevel")
@@ -75,7 +145,7 @@ func (r *Repos) Root(ctx context.Context, dir string) string {
 		root = ""
 	}
 	r.mu.Lock()
-	r.roots[dir] = root
+	r.roots[dir] = rootLookup{root: root, at: r.now()}
 	r.mu.Unlock()
 	return root
 }
@@ -92,6 +162,34 @@ func (r *Repos) Commits(ctx context.Context, root string, since time.Time) ([]Co
 	if err != nil || email == "" {
 		return nil, ErrNoAuthor
 	}
+	// The refs are read before the history: a commit landing between the
+	// two leaves a state that no longer holds, and the next ask reads
+	// again.
+	state, stateErr := refState(ctx, root, email)
+	if stateErr == nil {
+		r.mu.Lock()
+		if h := r.commits[root]; h.answers(state, since) {
+			out := h.from(since, []Commit{})
+			r.mu.Unlock()
+			return out, nil
+		}
+		r.mu.Unlock()
+	}
+	h, err := readCommits(ctx, root, email, since)
+	if err != nil {
+		return nil, err
+	}
+	if stateErr == nil {
+		h.state = state
+		r.mu.Lock()
+		r.commits[root] = h
+		r.mu.Unlock()
+	}
+	return h.from(since, []Commit{}), nil
+}
+
+// readCommits runs git log for Commits.
+func readCommits(ctx context.Context, root, email string, since time.Time) (*history[Commit], error) {
 	// --author matches a pattern anywhere in "Name <email>": a bare
 	// address also matches jimbob@ for bob@, and its dots match any
 	// character. The bracketed address as a fixed string matches the
@@ -104,32 +202,37 @@ func (r *Repos) Commits(ctx context.Context, root string, since time.Time) ([]Co
 		// lives rather than by the shape of its name.
 		"--decorate-refs=refs/heads/",
 		// The body can span lines, so records end in a record separator.
-		"--format=%H%x1f%at%x1f%s%x1f%D%x1f%b%x1e")
+		"--format=%H%x1f%at%x1f%ct%x1f%s%x1f%D%x1f%b%x1e")
 	if err != nil {
 		return nil, err
 	}
-	commits := []Commit{}
+	h := &history[Commit]{since: since}
 	for _, record := range strings.Split(out, "\x1e") {
-		parts := strings.SplitN(strings.TrimLeft(record, "\n"), "\x1f", 5)
-		if len(parts) < 3 {
+		parts := strings.SplitN(strings.TrimLeft(record, "\n"), "\x1f", 6)
+		if len(parts) < 4 {
 			continue
 		}
 		at, err := strconv.ParseInt(parts[1], 10, 64)
 		if err != nil {
 			continue
 		}
-		c := Commit{SHA: parts[0], At: time.Unix(at, 0).UTC(), Subject: parts[2]}
-		if len(parts) >= 4 {
-			c.Branch = branchOf(parts[3])
+		committed, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil {
+			continue
 		}
-		if len(parts) == 5 {
-			if m := revertedSHA.FindStringSubmatch(parts[4]); m != nil {
+		c := Commit{SHA: parts[0], At: time.Unix(at, 0).UTC(), Subject: parts[3]}
+		if len(parts) >= 5 {
+			c.Branch = branchOf(parts[4])
+		}
+		if len(parts) == 6 {
+			if m := revertedSHA.FindStringSubmatch(parts[5]); m != nil {
 				c.Reverts = m[1]
 			}
 		}
-		commits = append(commits, c)
+		h.items = append(h.items, c)
+		h.committed = append(h.committed, time.Unix(committed, 0))
 	}
-	return commits, nil
+	return h, nil
 }
 
 // OriginName is "owner/name" from the repository's origin remote, or ""
