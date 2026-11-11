@@ -6420,6 +6420,9 @@
                     "overall_grade": {
                       "type": "string"
                     },
+                    "period_days": {
+                      "type": "integer"
+                    },
                     "plan_use": {
                       "additionalProperties": false,
                       "properties": {
