@@ -190,3 +190,21 @@ func TestCapabilityOf(t *testing.T) {
 		}
 	}
 }
+
+// A tip a later one replaced settles nothing: it was neither acted on
+// nor left alone. Counted as not followed, a replaced held tip read as a
+// held tip proved right.
+func TestASupersededTipIsNotResolved(t *testing.T) {
+	entries := []SavingsEntry{
+		tip("replaced", "a", CohortHoldout, 1),
+		tip("unchanged", "b", CohortHoldout, 1),
+		tip("fixed", "c", CohortHoldout, 1),
+		{Type: SavingsOutcome, ID: "replaced", Signal: SignalSuperseded},
+		{Type: SavingsOutcome, ID: "unchanged", Signal: SignalUnchanged},
+		{Type: SavingsOutcome, ID: "fixed", Signal: SignalCompacted, Followed: true},
+	}
+	k := SummarizeSavings(entries, Implicit{}, s0.Add(48*time.Hour))[0]
+	if k.Holdout.Resolved != 2 || k.Holdout.Followed != 1 {
+		t.Errorf("held tips resolved %d, followed %d; want 2 and 1, the replaced one left open", k.Holdout.Resolved, k.Holdout.Followed)
+	}
+}

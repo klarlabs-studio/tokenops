@@ -232,7 +232,10 @@ type savingsKey struct{ capability, kind string }
 func SummarizeSavings(entries []SavingsEntry, implicit Implicit, now time.Time) []KindSavings {
 	outcomes := map[string]SavingsEntry{}
 	for _, e := range entries {
-		if e.Type == SavingsOutcome {
+		// A tip a later one replaced was never acted on or not: it
+		// settles nothing. Counted as not followed, a held tip replaced
+		// this way read as a held tip proved right.
+		if e.Type == SavingsOutcome && e.Signal != SignalSuperseded {
 			if _, ok := outcomes[e.ID]; !ok {
 				outcomes[e.ID] = e
 			}
