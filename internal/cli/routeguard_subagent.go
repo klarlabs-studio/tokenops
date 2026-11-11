@@ -134,8 +134,11 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 	out.HookSpecificOutput.PermissionDecision = "allow"
 	out.HookSpecificOutput.PermissionDecisionReason = "tokenops: " + dec.Reason
 	out.HookSpecificOutput.UpdatedInput = updated
+	// A move is said at every verbosity: quiet silences advice, not what
+	// TokenOps did to the call.
 	switch report.Verbosity {
 	case config.VerbosityQuiet:
+		out.SystemMessage = fmt.Sprintf("tokenops: moved a subagent from %s to %s.", dec.From, dec.To)
 	case config.VerbosityVerbose:
 		out.SystemMessage = fmt.Sprintf("tokenops: moved a subagent from %s to %s: %s. To stop: `tokenops coach set models advise`.",
 			dec.From, dec.To, dec.Reason)

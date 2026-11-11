@@ -95,7 +95,9 @@ func TestSubagentGuardLeavesCallsAloneBelowAutonomous(t *testing.T) {
 	}
 }
 
-func TestSubagentGuardQuietSaysNothing(t *testing.T) {
+// Quiet shortens the message but still says the move: it is something
+// TokenOps did to the call, not advice.
+func TestSubagentGuardQuietStillSaysTheMove(t *testing.T) {
 	writeCoachConfig(t, models+"coach:\n  autonomy: autonomous\n  verbosity: quiet\n")
 	dir := t.TempDir()
 	tp := writeCoachTranscript(t, dir, 1, "claude-opus-5")
@@ -104,7 +106,7 @@ func TestSubagentGuardQuietSaysNothing(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("no hook output: %q", out)
 	}
-	if got.SystemMessage != "" || got.HookSpecificOutput.UpdatedInput["model"] != "haiku" {
+	if got.SystemMessage != "tokenops: moved a subagent from claude-opus-5 to claude-haiku-4-5." || got.HookSpecificOutput.UpdatedInput["model"] != "haiku" {
 		t.Errorf("quiet: message %q model %v", got.SystemMessage, got.HookSpecificOutput.UpdatedInput["model"])
 	}
 }
