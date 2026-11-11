@@ -391,10 +391,9 @@ func writeStatusText(w io.Writer, base string, r daemonProbe) error {
 	lines := []string{
 		fmt.Sprintf("daemon: %s", base),
 		fmt.Sprintf("status: %s — %s", insight.Level, insight.Summary),
-		formatLine("health ", r.Health),
-		formatLine("ready  ", r.Ready),
-		formatLine("version", r.Version),
+		runningLine(r.Health, r.Version),
 	}
+	lines = append(lines, readyLines(r.Ready)...)
 	if len(r.Warnings) > 0 {
 		lines = append(lines, "warnings:")
 		for _, warn := range r.Warnings {
@@ -405,22 +404,78 @@ func writeStatusText(w io.Writer, base string, r daemonProbe) error {
 	return err
 }
 
-func formatLine(label string, r endpointResult) string {
-	if r.Error != "" {
-		return fmt.Sprintf("  %s  ERR  %s", label, r.Error)
+// runningLine says whether the daemon answers, how long it has been up
+// and which build it is, in words rather than the probes' JSON bodies
+// (`--json` keeps those).
+func runningLine(health, ver endpointResult) string {
+	switch {
+	case health.Error != "":
+		return "  daemon   not answering: " + health.Error
+	case health.Status != http.StatusOK:
+		return fmt.Sprintf("  daemon   unhealthy: HTTP %d%s", health.Status, statusWord(health.Body))
 	}
-	if len(r.Body) == 0 {
-		return fmt.Sprintf("  %s  %d", label, r.Status)
+	line := "  daemon   running"
+	if up, ok := health.Body["uptime_ns"].(float64); ok && up > 0 {
+		line += ", up " + humanUptime(time.Duration(up))
 	}
-	return fmt.Sprintf("  %s  %d  %s", label, r.Status, compactBody(r.Body))
+	if v, _ := ver.Body["version"].(string); v != "" {
+		line += ", version " + v
+		var build []string
+		if c, _ := ver.Body["commit"].(string); c != "" && c != "unknown" {
+			build = append(build, c[:min(len(c), 7)])
+		}
+		if d, _ := ver.Body["date"].(string); d != "" && d != "unknown" {
+			build = append(build, d[:min(len(d), 10)])
+		}
+		if len(build) > 0 {
+			line += " (" + strings.Join(build, ", ") + ")"
+		}
+	}
+	return line
 }
 
-func compactBody(body map[string]any) string {
-	b, err := json.Marshal(body)
-	if err != nil {
-		return ""
+// readyLines says whether the daemon is ready, and what stands in the way
+// and what to do when it is not.
+func readyLines(r endpointResult) []string {
+	if r.Error != "" {
+		return []string{"  ready    unknown: " + r.Error}
 	}
-	return string(b)
+	if s, _ := r.Body["status"].(string); r.Status == http.StatusOK && (s == "" || s == "ready") {
+		return []string{"  ready    yes"}
+	}
+	out := []string{fmt.Sprintf("  ready    no%s", statusWord(r.Body))}
+	for _, key := range []string{"blockers", "next_actions"} {
+		items, _ := r.Body[key].([]any)
+		for _, it := range items {
+			if s, ok := it.(string); ok && s != "" {
+				mark := "    - "
+				if key == "next_actions" {
+					mark = "    → "
+				}
+				out = append(out, mark+s)
+			}
+		}
+	}
+	return out
+}
+
+// statusWord is a probe body's status, as " (status)", or nothing.
+func statusWord(body map[string]any) string {
+	if s, _ := body["status"].(string); s != "" {
+		return " (" + strings.ReplaceAll(s, "_", " ") + ")"
+	}
+	return ""
+}
+
+// humanUptime is an uptime in days, hours or minutes.
+func humanUptime(d time.Duration) string {
+	switch {
+	case d >= 24*time.Hour:
+		return fmt.Sprintf("%dd %dh", int(d.Hours())/24, int(d.Hours())%24)
+	case d >= time.Hour:
+		return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
+	}
+	return fmt.Sprintf("%dm", int(d.Minutes()))
 }
 
 // restartCommand is the bare command that restarts or starts the daemon on
