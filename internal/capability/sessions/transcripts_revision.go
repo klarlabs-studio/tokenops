@@ -7,4 +7,4 @@ package sessions
 // without their comments. A cache saved under one revision is read back
 // only under the same, so an upgrade that leaves that code alone keeps
 // the cache, and one that changes it reads the transcripts again.
-const TranscriptsRevision = "e0f4aaeb2babcd8e"
+const TranscriptsRevision = "44632e868a9b66ff"
