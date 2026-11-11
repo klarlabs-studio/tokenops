@@ -68,12 +68,12 @@ func TestScorecardWarmsUpWithNothingToMeasure(t *testing.T) {
 }
 
 func TestWithoutLoopSentinelsKeepsOccasionalAcks(t *testing.T) {
-	in := make([]prompts.UserPrompt, 0, 2*loopSentinelRepeats+1)
+	in := make([]promptFact, 0, 2*loopSentinelRepeats+1)
 	for range loopSentinelRepeats {
-		in = append(in, prompts.UserPrompt{SessionID: "a", Text: " Continue "})
+		in = append(in, promptFactOf(prompts.UserPrompt{SessionID: "a", Text: " Continue "}))
 	}
 	for range loopSentinelRepeats + 1 {
-		in = append(in, prompts.UserPrompt{SessionID: "b", Text: "continue"})
+		in = append(in, promptFactOf(prompts.UserPrompt{SessionID: "b", Text: "continue"}))
 	}
 	if got := len(withoutLoopSentinels(in)); got != loopSentinelRepeats {
 		t.Errorf("kept %d prompts, want the %d from the session under the threshold", got, loopSentinelRepeats)
