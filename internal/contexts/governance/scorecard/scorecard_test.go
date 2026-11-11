@@ -172,7 +172,7 @@ func TestNewWithAgentKPIs(t *testing.T) {
 func TestStringRendersAgentKPIsWhenSet(t *testing.T) {
 	legacy := New(30, 25, 95, "")
 	out := legacy.String()
-	if strings.Contains(out, "CHR") || strings.Contains(out, "CGR") || strings.Contains(out, "RGR") {
+	if strings.Contains(out, "cache hits") || strings.Contains(out, "only confirm") || strings.Contains(out, "rejected") {
 		t.Errorf("legacy New() shouldn't render agent KPI lines:\n%s", out)
 	}
 	full := NewWithAgentKPIs(30, 25, 95, AgentKPIInputs{
@@ -181,7 +181,7 @@ func TestStringRendersAgentKPIsWhenSet(t *testing.T) {
 		RegenerateRatePct: 2, RegenerateComputed: true,
 	}, "")
 	out = full.String()
-	for _, marker := range []string{"CHR — Cache Hit Ratio", "CGR — Confirmation Gate Rate", "RGR — Regenerate Rate"} {
+	for _, marker := range []string{"cache hits (% of input read from cache):   99.0 [A]", "prompts that only confirm (%):", "replies you rejected (%):"} {
 		if !strings.Contains(out, marker) {
 			t.Errorf("missing %q in:\n%s", marker, out)
 		}
@@ -207,7 +207,7 @@ func TestNewScorecard(t *testing.T) {
 func TestScorecardString(t *testing.T) {
 	s := New(30, 25, 95, "v1.0.0")
 	out := s.String()
-	if !strings.Contains(out, "Overall Grade: A") {
+	if !strings.Contains(out, "Grade: A  (the worst graded measure: optimizer savings)") {
 		t.Errorf("expected overall grade A in output:\n%s", out)
 	}
 	if !strings.Contains(out, "v1.0.0") {
