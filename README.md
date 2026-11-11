@@ -229,31 +229,25 @@ Most CLI verbs have a matching MCP tool (`tokenops_<name>`). `fmt` is
 CLI-first (it wraps a shell command); its learning report is exposed to
 agents via `tokenops_fmt (view=learn)`.
 
-## Upgrading signal quality
+## Signal sources
 
-Default install reports **low** confidence (MCP pings only). Two zero-network
-upgrades:
+TokenOps reads what your clients already write on this machine. Each local
+reader (Claude Code, Codex, opencode, Gemini CLI, pi) switches itself on when
+its data appears, unless you switched it off with
+`tokenops vendor-usage enable <source> --disable` (ADR 0009). Nothing to
+configure for the transcripts.
 
-```yaml
-# ~/.config/tokenops/config.yaml
-vendor_usage:
-  claude_code:
-    enabled: true              # reads ~/.claude/stats-cache.json
-    interval: 60s
-  anthropic:
-    enabled: true              # calls Anthropic Admin API
-    admin_key: sk-ant-admin-…  # mint in claude.com console
-    interval: 5m
-```
+A subscription's plan windows are estimated from those transcripts against
+the published caps until you connect a source that reports them. Run
+`tokenops vendor-usage setup` to connect one:
 
-`tokenops vendor-usage status` shows whether the pollers are emitting; use
-`tokenops vendor-usage backfill --hours 168` to pull a week of history from
-Anthropic Admin in one shot after configuring the key.
+- `setup` with no provider reads Claude's 5-hour and 7-day windows from your
+  claude.ai session.
+- `setup claude-code` reads them with Claude Code's own sign-in (opt-in,
+  ADR 0011).
+- `setup <provider>` connects another vendor account.
 
-The Anthropic Admin API only covers metered API usage. Claude Max plan window
-state has no documented endpoint and stays heuristic — the cache reader is the
-only locally-available Max signal and reports daily granularity with an
-explicit caveat.
+`tokenops vendor-usage status` shows each source and what it has recorded.
 
 ## Architecture
 
@@ -368,7 +362,7 @@ and [SECURITY.md](SECURITY.md). Plans and tasks live in `.roady/` (see
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.71.0](https://github.com/klarlabs-studio/tokenops/releases/tag/v0.71.0).
+See [CHANGELOG.md](CHANGELOG.md), newest first, and the [releases page](https://github.com/klarlabs-studio/tokenops/releases/latest).
 
 ## License
 

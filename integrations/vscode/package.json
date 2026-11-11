@@ -23,13 +23,13 @@
       "properties": {
         "tokenops.daemonUrl": {
           "type": "string",
-          "default": "http://127.0.0.1:7878",
-          "description": "Base URL of the TokenOps daemon."
+          "default": "",
+          "description": "Base URL of the TokenOps daemon. Empty uses the address the running daemon writes to ~/.tokenops/daemon.url."
         },
         "tokenops.bearerToken": {
           "type": "string",
           "default": "",
-          "description": "Optional bearer token forwarded as Authorization: Bearer <token>."
+          "description": "Bearer token for the daemon API. Empty uses the token the running daemon writes to ~/.tokenops/daemon.url."
         }
       }
     },
