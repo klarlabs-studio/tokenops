@@ -18,9 +18,10 @@ import (
 // What is saved is what the cache holds, which is never an instruction's
 // words: the cache reads without them, and a tool call's arguments are
 // kept only as a digest (callSignature). The file is written with
-// owner-only permissions. A saved cache is used only by the build that
-// saved it (key), since another may read the transcripts differently, and
-// only into a cache that derives the same prompt facts. Each entry is
+// owner-only permissions. A saved cache is used only under the key it was
+// saved under, which names the code that fills it: other code may read
+// the transcripts differently. It is used only into a cache that derives
+// the same prompt facts. Each entry is
 // checked against its file as any cached entry is: a file that changed is
 // read on, or again.
 
@@ -29,7 +30,7 @@ const savedFormat = 1
 
 type savedCache struct {
 	Format int
-	// Key names the build that saved it.
+	// Key names the code that filled it.
 	Key string
 	// Facts is whether the cache derived prompt facts.
 	Facts  bool
@@ -65,8 +66,11 @@ type savedCodexReader struct {
 }
 
 // Save writes what the cache holds to path, replacing the file whole,
-// under key, which names the build saving it.
+// under key, which names the code that filled it. Scans wait while it
+// writes: a scan drops old records in place, under what is being written.
 func (c *TranscriptCache) Save(path, key string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	s := c.snapshot(key)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
@@ -96,10 +100,9 @@ func (c *TranscriptCache) Save(path, key string) error {
 // being written is saved as though the file ended before that line, so
 // the line, which may be a Codex prompt's raw words, is not saved; the
 // first scan after a load reads it again. A compressed rollout is left
-// out: it is read whole when it changes anyway.
+// out: it is read whole when it changes anyway. The caller holds c.mu
+// for as long as it uses the copy, which shares the cache's records.
 func (c *TranscriptCache) snapshot(key string) savedCache {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	s := savedCache{Format: savedFormat, Key: key, Facts: c.facts != nil,
 		Claude: make(map[string]savedClaude, len(c.claude)), Codex: make(map[string]savedCodex, len(c.codexs))}
 	for p, e := range c.claude {
@@ -143,9 +146,9 @@ func withoutText(recs []Record) []Record {
 	return recs
 }
 
-// ErrSavedCacheStale is a saved cache another build wrote, or one that
-// derived other prompt facts: it is not loaded.
-var ErrSavedCacheStale = errors.New("saved transcript cache is from another build")
+// ErrSavedCacheStale is a saved cache filled by other code (another
+// key), or one that derived other prompt facts: it is not loaded.
+var ErrSavedCacheStale = errors.New("saved transcript cache was filled by other reading code")
 
 // Load fills an empty cache from what Save wrote at path under key. A
 // missing file is fs.ErrNotExist; a cache that already holds entries is
