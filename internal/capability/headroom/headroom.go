@@ -269,3 +269,12 @@ func sortedProviders(bindings map[string]string) []string {
 	sort.Strings(out)
 	return out
 }
+
+// Providers are the providers of r's plans, in report order.
+func (r Result) Providers() []string {
+	out := make([]string, 0, len(r.Reports))
+	for _, rep := range r.Reports {
+		out = append(out, rep.Provider)
+	}
+	return out
+}

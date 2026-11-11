@@ -94,3 +94,33 @@ func usageSince(ctx context.Context, s Summarizer, provider string, since time.T
 	}
 	return u, nil
 }
+
+// CostsOf is each provider's usage today and over the last 30 days, the
+// providers read at once; a provider whose figures cannot be read is left
+// out, and one whose 30 days could not be read keeps today. Empty and
+// repeated providers are skipped.
+func CostsOf(ctx context.Context, s Summarizer, providers []string, now time.Time) map[string]ProviderCost {
+	var (
+		mu  sync.Mutex
+		wg  sync.WaitGroup
+		out = map[string]ProviderCost{}
+	)
+	seen := map[string]bool{}
+	for _, provider := range providers {
+		if seen[provider] || provider == "" {
+			continue
+		}
+		seen[provider] = true
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if c, err := CostOf(ctx, s, provider, now); err == nil || errors.Is(err, ErrLast30Unread) {
+				mu.Lock()
+				out[provider] = c
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	return out
+}

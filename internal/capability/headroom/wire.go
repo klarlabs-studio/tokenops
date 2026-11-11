@@ -4,6 +4,7 @@ import (
 	"time"
 
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
@@ -84,6 +85,12 @@ type GlancePayload struct {
 	// or cold, after which the next prompt writes the whole context to the
 	// cache again. Absent with no session current.
 	PromptCache *waste.CacheCountdown `json:"prompt_cache,omitempty"`
+	// ProviderCosts is each plan's provider's usage today and over the
+	// last 30 days, as the cards show it; a provider whose figures could
+	// not be read is absent. The caller sets it; Payload leaves it empty.
+	ProviderCosts map[string]spending.ProviderCost `json:"provider_costs,omitempty"`
+	// ProviderCostsLate is set when the costs were not all read in time.
+	ProviderCostsLate bool `json:"provider_costs_late,omitempty"`
 }
 
 // Payload is r on the wire.
@@ -106,6 +113,39 @@ func (r BudgetResult) Payload() *BudgetPayload {
 		return &BudgetPayload{Error: ErrStorageDisabled, Hint: r.StorageDisabled}
 	}
 	return &BudgetPayload{Budgets: r.Budgets, Notes: r.Notes}
+}
+
+// Glance is the glance p carries, as Payload made it: what a client that
+// asked the daemon renders, as it renders one it computed.
+func (p *GlancePayload) Glance() Glance {
+	g := Glance{Insight: p.Insight, Budgets: p.SessionBudget.result(), Accounts: p.Accounts, PlanUse: p.PlanUse,
+		PlanAdvice: p.PlanAdvice, EarlyResets: p.EarlyResets, Routing: p.Routing, PromptCache: p.PromptCache}
+	if p.PlanHeadroom != nil {
+		g.Headroom = p.PlanHeadroom.result()
+	}
+	return g
+}
+
+// result is the Result p carries.
+func (p HeadroomPayload) result() Result {
+	switch p.Error {
+	case ErrPlansUnconfigured:
+		return Result{Unconfigured: p.Hint}
+	case ErrStorageDisabled:
+		return Result{StorageDisabled: p.Hint}
+	}
+	return Result{Reports: p.Reports, Notes: p.Notes}
+}
+
+// result is the BudgetResult p carries.
+func (p BudgetPayload) result() BudgetResult {
+	switch p.Error {
+	case ErrPlansUnconfigured:
+		return BudgetResult{Unconfigured: p.Hint}
+	case ErrStorageDisabled:
+		return BudgetResult{StorageDisabled: p.Hint}
+	}
+	return BudgetResult{Budgets: p.Budgets, Notes: p.Notes}
 }
 
 // Payload is g on the wire.

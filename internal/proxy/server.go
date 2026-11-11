@@ -18,6 +18,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
@@ -67,6 +68,9 @@ type Server struct {
 	glances     *snapshots[glanceView]
 	glancePath  string
 	glanceKey   string
+	// glanceCosts reads the providers' usage each glance carries; nil
+	// leaves it out.
+	glanceCosts spending.Summarizer
 	// acted is when each finding was acted on, to leave it out of
 	// findings computed before (withoutActed).
 	actedMu sync.Mutex

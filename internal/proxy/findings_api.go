@@ -137,8 +137,19 @@ func (s *Server) registerFindingRoutes(mux RouteMux) {
 	}
 	mux.HandleFunc("GET /api/findings", func(w http.ResponseWriter, r *http.Request) {
 		d := s.findingsDeps()
-		body, err := shown(r.Context(), d, time.Now().UTC())
-		writeAPIResult(w, body, err)
+		now := time.Now().UTC()
+		switch r.URL.Query().Get("dismissed") {
+		case "":
+			body, err := shown(r.Context(), d, now)
+			writeAPIResult(w, body, err)
+		case "include":
+			// The CLI lists every finding: a dismissal tidies the menu
+			// bar's panel, it does not make a finding untrue.
+			body, err := d.Report(r.Context(), now)
+			writeAPIResult(w, body, err)
+		default:
+			writeAPIError(w, http.StatusBadRequest, errors.New("dismissed must be include or omitted"))
+		}
 	})
 }
 

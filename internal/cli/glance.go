@@ -3,13 +3,11 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -24,6 +22,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/observedlimits"
 	"go.klarlabs.de/tokenops/internal/infra/planevidence"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
+	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -32,8 +31,8 @@ import (
 // bare `tokenops` shows.
 func newGlanceCmd(rf *rootFlags) *cobra.Command {
 	var (
-		brief, jsonOut, noColor, onlyFindings bool
-		dbPath, color                         string
+		brief, jsonOut, noColor, onlyFindings, local bool
+		dbPath, color                                string
 	)
 	cmd := &cobra.Command{
 		Use:   "glance",
@@ -49,13 +48,18 @@ NO_COLOR or --no-color. --brief prints a table; --json the API's payload. Below 
 coach's findings: a window that runs out before its reset, files the agent
 keeps re-reading, sessions past their budget, the change that would most
 improve how sessions go, sources that cannot be read. --findings lists
-them all.`,
+them all.
+
+The running daemon holds the glance already, computed in the background,
+so glance asks it and draws its answer: the time at the top is when the
+daemon computed it. With no daemon answering, with --db or with --local,
+glance computes it here from the event store.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if noColor {
 				color = "never"
 			}
-			return runGlance(cmd, rf, dbPath, glanceView{brief: brief, json: jsonOut, findings: onlyFindings}, color)
+			return runGlance(cmd, rf, dbPath, glanceView{brief: brief, json: jsonOut, findings: onlyFindings, local: local}, color)
 		},
 	}
 	cmd.Flags().BoolVar(&brief, "brief", false, "a compact table: plan, window, used, resets")
@@ -63,17 +67,23 @@ them all.`,
 	cmd.Flags().BoolVar(&onlyFindings, "findings", false, "only the coach's findings, every one of them")
 	cmd.Flags().BoolVar(&noColor, "no-color", false, "plain text (same as --color never)")
 	cmd.Flags().StringVar(&color, "color", "auto", "auto | always | never; always keeps colour when piping, e.g. into less -R")
-	cmd.Flags().StringVar(&dbPath, "db", "", "event store path (defaults to the configured one)")
+	cmd.Flags().StringVar(&dbPath, "db", "", "event store path (defaults to the configured one); computes the glance here")
+	cmd.Flags().BoolVar(&local, "local", false, "compute the glance here instead of asking the running daemon")
 	return cmd
 }
 
 // glanceView is which view of the glance to print.
-type glanceView struct{ brief, json, findings bool }
+type glanceView struct{ brief, json, findings, local bool }
 
 func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView, color string) error {
 	cfg, err := loadConfig(rf)
 	if err != nil {
 		return err
+	}
+	if dbPath == "" && !view.local {
+		if answered, err := glanceFromDaemon(cmd, mcp.DaemonPlanReader(mcp.ConfiguredDaemonURL(cfg)), view, color); answered {
+			return err
+		}
 	}
 	resolved, err := resolvePlanDBIn(dbPath, cfg.Storage.Path)
 	if err != nil {
@@ -131,6 +141,58 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView
 	return err
 }
 
+// glanceDaemonWait bounds asking the daemon. It answers the glance from
+// its last computation at once; one that takes longer is busy, and the
+// glance is computed here instead.
+const glanceDaemonWait = 5 * time.Second
+
+// glanceFromDaemon draws the glance the daemon holds, and reports whether
+// it answered: the daemon computes the glance and its findings in the
+// background, and computing them again here took seconds of CPU for the
+// answer the daemon gives in milliseconds. Not answered, the caller
+// computes them here.
+func glanceFromDaemon(cmd *cobra.Command, ask mcp.DaemonJSON, view glanceView, color string) (bool, error) {
+	ctx, cancel := context.WithTimeout(cmd.Context(), glanceDaemonWait)
+	defer cancel()
+	var p headroom.GlancePayload
+	if err := ask(ctx, "/api/glance", &p); err != nil {
+		return false, nil
+	}
+	// Every finding, as the CLI lists them; the hidden note below says
+	// which the menu bar hides.
+	var found findings.Report
+	if err := ask(ctx, "/api/findings?dismissed=include", &found); err != nil {
+		return false, nil
+	}
+	out := cmd.OutOrStdout()
+	if view.json {
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		if view.findings {
+			return true, enc.Encode(found)
+		}
+		return true, enc.Encode(&p)
+	}
+	now := time.Now().UTC()
+	at := p.ComputedAt
+	if at.IsZero() {
+		at = now
+	}
+	opt := cards.Options{Width: terminalWidth(out), Color: terminalColor(out, color), Brief: view.brief, Now: at,
+		Findings: &found, OnlyFindings: view.findings}
+	if !view.findings {
+		// A daemon from before the glance carried costs has none: they
+		// are shown as not read rather than read here.
+		opt.Costs, opt.CostsLate = p.ProviderCosts, p.ProviderCostsLate || p.ProviderCosts == nil
+	}
+	if _, err := io.WriteString(out, cards.Render(p.Glance(), opt)); err != nil || !view.findings {
+		return true, err
+	}
+	ds, _ := findings.DefaultDismissals().Load(now)
+	_, err := io.WriteString(out, hiddenNote(found, ds, now))
+	return true, err
+}
+
 // hiddenNote says how many of the findings listed are hidden in the menu
 // bar. The CLI lists every finding: a dismissal tidies the panel, it does
 // not make a finding untrue.
@@ -151,30 +213,7 @@ const costBudget = 4 * time.Second
 // glanceCosts is each plan's provider's usage today and over 30 days; a
 // provider whose figures cannot be read shows none.
 func glanceCosts(ctx context.Context, s spending.Summarizer, g headroom.Glance, now time.Time) map[string]spending.ProviderCost {
-	var (
-		mu  sync.Mutex
-		wg  sync.WaitGroup
-		out = map[string]spending.ProviderCost{}
-	)
-	seen := map[string]bool{}
-	for _, r := range g.Headroom.Reports {
-		if seen[r.Provider] || r.Provider == "" {
-			continue
-		}
-		seen[r.Provider] = true
-		wg.Add(1)
-		go func(provider string) {
-			defer wg.Done()
-			// Today read in time is shown even when the 30 days were not.
-			if c, err := spending.CostOf(ctx, s, provider, now); err == nil || errors.Is(err, spending.ErrLast30Unread) {
-				mu.Lock()
-				out[provider] = c
-				mu.Unlock()
-			}
-		}(r.Provider)
-	}
-	wg.Wait()
-	return out
+	return spending.CostsOf(ctx, s, g.Headroom.Providers(), now)
 }
 
 // terminalWidth is $COLUMNS, else the terminal's width, else 80.

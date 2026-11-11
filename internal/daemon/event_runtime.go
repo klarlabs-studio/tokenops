@@ -154,6 +154,7 @@ func initializeEventRuntime(
 		proxy.WithSourceFreshness(sources),
 		proxy.WithPlans(deps),
 		proxy.WithGlanceSnapshot(filepath.Join(findings.DefaultDir(), "glance.json"), configKey(cfg)),
+		proxy.WithGlanceCosts(glanceCostReader(components.Aggregator)),
 		proxy.WithActions(actionDeps(cfg, rt.Store, logger)),
 		proxy.WithSessions(func() proxy.SessionRoots { return proxy.SessionRoots{} }),
 		proxy.WithState(stateDeps(cfg, rt.Store, sources, rt.Bus.DroppedCount)),
@@ -221,6 +222,15 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 // (its week and the four weeks before), and a day so that the window a
 // scorecard read yesterday still covers today's.
 const glanceEventsSpan = spending.ScorecardReach + 24*time.Hour
+
+// glanceCostReader is what the glance reads its providers' usage through:
+// agg, or nil without one (no typed nil a caller would call).
+func glanceCostReader(agg *spending.EventAggregator) spending.Summarizer {
+	if agg == nil {
+		return nil
+	}
+	return agg
+}
 
 // newGlanceEvents is the EventCache the plan routes and the scorecard
 // read: the glance reads weeks of events in full, and between two of the

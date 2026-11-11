@@ -13,6 +13,7 @@ import (
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 )
 
 // glanceRefreshBudget bounds one background computation of the glance.
@@ -201,6 +202,18 @@ func WithGlanceSnapshot(path, key string) Option {
 	return func(s *Server) { s.glancePath, s.glanceKey = path, key }
 }
 
+// WithGlanceCosts has each computed glance carry its plans' providers'
+// usage today and over 30 days, read through s: the cards show them, and
+// a client that asks for the glance would otherwise read 30 days of
+// usage itself. A nil s leaves them out.
+func WithGlanceCosts(s spending.Summarizer) Option {
+	return func(srv *Server) { srv.glanceCosts = s }
+}
+
+// glanceCostsBudget bounds the cost reads of one glance. They run in the
+// background, beside a glance that took longer.
+const glanceCostsBudget = 30 * time.Second
+
 // view is the glance and findings for a request at now, from the plan
 // routes' deps, and when they were computed.
 func (s *Server) view(ctx context.Context, now time.Time) (glanceView, time.Time, error) {
@@ -222,6 +235,12 @@ func (s *Server) computeView(ctx context.Context, now time.Time) (glanceView, er
 	p.Boundaries = boundaries.GlanceAdvice(d.Config, g.Headroom.Reports)
 	p.SpendBudgets = budgets.Current("", now)
 	p.ComputedAt = now
+	if s.glanceCosts != nil {
+		costCtx, cancel := context.WithTimeout(ctx, glanceCostsBudget)
+		p.ProviderCosts = spending.CostsOf(costCtx, s.glanceCosts, g.Headroom.Providers(), now)
+		p.ProviderCostsLate = costCtx.Err() != nil
+		cancel()
+	}
 	var c *coachcap.Report
 	if s.state != nil {
 		if st := s.state(); st.Coach != nil {

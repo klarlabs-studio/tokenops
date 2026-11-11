@@ -109,8 +109,9 @@ func readMergedPRs(ctx context.Context, root, email string, since time.Time) ([]
 		return nil, nil
 	}
 	args := append([]string{"log"}, refs...)
-	args = append(args, "--first-parent", "--since=@"+strconv.FormatInt(since.Unix(), 10),
-		"--format=%H%x1f%ct%x1f%ae%x1f%P%x1f%s", "--")
+	args = append(args, "--first-parent")
+	args = append(args, sinceArgs(since)...)
+	args = append(args, "--format=%H%x1f%ct%x1f%ae%x1f%P%x1f%s", "--")
 	out, err := git(ctx, root, args...)
 	if err != nil {
 		return nil, err

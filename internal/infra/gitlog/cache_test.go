@@ -246,3 +246,24 @@ func TestHistoryDoesNotKeepAFailedRead(t *testing.T) {
 		t.Errorf("after a cancelled read: %v, %v; want the commit", subjects(cs), err)
 	}
 }
+
+// A window that starts at or before the epoch is all of history. git read
+// such a --since as about now, so a read from the start found nothing
+// committed more than a second before.
+func TestHistoryFromTheStartReadsEverything(t *testing.T) {
+	isolateGit(t)
+	const me = "me@example.com"
+	hourAgo := time.Now().Add(-time.Hour)
+	repo := newRepo(t, me)
+	commit(t, repo, me, "feat: one (#1)", hourAgo)
+	for _, since := range []time.Time{{}, time.Unix(0, 0), time.Unix(-1, 0)} {
+		cs, err := NewRepos().Commits(context.Background(), repo, since)
+		if err != nil || len(cs) != 1 {
+			t.Errorf("commits since %v: %v, %v; want the commit an hour ago", since, subjects(cs), err)
+		}
+		prs, err := NewRepos().MergedPRs(context.Background(), repo, since)
+		if err != nil || len(prs) != 1 {
+			t.Errorf("PRs since %v: %v, %v; want the one an hour ago", since, prNumbers(prs), err)
+		}
+	}
+}
