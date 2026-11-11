@@ -12,7 +12,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // formatFocus is the only export format: FOCUS, as CSV.
@@ -83,7 +82,7 @@ The window defaults to the current month so far, in UTC days.`,
 				}
 			}
 			ctx := cmd.Context()
-			store, err := sqlite.Open(ctx, path, sqlite.Options{})
+			store, err := openStoreForRead(ctx, path)
 			if err != nil {
 				return fmt.Errorf("open event store: %w", err)
 			}

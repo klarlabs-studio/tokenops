@@ -306,7 +306,7 @@ func newOptimizationsCmd() *cobra.Command {
 				return err
 			}
 			ctx := cmd.Context()
-			store, err := sqlite.Open(ctx, resolved, sqlite.Options{})
+			store, err := openStoreForRead(ctx, resolved)
 			if err != nil {
 				return err
 			}

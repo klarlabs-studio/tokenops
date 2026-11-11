@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/tasklog"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // newTaskCmd assembles the `tokenops task` family. Three verbs
@@ -163,7 +162,7 @@ func computeTaskMetrics(ctx context.Context, all []tasklog.Task, dbFlag string) 
 	if _, err := os.Stat(dbPath); err != nil {
 		return nil, fmt.Errorf("events.db not found at %s; run `tokenops init` first", dbPath)
 	}
-	store, err := sqlite.Open(ctx, dbPath, sqlite.Options{})
+	store, err := openStoreForRead(ctx, dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open store: %w", err)
 	}

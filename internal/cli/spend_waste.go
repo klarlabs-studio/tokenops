@@ -10,7 +10,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // newSpendWasteCmd builds `tokenops spend waste`: the period's avoidable
@@ -59,7 +58,7 @@ realized, and the guardrails ranked by how ready their evidence is.`,
 				}
 			}
 			ctx := cmd.Context()
-			store, err := sqlite.Open(ctx, path, sqlite.Options{})
+			store, err := openStoreForRead(ctx, path)
 			if err != nil {
 				return fmt.Errorf("open event store: %w", err)
 			}

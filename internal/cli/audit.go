@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/auditlog"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 func newAuditCmd(rf *rootFlags) *cobra.Command {
@@ -41,7 +40,7 @@ Mirrors the tokenops_records (view=audit) MCP tool: both call auditlog.Read.`,
 			}
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 			defer cancel()
-			store, err := sqlite.Open(ctx, path, sqlite.Options{})
+			store, err := openStoreForRead(ctx, path)
 			if err != nil {
 				return fmt.Errorf("open audit db: %w", err)
 			}
