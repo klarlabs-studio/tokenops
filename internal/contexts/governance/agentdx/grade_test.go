@@ -14,10 +14,12 @@ func TestGradesAreAssigned(t *testing.T) {
 		P90TurnsPerPrompt:         9,
 		ReworkRatePct:             3,
 		InterruptRatePct:          1,
+		InterruptPrompts:          100,
 		FirstTryRatePct:           92,
 		MedianSecondsPerPrompt:    45,
 		MedianContextGrowthTokens: 4_000,
 		CompactionsPerSession:     0.2,
+		CompactionSessions:        5,
 	})
 	for name, got := range map[string]Letter{
 		"turns":     g.Turns,

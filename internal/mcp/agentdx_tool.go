@@ -20,7 +20,7 @@ type agentDXInput struct {
 	All    bool   `json:"all,omitempty" jsonschema:"description=Read all history instead of a days window. Overrides days."`
 	Source string `json:"source,omitempty" jsonschema:"description=One client: claude-code, codex, cursor or opencode (default: every client present)"`
 	Model  string `json:"model,omitempty" jsonschema:"description=Only instructions mostly served by this model id (case-insensitive exact match)"`
-	Role   string `json:"role,omitempty" jsonschema:"enum=all,enum=primary,enum=auto_review,enum=subagent,description=all (default), primary (the operator's own instructions), auto_review (reviews the harness ran by itself, such as Codex's), or subagent"`
+	Role   string `json:"role,omitempty" jsonschema:"enum=all,enum=primary,enum=auto_review,enum=subagent,description=primary (default: the operator's own instructions), all (every role), auto_review (reviews the harness ran by itself, such as Codex's), or subagent"`
 }
 
 // window is the transcripts and cohort one call selects; an unknown role

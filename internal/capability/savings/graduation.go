@@ -63,10 +63,9 @@ func evidence(capability string, r Report, followThrough []ft.Summary) learning.
 		if capability == learning.CapabilityReadGuard {
 			// The guard calls a re-read redundant only for a file read in
 			// full and unchanged since (size and mtime), so each shadow
-			// call is right by construction; what it would have saved is
-			// the re-read that went ahead.
+			// call is right by construction and confirms nothing; what it
+			// would have saved is the re-read that went ahead.
 			ev.Shadow += k.Shadow.Count
-			ev.ShadowConfirmed += k.Shadow.Count
 			tokens += k.ShadowTokens
 			continue
 		}

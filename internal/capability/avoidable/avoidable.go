@@ -146,7 +146,15 @@ type ClassCost struct {
 	// Causes split the cache rebuilds by why each happened, largest
 	// first; absent on every other class.
 	Causes []CauseCost `json:"causes,omitempty"`
+	// Inferred marks a class that reads waste into what did not happen
+	// rather than observing it: a session with no commit and no outcome
+	// may have been research, a review or a question. It is shown, and
+	// left out of Avoidable, the headline and the guardrails' ranking.
+	Inferred bool `json:"inferred,omitempty"`
 }
+
+// inferred are the classes that infer waste from an absence.
+var inferred = map[waste.Class]bool{waste.ClassAbandoned: true}
 
 // CauseCost is the part of the cache rebuilds one cause accounts for.
 type CauseCost struct {
@@ -293,7 +301,7 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 	tokensOf := map[waste.Class]map[string]int64{}
 	sessionsOf := map[waste.Class]map[string]bool{}
 	for _, c := range waste.Classes() {
-		cc := &ClassCost{Class: c, Name: waste.ClassName(c), Method: methods[c], Guardrail: guardrailOf[c]}
+		cc := &ClassCost{Class: c, Name: waste.ClassName(c), Method: methods[c], Guardrail: guardrailOf[c], Inferred: inferred[c]}
 		byClass[c], tokensOf[c], sessionsOf[c] = cc, map[string]int64{}, map[string]bool{}
 	}
 	causes := newCauseBook()
@@ -324,7 +332,9 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 			cc.Turns++
 			sessionsOf[c][t.SessionID] = true
 			tokensOf[c][t.Provider] += n
-			avoidTokens[t.Provider] += n
+			if !inferred[c] {
+				avoidTokens[t.Provider] += n
+			}
 			if note, ok := b.rebuilds[p]; ok && c == waste.ClassCacheRebuild {
 				causes.add(note, t, n, v)
 				if note.cause == waste.CausePrefixChanged {
@@ -344,9 +354,11 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 			cc.Causes = causes.costs(r.Calibrations)
 			likely.attach(cc.Causes)
 		}
-		r.Avoidable.Tokens += cc.Tokens
-		r.Avoidable.APIEquivalentUSD += cc.APIEquivalentUSD
-		r.Avoidable.BilledUSD += cc.BilledUSD
+		if !cc.Inferred {
+			r.Avoidable.Tokens += cc.Tokens
+			r.Avoidable.APIEquivalentUSD += cc.APIEquivalentUSD
+			r.Avoidable.BilledUSD += cc.BilledUSD
+		}
 		r.Classes = append(r.Classes, *cc)
 	}
 	r.Usage.WindowShare = shares(r.Calibrations, usageTokens)
@@ -559,7 +571,7 @@ func rank(steps []savings.Step, classes []ClassCost) ([]Guardrail, *Guardrail) {
 			g.Bar = savings.Bar(s)
 		}
 		for _, c := range classes {
-			if c.Guardrail != s.Capability {
+			if c.Guardrail != s.Capability || c.Inferred {
 				continue
 			}
 			g.Classes = append(g.Classes, c.Class)
@@ -625,7 +637,7 @@ func largest(ss []WindowShare) (WindowShare, bool) {
 func topClass(cs []ClassCost) string {
 	var best ClassCost
 	for _, c := range cs {
-		if c.APIEquivalentUSD > best.APIEquivalentUSD {
+		if !c.Inferred && c.APIEquivalentUSD > best.APIEquivalentUSD {
 			best = c
 		}
 	}

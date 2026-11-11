@@ -78,3 +78,28 @@ func TestActingHasNoNextStage(t *testing.T) {
 		t.Fatalf("graduation = %+v", g)
 	}
 }
+
+// The read guard's bar is what can fail: how many calls it made and what
+// the re-reads it let go cost. Its calls are right by construction, so a
+// precision criterion only counted every call as confirmed.
+func TestReadGuardBarHasNoPrecisionToPass(t *testing.T) {
+	for _, stage := range []Stage{StageShadow, StageAdvise} {
+		ev := GraduationEvidence{Shadow: 60, Realized: measurement.Estimated(240_000, "read_guard_shadow", "sized from the file"), RealizedUnit: "tokens"}
+		g := Graduate(CapabilityReadGuard, stage, ev)
+		for _, c := range g.Criteria {
+			if strings.Contains(c.Name, "precision") {
+				t.Errorf("%s: the read guard is graded on %q", stage, c.Name)
+			}
+		}
+		if !g.Ready {
+			t.Errorf("%s: 60 calls and a cost watched are not ready: %+v", stage, g)
+		}
+		ev.Realized = measurement.Unknown("no redundant re-read watched yet")
+		if g := Graduate(CapabilityReadGuard, stage, ev); g.Ready {
+			t.Errorf("%s: ready with nothing watched going by: %+v", stage, g)
+		}
+	}
+	if g := Graduate(CapabilityReadGuard, StageShadow, GraduationEvidence{}); g.Next != StageAdvise {
+		t.Errorf("from shadow the guard's next stage is %q, want advise", g.Next)
+	}
+}

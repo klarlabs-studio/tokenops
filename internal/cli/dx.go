@@ -100,7 +100,7 @@ type cohortFlags struct {
 
 func (c *cohortFlags) register(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&c.model, "model", "", "only instructions mostly served by this model id (case-insensitive)")
-	cmd.Flags().StringVar(&c.role, "role", "all", "instructions to measure: all | primary (yours) | auto_review (reviews the harness ran) | subagent")
+	cmd.Flags().StringVar(&c.role, "role", "primary", "instructions to measure: primary (yours) | auto_review (reviews the harness ran) | subagent | all")
 }
 
 func (c cohortFlags) validate() error {
@@ -111,8 +111,10 @@ func (c cohortFlags) validate() error {
 	return nil
 }
 
+// empty reports the default cohort, the operator's own instructions: the
+// one the daemon's analysis measures.
 func (c cohortFlags) empty() bool {
-	return c.model == "" && (c.role == "" || c.role == "all")
+	return !c.apply(sessions.Window{}).Filtered()
 }
 
 func (c cohortFlags) apply(w sessions.Window) sessions.Window {
@@ -354,7 +356,7 @@ func writeCohortLine(w io.Writer, c *sessions.CohortInfo) {
 	if c.Selected < c.InWindow {
 		fmt.Fprintf(w, "  cohort: %d of the window's %d instructions (%s)\n", c.Selected, c.InWindow, cohortFilter(c))
 	}
-	if reviews := c.ByRole["auto_review"]; reviews > 0 && c.Role == "" {
+	if reviews := c.ByRole["auto_review"]; reviews > 0 && c.Role == "all" {
 		fmt.Fprintf(w, "  %d of these are automatic reviews; --role primary measures your own instructions alone\n", reviews)
 	}
 }

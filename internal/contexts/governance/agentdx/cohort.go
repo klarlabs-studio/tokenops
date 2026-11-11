@@ -39,12 +39,17 @@ func RoleOf(recorded, model string) string {
 	return recorded
 }
 
-// ParseRole validates a role filter. Empty and "all" keep every role.
+// ParseRole validates a role filter. Empty is the operator's own
+// instructions: pooled with the reviews and subagent prompts the harness
+// sends by itself, a median describes neither. "all" keeps every role,
+// as the empty Cohort.Role does.
 func ParseRole(s string) (string, error) {
 	r := strings.ToLower(strings.TrimSpace(s))
 	r = strings.ReplaceAll(r, "-", "_")
 	switch r {
-	case "", RoleAll:
+	case "":
+		return RolePrimary, nil
+	case RoleAll:
 		return "", nil
 	case RolePrimary, RoleAutoReview, RoleSubagent:
 		return r, nil

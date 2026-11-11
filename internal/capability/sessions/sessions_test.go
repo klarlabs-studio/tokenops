@@ -462,3 +462,31 @@ func quotes(f Findings, text string) bool {
 	}
 	return false
 }
+
+// The default window measures the operator's own instructions: reviews
+// and subagent prompts the harness sends by itself are a different
+// workload, and pooled with them a median describes neither. "all" still
+// pools every role, and is not the window the daemon's analysis answers.
+func TestTheDefaultCohortIsTheOperatorsOwn(t *testing.T) {
+	for _, tc := range []struct {
+		role     string
+		want     agentdx.Cohort
+		filtered bool
+	}{
+		{"", agentdx.Cohort{Role: agentdx.RolePrimary}, false},
+		{"primary", agentdx.Cohort{Role: agentdx.RolePrimary}, false},
+		{"all", agentdx.Cohort{}, true},
+		{"subagent", agentdx.Cohort{Role: agentdx.RoleSubagent}, true},
+	} {
+		w := Window{Role: tc.role}
+		c, err := w.Cohort()
+		if err != nil || c != tc.want || w.Filtered() != tc.filtered {
+			t.Errorf("role %q: cohort %+v (%v), filtered %v; want %+v, %v", tc.role, c, err, w.Filtered(), tc.want, tc.filtered)
+		}
+	}
+	units := []agentdx.Unit{{Role: agentdx.RolePrimary}, {Role: agentdx.RoleAutoReview}, {Role: agentdx.RoleSubagent}}
+	c, _ := Window{}.Cohort()
+	if got := agentdx.FilterUnits(units, c); len(got) != 1 || got[0].Role != agentdx.RolePrimary {
+		t.Errorf("default window kept %+v", got)
+	}
+}

@@ -76,3 +76,52 @@ func TestActingCapabilityIsNotSuggested(t *testing.T) {
 		t.Fatalf("routing = %+v", s)
 	}
 }
+
+// Held tips are evidence only by how their sessions went: one the session
+// fixed on its own was not needed, and one a later tip replaced says
+// nothing. Before, every held tip not followed counted as right, the
+// replaced ones included, so the bar could not fail.
+func TestHeldTipsCanFailTheShadowBar(t *testing.T) {
+	l := &memLedger{}
+	var settled []Resolution
+	for i := range 60 {
+		id := fmt.Sprint("h", i)
+		RecordTip(l, t0, Tip{ID: id, Session: id, Kind: "compact_now", Cohort: Holdout})
+		switch {
+		case i < 20:
+			// The session compacted on its own.
+			settled = append(settled, Resolution{ID: id, Signal: learning.SignalCompacted, Followed: true})
+		case i < 40:
+			settled = append(settled, Resolution{ID: id, Signal: learning.SignalSuperseded})
+		default:
+			settled = append(settled, Resolution{ID: id, Signal: learning.SignalUnchanged})
+		}
+	}
+	RecordOutcomes(l, t0.Add(time.Hour), settled)
+	r := Build(context.Background(), Deps{Ledger: l}, t0.Add(48*time.Hour))
+	s := step(t, Graduations(r, rungs(map[string]string{"context": "off"}), nil), learning.CapabilityCompaction)
+	if s.Evidence.Shadow != 40 || s.Evidence.ShadowConfirmed != 20 {
+		t.Fatalf("shadow %d, confirmed %d; want 40 and 20, the replaced ones left out", s.Evidence.Shadow, s.Evidence.ShadowConfirmed)
+	}
+	if s.Ready {
+		t.Errorf("ready at 50%% shadow precision: %+v", s.Graduation)
+	}
+}
+
+// The read guard's step carries no precision, and confirms none of its
+// calls: each is right by construction.
+func TestReadGuardConfirmsNothingByConstruction(t *testing.T) {
+	l := &memLedger{}
+	for i := range 55 {
+		RecordReadGuard(l, t0, fmt.Sprint("r", i), "s", true, 4000)
+	}
+	s := step(t, Graduations(Build(context.Background(), Deps{Ledger: l}, t0), rungs(map[string]string{"waste": "off"}), nil), learning.CapabilityReadGuard)
+	if s.Evidence.ShadowConfirmed != 0 {
+		t.Errorf("confirmed %d calls by construction", s.Evidence.ShadowConfirmed)
+	}
+	for _, c := range s.Criteria {
+		if strings.Contains(c.Name, "precision") {
+			t.Errorf("graded on %q", c.Name)
+		}
+	}
+}

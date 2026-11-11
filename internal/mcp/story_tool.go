@@ -24,7 +24,7 @@ type storyInput struct {
 	Limit  int    `json:"limit,omitempty" jsonschema:"description=Most recent tasks to return (default 10). -1 returns every task in the window."`
 	Source string `json:"source,omitempty" jsonschema:"description=One client: claude-code, codex, cursor or opencode (default: every client present)"`
 	Model  string `json:"model,omitempty" jsonschema:"description=Only instructions mostly served by this model id (case-insensitive exact match)"`
-	Role   string `json:"role,omitempty" jsonschema:"enum=all,enum=primary,enum=auto_review,enum=subagent,description=all (default), primary (the operator's own instructions), auto_review (reviews the harness ran by itself, such as Codex's), or subagent"`
+	Role   string `json:"role,omitempty" jsonschema:"enum=all,enum=primary,enum=auto_review,enum=subagent,description=primary (default: the operator's own instructions), all (every role), auto_review (reviews the harness ran by itself, such as Codex's), or subagent"`
 	Quote  bool   `json:"quote,omitempty" jsonschema:"description=Off by default. true returns the narrative: each task titled with the operator's instruction text as typed, the absolute local file paths it edited, and each friction as a sentence. Off, tasks carry derived figures only: no title, a count of files edited and each friction's kind."`
 }
 

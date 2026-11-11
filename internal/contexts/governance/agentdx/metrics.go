@@ -151,11 +151,15 @@ type Metrics struct {
 	// MedianContextGrowthTokens is the typical context increase between
 	// consecutive turns — what eventually forces a compaction.
 	MedianContextGrowthTokens int64 `json:"median_context_growth_tokens"`
-	// CompactionsPerSession counts context compactions per session.
+	// CompactionsPerSession counts context compactions per session, over
+	// the CompactionSessions sessions whose client records compactions.
 	CompactionsPerSession float64 `json:"compactions_per_session"`
+	CompactionSessions    int     `json:"compaction_sessions"`
 	// InterruptRatePct is the share of instructions the operator had to
-	// interrupt.
+	// interrupt, over the InterruptPrompts instructions whose client
+	// records interrupts.
 	InterruptRatePct float64 `json:"interrupt_rate_pct"`
+	InterruptPrompts int     `json:"interrupt_prompts"`
 	// MedianSecondsPerPrompt is the wall-clock a typical instruction
 	// takes from being typed to the agent's last turn. Turns measure
 	// effort; this measures waiting, and they diverge when turns are slow.
@@ -190,6 +194,21 @@ type Metrics struct {
 	// provider — which is every client except opencode.
 	ByProvider map[string]Metrics `json:"by_provider,omitempty"`
 }
+
+// unrecorded are the record kinds a client's transcripts never carry,
+// so their absence there says nothing: Cursor and opencode do not record
+// an interrupt, and neither Cursor nor Codex a compaction (opencode
+// records them explicitly). A rate over such a client's instructions
+// counted the missing record as a clean run and graded it A.
+var unrecorded = map[Source]map[RecordKind]bool{
+	SourceCursor:   {KindInterrupt: true, KindCompaction: true},
+	SourceOpencode: {KindInterrupt: true},
+	SourceCodex:    {KindCompaction: true},
+}
+
+// carries reports whether a client's transcripts can carry a kind of
+// record. A record whose client is not known is taken to.
+func carries(h Source, k RecordKind) bool { return !unrecorded[h][k] }
 
 // escalationTools are the tools that hand work to a subagent. Names are
 // compared lower-cased: the clients spell them differently (Claude Code
@@ -262,10 +281,14 @@ func Compute(records []Record) Metrics {
 	// units: a compaction happens between instructions, and a session
 	// exists whether or not anyone typed into it.
 	sessions := map[string]bool{}
+	compacting := map[string]bool{}
 	compactions := 0
 	for _, r := range records {
 		if r.SessionID != "" {
 			sessions[r.SessionID] = true
+			if carries(r.Harness, KindCompaction) {
+				compacting[r.SessionID] = true
+			}
 		}
 		if r.Kind == KindCompaction {
 			compactions++
@@ -284,6 +307,7 @@ func Compute(records []Record) Metrics {
 		reworkEdits     int
 		promptsWithTask int
 		interrupted     int
+		interruptible   int
 		firstTry        int
 	)
 	for _, u := range units {
@@ -301,8 +325,11 @@ func Compute(records []Record) Metrics {
 		if u.Escalated {
 			promptsWithTask++
 		}
-		if u.Interrupted {
-			interrupted++
+		if carries(Source(u.Harness), KindInterrupt) {
+			interruptible++
+			if u.Interrupted {
+				interrupted++
+			}
 		}
 		if u.FirstTry() {
 			firstTry++
@@ -324,11 +351,15 @@ func Compute(records []Record) Metrics {
 	}
 	if m.Prompts > 0 {
 		m.EscalationRatePct = round1(float64(promptsWithTask) / float64(m.Prompts) * 100)
-		m.InterruptRatePct = round1(float64(interrupted) / float64(m.Prompts) * 100)
+		m.InterruptPrompts = interruptible
 		m.FirstTryRatePct = round1(float64(firstTry) / float64(m.Prompts) * 100)
 	}
-	if m.Sessions > 0 {
-		m.CompactionsPerSession = round1(float64(compactions) / float64(m.Sessions))
+	if interruptible > 0 {
+		m.InterruptRatePct = round1(float64(interrupted) / float64(interruptible) * 100)
+	}
+	m.CompactionSessions = len(compacting)
+	if m.CompactionSessions > 0 {
+		m.CompactionsPerSession = round1(float64(compactions) / float64(m.CompactionSessions))
 	}
 	m.ReadOnlyCommands, m.RepeatedCommands = repeatedCommands(records)
 	if m.ReadOnlyCommands > 0 {

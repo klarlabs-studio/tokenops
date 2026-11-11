@@ -36,9 +36,9 @@ type Window struct {
 	// Model keeps instructions mostly served by one model (compared
 	// without regard to case); empty keeps every model.
 	Model string
-	// Role keeps instructions of one role: primary (the operator's own),
-	// auto_review (a review the harness ran by itself) or subagent.
-	// Empty or "all" keeps every role.
+	// Role keeps instructions of one role: primary (the operator's own,
+	// and the default), auto_review (a review the harness ran by itself)
+	// or subagent. "all" keeps every role.
 	Role string
 }
 
@@ -55,7 +55,7 @@ func (w Window) Cohort() (agentdx.Cohort, error) {
 // which a precomputed whole-window answer cannot serve.
 func (w Window) Filtered() bool {
 	c, err := w.Cohort()
-	return err != nil || !c.IsZero() || (w.Source != "" && w.Source != string(agentdx.SourceAuto))
+	return err != nil || c != (agentdx.Cohort{Role: agentdx.RolePrimary}) || (w.Source != "" && w.Source != string(agentdx.SourceAuto))
 }
 
 // CohortInfo says which instructions a measurement covers and what the
@@ -83,6 +83,9 @@ func (w Window) read(now time.Time, withText bool) ([]agentdx.Record, string, Co
 	records, readErr := agentdx.ExtractAll(opts)
 	all := agentdx.Units(records)
 	info := CohortInfo{Model: cohort.Model, Role: cohort.Role, InWindow: len(all), ByRole: agentdx.RoleCounts(all)}
+	if info.Role == "" {
+		info.Role = agentdx.RoleAll
+	}
 	if w.Source != string(agentdx.SourceAuto) {
 		info.Source = w.Source
 	}
