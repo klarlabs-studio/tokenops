@@ -49,7 +49,8 @@ const (
 type GraduationEvidence struct {
 	// Shadow counts the resolved calls the capability made without
 	// delivering them (held back or observed only); ShadowConfirmed those
-	// whose outcome showed the call was right.
+	// whose outcome showed the call was right. The read guard's calls
+	// are right by construction, so it confirms none.
 	Shadow          int `json:"shadow"`
 	ShadowConfirmed int `json:"shadow_confirmed"`
 	// Advised counts the delivered interventions with a known outcome;
@@ -93,15 +94,18 @@ type Graduation struct {
 func Graduate(capability string, stage Stage, ev GraduationEvidence) Graduation {
 	g := Graduation{Capability: capability, Stage: stage}
 	switch {
-	case stage == StageShadow:
-		g.Next = StageAdvise
-		g.Criteria = shadowCriteria(ev)
-	case stage == StageAdvise && capability == CapabilityReadGuard:
+	case capability == CapabilityReadGuard && stage != StageAct:
 		// The guard advises by watching: its evidence for enforcing is
 		// still the re-reads it would have refused, and the tokens they
 		// cost when they went ahead.
 		g.Next = StageAct
-		g.Criteria = append(shadowCriteria(ev), realizedCriterion(ev))
+		if stage == StageShadow {
+			g.Next = StageAdvise
+		}
+		g.Criteria = readGuardCriteria(ev)
+	case stage == StageShadow:
+		g.Next = StageAdvise
+		g.Criteria = shadowCriteria(ev)
 	case stage == StageAdvise:
 		g.Next = StageAct
 		g.Criteria = []Criterion{
@@ -118,6 +122,16 @@ func Graduate(capability string, stage Stage, ev GraduationEvidence) Graduation 
 		g.Ready = g.Ready && c.Met
 	}
 	return g
+}
+
+// readGuardCriteria are the guard's bar. Its calls have no precision to
+// measure: it calls a re-read redundant only for a file read in full and
+// unchanged since, so every call is right by construction, and a
+// precision criterion counted every call as confirmed and could not
+// fail. What can be shown is how many it made and what the re-reads it
+// let go ahead cost.
+func readGuardCriteria(ev GraduationEvidence) []Criterion {
+	return []Criterion{countCriterion("shadow calls", ev.Shadow), realizedCriterion(ev)}
 }
 
 func shadowCriteria(ev GraduationEvidence) []Criterion {

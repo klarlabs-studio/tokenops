@@ -184,7 +184,7 @@ func TestFilterRecordsMatchesFilterUnits(t *testing.T) {
 }
 
 func TestParseRole(t *testing.T) {
-	for in, want := range map[string]string{"": "", "all": "", "Primary": RolePrimary, "auto-review": RoleAutoReview, "subagent": RoleSubagent} {
+	for in, want := range map[string]string{"": RolePrimary, "all": "", "Primary": RolePrimary, "auto-review": RoleAutoReview, "subagent": RoleSubagent} {
 		got, err := ParseRole(in)
 		if err != nil || got != want {
 			t.Errorf("ParseRole(%q) = %q, %v; want %q", in, got, err, want)

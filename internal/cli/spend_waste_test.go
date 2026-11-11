@@ -176,3 +176,31 @@ func TestWriteWasteReportNamesTheLikelyLintFinding(t *testing.T) {
 		})
 	}
 }
+
+// An inferred class is marked and said to be left out of the total.
+func TestWriteWasteReportMarksTheInferredClass(t *testing.T) {
+	t0 := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
+	r := avoidable.Report{Since: t0, Until: t0.Add(7 * 24 * time.Hour), Attribution: avoidable.Attribution,
+		Usage:     avoidable.Amount{Tokens: 10_000, APIEquivalentUSD: 10},
+		Avoidable: avoidable.Amount{Tokens: 1_000, APIEquivalentUSD: 1},
+		Classes: []avoidable.ClassCost{
+			{Class: waste.ClassReread, Name: waste.ClassName(waste.ClassReread), Turns: 1, Amount: avoidable.Amount{Tokens: 1_000, APIEquivalentUSD: 1}},
+			{Class: waste.ClassAbandoned, Name: waste.ClassName(waste.ClassAbandoned), Turns: 4, Inferred: true,
+				Amount: avoidable.Amount{Tokens: 6_000, APIEquivalentUSD: 6}},
+		}}
+	var b bytes.Buffer
+	writeWasteReport(&b, r)
+	out := b.String()
+	for _, want := range []string{"abandoned sessions *", "* inferred from no commit and no outcome", "not counted as avoidable", "10% of usage"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	// Nothing inferred, no note.
+	r.Classes = r.Classes[:1]
+	b.Reset()
+	writeWasteReport(&b, r)
+	if strings.Contains(b.String(), "inferred") {
+		t.Errorf("a note for no inferred class:\n%s", b.String())
+	}
+}

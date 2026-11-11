@@ -59,7 +59,7 @@ var (
 	allParam     = q("all", "boolean", "read all history; overrides days")
 	sourceParam  = q("source", "string", "one client: claude-code, codex, cursor or opencode; every client present when omitted")
 	modelParam   = q("model", "string", "only instructions mostly served by this model id (case-insensitive)")
-	roleParam    = q("role", "string", "all (default), primary, auto_review or subagent")
+	roleParam    = q("role", "string", "primary (default: the operator's own instructions), auto_review, subagent or all")
 	includeParam = q("include_sources", "string", "comma-separated sources to include beyond the defaults")
 )
 

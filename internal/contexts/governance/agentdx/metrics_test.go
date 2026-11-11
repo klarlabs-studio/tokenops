@@ -131,3 +131,43 @@ func TestTurnsBeforeFirstPromptIgnored(t *testing.T) {
 		t.Errorf("MedianTurnsPerPrompt = %v, want 1 — orphan turns must not be attributed", m.MedianTurnsPerPrompt)
 	}
 }
+
+// A client that never records an interrupt or a compaction has no rate of
+// either: its instructions and sessions are left out of the denominator,
+// and a window of only such a client is not graded on them. Counted in,
+// its missing records read as clean runs and graded A.
+func TestUnrecordableKindsAreNotRated(t *testing.T) {
+	from := func(h Source, rs ...Record) []Record {
+		for i := range rs {
+			rs[i].Harness = h
+		}
+		return rs
+	}
+	claude := from(SourceClaudeCode,
+		prompt(0, "c"), turn(1, "c", 0),
+		Record{At: at(2), SessionID: "c", Kind: KindInterrupt},
+		Record{At: at(3), SessionID: "c", Kind: KindCompaction},
+		prompt(10, "c"), turn(11, "c", 0))
+	cursor := from(SourceCursor, prompt(20, "u"), turn(21, "u", 0), prompt(30, "u"), turn(31, "u", 0))
+	codex := from(SourceCodex, prompt(40, "x"), turn(41, "x", 0))
+	opencode := from(SourceOpencode, prompt(50, "o"), turn(51, "o", 0))
+
+	m := Compute(append(append(append(append([]Record{}, claude...), cursor...), codex...), opencode...))
+	// One interrupt in Claude Code's two instructions and Codex's one;
+	// Cursor's and opencode's three are not counted.
+	if m.InterruptPrompts != 3 || m.InterruptRatePct != 33.3 {
+		t.Errorf("interrupts over %d instructions at %v%%; want 3 and 33.3", m.InterruptPrompts, m.InterruptRatePct)
+	}
+	// One compaction over Claude Code's and opencode's sessions.
+	if m.CompactionSessions != 2 || m.CompactionsPerSession != 0.5 {
+		t.Errorf("compactions over %d sessions at %v; want 2 and 0.5", m.CompactionSessions, m.CompactionsPerSession)
+	}
+
+	only := Compute(cursor)
+	if only.InterruptPrompts != 0 || only.CompactionSessions != 0 {
+		t.Errorf("cursor alone: %d instructions, %d sessions rated", only.InterruptPrompts, only.CompactionSessions)
+	}
+	if g := Grade(only); g.Interrupt != "" || g.Compaction != "" {
+		t.Errorf("cursor alone graded interrupt %q, compaction %q on records it cannot write", g.Interrupt, g.Compaction)
+	}
+}

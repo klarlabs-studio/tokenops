@@ -2953,7 +2953,7 @@
             }
           },
           {
-            "description": "all (default), primary, auto_review or subagent",
+            "description": "primary (default: the operator's own instructions), auto_review, subagent or all",
             "in": "query",
             "name": "role",
             "required": false,
@@ -3079,6 +3079,9 @@
                           "properties": {},
                           "type": "object"
                         },
+                        "compaction_sessions": {
+                          "type": "integer"
+                        },
                         "compactions_per_session": {
                           "type": "number"
                         },
@@ -3087,6 +3090,9 @@
                         },
                         "first_try_rate_pct": {
                           "type": "number"
+                        },
+                        "interrupt_prompts": {
+                          "type": "integer"
                         },
                         "interrupt_rate_pct": {
                           "type": "number"
@@ -9106,6 +9112,9 @@
                           "guardrail": {
                             "type": "string"
                           },
+                          "inferred": {
+                            "type": "boolean"
+                          },
                           "method": {
                             "type": "string"
                           },
@@ -9475,7 +9484,7 @@
             }
           },
           {
-            "description": "all (default), primary, auto_review or subagent",
+            "description": "primary (default: the operator's own instructions), auto_review, subagent or all",
             "in": "query",
             "name": "role",
             "required": false,
@@ -9664,7 +9673,7 @@
             }
           },
           {
-            "description": "all (default), primary, auto_review or subagent",
+            "description": "primary (default: the operator's own instructions), auto_review, subagent or all",
             "in": "query",
             "name": "role",
             "required": false,
