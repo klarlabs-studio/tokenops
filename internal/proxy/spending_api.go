@@ -11,6 +11,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/claudecodeorg"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
+	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 )
@@ -68,7 +69,8 @@ func (a *AnalyticsHandlers) scorecard(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	p := spending.ScorecardParams{SinceDays: days, Spend: a.spend, Allocation: a.allocation, AgentFacts: a.agentFacts, Repos: a.repos}
+	p := spending.ScorecardParams{SinceDays: days, Spend: a.spend, Allocation: a.allocation, AgentFacts: a.agentFacts, Repos: a.repos,
+		Sessions: findings.ScorecardSessions(days, time.Now())}
 	if a.events != nil {
 		p.Events = a.events
 	}
