@@ -236,7 +236,11 @@ func Describe(k learning.KindSavings) string {
 	if per, ok := k.RealizedPerTipUSD.Amount(); ok {
 		after, _ := k.Treated.SpendAfterUSD.Amount()
 		held, _ := k.Holdout.SpendAfterUSD.Amount()
-		fmt.Fprintf(&b, " · realized $%.2f per tip (spend after: $%.2f shown vs $%.2f held back)", per, after, held)
+		fmt.Fprintf(&b, " · realized $%.2f per tip", per)
+		if in := k.Verdict.Interval; in != nil {
+			fmt.Fprintf(&b, ", %.0f%% interval $%.2f to $%.2f", in.Level*100, in.Low, in.High)
+		}
+		fmt.Fprintf(&b, " (spend after: $%.2f shown vs $%.2f held back)", after, held)
 		return b.String()
 	}
 	fmt.Fprintf(&b, " · realized %s", k.RealizedPerTipUSD.Caveat())
