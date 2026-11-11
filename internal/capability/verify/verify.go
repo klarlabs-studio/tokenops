@@ -342,9 +342,11 @@ func CompareExperiment(execs []work.Execution, events []*eventschema.Envelope, e
 	}
 
 	report.Comparison = intervention.Comparison{
-		Assignment:   assignment,
-		Baseline:     meanTokens(baseline),
-		Intervention: meanTokens(intervened),
+		Assignment:         assignment,
+		Baseline:           meanTokens(baseline),
+		Intervention:       meanTokens(intervened),
+		BaselineValues:     tokensOf(baseline),
+		InterventionValues: tokensOf(intervened),
 		// The comparison is only as strong as its smaller side: ten
 		// baselines against one intervention is one observation, not ten.
 		Samples:              min(len(baseline), len(intervened)),
@@ -785,6 +787,20 @@ func meanTokens(as []Attributed) measurement.Value {
 	}
 	return measurement.Measured(amount/float64(len(as)), total.Source()).
 		WithCaveat(total.Caveat())
+}
+
+// tokensOf is each execution's tokens, what a difference in meanTokens is
+// tested with; nil when any is unknown, as meanTokens is then.
+func tokensOf(as []Attributed) []float64 {
+	out := make([]float64, 0, len(as))
+	for _, a := range as {
+		n, ok := a.Tokens.Amount()
+		if !ok {
+			return nil
+		}
+		out = append(out, n)
+	}
+	return out
 }
 
 // CompareReconstructedExperiment compares reconstructed work and optionally

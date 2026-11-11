@@ -271,18 +271,21 @@ func SummarizeSavings(entries []SavingsEntry, implicit Implicit, now time.Time) 
 	for _, k := range order {
 		g := groups[k]
 		ks := KindSavings{Capability: k.capability, Kind: k.kind}
-		ks.Shadow, _ = cohortStats(g.shadow, outcomes, Implicit{})
+		ks.Shadow, _, _ = cohortStats(g.shadow, outcomes, Implicit{})
 		for _, r := range g.shadow {
 			ks.ShadowTokens += r.ExpectedTokens
 		}
 		var treatedOutcomes, holdoutOutcomes intervention.Outcomes
-		ks.Treated, treatedOutcomes = cohortStats(g.treated, outcomes, implicit)
-		ks.Holdout, holdoutOutcomes = cohortStats(g.holdout, outcomes, implicit)
+		var treatedSpend, holdoutSpend []float64
+		ks.Treated, treatedOutcomes, treatedSpend = cohortStats(g.treated, outcomes, implicit)
+		ks.Holdout, holdoutOutcomes, holdoutSpend = cohortStats(g.holdout, outcomes, implicit)
 		ks.ExpectedPerTipUSD, ks.ExpectedBasis, ks.ExpectedTokens = expected(g.treated)
 		ks.Comparison = intervention.Comparison{
 			Assignment:           intervention.Randomised,
 			Baseline:             ks.Holdout.SpendAfterUSD,
 			Intervention:         ks.Treated.SpendAfterUSD,
+			BaselineValues:       holdoutSpend,
+			InterventionValues:   treatedSpend,
 			Samples:              min(ks.Treated.Count, ks.Holdout.Count),
 			BaselineOutcomes:     holdoutOutcomes,
 			InterventionOutcomes: treatedOutcomes,
@@ -295,10 +298,13 @@ func SummarizeSavings(entries []SavingsEntry, implicit Implicit, now time.Time) 
 	return out
 }
 
-func cohortStats(rows []SavingsEntry, outcomes map[string]SavingsEntry, implicit Implicit) (CohortStats, intervention.Outcomes) {
+// cohortStats is a cohort's counts and outcomes, and the spend after the
+// intervention of each session whose spend was seen.
+func cohortStats(rows []SavingsEntry, outcomes map[string]SavingsEntry, implicit Implicit) (CohortStats, intervention.Outcomes, []float64) {
 	s := CohortStats{Count: len(rows)}
 	var o intervention.Outcomes
 	var spend []measurement.Value
+	var seen []float64
 	for _, r := range rows {
 		if out, ok := outcomes[r.ID]; ok {
 			s.Resolved++
@@ -313,6 +319,7 @@ func cohortStats(rows []SavingsEntry, outcomes map[string]SavingsEntry, implicit
 		}
 		if peak, ok := implicit.SessionPeakUSD[r.Session]; ok && peak >= r.SessionUSD {
 			spend = append(spend, measurement.Measured(peak-r.SessionUSD, "coach_hook_ledger"))
+			seen = append(seen, peak-r.SessionUSD)
 		} else {
 			spend = append(spend, measurement.Unknown("the session's spend after the intervention was not seen"))
 		}
@@ -333,7 +340,7 @@ func cohortStats(rows []SavingsEntry, outcomes map[string]SavingsEntry, implicit
 		}
 	}
 	s.SpendAfterUSD = meanOf(spend)
-	return s, o
+	return s, o, seen
 }
 
 // meanOf averages the known values; a cohort none of whose spend was seen
@@ -380,6 +387,11 @@ const holdoutMinSamples = 5
 
 // realized reads the saving off a concluded randomized comparison. Harm
 // is a negative saving and is reported as one.
+//
+// Neither figure is a measurement, and both used to be labelled one. Per
+// tip it is the difference of two cohorts' mean spend, an estimate of the
+// effect with the interval it lies in; the total multiplies that by the
+// tips shown, which assumes every tip saved the mean.
 func realized(k KindSavings) (perTip, total measurement.Value) {
 	if !k.Verdict.Conclusive() {
 		why := k.Verdict.Caveat
@@ -399,5 +411,10 @@ func realized(k KindSavings) (perTip, total measurement.Value) {
 		return u, u
 	}
 	src := fmt.Sprintf("randomized holdout, %d vs %d", k.Treated.Count, k.Holdout.Count)
-	return measurement.Measured(delta, src), measurement.Measured(delta*float64(k.Treated.Count), src)
+	how := "the difference of the two cohorts' mean spend after the tip"
+	if in := k.Verdict.Interval; in != nil {
+		how += fmt.Sprintf("; %.0f%% interval $%.2f to $%.2f per tip", in.Level*100, in.Low, in.High)
+	}
+	return measurement.Estimated(delta, src, how), measurement.Estimated(delta*float64(k.Treated.Count), src,
+		fmt.Sprintf("the saving per tip times the %d tips shown", k.Treated.Count))
 }
