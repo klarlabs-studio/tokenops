@@ -3183,6 +3183,17 @@
     "/api/findings": {
       "get": {
         "operationId": "getFindings",
+        "parameters": [
+          {
+            "description": "include: also the findings the operator dismissed; left out when omitted",
+            "in": "query",
+            "name": "dismissed",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4199,6 +4210,13 @@
                         }
                       },
                       "type": "object"
+                    },
+                    "provider_costs": {
+                      "properties": {},
+                      "type": "object"
+                    },
+                    "provider_costs_late": {
+                      "type": "boolean"
                     },
                     "routing": {
                       "items": {
