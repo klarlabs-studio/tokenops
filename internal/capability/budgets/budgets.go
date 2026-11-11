@@ -71,9 +71,10 @@ type Report struct {
 	Errors []error
 }
 
-// forecastHistory is how much history a forecast trains on, whatever the
-// budget window, so a short window still gets a trend.
-const forecastHistory = 14 * 24 * time.Hour
+// forecastHistory is how much history a forecast is made from, whatever
+// the budget window: enough weeks for each day of the week to be read
+// from its own days (forecast.Daily).
+const forecastHistory = 30 * 24 * time.Hour
 
 // Tick measures every budget at now.
 func (w *Watcher) Tick(ctx context.Context, now time.Time) Report {
@@ -285,10 +286,12 @@ func UsedPct(ctx context.Context, src Source, limits []Limit, now time.Time) map
 	return UsedPctOf(Read(ctx, src, limits, now))
 }
 
-// forecast projects l's metric over the rest of its window. An
-// equivalent-basis budget is not forecast: the daily rows carry real
-// spend only, and its threshold alerts still fire. Nor is a budget scoped
-// to a tag: the daily rows are all spend, not the tag's.
+// forecast projects l's metric over the rest of its window: what is left
+// of today and each day after it up to the window's end, on top of what
+// the window has measured so far. An equivalent-basis budget is not
+// forecast: the daily rows carry real spend only, and its threshold
+// alerts still fire. Nor is a budget scoped to a tag: the daily rows are
+// all spend, not the tag's.
 func (w *Watcher) forecast(ctx context.Context, l Limit, now time.Time) []forecast.Prediction {
 	if l.Basis == budget.BasisEquivalent || l.Tag != "" {
 		return nil
@@ -297,15 +300,15 @@ func (w *Watcher) forecast(ctx context.Context, l Limit, now time.Time) []foreca
 	if l.Basis == budget.BasisTokens {
 		metric = forecast.TotalTokens
 	}
-	start := budget.WindowStart(l.Window, now)
-	daysLeft := int(budget.WindowEnd(l.Window, start).Sub(now).Hours()/24) + 1
+	since := now.Add(-forecastHistory)
 	rows, err := w.Source.AggregateBy(ctx, analytics.Filter{
-		Since: now.Add(-forecastHistory), WorkflowID: l.WorkflowID, AgentID: l.AgentID, Provider: l.Provider,
+		Since: since, WorkflowID: l.WorkflowID, AgentID: l.AgentID, Provider: l.Provider,
 	}, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
 		return nil
 	}
-	return forecast.AutoForecast(forecast.SeriesFromRows(rows, metric), daysLeft, 24*time.Hour)
+	end := budget.WindowEnd(l.Window, budget.WindowStart(l.Window, now))
+	return forecast.DailyFrom(rows, metric, since, now).Rest(end)
 }
 
 // publishExceeded raises budget.exceeded for a once per window: not when

@@ -357,7 +357,7 @@ func RegisterTools(s *Server, d Deps) error {
 		})
 
 	s.Tool("tokenops_forecast").
-		Description("Forecast daily spend horizon_days into the future using Holt's exponential smoothing.").
+		Description("Forecast daily spend for the horizon_days whole days ahead, from the whole days of the last thirty: each day is expected to bring what its weekday has brought.").
 		OutputSchema(forecastResult{}).
 		Handler(func(ctx context.Context, in forecastInput) (*forecastResult, error) {
 			return forecastSpend(ctx, d, in)

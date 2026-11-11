@@ -5,8 +5,6 @@ import (
 	"math"
 	"testing"
 	"time"
-
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 )
 
 const eps = 1e-6
@@ -115,28 +113,6 @@ func TestHoltDefaults(t *testing.T) {
 	h2 := NewHolt(0.7, 0.2)
 	if h2.Alpha != 0.7 || h2.Beta != 0.2 {
 		t.Errorf("explicit values lost: %+v", h2)
-	}
-}
-
-func TestSeriesFromRows(t *testing.T) {
-	now := time.Date(2026, 5, 9, 10, 0, 0, 0, time.UTC)
-	rows := []analytics.Row{
-		{BucketStart: now, TotalTokens: 100, CostUSD: 0.01},
-		{BucketStart: now.Add(time.Hour), TotalTokens: 200, CostUSD: 0.02},
-	}
-	tok := SeriesFromRows(rows, TotalTokens)
-	if len(tok) != 2 {
-		t.Fatalf("len = %d", len(tok))
-	}
-	if tok[0].Value != 100 || tok[1].Value != 200 {
-		t.Errorf("token series wrong: %+v", tok)
-	}
-	cost := SeriesFromRows(rows, CostUSD)
-	if cost[0].Value != 0.01 || cost[1].Value != 0.02 {
-		t.Errorf("cost series wrong: %+v", cost)
-	}
-	if SeriesFromRows(rows, nil) != nil {
-		t.Error("nil accessor should return nil")
 	}
 }
 

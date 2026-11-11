@@ -1,14 +1,18 @@
 // Package forecast provides token-consumption and spend forecasters
-// over the time-bucketed series produced by internal/analytics. Two
-// methods are implemented:
+// over the time-bucketed series produced by internal/analytics.
+//
+// Daily is the series the spend forecast and the budget breach forecast
+// are made from: whole days, each day ahead expected to bring what its
+// weekday has brought.
+//
+// Two trend methods forecast the next step of a series:
 //
 //   - LinearForecaster: ordinary least squares on (t, y) — captures a
 //     linear trend, fast, and gives the best signal when the series is
 //     short or roughly monotonic.
 //
 //   - HoltForecaster: Holt's double-exponential smoothing (level +
-//     trend) — handles series with a changing slope and is the default
-//     for the dashboard's weekly forecast.
+//     trend) — handles series with a changing slope.
 //
 // Confidence intervals are computed from the residual standard error
 // using the normal-approximation factor (1.96 for 95% CI).
@@ -18,8 +22,6 @@ import (
 	"errors"
 	"math"
 	"time"
-
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 )
 
 // Point is one (timestamp, value) sample. Forecasters consume series of
@@ -44,26 +46,6 @@ type Prediction struct {
 type Forecaster interface {
 	Forecast(history []Point, horizon int, interval time.Duration) ([]Prediction, error)
 }
-
-// SeriesFromRows extracts (BucketStart, value) points from analytics rows
-// using the supplied accessor. The returned series is in the row order;
-// callers are expected to sort or pre-bucket as needed.
-func SeriesFromRows(rows []analytics.Row, get func(analytics.Row) float64) []Point {
-	if get == nil {
-		return nil
-	}
-	out := make([]Point, len(rows))
-	for i, r := range rows {
-		out[i] = Point{At: r.BucketStart, Value: get(r)}
-	}
-	return out
-}
-
-// TotalTokens returns the rollup token total accessor for SeriesFromRows.
-func TotalTokens(r analytics.Row) float64 { return float64(r.TotalTokens) }
-
-// CostUSD returns the rollup spend accessor for SeriesFromRows.
-func CostUSD(r analytics.Row) float64 { return r.CostUSD }
 
 // ConfidenceZ95 is the 1-sided 1.96 normal-approximation factor for a
 // 95% CI. Exposed so callers can reuse it for non-Gaussian variants.

@@ -11,25 +11,40 @@ import (
 // Prediction is one projected point with its 95% band.
 type Prediction = forecast.Prediction
 
-// Project forecasts daily rows horizon days ahead (seven when not
-// positive), in dollars and in tokens. The token series is returned
-// alongside because on a flat-rate plan the dollar history is zero at
-// every point and its projection carries no signal.
-func Project(rows []analytics.Row, horizon int) (cost, tokens []Prediction) {
+// Projection is a daily forecast in dollars and in tokens. The token
+// series is there because on a flat-rate plan the dollar history is zero
+// on every day and its projection carries no signal.
+type Projection struct {
+	Cost, Tokens []Prediction
+	// Days is how many whole days the forecast was made from.
+	Days int
+	// Unbilled is true when none of those days cost anything.
+	Unbilled bool
+}
+
+// Project forecasts the horizon whole days ahead of now (seven when not
+// positive) from daily rows read since `since`. It is made from whole
+// days only, a day with no rows counting as a day at zero, and expects of
+// a day what its weekday has brought (forecast.Daily).
+func Project(rows []analytics.Row, horizon int, since, now time.Time) Projection {
 	if horizon <= 0 {
 		horizon = defaultHorizonDays
 	}
-	cost = forecast.AutoForecast(forecast.SeriesFromRows(rows, forecast.CostUSD), horizon, 24*time.Hour)
-	tokens = forecast.AutoForecast(forecast.SeriesFromRows(rows, forecast.TotalTokens), horizon, 24*time.Hour)
-	return cost, tokens
+	spend := forecast.DailyFrom(rows, forecast.CostUSD, since, now)
+	return Projection{
+		Cost:     spend.Ahead(horizon),
+		Tokens:   forecast.DailyFrom(rows, forecast.TotalTokens, since, now).Ahead(horizon),
+		Days:     len(spend.Points),
+		Unbilled: spend.Zero(),
+	}
 }
 
 // AllZero reports whether a projection is entirely zero.
 //
-// A flat-rate plan's cost history is zero at every point, so the forecaster
-// dutifully projects zero forward with zero-width bands. Shown bare that
-// reads as a broken forecaster rather than as the correct answer to a
-// question that does not apply, so every surface replaces it with a reason.
+// A flat-rate plan's cost history is zero on every day, so its projection
+// is zero with a zero-width band. Shown bare that reads as a broken
+// forecaster rather than as the correct answer to a question that does
+// not apply, so every surface replaces it with the reason (NoteAllZero).
 func AllZero(points []Prediction) bool {
 	for _, p := range points {
 		if p.Value != 0 || p.Lower != 0 || p.Upper != 0 {
@@ -40,11 +55,13 @@ func AllZero(points []Prediction) bool {
 }
 
 // SpendForecast is the agent's daily spend projection. Note is set when
-// there is too little history to project, or when the dollar series is
-// all zero. The daemon API's ForecastReport projects the same series with
+// there is too little history to project, or when no day of the history
+// cost anything. The daemon API's ForecastReport projects the same series with
 // the same Project; it carries the history instead of a note.
 type SpendForecast struct {
-	HorizonDays   int          `json:"horizon_days,omitempty"`
+	HorizonDays int `json:"horizon_days,omitempty"`
+	// HistoryPoints is the whole days the projection was made from:
+	// today, still running, is not one of them.
 	HistoryPoints int          `json:"history_points"`
 	Forecast      []Prediction `json:"forecast"`
 	// ForecastTokens projects token volume over the same horizon. On a
@@ -57,7 +74,7 @@ type SpendForecast struct {
 
 // Forecast notes.
 const (
-	NoteInsufficientHistory = "insufficient history (need ≥2 daily buckets)"
+	NoteInsufficientHistory = "insufficient history (need ≥2 whole days before today)"
 	NoteAllZero             = "cost history is all zero (plan-covered traffic bills $0 at the margin), so the dollar forecast is flat zero — forecast_tokens carries the signal"
 )
 
@@ -72,22 +89,25 @@ func ForecastSpend(ctx context.Context, agg Aggregator, horizon int, include []s
 	if err != nil {
 		return SpendForecast{}, err
 	}
-	if len(rows) < 2 {
+	p := Project(rows, horizon, f.Since, now)
+	if p.Days < forecast.MinDays {
 		return SpendForecast{
-			HistoryPoints: len(rows),
+			HistoryPoints: p.Days,
 			Forecast:      []Prediction{},
 			Note:          NoteInsufficientHistory,
 		}, nil
 	}
-	cost, tokens := Project(rows, horizon)
 	out := SpendForecast{
 		HorizonDays:    horizon,
-		HistoryPoints:  len(rows),
-		Forecast:       cost,
-		ForecastTokens: tokens,
+		HistoryPoints:  p.Days,
+		Forecast:       p.Cost,
+		ForecastTokens: p.Tokens,
 		Currency:       currency,
 	}
-	if AllZero(cost) {
+	// The note states a fact about the history, so it is set from the
+	// history: a zero forecast alone can also be days of the week on
+	// which nothing is ever spent.
+	if p.Unbilled {
 		out.Note = NoteAllZero
 	}
 	return out, nil

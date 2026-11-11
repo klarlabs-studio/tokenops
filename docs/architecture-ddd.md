@@ -42,7 +42,7 @@ PRs that cross these boundaries must update this document.
 │   spend: Engine, Table                                     │
 │   workflow: Trace                                          │
 │   redaction: Redactor                                      │
-│   forecast: Holt, Linear                                   │
+│   forecast: Daily, Holt, Linear                            │
 │   pkg/eventschema: PromptEvent, WorkflowEvent, ...         │
 │                                                            │
 │   - pure, framework-free                                   │
