@@ -13,10 +13,10 @@ func TestScorecardCarriesAllocationCoverage(t *testing.T) {
 		Rules: 2, TaggedPct: 62.5, ByKeyPct: map[string]float64{"project": 62.5, "client": 40, "cost_center": 0},
 	}})
 	text := sc.String()
-	sac := strings.Index(text, "SAC")
+	sac := strings.Index(text, "prompts with a workflow or session")
 	tags := strings.Index(text, "allocation tags on 62.5% of spend (project 62%, client 40%)")
 	if sac < 0 || tags < sac {
-		t.Errorf("the allocation line is not under SAC:\n%s", text)
+		t.Errorf("the allocation line is not under spend attribution:\n%s", text)
 	}
 	b, err := sc.MarshalJSON()
 	if err != nil {

@@ -49,7 +49,17 @@ type ScorecardParams struct {
 	// Repos is what the unit costs resolve repositories and read their
 	// history through; nil resolves and reads them afresh.
 	Repos *gitlog.Repos
+	// Sessions is the session quality the scorecard grades (ADR 0018);
+	// nil leaves it off the scorecard.
+	Sessions *ScorecardSessions
 }
+
+// ScorecardSessions is the scorecard's session quality: the DX grade of
+// the operator's own instructions, or why there is none.
+type ScorecardSessions = scorecard.SessionGrade
+
+// ScorecardGrade is a scorecard letter.
+type ScorecardGrade = scorecard.Grade
 
 // ScorecardReport is the scorecard answer, named here so adapters can
 // describe it without reaching into the governance domain.
@@ -106,6 +116,7 @@ func Scorecard(ctx context.Context, store *sqlite.Store, p ScorecardParams) *Sco
 		factsCtx = context.WithoutCancel(ctx)
 	}
 	agent, agentBase := facts.kpis(factsCtx, p.TranscriptRoot, since.AddDate(0, 0, -scorecard.BaselineDays), since, now)
+	agent.Sessions = p.Sessions
 	return scorecard.Build(ctx, reader, scorecard.BuildParams{
 		UnitCosts:          units,
 		Allocation:         alloc,

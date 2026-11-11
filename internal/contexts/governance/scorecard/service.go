@@ -107,7 +107,7 @@ func Build(ctx context.Context, reader EventReader, params BuildParams) *Scoreca
 		sac, base.sac, anyComputed = params.SACPctOverride, math.NaN(), true
 	}
 	if agent.CacheHitRatioComputed || agent.ConfirmationGateComputed || agent.RegenerateComputed ||
-		agent.ToolSuccessComputed || agent.DestructiveComputed {
+		agent.ToolSuccessComputed || agent.DestructiveComputed || (agent.Sessions != nil && agent.Sessions.Letter != "") {
 		anyComputed = true
 	}
 	if !anyComputed {

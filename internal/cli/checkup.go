@@ -141,8 +141,9 @@ func renderCheckup(w io.Writer, r checkup.Report) {
 	fmt.Fprintf(w, "%-41s %8d %10s %12s\n", "Total", t.Turns, compactTokens(t.InputTokens+t.OutputTokens), usdOrUnpriced(t))
 	fmt.Fprintln(w, "API value is what the tokens would cost on an API key; on a flat-rate plan it is a measure, not a bill.")
 
-	if g := r.DX.Grades.Overall; g != "" {
-		fmt.Fprintf(w, "\nSessions: %s  (%d instructions; `tokenops dx` for the breakdown)\n", g, r.DX.Metrics.Prompts)
+	if r.DX.Metrics.Prompts > 0 {
+		fmt.Fprintf(w, "\nSessions: %d instructions; `tokenops scorecard` grades them with the rest, `tokenops dx` breaks them down\n",
+			r.DX.Metrics.Prompts)
 	}
 	fmt.Fprintln(w)
 	if len(r.Findings) == 0 {
