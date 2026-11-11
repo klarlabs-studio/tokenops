@@ -62,8 +62,14 @@ func newWebServer(t *testing.T, session string, refuse int, routes map[string]st
 // are the answers, as webServer routes.
 func routesOf(t *testing.T, id string) map[string]string {
 	t.Helper()
+	return routesIn(t, fixture(t, id))
+}
+
+// routesIn is routesOf for a fixture already read.
+func routesIn(t *testing.T, body string) map[string]string {
+	t.Helper()
 	var parts map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(fixture(t, id)), &parts); err != nil {
+	if err := json.Unmarshal([]byte(body), &parts); err != nil {
 		t.Fatal(err)
 	}
 	out := make(map[string]string, len(parts))

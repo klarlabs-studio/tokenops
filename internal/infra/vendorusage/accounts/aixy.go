@@ -65,19 +65,20 @@ type aixyBudget struct {
 
 // used is what counts against a budget, when Aixy knows it: settled spend
 // plus outstanding reservations for a hard budget, recorded spend for a
-// monitoring one.
-func (b aixyBudget) used() (used, remaining float64, ok bool) {
+// monitoring one. exhausted is a hard budget with nothing left; a
+// monitoring budget stops nothing.
+func (b aixyBudget) used() (used float64, exhausted, ok bool) {
 	if b.Enforcement == "hard" {
 		a := b.Availability
 		if a.Status != "available" || !a.SpentUSD.ok || !a.ReservedUSD.ok || !a.RemainingUSD.ok {
-			return 0, 0, false
+			return 0, false, false
 		}
-		return a.SpentUSD.v + a.ReservedUSD.v, a.RemainingUSD.v, true
+		return a.SpentUSD.v + a.ReservedUSD.v, a.RemainingUSD.v <= 0, true
 	}
 	if b.SpendStatus != "available" || !b.SpendUSD.ok {
-		return 0, 0, false
+		return 0, false, false
 	}
-	return b.SpendUSD.v, b.RemainingUSD.v, true
+	return b.SpendUSD.v, false, true
 }
 
 func (g Aixy) Read(ctx context.Context, root, key string) (usage.Reading, error) {
@@ -93,19 +94,20 @@ func (g Aixy) Read(ctx context.Context, root, key string) (usage.Reading, error)
 		return usage.Reading{}, errAixyContract
 	}
 	type known struct {
-		b                       aixyBudget
-		used, remaining, usedPc float64
+		b                   aixyBudget
+		limit, used, usedPc float64
+		exhausted           bool
 	}
 	var budgets []known
 	for _, b := range resp.Budgets {
 		if !b.LimitUSD.ok || b.LimitUSD.v <= 0 {
 			continue
 		}
-		used, remaining, ok := b.used()
+		used, exhausted, ok := b.used()
 		if !ok {
 			continue // Aixy does not know its balance: not shown as zero
 		}
-		budgets = append(budgets, known{b, used, remaining, pct(used, b.LimitUSD.v)})
+		budgets = append(budgets, known{b, b.LimitUSD.v, used, pct(used, b.LimitUSD.v), exhausted})
 	}
 	// Hard limits first, then the most used, as CodexBar ranks them.
 	sort.SliceStable(budgets, func(i, j int) bool {
@@ -124,12 +126,12 @@ func (g Aixy) Read(ctx context.Context, root, key string) (usage.Reading, error)
 			w.Duration = aixyIntervals[k.b.Interval]
 		}
 		r.Windows = append(r.Windows, w)
-		if k.b.Enforcement == "hard" && k.remaining <= 0 {
+		if k.exhausted {
 			r.LimitReached = true
 		}
 		// The binding budget is the spend against a cap.
 		if i == 0 {
-			r.UsedUSD, r.HasUsed, r.LimitUSD = k.used, true, k.b.LimitUSD.v
+			r.UsedUSD, r.HasUsed, r.LimitUSD = k.used, true, k.limit
 		}
 	}
 	return r, nil

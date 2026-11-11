@@ -55,7 +55,7 @@ func (b IBMBob) Read(ctx context.Context, key string) (usage.Reading, error) {
 		return usage.Reading{}, err
 	}
 	var used, limit float64
-	teams, limited := 0, 0
+	teams, metered, limited := 0, 0, 0
 	var reset time.Time
 	for _, in := range profile.Instances {
 		if in.UserID == "" {
@@ -79,7 +79,10 @@ func (b IBMBob) Read(ctx context.Context, key string) (usage.Reading, error) {
 				return usage.Reading{}, err
 			}
 			teams++
-			used += max(0, budget.Usage.v)
+			if budget.Usage.ok {
+				used += max(0, budget.Usage.v)
+				metered++
+			}
 			l := budget.BudgetLimit
 			if !l.ok {
 				l = t.BudgetLimit
@@ -94,8 +97,9 @@ func (b IBMBob) Read(ctx context.Context, key string) (usage.Reading, error) {
 		}
 	}
 	r := usage.Reading{Scope: "account"}
-	// Without a budget for every team there is no share to report.
-	if teams == 0 || limited != teams || limit <= 0 {
+	// Without a budget and a usage figure for every team there is no
+	// share to report.
+	if teams == 0 || limited != teams || metered != teams || limit <= 0 {
 		return r, nil
 	}
 	r.Subscription = true

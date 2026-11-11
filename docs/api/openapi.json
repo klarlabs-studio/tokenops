@@ -3974,6 +3974,9 @@
                                 },
                                 "type": "object"
                               },
+                              "spend_limit_unknown": {
+                                "type": "boolean"
+                              },
                               "spend_limit_usd": {
                                 "type": "number"
                               },
@@ -5176,6 +5179,9 @@
                               }
                             },
                             "type": "object"
+                          },
+                          "spend_limit_unknown": {
+                            "type": "boolean"
                           },
                           "spend_limit_usd": {
                             "type": "number"

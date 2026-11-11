@@ -89,6 +89,20 @@ func TestAccountReadingKeepsItsScope(t *testing.T) {
 	}
 }
 
+// A limit that was not read is stored as not read. The zero stays, so the
+// reading is still found, but it does not say the account has no limit.
+func TestEnvelopeSaysTheLimitWasNotRead(t *testing.T) {
+	env := NewEnvelope(now, Reading{Scope: ScopeAccount, AccountID: "acme", UsedUSD: 15, LimitUnknown: true})
+	if env.Attributes["extra_usage_limit_unknown"] != "true" || env.Attributes["extra_usage_limit"] != "0.00" ||
+		env.Attributes["extra_usage_used"] != "15.00" {
+		t.Errorf("attrs %v", env.Attributes)
+	}
+	env = NewEnvelope(now, Reading{Scope: ScopeAccount, AccountID: "acme", UsedUSD: 15})
+	if _, said := env.Attributes["extra_usage_limit_unknown"]; said {
+		t.Errorf("an account read as having no limit says it was not read: %v", env.Attributes)
+	}
+}
+
 type userReader struct{ account, user string }
 
 func (r *userReader) Read(_ context.Context, account, user string, _ time.Time) (Reading, error) {

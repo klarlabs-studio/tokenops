@@ -38,7 +38,7 @@ func (s Synthetic) Read(ctx context.Context, key string) (usage.Reading, error) 
 		return usage.Reading{}, err
 	}
 	sub := resp.Subscription
-	if sub == nil || !sub.Limit.ok || sub.Limit.v <= 0 {
+	if sub == nil || !sub.Limit.ok || sub.Limit.v <= 0 || !sub.Requests.ok {
 		return usage.Reading{Scope: "account"}, nil
 	}
 	return usage.Reading{Scope: "account", Subscription: true, Windows: []usage.Window{{

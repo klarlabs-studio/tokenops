@@ -77,13 +77,21 @@ func (m Mistral) Read(ctx context.Context, cookie string) (usage.Reading, error)
 	r.Subscription = len(r.Windows) > 0
 	var credits struct {
 		Wallet   *float64 `json:"walletAmount"`
-		Notes    float64  `json:"creditNotesAmount"`
-		Ongoing  float64  `json:"ongoingUsageBalance"`
+		Notes    number   `json:"creditNotesAmount"`
+		Ongoing  number   `json:"ongoingUsageBalance"`
 		Currency string   `json:"currency"`
 	}
 	if body, err := doWeb(ctx, m.HTTP, http.MethodGet, admin+"/api/billing/credits", header, nil); err == nil &&
 		json.Unmarshal(body, &credits) == nil && credits.Wallet != nil && strings.TrimSpace(credits.Currency) != "" {
-		left := *credits.Wallet + credits.Notes - credits.Ongoing
+		// Credit notes and usage not yet billed are named when there are
+		// any.
+		left := *credits.Wallet
+		if credits.Notes.ok {
+			left += credits.Notes.v
+		}
+		if credits.Ongoing.ok {
+			left -= credits.Ongoing.v
+		}
 		if cur := strings.ToUpper(strings.TrimSpace(credits.Currency)); cur == "USD" {
 			r.BalanceUSD, r.HasBalance = left, true
 		} else {
@@ -132,10 +140,10 @@ func (m Mistral) vibe(ctx context.Context, cookie, csrf string) *mistralBudget {
 
 // mistralBudget is one allowance as the subscription page carries it.
 type mistralBudget struct {
-	UsagePercentage float64 `json:"usage_percentage"`
-	InitialBudget   float64 `json:"initial_budget"`
-	Currency        string  `json:"currency"`
-	ResetAt         string  `json:"reset_at"`
+	UsagePercentage float64
+	InitialBudget   float64
+	Currency        string
+	ResetAt         string
 }
 
 func (b mistralBudget) window(name string) usage.Window {
@@ -231,11 +239,18 @@ func mistralBudgetOf(v any) *mistralBudget {
 	if !ok {
 		return nil
 	}
-	var b mistralBudget
-	if json.Unmarshal([]byte(mustJSON(m)), &b) != nil || b.UsagePercentage < 0 || b.InitialBudget <= 0 || strings.TrimSpace(b.Currency) == "" {
+	// A budget without its share used is not one at 0%.
+	var b struct {
+		UsagePercentage number `json:"usage_percentage"`
+		InitialBudget   number `json:"initial_budget"`
+		Currency        string `json:"currency"`
+		ResetAt         string `json:"reset_at"`
+	}
+	if json.Unmarshal([]byte(mustJSON(m)), &b) != nil || !b.UsagePercentage.ok || b.UsagePercentage.v < 0 ||
+		!b.InitialBudget.ok || b.InitialBudget.v <= 0 || strings.TrimSpace(b.Currency) == "" {
 		return nil
 	}
-	return &b
+	return &mistralBudget{UsagePercentage: b.UsagePercentage.v, InitialBudget: b.InitialBudget.v, Currency: b.Currency, ResetAt: b.ResetAt}
 }
 
 func sameBudget(a, b *mistralBudget) bool {

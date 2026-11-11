@@ -172,7 +172,7 @@ func parseStepFun(body []byte) (usage.Reading, error) {
 			return r, nil
 		}
 		w := usage.Window{Name: "credits", UsedPct: clampPct((1 - left) * 100)}
-		if cr.SubscriptionReset.v > 0 {
+		if cr.SubscriptionReset.ok && cr.SubscriptionReset.v > 0 {
 			w.ResetsAt = time.Unix(int64(cr.SubscriptionReset.v), 0).UTC()
 		}
 		r.Windows = []usage.Window{w}

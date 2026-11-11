@@ -89,7 +89,7 @@ func (p Perplexity) Read(ctx context.Context, key string) (usage.Reading, error)
 	}
 	var recurring float64
 	for _, g := range *resp.Grants {
-		if g.Type == "recurring" {
+		if g.Type == "recurring" && g.Amount.ok {
 			recurring += g.Amount.v
 		}
 	}

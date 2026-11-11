@@ -397,6 +397,12 @@ func TestCardMarksOldFiguresThatHaveNoBar(t *testing.T) {
 			want:    []string{"$40.00, read 5h 0m ago"},
 			wantNot: []string{"no limit"},
 		},
+		"vendor spend, limit not read": {
+			r: plans.HeadroomReport{Provider: "fireworks", Display: "Pay as you go", SpendUSD: 40,
+				SpendSource: "vendor", SpendLimitUnknown: true},
+			want:    []string{"$40.00, limit not read"},
+			wantNot: []string{"no limit"},
+		},
 		"prepaid balance": {
 			r: plans.HeadroomReport{Provider: "deepseek", Display: "Pay as you go", SpendUSD: 3,
 				SpendSource: "estimate", BalanceUSD: &balance, SpendStale: true, SpendReadAt: &read},
