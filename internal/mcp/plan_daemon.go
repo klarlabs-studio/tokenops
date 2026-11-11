@@ -18,8 +18,14 @@ const daemonPlanLimit = 8 << 20
 
 // DaemonPlanReader reads the plan routes of the daemon at baseURL.
 func DaemonPlanReader(baseURL string) DaemonJSON {
+	return DaemonReader(baseURL, daemonPlanTimeout)
+}
+
+// DaemonReader reads the daemon's routes at baseURL, waiting up to timeout
+// for each answer.
+func DaemonReader(baseURL string, timeout time.Duration) DaemonJSON {
 	return func(ctx context.Context, path string, out any) error {
-		return getDaemonJSONWithin(ctx, baseURL, path, daemonPlanTimeout, daemonPlanLimit, out)
+		return getDaemonJSONWithin(ctx, baseURL, path, timeout, daemonPlanLimit, out)
 	}
 }
 
