@@ -31,7 +31,18 @@ type WindowPace struct {
 	LastsToReset bool `json:"lasts_to_reset"`
 	// RunsOutIn is when it runs out at that rate, when it does not last.
 	RunsOutIn time.Duration `json:"runs_out_in_ns,omitempty"`
+	// TooEarly is a window too little of which has gone by to project:
+	// one burst early on would read as running out. Neither LastsToReset
+	// nor RunsOutIn says anything then.
+	TooEarly bool `json:"too_early,omitempty"`
+	// Basis is the rate the projection reads: empty for the window's
+	// average so far, BasisRecent for the last hour's (ApplyBurn).
+	Basis string `json:"basis,omitempty"`
 }
+
+// BasisRecent is a projection from the rate of the last hour and the last
+// quarter hour, the coach's run-out warning.
+const BasisRecent = "recent"
 
 // PaceAt is w's pace at now; nil when its length or reset is unknown,
 // nothing is used yet, or no time has passed.
@@ -59,6 +70,13 @@ func (w VendorWindow) PaceAt(now time.Time) *WindowPace {
 	}
 	if w.UsedPct >= 100 {
 		p.Status = PaceUsedUp
+		return p
+	}
+	// The same bar the pressure rule holds a projection to (2.25 of the
+	// 2026-11-10 review): six minutes into a five-hour window, 4% used
+	// projected a run-out in 2h24m.
+	if float64(elapsed) < pressureMinElapsed*float64(w.Duration) {
+		p.TooEarly = true
 		return p
 	}
 	// At the rate so far, the rest of the window lasts this long.
