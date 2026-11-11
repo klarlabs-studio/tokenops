@@ -18,6 +18,7 @@ package tools
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -127,54 +128,14 @@ func Extract(opts ExtractOptions) ([]ToolEvent, error) {
 		scanner := bufio.NewScanner(f)
 		scanner.Buffer(make([]byte, 0, 64*1024), scanBufSize)
 		for scanner.Scan() {
-			var line rawLine
-			if jsonErr := json.Unmarshal(scanner.Bytes(), &line); jsonErr != nil {
-				continue
-			}
-			ts, terr := time.Parse(time.RFC3339Nano, line.Timestamp)
-			if terr != nil {
-				continue
-			}
-			if !opts.Since.IsZero() && ts.Before(opts.Since) {
-				continue
-			}
-			if !opts.Until.IsZero() && ts.After(opts.Until) {
-				continue
-			}
-			if len(line.Message.Content) == 0 || line.Message.Content[0] != '[' {
-				continue
-			}
-			var parts []rawContent
-			if jsonErr := json.Unmarshal(line.Message.Content, &parts); jsonErr != nil {
-				continue
-			}
-			for _, p := range parts {
-				switch p.Type {
-				case "tool_use":
-					ev := ToolEvent{
-						Timestamp: ts,
-						SessionID: line.SessionID,
-						ToolUseID: p.ToolUseID,
-						Name:      p.Name,
-					}
-					if p.Name == "Bash" && len(p.Input) > 0 {
-						var inp struct {
-							Command string `json:"command"`
-						}
-						if jsonErr := json.Unmarshal(p.Input, &inp); jsonErr == nil {
-							ev.RawCommand = inp.Command
-						}
-					}
-					out = append(out, ev)
-				case "tool_result":
-					out = append(out, ToolEvent{
-						Timestamp: ts,
-						SessionID: line.SessionID,
-						IsResult:  true,
-						ToolUseID: p.ToolUseID,
-						IsError:   p.IsError,
-					})
+			for _, ev := range ParseLine(scanner.Bytes()) {
+				if !opts.Since.IsZero() && ev.Timestamp.Before(opts.Since) {
+					break
 				}
+				if !opts.Until.IsZero() && ev.Timestamp.After(opts.Until) {
+					break
+				}
+				out = append(out, ev)
 				if opts.Limit > 0 && len(out) >= opts.Limit {
 					return filepath.SkipAll
 				}
@@ -186,6 +147,72 @@ func Extract(opts ExtractOptions) ([]ToolEvent, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// toolBlock is in every line that holds a tool_use or tool_result block.
+var toolBlock = []byte("tool_")
+
+// ParseLine is the tool_use and tool_result blocks of one line of a
+// Claude Code transcript, in the line's order and stamped with its time;
+// none for any other line. It is what Extract reads each line with, for
+// a caller that reads the file itself.
+func ParseLine(raw []byte) []ToolEvent {
+	// Most lines hold no tool block, and some run to megabytes: such a
+	// line is not decoded to find that out.
+	if !bytes.Contains(raw, toolBlock) {
+		return nil
+	}
+	var line rawLine
+	if err := json.Unmarshal(raw, &line); err != nil {
+		return nil
+	}
+	ts, err := time.Parse(time.RFC3339Nano, line.Timestamp)
+	if err != nil {
+		return nil
+	}
+	if len(line.Message.Content) == 0 || line.Message.Content[0] != '[' {
+		return nil
+	}
+	var parts []rawContent
+	if err := json.Unmarshal(line.Message.Content, &parts); err != nil {
+		return nil
+	}
+	var out []ToolEvent
+	for _, p := range parts {
+		switch p.Type {
+		case "tool_use":
+			ev := ToolEvent{
+				Timestamp: ts,
+				SessionID: line.SessionID,
+				ToolUseID: p.ToolUseID,
+				Name:      p.Name,
+			}
+			if p.Name == "Bash" && len(p.Input) > 0 {
+				var inp struct {
+					Command string `json:"command"`
+				}
+				if err := json.Unmarshal(p.Input, &inp); err == nil {
+					ev.RawCommand = inp.Command
+				}
+			}
+			out = append(out, ev)
+		case "tool_result":
+			out = append(out, ToolEvent{
+				Timestamp: ts,
+				SessionID: line.SessionID,
+				IsResult:  true,
+				ToolUseID: p.ToolUseID,
+				IsError:   p.IsError,
+			})
+		}
+	}
+	return out
+}
+
+// Destructive reports whether ev is a Bash call the operator should
+// review before it runs.
+func (ev ToolEvent) Destructive() bool {
+	return !ev.IsResult && ev.Name == "Bash" && destructiveRE.MatchString(ev.RawCommand)
 }
 
 // Analyze rolls Extract output into per-window Stats. Pairs
@@ -204,7 +231,7 @@ func Analyze(events []ToolEvent) Stats {
 		if ev.Name != "" {
 			s.ByTool[ev.Name]++
 		}
-		if ev.Name == "Bash" && destructiveRE.MatchString(ev.RawCommand) {
+		if ev.Destructive() {
 			s.DestructiveCalls++
 			if len(s.DestructiveSample) < 3 {
 				s.DestructiveSample = append(s.DestructiveSample, ev.RawCommand)

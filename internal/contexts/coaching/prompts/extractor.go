@@ -7,6 +7,7 @@ package prompts
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -117,20 +118,53 @@ func Extract(opts ExtractOptions) ([]UserPrompt, error) {
 			root, _ = codexhome.SessionsDir()
 		default:
 			root = claudehome.Join("projects")
-			if src == SourceAuto {
-				src = SourceClaudeCode
-			}
 		}
 	}
 	if src == SourceAuto {
 		// Operator supplied a Root but no Source; sniff from the path.
-		if codexhome.Owns(root) {
-			src = SourceCodex
-		} else {
-			src = SourceClaudeCode
-		}
+		src = sourceOf(root)
 	}
 	return extractFromRoot(root, src, opts)
+}
+
+// sourceOf is the harness whose transcripts root holds, told from the
+// path: Codex's sessions directory, otherwise Claude Code's.
+func sourceOf(root string) Source {
+	if codexhome.Owns(root) {
+		return SourceCodex
+	}
+	return SourceClaudeCode
+}
+
+// TranscriptRoot is one tree of JSONL transcripts and the harness that
+// wrote them.
+type TranscriptRoot struct {
+	Dir    string
+	Source Source
+}
+
+// JSONLRoots are the transcript trees an extract with no harness named
+// walks: root alone, its harness told from the path, or with no root the
+// default trees of Claude Code and Codex that exist. opencode keeps its
+// history in SQLite, so it is never among them.
+func JSONLRoots(root string) ([]TranscriptRoot, error) {
+	if root != "" {
+		return []TranscriptRoot{{Dir: root, Source: sourceOf(root)}}, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	var out []TranscriptRoot
+	for _, candidate := range []TranscriptRoot{
+		{claudehome.Join("projects"), SourceClaudeCode},
+		{filepath.Join(home, ".codex", "sessions"), SourceCodex},
+	} {
+		if _, statErr := os.Stat(candidate.Dir); statErr == nil {
+			out = append(out, candidate)
+		}
+	}
+	return out, nil
 }
 
 // extractAuto unions Claude Code + Codex extracts so the default
@@ -138,22 +172,13 @@ func Extract(opts ExtractOptions) ([]UserPrompt, error) {
 // absent (no permission, never installed) — Extract returns the
 // union of what it could read.
 func extractAuto(opts ExtractOptions) ([]UserPrompt, error) {
-	home, err := os.UserHomeDir()
+	roots, err := JSONLRoots("")
 	if err != nil {
 		return nil, err
 	}
 	var out []UserPrompt
-	for _, candidate := range []struct {
-		root string
-		src  Source
-	}{
-		{claudehome.Join("projects"), SourceClaudeCode},
-		{filepath.Join(home, ".codex", "sessions"), SourceCodex},
-	} {
-		if _, statErr := os.Stat(candidate.root); statErr != nil {
-			continue
-		}
-		got, err := extractFromRoot(candidate.root, candidate.src, opts)
+	for _, candidate := range roots {
+		got, err := extractFromRoot(candidate.Dir, candidate.Source, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -208,14 +233,9 @@ func extractFromRoot(root string, src Source, opts ExtractOptions) ([]UserPrompt
 		defer func() { _ = f.Close() }()
 		scanner := bufio.NewScanner(f)
 		scanner.Buffer(make([]byte, 0, 64*1024), turnsScanBufSize)
-		// Codex JSONLs don't always stamp per-line timestamps the way
-		// Claude Code does — the rollout filename carries the session
-		// timestamp. Capture it on first session-meta line as the
-		// fallback for downstream Since/Until filtering.
-		sessionFallbackTS := timestampFromCodexFilename(path)
-		sessionFallbackID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+		parse := LineParser(path, src)
 		for scanner.Scan() {
-			p, ok := parseLine(scanner.Bytes(), src, sessionFallbackTS, sessionFallbackID)
+			p, ok := parse(scanner.Bytes())
 			if !ok {
 				continue
 			}
@@ -337,11 +357,34 @@ func timestampFromCodexFilename(path string) time.Time {
 	return t.UTC()
 }
 
+// LineParser reads one line of the transcript at path, written by src,
+// as the prompt the operator typed; not ok for any other line. It is what
+// Extract reads each line with, for a caller that reads the file itself.
+func LineParser(path string, src Source) func(raw []byte) (UserPrompt, bool) {
+	// Codex JSONLs don't always stamp per-line timestamps the way
+	// Claude Code does — the rollout filename carries the session
+	// timestamp, the fallback for downstream Since/Until filtering.
+	fallbackTS := timestampFromCodexFilename(path)
+	fallbackSession := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	return func(raw []byte) (UserPrompt, bool) {
+		return parseLine(raw, src, fallbackTS, fallbackSession)
+	}
+}
+
+// userValue is in every line a user wrote, whichever harness: the value
+// of Claude Code's type and of Codex's role.
+var userValue = []byte(`"user"`)
+
 // parseLine extracts one UserPrompt from a raw JSONL line, picking
 // the per-source parser. Returns ok=false when the line is not a
 // human user turn (assistant, tool result, synthetic system message)
 // or fails to parse.
 func parseLine(raw []byte, src Source, fallbackTS time.Time, fallbackSession string) (UserPrompt, bool) {
+	// Most lines are the assistant's, and some run to megabytes: a line
+	// that names no user is not decoded to find that out.
+	if !bytes.Contains(raw, userValue) {
+		return UserPrompt{}, false
+	}
 	switch src {
 	case SourceCodex:
 		var c codexLine
