@@ -54,7 +54,7 @@ tokenops_records (view=events) MCP tool.`,
 			}
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 			defer cancel()
-			store, err := sqlite.Open(ctx, path, sqlite.Options{})
+			store, err := openStoreForRead(ctx, path)
 			if err != nil {
 				return fmt.Errorf("open event store: %w", err)
 			}

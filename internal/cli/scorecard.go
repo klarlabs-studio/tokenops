@@ -112,7 +112,7 @@ func openScorecardStore(ctx context.Context, rf *rootFlags, flagPath string) (*s
 	}
 	openCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	store, err := sqlite.Open(openCtx, path, sqlite.Options{})
+	store, err := openStoreForRead(openCtx, path)
 	if err != nil {
 		return nil, func() {}, fmt.Errorf("open events db: %w", err)
 	}

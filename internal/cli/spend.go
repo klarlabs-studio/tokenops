@@ -17,7 +17,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/fxrate"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/infra/svgchart"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // writeRatioSVG renders the input-vs-output token proportion — the ratio that
@@ -89,7 +88,7 @@ spend within the selected window. It surfaces:
 				return err
 			}
 			ctx := cmd.Context()
-			store, err := sqlite.Open(ctx, path, sqlite.Options{})
+			store, err := openStoreForRead(ctx, path)
 			if err != nil {
 				return fmt.Errorf("open event store: %w", err)
 			}

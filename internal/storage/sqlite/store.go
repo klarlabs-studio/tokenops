@@ -301,6 +301,48 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	return &Store{db: db, path: abs, logger: slog.Default(), slowLock: defaultSlowLockWarn}, nil
 }
 
+// OpenForRead opens an existing store for a command that only reads it.
+// It opens it read-only, so a read neither creates the file nor takes
+// the write lock, unless the store predates this binary's schema: then it
+// opens it as Open does, which brings the schema up first, because the
+// reads expect it. A missing store is an error satisfying
+// errors.Is(err, fs.ErrNotExist).
+func OpenForRead(ctx context.Context, path string) (*Store, error) {
+	s, err := OpenReadOnly(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	current, err := s.schemaCurrent(ctx)
+	if err == nil && current {
+		return s, nil
+	}
+	_ = s.Close()
+	return Open(ctx, path, Options{})
+}
+
+// schemaCurrent reports whether every migration this binary knows has
+// been applied. A store with no migration table has none applied.
+func (s *Store) schemaCurrent(ctx context.Context) (bool, error) {
+	var tables int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'`).Scan(&tables); err != nil {
+		return false, err
+	}
+	if tables == 0 {
+		return false, nil
+	}
+	applied, err := loadAppliedVersions(ctx, s.db)
+	if err != nil {
+		return false, err
+	}
+	for _, m := range migrations {
+		if !applied[m.Version] {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 // LatestAttributesBySource returns the attributes of the newest event from
 // source, no older than since, that carries key. ok is false when there is
 // none: an older reading is not reported as current.

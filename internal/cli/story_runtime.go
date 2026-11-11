@@ -12,7 +12,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // runtimeTurns opens the event store the runtime report's usage and cost
@@ -32,7 +31,7 @@ func runtimeTurns(cmd *cobra.Command, rf *rootFlags) (commits.TurnReader, func()
 	if _, err := os.Stat(path); err != nil {
 		return nil, none
 	}
-	store, err := sqlite.Open(cmd.Context(), path, sqlite.Options{})
+	store, err := openStoreForRead(cmd.Context(), path)
 	if err != nil {
 		warnRead(cmd, []string{"usage per task is left out: open event store: " + err.Error()})
 		return nil, none

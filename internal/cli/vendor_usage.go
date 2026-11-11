@@ -534,7 +534,7 @@ machine-readable output.`,
 				return err
 			}
 			ctx := cmd.Context()
-			store, err := sqlite.Open(ctx, db, sqlite.Options{})
+			store, err := openStoreForRead(ctx, db)
 			if err != nil {
 				return fmt.Errorf("open store: %w", err)
 			}

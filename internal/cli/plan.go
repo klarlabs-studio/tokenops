@@ -282,7 +282,7 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 			defer cancel()
-			store, err := sqlite.Open(ctx, resolvedPath, sqlite.Options{})
+			store, err := openStoreForRead(ctx, resolvedPath)
 			if err != nil {
 				return fmt.Errorf("open store: %w", err)
 			}

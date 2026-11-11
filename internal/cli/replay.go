@@ -17,7 +17,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/replays"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -52,7 +51,7 @@ findings (when --workflow is set), and a summary footer.`,
 				return err
 			}
 			ctx := cmd.Context()
-			store, err := sqlite.Open(ctx, path, sqlite.Options{})
+			store, err := openStoreForRead(ctx, path)
 			if err != nil {
 				return fmt.Errorf("open event store: %w", err)
 			}

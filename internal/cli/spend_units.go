@@ -11,7 +11,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // newSpendUnitsCmd builds `tokenops spend units`: what a unit of finished
@@ -54,7 +53,7 @@ heuristics, so the work no unit took is listed by why.`,
 				}
 			}
 			ctx := cmd.Context()
-			store, err := sqlite.Open(ctx, path, sqlite.Options{})
+			store, err := openStoreForRead(ctx, path)
 			if err != nil {
 				return fmt.Errorf("open event store: %w", err)
 			}
