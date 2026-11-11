@@ -68,7 +68,7 @@ func (a *AnalyticsHandlers) scorecard(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	p := spending.ScorecardParams{SinceDays: days, Spend: a.spend, Allocation: a.allocation, AgentFacts: a.agentFacts}
+	p := spending.ScorecardParams{SinceDays: days, Spend: a.spend, Allocation: a.allocation, AgentFacts: a.agentFacts, Repos: a.repos}
 	if a.events != nil {
 		p.Events = a.events
 	}
@@ -111,7 +111,7 @@ func (a *AnalyticsHandlers) spendUnits(w http.ResponseWriter, r *http.Request) {
 		since = s
 	}
 	res, err := uniteconomics.Compute(r.Context(), uniteconomics.Deps{
-		Turns: commits.TurnsIn(a.aggregator, spending.Window{}), Events: a.store,
+		Turns: commits.TurnsIn(a.aggregator, spending.Window{}), Events: a.store, Repos: a.repos,
 	}, since, time.Now())
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)

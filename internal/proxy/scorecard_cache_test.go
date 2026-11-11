@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
@@ -146,5 +147,26 @@ func TestScorecardKeepsTheTranscriptsItRead(t *testing.T) {
 	}
 	if got := cgr(); got != 50.0 {
 		t.Errorf("CGR %v on the second scorecard, want 50 from what the first read", got)
+	}
+}
+
+// The routes that join spend with git keep one set of repositories
+// between requests, and the configuration does not swap the waste
+// report's for a fresh one.
+func TestAnalyticsRoutesShareTheirRepositories(t *testing.T) {
+	store, done := seedAnalyticsStore(t)
+	defer done()
+	spendEng := spend.NewEngine(spend.DefaultTable())
+	h, err := NewAnalyticsHandlers(store, analytics.New(store, spendEng), spendEng, waste.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.repos == nil || h.avoidable.Repos != h.repos {
+		t.Fatalf("the waste report reads %p, the other routes %p", h.avoidable.Repos, h.repos)
+	}
+	repos := h.repos
+	h.WithConfig(config.Config{})
+	if h.repos != repos || h.avoidable.Repos != repos {
+		t.Errorf("after the configuration the routes read %p and %p, want the one they had, %p", h.repos, h.avoidable.Repos, repos)
 	}
 }

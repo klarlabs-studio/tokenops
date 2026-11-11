@@ -13,6 +13,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/infra/gitlog"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -43,6 +44,12 @@ type AnalyticsHandlers struct {
 	// session transcripts. It is filled by the first one asked for, not
 	// at start: a daemon nobody asks for a scorecard reads none of them.
 	agentFacts *spending.AgentFacts
+	// repos resolves the sessions' repositories and keeps their commits
+	// and merged pull requests between requests, for every route that
+	// joins spend with git: each built its own, and resolved a month of
+	// session directories and read every repository's history again on
+	// each request.
+	repos *gitlog.Repos
 }
 
 // NewAnalyticsHandlers builds the handlers. Store, aggregator, and
@@ -59,7 +66,9 @@ func NewAnalyticsHandlers(store *sqlite.Store, agg *spending.EventAggregator, sp
 		workflows:  workflowtrace.NewReader(store, spendEng, wasteCfg),
 		avoidable:  avoidable.DepsFor(config.Config{}, agg, store, spendEng),
 		agentFacts: &spending.AgentFacts{},
+		repos:      gitlog.NewRepos(),
 	}
+	a.avoidable.Repos = a.repos
 	a.avoidable.Waste = wasteCfg
 	return a, nil
 }
@@ -68,6 +77,7 @@ func NewAnalyticsHandlers(store *sqlite.Store, agg *spending.EventAggregator, sp
 // and the allocation rules from cfg, the daemon's configuration.
 func (a *AnalyticsHandlers) WithConfig(cfg config.Config) *AnalyticsHandlers {
 	a.avoidable = avoidable.DepsFor(cfg, a.aggregator, a.store, a.spend)
+	a.avoidable.Repos = a.repos
 	a.allocation = cfg.AllocationRules()
 	an := cfg.VendorUsage.Anthropic
 	a.claudeCode = claudecodeorg.Sources(an.AdminKey, an.AnalyticsKey)
