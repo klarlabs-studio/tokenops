@@ -75,6 +75,35 @@ func (r *Repos) MergedPRs(ctx context.Context, root string, since time.Time) ([]
 	if err != nil || email == "" {
 		return nil, nil
 	}
+	// As for Commits: the refs before the history.
+	state, stateErr := refState(ctx, root, email)
+	if stateErr == nil {
+		r.mu.Lock()
+		if h := r.prs[root]; h.answers(state, since) {
+			out := h.from(since, nil)
+			r.mu.Unlock()
+			return out, nil
+		}
+		r.mu.Unlock()
+	}
+	prs, err := readMergedPRs(ctx, root, email, since)
+	if err != nil {
+		return nil, err
+	}
+	h := &history[PR]{state: state, since: since, items: prs}
+	for _, p := range prs {
+		h.committed = append(h.committed, p.MergedAt)
+	}
+	if stateErr == nil {
+		r.mu.Lock()
+		r.prs[root] = h
+		r.mu.Unlock()
+	}
+	return h.from(since, nil), nil
+}
+
+// readMergedPRs runs git log for MergedPRs.
+func readMergedPRs(ctx context.Context, root, email string, since time.Time) ([]PR, error) {
 	refs := defaultRefs(ctx, root)
 	if len(refs) == 0 {
 		return nil, nil
