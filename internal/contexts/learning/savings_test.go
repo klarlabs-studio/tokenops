@@ -2,10 +2,12 @@ package learning
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/intervention"
+	"go.klarlabs.de/tokenops/internal/contexts/measurement"
 )
 
 var s0 = time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
@@ -95,6 +97,36 @@ func TestSummarizeRealizedFromHoldout(t *testing.T) {
 	}
 	if k.ExpectedPerTipUSD < 0.29 || k.ExpectedPerTipUSD > 0.31 {
 		t.Fatalf("expected = %v", k.ExpectedPerTipUSD)
+	}
+	// Neither is a measurement: the per-tip figure estimates the effect,
+	// with its interval; the total assumes each tip saved the mean.
+	if q := k.RealizedPerTipUSD.Quality(); q != measurement.QualityEstimated || !strings.Contains(k.RealizedPerTipUSD.Caveat(), "95% interval $6.00 to $6.00") {
+		t.Errorf("per tip %s: %q", q, k.RealizedPerTipUSD.Caveat())
+	}
+	if q := k.RealizedUSD.Quality(); q != measurement.QualityEstimated || !strings.Contains(k.RealizedUSD.Caveat(), "times the 6 tips shown") {
+		t.Errorf("total %s: %q", q, k.RealizedUSD.Caveat())
+	}
+}
+
+// The same means from sessions that vary more than the difference
+// conclude nothing: six sessions a side once realized $36 here.
+func TestSummarizeNoisySessionsAreNotASaving(t *testing.T) {
+	after := map[Cohort][]float64{CohortTreated: {0.5, 9, 1, 8, 2, 3.5}, CohortHoldout: {1, 25, 2, 18, 9, 5}}
+	entries := make([]SavingsEntry, 0, 12)
+	peaks := map[string]float64{}
+	for c, spends := range after {
+		for i, usd := range spends {
+			id := fmt.Sprintf("%s%d", c, i)
+			entries = append(entries, tip(id, id, c, 10))
+			peaks[id] = 10 + usd
+		}
+	}
+	k := SummarizeSavings(entries, Implicit{SessionPeakUSD: peaks}, s0.Add(48*time.Hour))[0]
+	if k.Verdict.Conclusive() || k.RealizedUSD.Known() {
+		t.Fatalf("verdict %+v, realized %v: a $6 difference between sessions of $0.50 to $25", k.Verdict, k.RealizedUSD)
+	}
+	if !strings.Contains(k.RealizedUSD.Caveat(), "cannot be told from no difference") {
+		t.Errorf("realized caveat %q does not say why", k.RealizedUSD.Caveat())
 	}
 }
 
