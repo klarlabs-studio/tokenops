@@ -35,6 +35,14 @@ type AnalyticsHandlers struct {
 	// claudeCode are the Anthropic reports of the organisation's Claude
 	// Code use the configured keys reach; WithConfig sets them.
 	claudeCode []claudecodeorg.Source
+	// events is the daemon's cache of events, which the scorecard reads
+	// its five weeks through; WithEvents sets it, and without it the
+	// scorecard reads the store.
+	events *sqlite.EventCache
+	// agentFacts is what the scorecards asked for so far read of the
+	// session transcripts. It is filled by the first one asked for, not
+	// at start: a daemon nobody asks for a scorecard reads none of them.
+	agentFacts *spending.AgentFacts
 }
 
 // NewAnalyticsHandlers builds the handlers. Store, aggregator, and
@@ -50,6 +58,7 @@ func NewAnalyticsHandlers(store *sqlite.Store, agg *spending.EventAggregator, sp
 		spend:      spendEng,
 		workflows:  workflowtrace.NewReader(store, spendEng, wasteCfg),
 		avoidable:  avoidable.DepsFor(config.Config{}, agg, store, spendEng),
+		agentFacts: &spending.AgentFacts{},
 	}
 	a.avoidable.Waste = wasteCfg
 	return a, nil
@@ -62,6 +71,14 @@ func (a *AnalyticsHandlers) WithConfig(cfg config.Config) *AnalyticsHandlers {
 	a.allocation = cfg.AllocationRules()
 	an := cfg.VendorUsage.Anthropic
 	a.claudeCode = claudecodeorg.Sources(an.AdminKey, an.AnalyticsKey)
+	return a
+}
+
+// WithEvents has the scorecard read events through the daemon's cache of
+// them, so each one does not decode five weeks of the store again. A nil
+// cache leaves it reading the store.
+func (a *AnalyticsHandlers) WithEvents(events *sqlite.EventCache) *AnalyticsHandlers {
+	a.events = events
 	return a
 }
 
