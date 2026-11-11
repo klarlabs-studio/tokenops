@@ -8,6 +8,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/auditlog"
+	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -56,7 +57,7 @@ func RegisterParityTools(s *Server, d ParityDeps) error {
 		return errors.New("mcp: server must not be nil")
 	}
 	s.Tool("tokenops_scorecard").
-		Description("Operator wedge KPI scorecard (FVT, TEU, SAC and the agent KPIs) computed from the local event store, each KPI set against your own trailing baseline (vs_baseline). Mirrors `tokenops scorecard`.").
+		Description("TokenOps' one grade: the worst of the measures it grades (session quality from the DX analysis, cache hits, confirmations, rejected replies, tool success, destructive commands, and optimizer savings where the proxy runs), with overall_driver naming the measure that set it; first-value time and spend attribution are reported (reported: true), not graded. Each measure is set against your own trailing baseline (vs_baseline). Mirrors `tokenops scorecard`.").
 		OutputSchema(spending.ScorecardReport{}).
 		Handler(func(ctx context.Context, in scorecardInput) (*spending.ScorecardReport, error) {
 			return runScorecard(ctx, d, in)
@@ -84,6 +85,7 @@ func runScorecard(ctx context.Context, d ParityDeps, in scorecardInput) (*spendi
 		BaselineRef: in.BaselineRef,
 		Spend:       d.Spend,
 		Allocation:  rulesOf(d.Allocation),
+		Sessions:    findings.ScorecardSessions(in.SinceDays, time.Now()),
 	})
 	return s, nil
 }

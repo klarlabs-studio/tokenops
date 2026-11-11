@@ -44,6 +44,22 @@ type KPIResult struct {
 	// baseline (SelfBaseline); nil when either side was not measured or
 	// the operator overrode the figure.
 	VsBaseline *Comparison `json:"vs_baseline,omitempty"`
+	// Reported marks a KPI shown for what it measures that does not
+	// count toward the overall grade (ADR 0018). Grade still says it
+	// was measured.
+	Reported bool `json:"reported,omitempty"`
+	// Note says why a KPI was not measured, when that is worth telling.
+	Note string `json:"note,omitempty"`
+}
+
+// SessionGrade is the DX grade of the operator's own instructions, the
+// scorecard's session quality (ADR 0018). Missing says why there is none
+// for this period.
+type SessionGrade struct {
+	Letter       Grade
+	Driver       string
+	Instructions int
+	Missing      string
 }
 
 type Thresholds struct {
@@ -60,13 +76,19 @@ type Scorecard struct {
 	// Agent-workflow KPIs (added v0.19). Grade is "" when the live
 	// computation didn't supply the metric; renderers skip empty
 	// KPIs so the operator doesn't see a phantom F.
+	// Sessions is session quality, the DX grade of the operator's own
+	// instructions (ADR 0018).
+	Sessions             KPIResult `json:"sessions,omitempty"`
 	CacheHitRatio        KPIResult `json:"cache_hit_ratio,omitempty"`
 	ConfirmationGateRate KPIResult `json:"confirmation_gate_rate,omitempty"`
 	RegenerateRate       KPIResult `json:"regenerate_rate,omitempty"`
 	ToolSuccessRate      KPIResult `json:"tool_success_rate,omitempty"`
 	DestructiveRate      KPIResult `json:"destructive_rate,omitempty"`
-	OverallGrade         Grade     `json:"overall_grade"`
-	BaselineRef          string    `json:"baseline_ref,omitempty"`
+	// OverallGrade is the worst graded KPI's grade, empty when nothing
+	// graded was measured; OverallDriver is that KPI's name.
+	OverallGrade  Grade  `json:"overall_grade"`
+	OverallDriver string `json:"overall_driver,omitempty"`
+	BaselineRef   string `json:"baseline_ref,omitempty"`
 	// Degraded explains why the live store could not be read, when it
 	// could not. An unreadable store and an unmeasured metric both used
 	// to render as "N/A (not measured)", which made a failure look like
@@ -271,6 +293,8 @@ type AgentKPIInputs struct {
 	ToolSuccessComputed      bool
 	DestructiveRatePct       float64
 	DestructiveComputed      bool
+	// Sessions is the session grade; nil when no one supplied it.
+	Sessions *SessionGrade
 }
 
 func New(fvtSeconds, teuPct, sacPct float64, baselineRef string) *Scorecard {
@@ -301,7 +325,8 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 	fvt := kpiOrNA(KPIResult{
 		Name:        "First Value Time (FVT)",
 		Polarity:    LowerIsBetter,
-		Description: "Seconds from install to first measurable insight. Lower is better.",
+		Description: "Seconds from a session's start to its first recorded prompt. Reported, not graded.",
+		Reported:    true,
 		Unit:        "seconds",
 		Threshold:   DefaultThresholds.FirstValueTime,
 	}, fvtSeconds, gradeFVT)
@@ -315,25 +340,44 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 	sac := kpiOrNA(KPIResult{
 		Name:        "Spend Attribution Completeness (SAC)",
 		Polarity:    HigherIsBetter,
-		Description: "Percent of spend with workflow or agent attribution. Higher is better.",
+		Description: "Percent of prompts with a workflow, agent or session id. Reported, not graded: every transcript has a session id.",
+		Reported:    true,
 		Unit:        "%",
 		Threshold:   DefaultThresholds.SpendAttribution,
 	}, sacPct, gradeSAC)
 	// Only graded metrics contribute to the overall. An uncomputed one
 	// must neither prop the summary up with a placeholder nor drag it
-	// down with a phantom F.
-	var grades []Grade
-	for _, k := range []KPIResult{fvt, teu, sac} {
-		if k.Grade != "" {
-			grades = append(grades, k.Grade)
-		}
-	}
+	// down with a phantom F; a reported one (FVT, SAC) is shown and does
+	// not count (ADR 0018).
+	var graded []gradedKPI
 	sc := &Scorecard{
 		GeneratedAt:      time.Now().UTC(),
 		FirstValueTime:   fvt,
 		TokenEfficiency:  teu,
 		SpendAttribution: sac,
 		BaselineRef:      baselineRef,
+	}
+	if s := agent.Sessions; s != nil {
+		k := KPIResult{
+			Name:        "Session quality",
+			Polarity:    HigherIsBetter,
+			Description: "The worst of `tokenops dx`'s grades over your own instructions: turns, waiting, rework, interrupts, first-try success, context growth, compactions.",
+			Unit:        "instructions",
+			Note:        s.Missing,
+		}
+		if s.Letter != "" {
+			k.Value, k.Grade = float64(s.Instructions), s.Letter
+			if s.Driver != "" {
+				k.Description = "The worst of `tokenops dx`'s grades over your own instructions, here " + s.Driver + "."
+			}
+		}
+		sc.Sessions = k
+		if k.Grade != "" {
+			graded = append(graded, gradedKPI{"session quality", k.Grade})
+		}
+	}
+	if teu.Grade != "" {
+		graded = append(graded, gradedKPI{"optimizer savings", teu.Grade})
 	}
 	if agent.CacheHitRatioComputed {
 		k := KPIResult{
@@ -346,7 +390,7 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 			Threshold:   DefaultThresholds.CacheHitRatio,
 		}
 		sc.CacheHitRatio = k
-		grades = append(grades, k.Grade)
+		graded = append(graded, gradedKPI{"cache hits", k.Grade})
 	}
 	if agent.ConfirmationGateComputed {
 		k := KPIResult{
@@ -359,7 +403,7 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 			Threshold:   DefaultThresholds.ConfirmationGateRate,
 		}
 		sc.ConfirmationGateRate = k
-		grades = append(grades, k.Grade)
+		graded = append(graded, gradedKPI{"prompts that only confirm", k.Grade})
 	}
 	if agent.RegenerateComputed {
 		k := KPIResult{
@@ -372,7 +416,7 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 			Threshold:   DefaultThresholds.RegenerateRate,
 		}
 		sc.RegenerateRate = k
-		grades = append(grades, k.Grade)
+		graded = append(graded, gradedKPI{"replies you rejected", k.Grade})
 	}
 	if agent.ToolSuccessComputed {
 		k := KPIResult{
@@ -385,7 +429,7 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 			Threshold:   DefaultThresholds.ToolSuccessRate,
 		}
 		sc.ToolSuccessRate = k
-		grades = append(grades, k.Grade)
+		graded = append(graded, gradedKPI{"tool calls that succeeded", k.Grade})
 	}
 	if agent.DestructiveComputed {
 		k := KPIResult{
@@ -398,10 +442,36 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 			Threshold:   DefaultThresholds.DestructiveRate,
 		}
 		sc.DestructiveRate = k
-		grades = append(grades, k.Grade)
+		graded = append(graded, gradedKPI{"destructive commands", k.Grade})
 	}
-	sc.OverallGrade = overallGrade(grades)
+	sc.OverallGrade, sc.OverallDriver = overallOf(graded)
 	return sc
+}
+
+// gradedKPI is a graded measure's plain label and its grade.
+type gradedKPI struct {
+	label string
+	grade Grade
+}
+
+// overallOf is the worst grade among the graded KPIs and the label of the
+// first KPI that has it; empty when none was graded, which says nothing
+// was measured rather than inventing an F.
+func overallOf(graded []gradedKPI) (Grade, string) {
+	if len(graded) == 0 {
+		return "", ""
+	}
+	grades := make([]Grade, len(graded))
+	for i, k := range graded {
+		grades[i] = k.grade
+	}
+	worst := overallGrade(grades)
+	for _, k := range graded {
+		if k.grade == worst {
+			return worst, k.label
+		}
+	}
+	return worst, ""
 }
 
 // MarshalJSON renders Scorecard with empty KPI blocks dropped when
@@ -434,12 +504,14 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 		FirstValueTime       *KPIResult           `json:"first_value_time,omitempty"`
 		TokenEfficiency      *KPIResult           `json:"token_efficiency_uplift,omitempty"`
 		SpendAttribution     *KPIResult           `json:"spend_attribution_completeness,omitempty"`
+		Sessions             *KPIResult           `json:"sessions,omitempty"`
 		CacheHitRatio        *KPIResult           `json:"cache_hit_ratio,omitempty"`
 		ConfirmationGateRate *KPIResult           `json:"confirmation_gate_rate,omitempty"`
 		RegenerateRate       *KPIResult           `json:"regenerate_rate,omitempty"`
 		ToolSuccessRate      *KPIResult           `json:"tool_success_rate,omitempty"`
 		DestructiveRate      *KPIResult           `json:"destructive_rate,omitempty"`
 		OverallGrade         Grade                `json:"overall_grade"`
+		OverallDriver        string               `json:"overall_driver,omitempty"`
 		BaselineRef          string               `json:"baseline_ref,omitempty"`
 		Degraded             string               `json:"degraded,omitempty"`
 		PeriodDays           int                  `json:"period_days,omitempty"`
@@ -451,6 +523,7 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 	}{
 		GeneratedAt:       s.GeneratedAt,
 		OverallGrade:      s.OverallGrade,
+		OverallDriver:     s.OverallDriver,
 		BaselineRef:       s.BaselineRef,
 		Degraded:          s.Degraded,
 		PeriodDays:        s.PlanUseDays,
@@ -475,6 +548,12 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 	if s.SpendAttribution.Grade != "" {
 		k := s.SpendAttribution
 		out.SpendAttribution = &k
+	}
+	// Session quality is carried when graded, and when its note says why
+	// it is not.
+	if s.Sessions.Grade != "" || s.Sessions.Note != "" {
+		k := s.Sessions
+		out.Sessions = &k
 	}
 	if s.CacheHitRatio.Grade != "" {
 		k := s.CacheHitRatio
@@ -510,12 +589,14 @@ func (s *Scorecard) UnmarshalJSON(b []byte) error {
 		FirstValueTime       *KPIResult           `json:"first_value_time"`
 		TokenEfficiency      *KPIResult           `json:"token_efficiency_uplift"`
 		SpendAttribution     *KPIResult           `json:"spend_attribution_completeness"`
+		Sessions             *KPIResult           `json:"sessions"`
 		CacheHitRatio        *KPIResult           `json:"cache_hit_ratio"`
 		ConfirmationGateRate *KPIResult           `json:"confirmation_gate_rate"`
 		RegenerateRate       *KPIResult           `json:"regenerate_rate"`
 		ToolSuccessRate      *KPIResult           `json:"tool_success_rate"`
 		DestructiveRate      *KPIResult           `json:"destructive_rate"`
 		OverallGrade         Grade                `json:"overall_grade"`
+		OverallDriver        string               `json:"overall_driver"`
 		BaselineRef          string               `json:"baseline_ref"`
 		Degraded             string               `json:"degraded"`
 		PeriodDays           int                  `json:"period_days"`
@@ -536,7 +617,7 @@ func (s *Scorecard) UnmarshalJSON(b []byte) error {
 	}
 	unmeasured := New(math.NaN(), math.NaN(), math.NaN(), "")
 	*s = Scorecard{
-		GeneratedAt: w.GeneratedAt, OverallGrade: w.OverallGrade, BaselineRef: w.BaselineRef, Degraded: w.Degraded,
+		GeneratedAt: w.GeneratedAt, OverallGrade: w.OverallGrade, OverallDriver: w.OverallDriver, BaselineRef: w.BaselineRef, Degraded: w.Degraded,
 		PlanUse: w.PlanUse, PlanUseDays: w.PeriodDays, UnitCosts: w.UnitCosts, SelfBaseline: w.SelfBaseline,
 		PlanUseVsBaseline: w.PlanUseVsBaseline, Allocation: w.Allocation, Checklist: w.Checklist,
 		FirstValueTime: unmeasured.FirstValueTime, TokenEfficiency: unmeasured.TokenEfficiency,
@@ -547,7 +628,7 @@ func (s *Scorecard) UnmarshalJSON(b []byte) error {
 		to   *KPIResult
 	}{
 		{w.FirstValueTime, &s.FirstValueTime}, {w.TokenEfficiency, &s.TokenEfficiency},
-		{w.SpendAttribution, &s.SpendAttribution}, {w.CacheHitRatio, &s.CacheHitRatio},
+		{w.SpendAttribution, &s.SpendAttribution}, {w.Sessions, &s.Sessions}, {w.CacheHitRatio, &s.CacheHitRatio},
 		{w.ConfirmationGateRate, &s.ConfirmationGateRate}, {w.RegenerateRate, &s.RegenerateRate},
 		{w.ToolSuccessRate, &s.ToolSuccessRate}, {w.DestructiveRate, &s.DestructiveRate},
 	} {
@@ -561,7 +642,7 @@ func (s *Scorecard) UnmarshalJSON(b []byte) error {
 func (s *Scorecard) String() string {
 	if s.OverallGrade == GradeWarmingUp {
 		var b strings.Builder
-		fmt.Fprintf(&b, "Operator Wedge KPI Scorecard\nGenerated: %s\n\nScorecard: warming up (no real events observed yet)\n\nFirst-week checklist:\n",
+		fmt.Fprintf(&b, "Scorecard\nGenerated: %s\n\nScorecard: warming up (no real events observed yet)\n\nFirst-week checklist:\n",
 			s.GeneratedAt.Format(time.RFC3339))
 		for i, item := range s.Checklist {
 			marker := "[ ]"
@@ -574,80 +655,120 @@ func (s *Scorecard) String() string {
 		// A store that could not be read leaves nothing measured too:
 		// warming up must not read as "nothing happened yet" then.
 		if s.Degraded != "" {
-			fmt.Fprintf(&b, "\n⚠ some KPIs could not be computed: %s\n", s.Degraded)
+			fmt.Fprintf(&b, "\n⚠ some measures could not be computed: %s\n", s.Degraded)
 		}
 		return b.String()
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Operator Wedge KPI Scorecard\nGenerated: %s\n",
-		s.GeneratedAt.Format(time.RFC3339))
+	fmt.Fprintf(&b, "Scorecard")
+	if s.PlanUseDays > 0 {
+		fmt.Fprintf(&b, " — the last %d days", s.PlanUseDays)
+	}
+	fmt.Fprintf(&b, "\nGenerated: %s\n", s.GeneratedAt.Format(time.RFC3339))
 	if sb := s.SelfBaseline; sb != nil {
 		fmt.Fprintf(&b, "Against your own baseline: the %d days before (%s – %s)\n",
 			sb.Days, sb.Since.Format(baselineHeaderDate), sb.Until.Format(baselineHeaderDate))
 	}
-	b.WriteString("\n")
-	fmt.Fprintf(&b, "FVT — First-Value Time (seconds):           %s\n",
-		renderKPI(s.FirstValueTime, 1))
-	fmt.Fprintf(&b, "TEU — Token Efficiency Uplift (%%):          %s\n",
-		renderKPI(s.TokenEfficiency, 1))
-	fmt.Fprintf(&b, "SAC — Spend Attribution Completeness (%%):   %s\n",
-		renderKPI(s.SpendAttribution, 1))
-	writeAllocation(&b, s.Allocation)
+	fmt.Fprintf(&b, "\nGrade: %s\n", overallLine(s.OverallGrade, s.OverallDriver))
+
+	b.WriteString("\nGraded\n")
+	writeSessions(&b, s.Sessions)
 	for _, row := range []struct {
 		label    string
 		k        KPIResult
 		decimals int
 	}{
-		{"CHR — Cache Hit Ratio (%):                  ", s.CacheHitRatio, kpiValueDecimals},
-		{"CGR — Confirmation Gate Rate (%):           ", s.ConfirmationGateRate, kpiValueDecimals},
-		{"RGR — Regenerate Rate (%):                  ", s.RegenerateRate, kpiValueDecimals},
-		{"TCS — Tool Success Rate (%):                ", s.ToolSuccessRate, kpiValueDecimals},
-		{"DAR — Destructive Action Rate (%):          ", s.DestructiveRate, darValueDecimals},
+		{"cache hits (% of input read from cache)", s.CacheHitRatio, kpiValueDecimals},
+		{"prompts that only confirm (%)", s.ConfirmationGateRate, kpiValueDecimals},
+		{"replies you rejected (%)", s.RegenerateRate, kpiValueDecimals},
+		{"tool calls that succeeded (%)", s.ToolSuccessRate, kpiValueDecimals},
+		{"destructive commands (%)", s.DestructiveRate, darValueDecimals},
+		{"optimizer savings (% of input)", s.TokenEfficiency, 1},
 	} {
 		if row.k.Grade != "" {
-			fmt.Fprintf(&b, "%s%s\n", row.label, renderKPI(row.k, row.decimals))
+			fmt.Fprintf(&b, "  %-42s %s\n", row.label+":", renderKPI(row.k, row.decimals))
 		}
 	}
+
+	b.WriteString("\nReported, not graded\n")
+	fmt.Fprintf(&b, "  %-42s %s\n", "first prompt after a session starts (s):", renderReported(s.FirstValueTime, 1))
+	fmt.Fprintf(&b, "  %-42s %s\n", "prompts with a workflow or session (%):", renderReported(s.SpendAttribution, 1))
+	writeAllocation(&b, s.Allocation)
 	writePlanUse(&b, s.PlanUse, s.PlanUseVsBaseline, s.PlanUseDays)
 	writeUnitCosts(&b, s.UnitCosts, s.PlanUseDays)
-	fmt.Fprintf(&b, "\nOverall Grade: %s\n", s.OverallGrade)
 	// The operator's label for this run (--baseline-ref), not the
 	// trailing baseline the KPIs are compared with: "no baseline
 	// captured" under a line of comparisons read as a contradiction.
 	if s.BaselineRef != "" {
-		fmt.Fprintf(&b, "Baseline ref: %s\n", s.BaselineRef)
+		fmt.Fprintf(&b, "\nBaseline ref: %s\n", s.BaselineRef)
 	}
 	if s.Degraded != "" {
-		fmt.Fprintf(&b, "\n⚠ some KPIs could not be computed: %s\n", s.Degraded)
+		fmt.Fprintf(&b, "\n⚠ some measures could not be computed: %s\n", s.Degraded)
 	}
-	fmt.Fprintf(&b, "\nThresholds (green / yellow / red):\n")
-	fmt.Fprintf(&b, "  FVT:  ≤%.0f / ≤%.0f / ≤%.0f seconds\n",
-		s.FirstValueTime.Threshold.Green, s.FirstValueTime.Threshold.Yellow, s.FirstValueTime.Threshold.Red)
-	fmt.Fprintf(&b, "  TEU:  ≥%.0f%% / ≥%.0f%% / ≥%.0f%%\n",
-		s.TokenEfficiency.Threshold.Green, s.TokenEfficiency.Threshold.Yellow, s.TokenEfficiency.Threshold.Red)
-	fmt.Fprintf(&b, "  SAC:  ≥%.0f%% / ≥%.0f%% / ≥%.0f%%\n",
-		s.SpendAttribution.Threshold.Green, s.SpendAttribution.Threshold.Yellow, s.SpendAttribution.Threshold.Red)
-	if s.CacheHitRatio.Grade != "" {
-		fmt.Fprintf(&b, "  CHR:  ≥%.0f%% / ≥%.0f%% / ≥%.0f%%\n",
-			s.CacheHitRatio.Threshold.Green, s.CacheHitRatio.Threshold.Yellow, s.CacheHitRatio.Threshold.Red)
-	}
-	if s.ConfirmationGateRate.Grade != "" {
-		fmt.Fprintf(&b, "  CGR:  ≤%.0f%% / ≤%.0f%% / ≤%.0f%%\n",
-			s.ConfirmationGateRate.Threshold.Green, s.ConfirmationGateRate.Threshold.Yellow, s.ConfirmationGateRate.Threshold.Red)
-	}
-	if s.RegenerateRate.Grade != "" {
-		fmt.Fprintf(&b, "  RGR:  ≤%.0f%% / ≤%.0f%% / ≤%.0f%%\n",
-			s.RegenerateRate.Threshold.Green, s.RegenerateRate.Threshold.Yellow, s.RegenerateRate.Threshold.Red)
-	}
-	if s.ToolSuccessRate.Grade != "" {
-		fmt.Fprintf(&b, "  TCS:  ≥%.0f%% / ≥%.0f%% / ≥%.0f%%\n",
-			s.ToolSuccessRate.Threshold.Green, s.ToolSuccessRate.Threshold.Yellow, s.ToolSuccessRate.Threshold.Red)
-	}
-	if s.DestructiveRate.Grade != "" {
-		fmt.Fprintf(&b, "  DAR:  ≤%.2f%% / ≤%.2f%% / ≤%.2f%%\n",
-			s.DestructiveRate.Threshold.Green, s.DestructiveRate.Threshold.Yellow, s.DestructiveRate.Threshold.Red)
-	}
+	writeThresholds(&b, s)
 	return b.String()
+}
+
+// overallLine is the grade with what set it.
+func overallLine(g Grade, driver string) string {
+	switch {
+	case g == "":
+		return "none yet: nothing graded was measured"
+	case driver != "":
+		return fmt.Sprintf("%s  (the worst graded measure: %s)", g, driver)
+	}
+	return string(g)
+}
+
+// writeSessions renders session quality: its grade and how many
+// instructions it covers, or why it is not graded.
+func writeSessions(b *strings.Builder, k KPIResult) {
+	label := fmt.Sprintf("  %-42s ", "session quality (`tokenops dx`):")
+	switch {
+	case k.Grade != "":
+		fmt.Fprintf(b, "%s[%s] over %.0f of your instructions\n", label, k.Grade, k.Value)
+	case k.Note != "":
+		fmt.Fprintf(b, "%snot graded: %s\n", label, k.Note)
+	}
+}
+
+// renderReported formats a reported KPI's value without a letter.
+func renderReported(k KPIResult, decimals int) string {
+	if k.Grade == "" {
+		return "not measured"
+	}
+	return fmt.Sprintf("%.*f", decimals, k.Value) + renderVsBaseline(k, decimals)
+}
+
+// writeThresholds lists the bar each graded measure is held to.
+func writeThresholds(b *strings.Builder, s *Scorecard) {
+	b.WriteString("\nThresholds for A / B / C (worse is F):\n")
+	if s.Sessions.Grade != "" {
+		b.WriteString("  session quality: `tokenops dx` grades each measure\n")
+	}
+	for _, row := range []struct {
+		label  string
+		k      KPIResult
+		higher bool
+		format string
+	}{
+		{"cache hits", s.CacheHitRatio, true, "%.0f%%"},
+		{"prompts that only confirm", s.ConfirmationGateRate, false, "%.0f%%"},
+		{"replies you rejected", s.RegenerateRate, false, "%.0f%%"},
+		{"tool calls that succeeded", s.ToolSuccessRate, true, "%.0f%%"},
+		{"destructive commands", s.DestructiveRate, false, "%.2f%%"},
+		{"optimizer savings", s.TokenEfficiency, true, "%.0f%%"},
+	} {
+		if row.k.Grade == "" {
+			continue
+		}
+		op := "≤"
+		if row.higher {
+			op = "≥"
+		}
+		t := row.k.Threshold
+		fmt.Fprintf(b, "  %s: %s"+row.format+" / %s"+row.format+" / %s"+row.format+"\n", row.label, op, t.Green, op, t.Yellow, op, t.Red)
+	}
 }
 
 // writePlanUse renders each provider's plan utilization and coverage.

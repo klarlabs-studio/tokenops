@@ -6194,8 +6194,14 @@
                         "name": {
                           "type": "string"
                         },
+                        "note": {
+                          "type": "string"
+                        },
                         "polarity": {
                           "type": "string"
+                        },
+                        "reported": {
+                          "type": "boolean"
                         },
                         "thresholds": {
                           "additionalProperties": false,
@@ -6266,8 +6272,14 @@
                         "name": {
                           "type": "string"
                         },
+                        "note": {
+                          "type": "string"
+                        },
                         "polarity": {
                           "type": "string"
+                        },
+                        "reported": {
+                          "type": "boolean"
                         },
                         "thresholds": {
                           "additionalProperties": false,
@@ -6323,8 +6335,14 @@
                         "name": {
                           "type": "string"
                         },
+                        "note": {
+                          "type": "string"
+                        },
                         "polarity": {
                           "type": "string"
+                        },
+                        "reported": {
+                          "type": "boolean"
                         },
                         "thresholds": {
                           "additionalProperties": false,
@@ -6377,8 +6395,14 @@
                         "name": {
                           "type": "string"
                         },
+                        "note": {
+                          "type": "string"
+                        },
                         "polarity": {
                           "type": "string"
+                        },
+                        "reported": {
+                          "type": "boolean"
                         },
                         "thresholds": {
                           "additionalProperties": false,
@@ -6421,6 +6445,9 @@
                     },
                     "generated_at": {
                       "format": "date-time",
+                      "type": "string"
+                    },
+                    "overall_driver": {
                       "type": "string"
                     },
                     "overall_grade": {
@@ -6545,8 +6572,14 @@
                         "name": {
                           "type": "string"
                         },
+                        "note": {
+                          "type": "string"
+                        },
                         "polarity": {
                           "type": "string"
+                        },
+                        "reported": {
+                          "type": "boolean"
                         },
                         "thresholds": {
                           "additionalProperties": false,
@@ -6604,6 +6637,66 @@
                       },
                       "type": "object"
                     },
+                    "sessions": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "grade": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "polarity": {
+                          "type": "string"
+                        },
+                        "reported": {
+                          "type": "boolean"
+                        },
+                        "thresholds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "green": {
+                              "type": "number"
+                            },
+                            "red": {
+                              "type": "number"
+                            },
+                            "yellow": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "number"
+                        },
+                        "vs_baseline": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "baseline": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "spend_attribution_completeness": {
                       "additionalProperties": false,
                       "properties": {
@@ -6616,8 +6709,14 @@
                         "name": {
                           "type": "string"
                         },
+                        "note": {
+                          "type": "string"
+                        },
                         "polarity": {
                           "type": "string"
+                        },
+                        "reported": {
+                          "type": "boolean"
                         },
                         "thresholds": {
                           "additionalProperties": false,
@@ -6670,8 +6769,14 @@
                         "name": {
                           "type": "string"
                         },
+                        "note": {
+                          "type": "string"
+                        },
                         "polarity": {
                           "type": "string"
+                        },
+                        "reported": {
+                          "type": "boolean"
                         },
                         "thresholds": {
                           "additionalProperties": false,
@@ -6724,8 +6829,14 @@
                         "name": {
                           "type": "string"
                         },
+                        "note": {
+                          "type": "string"
+                        },
                         "polarity": {
                           "type": "string"
+                        },
+                        "reported": {
+                          "type": "boolean"
                         },
                         "thresholds": {
                           "additionalProperties": false,

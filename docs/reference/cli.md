@@ -1150,19 +1150,31 @@ the agent a hard window limits can reach both.
 
 ### `tokenops scorecard`
 
-Operator wedge KPI scorecard. Three classic KPIs (FVT, TEU, SAC)
-plus five agent-workflow KPIs added in v0.19–v0.21:
+TokenOps' one grade
+([ADR 0018](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0018-one-grade.md)):
+the worst of the measures it grades, with the measure that set it. `dx`
+and `checkup` show no letter of their own.
 
-  - **CHR** — Cache Hit Ratio (≥90/70/50)
-  - **CGR** — Confirmation Gate Rate (≤10/20/30)
-  - **RGR** — Regenerate Rate (≤5/10/20)
-  - **TCS** — Tool Success Rate (≥95/85/70)
-  - **DAR** — Destructive Action Rate (≤0.5/2/5)
+Graded (thresholds for A / B / C):
 
-All grade A–F against tuneable thresholds. CHR is computed from
-events.db; CGR + RGR from JSONL prompt extracts; TCS + DAR from
-JSONL `tool_use` + `tool_result` blocks. Returns `warming_up`
-with a 3-step activation checklist when no real data backs the KPIs.
+  - **session quality**: the worst of `tokenops dx`'s grades over your own
+    instructions, from the daemon's analysis of the last 7 days. On any
+    other period it is not graded, and says to run `tokenops dx --days N`
+  - **cache hits** (CHR): ≥90 / 70 / 50%
+  - **prompts that only confirm** (CGR): ≤10 / 20 / 30%
+  - **replies you rejected** (RGR): ≤5 / 10 / 20%
+  - **tool calls that succeeded** (TCS): ≥95 / 85 / 70%
+  - **destructive commands** (DAR): ≤0.5 / 2 / 5%
+  - **optimizer savings** (TEU), only where the proxy carries traffic:
+    ≥20 / 10 / 5%
+
+Reported, not graded: first prompt after a session starts (FVT), prompts
+with a workflow or session id (SAC; every transcript has a session id),
+plan use, unit costs and allocation. Cache hits come from events.db;
+confirmations and rejections from the transcripts' prompts; tool success
+and destructive commands from their `tool_use` and `tool_result` blocks.
+With nothing graded measured the grade is "none yet"; with no data at all
+the scorecard returns `warming_up` and a 3-step activation checklist.
 
 Each measured KPI is set against **your own trailing baseline**: the 28
 days before the window, the same stretch unit costs use. The line shows
@@ -1177,9 +1189,14 @@ or peer figure and ranks nobody.
 ```
 Against your own baseline: the 28 days before (Sep 10 – Oct 8)
 
-FVT — First-Value Time (seconds):           5.4 [A] · baseline 140.1 (-134.7, better)
-SAC — Spend Attribution Completeness (%):   84.2 [B] · baseline 96.2 (-12.0, worse)
-CHR — Cache Hit Ratio (%):                  97.5 [A] · baseline 98.5 (-1.0, worse)
+Grade: B  (the worst graded measure: session quality)
+
+Graded
+  session quality (`tokenops dx`):           [B] over 412 of your instructions
+  cache hits (% of input read from cache):   97.5 [A] · baseline 98.5 (-1.0, worse)
+
+Reported, not graded
+  first prompt after a session starts (s):   5.4 · baseline 140.1 (-134.7, better)
 ```
 
 `--json`, `GET /api/scorecard` and the `tokenops_scorecard` MCP tool carry

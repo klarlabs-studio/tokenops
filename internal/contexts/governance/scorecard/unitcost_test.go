@@ -31,7 +31,8 @@ func TestScorecardCarriesUnitCosts(t *testing.T) {
 	if !strings.Contains(string(b), `"unit_costs"`) || !strings.Contains(string(b), `"per_unit_usd": 7`) {
 		t.Errorf("JSON missing unit costs: %s", b)
 	}
-	if sc.OverallGrade == "" {
-		t.Error("the grade still comes from the KPIs")
+	// Unit costs are reported, as is SAC: nothing here is graded.
+	if sc.OverallGrade != "" {
+		t.Errorf("graded %q on reported figures", sc.OverallGrade)
 	}
 }

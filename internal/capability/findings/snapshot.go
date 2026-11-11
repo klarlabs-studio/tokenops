@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
@@ -179,4 +181,32 @@ func DX(w sessions.Window, now time.Time) sessions.DX {
 		}
 	}
 	return sessions.ComputeDX(w, now)
+}
+
+// ScorecardSessions is the scorecard's session quality over the days
+// ending now (ADR 0018): the DX grade of the operator's own instructions
+// from the daemon's analysis. The analysis covers the last seven days, so
+// any other period says so instead of grading a different week.
+func ScorecardSessions(days int, now time.Time) *spending.ScorecardSessions {
+	return scorecardSessions(DefaultDir(), days, now)
+}
+
+func scorecardSessions(dir string, days int, now time.Time) *spending.ScorecardSessions {
+	if days <= 0 {
+		days = 7
+	}
+	if days != 7 {
+		return &spending.ScorecardSessions{Missing: fmt.Sprintf(
+			"the session analysis covers the last 7 days; `tokenops dx --days %d` grades these", days)}
+	}
+	s, err := ReadSnapshot(dir)
+	if err != nil || s == nil || now.Sub(s.ComputedAt) > MaxSnapshotAge {
+		return &spending.ScorecardSessions{Missing: "the daemon has not analysed the sessions recently; `tokenops dx` grades them"}
+	}
+	g := s.DX.Grades
+	if g.Overall == "" {
+		return &spending.ScorecardSessions{Missing: "none of your instructions in the last 7 days could be graded"}
+	}
+	return &spending.ScorecardSessions{Letter: spending.ScorecardGrade(g.Overall), Driver: g.OverallDriver,
+		Instructions: s.DX.Metrics.Prompts}
 }

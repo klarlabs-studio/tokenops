@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/allocation"
+	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -28,23 +29,23 @@ func newScorecardCmd(rf *rootFlags) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "scorecard",
-		Short: "Time to first value, token savings and spend attribution, graded A–F",
-		Long: `scorecard computes and displays the operator wedge KPI scorecard,
-which measures three key outcomes:
+		Short: "The one grade: how your sessions went, graded A–F",
+		Long: `scorecard is TokenOps' one grade (ADR 0018): the worst of the measures
+it grades, with the measure that set it.
 
-  First-Value Time (FVT)      — seconds from daemon start to first
-                                observable result (proxy, spend, event).
-                                Lower is better. Threshold: ≤60s green.
+Graded:
+  session quality             the worst of ` + "`tokenops dx`" + `'s grades over your own
+                              instructions (the last 7 days)
+  cache hits                  share of input read from the prompt cache
+  prompts that only confirm   yes / no / continue, which a clearer
+                              instruction could have spared
+  replies you rejected        instructions that reject the last reply
+  tool calls that succeeded   calls that returned without an error
+  destructive commands        rm -rf, force-push, drop table
+  optimizer savings           only where the proxy carries traffic
 
-  Token Efficiency Uplift     — percentage reduction in tokens when the
-    (TEU)                       optimizer pipeline is active vs. passive.
-                                Higher is better. Threshold: ≥20% green.
-
-  Spend Attribution           — percentage of total spend associated
-    Completeness (SAC)          with a known workflow, agent, or session.
-                                Higher is better. Threshold: ≥90% green.
-
-The scorecard aggregates these three into an overall grade (A–F).
+Reported, not graded: first prompt after a session starts, prompts
+with a workflow or session id, plan use, unit costs and allocation.
 
 Each measured KPI is set against your own trailing baseline, the 28
 days before the window, with whether it moved better or worse given
@@ -86,6 +87,7 @@ scorecard here.`,
 				BaselineRef: baselineRef,
 				Spend:       eng,
 				Allocation:  rules,
+				Sessions:    findings.ScorecardSessions(sinceDays, time.Now()),
 			})
 			return printScorecard(cmd, s, jsonOut)
 		},

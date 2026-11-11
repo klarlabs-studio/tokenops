@@ -105,7 +105,7 @@ func TestScorecardComputesHereWhenItIsNotTheDaemons(t *testing.T) {
 	}
 	// Nothing listening: computed here, from the configured store.
 	out, err := executeRoot(t, "--listen", "127.0.0.1:1", "scorecard")
-	if err != nil || !strings.Contains(out, "Operator Wedge KPI Scorecard") {
+	if err != nil || !strings.Contains(out, "Scorecard") {
 		t.Errorf("with no daemon: %v\n%s", err, out)
 	}
 }
