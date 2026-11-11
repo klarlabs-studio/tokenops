@@ -3,6 +3,7 @@ package cursor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"sync"
@@ -40,6 +41,8 @@ func (f fakeSource) Usage(context.Context) (*UsageResponse, error) {
 type captureBus struct {
 	mu        sync.Mutex
 	envelopes []*eventschema.Envelope
+	// refuse is how many PublishWait calls to refuse before taking one.
+	refuse int
 }
 
 func (b *captureBus) Publish(env *eventschema.Envelope) {
@@ -55,9 +58,11 @@ func (b *captureBus) PublishedCount() int64 {
 func (b *captureBus) DroppedCount() int64         { return 0 }
 func (b *captureBus) Close(_ time.Duration) error { return nil }
 
-// Each model row yields one envelope. Same-content second scan must
-// dedupe via snapshotKey.
-func TestPollerEmitsOneEnvelopePerModelAndDedupes(t *testing.T) {
+// The legacy answer yields one reading of the plan's request allowance:
+// the row that has one, the busiest when several do. It carries no model,
+// so it is not counted as a request to one, and is stored once while the
+// figures stand.
+func TestPollerEmitsTheRequestAllowance(t *testing.T) {
 	bus := &captureBus{}
 	p := NewPoller(bus, PollerOptions{
 		Cookie:   "tok",
@@ -72,41 +77,52 @@ func TestPollerEmitsOneEnvelopePerModelAndDedupes(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.scan(context.Background())
-	if got := bus.PublishedCount(); got != 3 {
-		t.Fatalf("want 3 envelopes (one per model row); got %d", got)
-	}
 	p.scan(context.Background())
-	if got := bus.PublishedCount(); got != 3 {
-		t.Errorf("same snapshot must dedupe; total %d", got)
+	if got := bus.PublishedCount(); got != 1 {
+		t.Fatalf("stored %d readings of one unchanged answer, want 1", got)
 	}
-}
-
-// newEnvelope encodes the per-model snapshot + used_pct in Attributes
-// and tags with ProviderCursor.
-func TestNewEnvelopeAttrShape(t *testing.T) {
-	env := newEnvelope(
-		time.Now().UTC(),
-		"user-1",
-		"2026-05-01T00:00:00Z",
-		"gpt-4",
-		ModelUsage{NumRequests: 250, MaxRequestUsage: 500},
-	)
+	env := bus.envelopes[0]
+	a := env.Attributes
+	// gpt-4 is at 120 of 500 and gpt-4-32k at 12 of 50: both 24%, and the
+	// first by name is named. premiumRequests has no allowance.
+	if a["used_pct"] != "24.00" || a["allowance_of"] != "gpt-4" || a["num_requests"] != "120" || a["max_request_usage"] != "500" ||
+		a["granularity"] != "monthly_snapshot" || a["start_of_month"] != "2026-05-01T00:00:00.000Z" {
+		t.Errorf("attributes %v", a)
+	}
 	pe := env.Payload.(*eventschema.PromptEvent)
-	if pe.Provider != eventschema.ProviderCursor {
-		t.Errorf("provider = %s", pe.Provider)
+	if pe.Provider != eventschema.ProviderCursor || pe.RequestModel != "" || pe.TotalTokens != 0 {
+		t.Errorf("payload %+v: a reading has a provider, no model and no tokens", pe)
 	}
 	if env.Source != SourceTag {
 		t.Errorf("source = %q", env.Source)
 	}
-	if env.Attributes["used_pct"] != "50.00" {
-		t.Errorf("used_pct = %q", env.Attributes["used_pct"])
+}
+
+// The busiest row with an allowance is the plan's share; a row without
+// one has no share, and an answer with none is no reading.
+func TestRequestsEnvelopeReadsTheBusiestAllowance(t *testing.T) {
+	at := time.Date(2026, 11, 10, 9, 0, 0, 0, time.UTC)
+	env := requestsEnvelope(at, "u", &UsageResponse{Models: map[string]ModelUsage{
+		"gpt-4":           {NumRequests: 250, MaxRequestUsage: 500},
+		"gpt-4-32k":       {NumRequests: 45, MaxRequestUsage: 50},
+		"premiumRequests": {NumRequests: 900},
+	}})
+	if env == nil || env.Attributes["used_pct"] != "90.00" || env.Attributes["allowance_of"] != "gpt-4-32k" {
+		t.Fatalf("reading %+v, want gpt-4-32k at 90%%", env)
 	}
-	if env.Attributes["num_requests"] != "250" {
-		t.Errorf("num_requests = %q", env.Attributes["num_requests"])
+	if env := requestsEnvelope(at, "u", &UsageResponse{Models: map[string]ModelUsage{"premiumRequests": {NumRequests: 3}}}); env != nil {
+		t.Errorf("an answer with no allowance was read as %v", env.Attributes)
 	}
 }
 
 func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	b.mu.Lock()
+	if b.refuse > 0 {
+		b.refuse--
+		b.mu.Unlock()
+		return errors.New("the store is busy")
+	}
+	b.mu.Unlock()
 	b.Publish(env)
 	return nil
 }
@@ -168,14 +184,5 @@ func TestPollerEmitsTheWeeklyPool(t *testing.T) {
 	}
 	if _, ok := a["used_pct"]; ok {
 		t.Errorf("the stale monthly share was written: %v", a)
-	}
-}
-
-// A legacy row without an allowance carries no share: it was written as
-// -1, which the monthly reading took for the plan's.
-func TestLegacyRowWithoutAnAllowanceHasNoShare(t *testing.T) {
-	env := newEnvelope(time.Now().UTC(), "u", "2026-05-01T00:00:00Z", "premiumRequests", ModelUsage{NumRequests: 3})
-	if v, ok := env.Attributes["used_pct"]; ok {
-		t.Errorf("used_pct = %q", v)
 	}
 }

@@ -7,11 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/heartbeat"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -48,13 +51,16 @@ type PollerOptions struct {
 	// NewClient binds an OAuth token to a UserSource. Required; the
 	// daemon passes the HTTP client from internal/infra/vendorusage/copilot.
 	NewClient func(token string) UserSource
+	// Now is the clock a reading is stamped with; nil is time.Now.
+	Now func() time.Time
 }
 
-// Poller queries /copilot_internal/user on a tick and emits one
-// PromptEvent envelope per quota snapshot (one for `chat`, one for
-// `premium_interactions`, etc.). Envelope IDs are deterministic per
-// (timestamp_utc, snapshot key) so re-running never double-counts
-// against the store.
+// Poller queries /copilot_internal/user on a tick and stores one reading
+// per quota snapshot (`chat`, `premium_interactions`, …) and one of the
+// plan as a whole. A poll's readings carry one time, the poll's: that is
+// what makes them one set to whoever reads them back. A set that differs
+// from the last one stored is stored, and an unchanged one again every
+// heartbeat.Every, so the newest set is never old while the poller works.
 type Poller struct {
 	bus  events.Bus
 	opts PollerOptions
@@ -64,7 +70,8 @@ type Poller struct {
 	publishes   int64
 	lastErr     error
 	lastErrTime time.Time
-	lastSeenTs  string // timestamp_utc from the last successful response — dedup key
+	// kept is the last set of readings stored and when.
+	kept heartbeat.Keeper
 }
 
 func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
@@ -73,6 +80,9 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 	}
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
+	}
+	if opts.Now == nil {
+		opts.Now = time.Now
 	}
 	return &Poller{bus: bus, opts: opts}
 }
@@ -170,43 +180,78 @@ func (p *Poller) scan(ctx context.Context) {
 		return
 	}
 	p.recordSuccess()
-	// Dedup the whole poll against the response's timestamp_utc —
-	// snapshots refresh slowly server-side and re-querying inside the
-	// same minute returns identical data.
-	p.mu.Lock()
-	if resp.TimestampUTC != "" && resp.TimestampUTC == p.lastSeenTs {
-		p.mu.Unlock()
-		return
-	}
-	if resp.TimestampUTC != "" {
-		p.lastSeenTs = resp.TimestampUTC
-	}
-	p.mu.Unlock()
-	ts := time.Now().UTC()
-	if resp.TimestampUTC != "" {
-		if parsed, err := time.Parse(time.RFC3339Nano, resp.TimestampUTC); err == nil {
-			ts = parsed
-		}
-	}
 	if p.bus == nil {
 		return
 	}
-	for key, snap := range resp.QuotaSnapshots {
-		p.publishWait(ctx, newEnvelope(ts, resp, key, snap))
+	now := p.opts.Now().UTC()
+	envs := make([]*eventschema.Envelope, 0, len(resp.QuotaSnapshots)+1)
+	for _, name := range snapshotNames(resp) {
+		envs = append(envs, newEnvelope(now, resp, name, resp.QuotaSnapshots[name]))
 	}
-	p.publishWait(ctx, newPlanEnvelope(ts, resp, reading))
+	envs = append(envs, newPlanEnvelope(now, resp, reading))
+	// The record's own timestamp_utc is no part of what is compared: were
+	// it the time of the answer, every poll would differ from the last.
+	key := readingsKey(envs)
+	if !p.kept.Due(key, now) {
+		return
+	}
+	stored := true
+	for _, env := range envs {
+		if resp.TimestampUTC != "" {
+			env.Attributes["reported_at"] = resp.TimestampUTC
+		}
+		heartbeat.Stamp(env.Attributes, p.opts.Interval)
+		if !p.publishWait(ctx, env) {
+			stored = false
+		}
+	}
+	// Remembered once the store has taken the whole set: a set the store
+	// took part of is offered again on the next poll.
+	if stored {
+		p.kept.Stored(key, now)
+	}
+}
+
+// snapshotNames is the record's quota snapshots by name, in order: a map
+// has none of its own.
+func snapshotNames(resp *UserResponse) []string {
+	names := make([]string, 0, len(resp.QuotaSnapshots))
+	for name := range resp.QuotaSnapshots {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
+}
+
+// readingsKey identifies the content of a poll's readings: what says
+// whether the set differs from the last one stored.
+func readingsKey(envs []*eventschema.Envelope) string {
+	var b strings.Builder
+	for _, env := range envs {
+		names := make([]string, 0, len(env.Attributes))
+		for name := range env.Attributes {
+			names = append(names, name)
+		}
+		slices.Sort(names)
+		for _, name := range names {
+			b.WriteString(name + "=" + env.Attributes[name] + ";")
+		}
+		b.WriteString("|")
+	}
+	return b.String()
 }
 
 func (p *Poller) recordErr(err error) {
-	p.opts.Health.Failed(err, time.Now())
+	now := p.opts.Now()
+	p.opts.Health.Failed(err, now)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lastErr = err
-	p.lastErrTime = time.Now()
+	p.lastErrTime = now
 }
 
 func (p *Poller) recordSuccess() {
-	p.opts.Health.Succeeded(time.Now())
+	p.opts.Health.Succeeded(p.opts.Now())
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lastErr = nil
@@ -219,9 +264,8 @@ func (p *Poller) recordSuccess() {
 // signal_quality classifier and future Copilot-aware session_budget
 // can read it.
 func newEnvelope(ts time.Time, resp *UserResponse, snapshotKey string, snap QuotaSnapshot) *eventschema.Envelope {
-	h := sha256.Sum256([]byte("github-copilot|" + resp.Login + "|" + resp.TimestampUTC + "|" + snapshotKey))
 	env := &eventschema.Envelope{
-		ID:            "ghc-" + hex.EncodeToString(h[:8]),
+		ID:            readingID(ts, resp.Login, snapshotKey),
 		SchemaVersion: eventschema.SchemaVersion,
 		Type:          eventschema.EventTypePrompt,
 		Timestamp:     ts,
@@ -268,7 +312,6 @@ const PlanSnapshot = "plan"
 // seat with no personal allowance) has no window, and headroom says so
 // instead of reading it as unlimited headroom.
 func newPlanEnvelope(ts time.Time, resp *UserResponse, r Reading) *eventschema.Envelope {
-	h := sha256.Sum256([]byte("github-copilot|" + resp.Login + "|" + resp.TimestampUTC + "|" + PlanSnapshot))
 	attrs := map[string]string{
 		"granularity": "quota_snapshot",
 		"snapshot":    PlanSnapshot,
@@ -293,7 +336,7 @@ func newPlanEnvelope(ts time.Time, resp *UserResponse, r Reading) *eventschema.E
 		}
 	}
 	return &eventschema.Envelope{
-		ID:            "ghc-" + hex.EncodeToString(h[:8]),
+		ID:            readingID(ts, resp.Login, PlanSnapshot),
 		SchemaVersion: eventschema.SchemaVersion,
 		Type:          eventschema.EventTypePrompt,
 		Timestamp:     ts,
@@ -303,20 +346,28 @@ func newPlanEnvelope(ts time.Time, resp *UserResponse, r Reading) *eventschema.E
 	}
 }
 
-// publishWait hands env to the bus and waits for room rather than letting
-// it be dropped. Ingestion marks each row seen before publishing, so a
-// dropped envelope is never revisited: the loss is permanent, silent, and
-// reproduces identically on every restart. Waiting costs a backfill some
-// wall-clock and costs the operator nothing.
-func (p *Poller) publishWait(ctx context.Context, env *eventschema.Envelope) {
-	if env == nil {
-		return
-	}
+// readingID is the ID of the reading of one snapshot taken at ts.
+//
+// It was made from the record's timestamp_utc. The store keeps the first
+// event of each ID, so wherever that timestamp stands still while nothing
+// is used, a reading stored again would have been the event the store
+// already had, under the time it was first seen.
+func readingID(ts time.Time, login, snapshot string) string {
+	h := sha256.Sum256([]byte("github-copilot|" + login + "|" + strconv.FormatInt(ts.UnixNano(), 10) + "|" + snapshot))
+	return "ghc-" + hex.EncodeToString(h[:8])
+}
+
+// publishWait hands env to the bus, waiting for room rather than letting
+// it be dropped, and reports whether the bus took it. A set with a reading
+// it did not take is not remembered as stored, so the next poll offers it
+// again.
+func (p *Poller) publishWait(ctx context.Context, env *eventschema.Envelope) bool {
 	if err := p.bus.PublishWait(ctx, env); err != nil {
 		p.opts.Logger.Warn("usage event not stored", "err", err)
-		return
+		return false
 	}
 	p.mu.Lock()
 	p.publishes++
 	p.mu.Unlock()
+	return true
 }

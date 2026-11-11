@@ -61,7 +61,8 @@ func Gauges(in Inputs) []otlp.Gauge {
 					}
 				}
 			}
-			if r.SpendLimitUSD > 0 {
+			// Neither can it say that the vendor's spend figure is old.
+			if r.SpendLimitUSD > 0 && !r.StaleSpend() {
 				spendUsed.Points = append(spendUsed.Points, otlp.Point{Attrs: map[string]string{"provider": r.Provider, "plan": r.PlanName}, Value: r.SpendPct})
 			}
 		}

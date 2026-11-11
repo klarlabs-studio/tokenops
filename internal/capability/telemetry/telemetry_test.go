@@ -94,3 +94,25 @@ func TestNoGaugeForAWindowThatIsNotCurrent(t *testing.T) {
 		t.Errorf("points %+v, want the week alone", points)
 	}
 }
+
+// A spend figure whose reader has stopped is what was spent when it was
+// read, so it has no point either. An old prepaid balance beside a
+// current spend takes nothing from the spend's point.
+func TestNoGaugeForASpendFigureThatIsNotCurrent(t *testing.T) {
+	spend := func(provider, source string, stale bool) plans.HeadroomReport {
+		return plans.HeadroomReport{Provider: provider, PlanName: "pay-as-you-go", SpendUSD: 96, SpendLimitUSD: 100,
+			SpendPct: 96, SpendSource: source, SpendStale: stale}
+	}
+	var g headroom.Glance
+	g.Headroom.Reports = []plans.HeadroomReport{
+		spend("fireworks", "vendor", true), spend("deepseek", "estimate", true), spend("mistral", "vendor", false),
+	}
+	points := byName(Gauges(Inputs{Glance: &g}))["tokenops.plan.spend.utilization"].Points
+	got := make([]string, 0, len(points))
+	for _, p := range points {
+		got = append(got, p.Attrs["provider"])
+	}
+	if strings.Join(got, ",") != "deepseek,mistral" {
+		t.Errorf("points for %v, want deepseek and mistral", got)
+	}
+}

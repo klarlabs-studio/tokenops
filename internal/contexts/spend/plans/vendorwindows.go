@@ -38,8 +38,8 @@ type VendorWindow struct {
 	// (ADR 0011): where two sources report a window, the newer wins.
 	Source     string    `json:"source,omitempty"`
 	ObservedAt time.Time `json:"observed_at,omitzero"`
-	// Stale is a window from a polling source that has fallen silent, so
-	// its share is no longer known to be current.
+	// Stale is a window whose reader has stopped replacing its reading
+	// (see ReadingStale), so its share is no longer known to be current.
 	Stale bool `json:"stale,omitempty"`
 	// Lapsed is a window whose reset has passed since its reading. UsedPct
 	// is the share of the window that is over; how much of the one that
@@ -78,23 +78,12 @@ func Busiest(ws []VendorWindow, now time.Time) (VendorWindow, bool) {
 	return best, found
 }
 
-// PolledSources are the window sources that read on a schedule whether or
-// not anyone works, with how old their newest reading may be while they
-// are working. A source missing here reads as work happens (the status
-// line, Codex's rollouts), so an old reading from it is idle, not stopped.
-var PolledSources = map[string]time.Duration{
-	"claude-usage-meter": 30 * time.Minute,
-	"claude-code-oauth":  30 * time.Minute,
-	"codex-app-server":   45 * time.Minute,
-}
-
-// stamp marks every window with the reading it came from.
+// stamp marks every window with the reading it came from, and as stale
+// when that reading's reader has stopped by now.
 func stamp(ws []VendorWindow, e *eventschema.Envelope, now time.Time) []VendorWindow {
+	stale := ReadingStale(e, now)
 	for i := range ws {
-		ws[i].Source, ws[i].ObservedAt = e.Source, e.Timestamp
-		if limit, polled := PolledSources[e.Source]; polled && now.Sub(e.Timestamp) > limit {
-			ws[i].Stale = true
-		}
+		ws[i].Source, ws[i].ObservedAt, ws[i].Stale = e.Source, e.Timestamp, stale
 	}
 	return ws
 }

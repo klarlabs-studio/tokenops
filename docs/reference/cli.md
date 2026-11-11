@@ -56,6 +56,25 @@ no pace, and it raises no warning, advice or alert. The API marks it with
 `lapsed: true` and leaves out its reset; `used_pct` is then the share of
 the window that ended. The next reading replaces it.
 
+A reading is **stale** once its reader has stopped replacing it: a
+sign-in that expired, a key that was revoked, a vendor that no longer
+answers. A reader that asks a vendor on a schedule stores its reading
+again every ten minutes while nothing changes, and writes on each one for
+how long it stands (the attribute `fresh_for_min`: ten minutes and three
+of its polls). A reading older than that is stale. An account nobody is
+using is therefore not stale while its reader works. Readings taken as
+you work (Claude Code's status line, Codex's session files) make no such
+promise and are never stale for their age alone; any other reading that
+does not say is stale after an hour. A stale window is shown as the last
+reading with its age, and raises no warning, advice or alert; the API
+marks it with `stale: true`. A vendor's spend figure or
+prepaid balance is treated the same way: the card says when it was read,
+the plan's note says how old it is, and no risk, block or alert is
+decided from it. The API marks it with `spend_stale: true` and
+`spend_read_at`; when `spend_source` is `vendor` the old figure is the
+spend, otherwise it is the balance beside a spend TokenOps counted
+itself.
+
 **Early resets** are shown when a window resets well before the time its
 vendor gave: more than an hour early, after it had been at least a fifth
 used, and back to near empty. Nothing the operator did explains it, so the
@@ -1377,7 +1396,8 @@ until you bind another plan.
   `tokenops vendor-usage status` and as `spend_scope_reason` in the API.
 - **A block.** When your cap blocks requests, the card says "Blocked
   until 1 Nov" (your local date) and the API carries `limit_reached` and
-  `blocked_until`.
+  `blocked_until`. A figure whose reader has stopped announces no block:
+  it says what was spent when it was read (`spend_stale`).
 - **Calls** go to `api.fireworks.ai` only. Turn them off with
   `tokenops vendor-usage enable fireworks --disable`.
 

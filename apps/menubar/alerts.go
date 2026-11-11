@@ -69,18 +69,26 @@ func (a *alerter) observe(raw json.RawMessage) []note {
 	return out
 }
 
-// reading notes a plan whose every window has gone stale, and its return:
-// its share is the last one read, so the operator should know it is not
-// being watched (ADR 0011). Each change is said once.
+// reading notes a plan whose every window has gone stale, or whose spend
+// figure has when the vendor reports no window, and its return: its share
+// is the last one read, so the operator should know it is not being
+// watched (ADR 0011). Each change is said once.
 func (a *alerter) reading(r report) (note, bool) {
-	if len(r.Windows) == 0 {
-		return note{}, false
-	}
-	stopped := 1
-	for _, w := range r.Windows {
-		if !w.Stale {
+	stopped, shows := 1, "windows show"
+	switch {
+	case len(r.Windows) > 0:
+		for _, w := range r.Windows {
+			if !w.Stale {
+				stopped = 0
+			}
+		}
+	case r.SpendLimitUSD > 0:
+		shows = "spend shows"
+		if !r.staleSpend() {
 			stopped = 0
 		}
+	default:
+		return note{}, false
 	}
 	key := r.Provider + "/reading"
 	prev := a.steps[key]
@@ -90,7 +98,7 @@ func (a *alerter) reading(r report) (note, bool) {
 	case !a.primed || stopped == prev:
 		return note{}, false
 	case stopped == 1:
-		body := "Its windows show the last reading. `tokenops status` names the source that stopped."
+		body := "Its " + shows + " the last reading. `tokenops status` names the source that stopped."
 		if r.Provider == "anthropic" {
 			body = "Sign in to claude.ai in your browser, or run `tokenops vendor-usage setup claude-subscription`."
 		}
@@ -117,7 +125,9 @@ func measures(g glanceView) []measure {
 				used: w.UsedPct, resetsIn: w.ResetsIn, pace: w.Pace,
 			})
 		}
-		if len(r.Windows) == 0 && r.SpendLimitUSD > 0 {
+		// A spend figure whose reader has stopped is no more a measure
+		// than a window's.
+		if len(r.Windows) == 0 && r.SpendLimitUSD > 0 && !r.staleSpend() {
 			words := name + " spend limit"
 			if r.SpendScope == "account" {
 				words = name + " account spend limit (" + r.SpendScopeLabel + ")"

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/heartbeat"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -54,14 +55,18 @@ type PollerOptions struct {
 }
 
 // Poller reads the Fireworks account's spend and limit on a tick and
-// stores each changed reading as a quota snapshot.
+// stores each changed reading as a quota snapshot, and an unchanged one
+// again every heartbeat.Every, so its newest reading is never old while
+// it works.
 type Poller struct {
 	bus    events.Bus
 	opts   PollerOptions
 	client Reader
 
+	// kept is the last reading stored and when.
+	kept heartbeat.Keeper
+
 	mu        sync.Mutex
-	last      string
 	publishes int64
 	found     foundUser
 }
@@ -123,18 +128,16 @@ func (p *Poller) Scan(ctx context.Context) {
 	}
 	env := NewEnvelope(now, r)
 	key := fmt.Sprint(env.Attributes)
-	p.mu.Lock()
-	unchanged := key == p.last
-	p.mu.Unlock()
-	if unchanged || p.bus == nil {
+	if p.bus == nil || !p.kept.Due(key, now) {
 		return
 	}
+	heartbeat.Stamp(env.Attributes, p.opts.Interval)
 	if err := p.bus.PublishWait(ctx, env); err != nil {
 		p.opts.Logger.Warn("usage event not stored", "err", err)
 		return
 	}
+	p.kept.Stored(key, now)
 	p.mu.Lock()
-	p.last = key
 	p.publishes++
 	p.mu.Unlock()
 }

@@ -14,6 +14,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/heartbeat"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -36,11 +37,14 @@ type PollerOptions struct {
 }
 
 // Poller asks Codex for its windows on a schedule and publishes each new
-// reading in the attribute shape Codex's rollouts already use.
+// reading in the attribute shape Codex's rollouts already use, and an
+// unchanged one again every heartbeat.Every, so its newest reading is
+// never old while it works.
 type Poller struct {
-	bus     events.Bus
-	opts    PollerOptions
-	lastKey string
+	bus  events.Bus
+	opts PollerOptions
+	// kept is the last set of readings stored and when.
+	kept heartbeat.Keeper
 	// credits is the reset-credit count the last read reported, and
 	// details the credits last read in detail, at detailsAt, for that
 	// count: kept so a read without details still carries their expiry.
@@ -83,8 +87,9 @@ func (p *Poller) Run(ctx context.Context) error {
 	}
 }
 
-// Scan asks Codex once, and stores one reading per limit bucket whose
-// windows changed since the last scan.
+// Scan asks Codex once, and stores one reading per limit bucket when any
+// bucket's windows changed since the last ones stored, or their heartbeat
+// is due.
 func (p *Poller) Scan(ctx context.Context) {
 	now := p.opts.Now()
 	details := p.credits > 0 && now.Sub(p.detailsAt) >= creditDetailsEvery
@@ -103,17 +108,24 @@ func (p *Poller) Scan(ctx context.Context) {
 		envs = append(envs, env)
 		key.WriteString(attributesKey(env.Attributes) + "|")
 	}
-	if key.String() == p.lastKey {
+	if !p.kept.Due(key.String(), now) {
 		return
 	}
-	p.lastKey = key.String()
-	if p.bus == nil {
-		return
-	}
+	stored := true
 	for _, env := range envs {
+		heartbeat.Stamp(env.Attributes, p.opts.Interval)
+		if p.bus == nil {
+			continue
+		}
 		if err := p.bus.PublishWait(ctx, env); err != nil {
 			p.opts.Logger.Warn("codex-app-server: reading not stored", "err", err)
+			stored = false
 		}
+	}
+	// Remembered only when the store took every bucket: the next scan
+	// offers the set again otherwise.
+	if stored {
+		p.kept.Stored(key.String(), now)
 	}
 }
 

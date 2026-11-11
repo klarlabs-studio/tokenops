@@ -194,7 +194,7 @@ func TestRoutingAdviseDoesNotActOnAWindowThatHasReset(t *testing.T) {
 		t.Errorf("advice = %s at %.0f%% (%s), from a window that reset five minutes ago", res.Recommendation, res.WindowPct, res.Reason)
 	}
 	// The same reading while its window still runs is acted on.
-	if res := adviseOpus(t, meterDeps(t, time.Hour, reset(time.Hour))); res.Recommendation != "switch" || res.WindowPct != 95 {
+	if res := adviseOpus(t, meterDeps(t, 30*time.Minute, reset(time.Hour))); res.Recommendation != "switch" || res.WindowPct != 95 {
 		t.Errorf("advice = %s at %.0f%% (%s), want a switch on the running window", res.Recommendation, res.WindowPct, res.Reason)
 	}
 }
