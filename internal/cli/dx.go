@@ -213,12 +213,14 @@ func writeDXText(w io.Writer, dx sessions.DX, bands []sessions.ContextBand, days
 	}
 
 	if g.Overall != "" {
+		// Not a grade of its own (ADR 0018): the worst of these is the
+		// scorecard's session quality, one part of the one grade.
 		overall := string(g.Overall)
 		if g.OverallDriver != "" {
 			overall += " (" + g.OverallDriver + ")"
 		}
-		fmt.Fprintf(w, "\nOverall: %s  (the worst grade, not the average — an experience is\n", overall)
-		fmt.Fprintln(w, "         only as good as its sharpest friction)")
+		fmt.Fprintf(w, "\nSession quality: %s  (the worst of these, not the average; the scorecard\n", overall)
+		fmt.Fprintln(w, "                 grades it with the rest: `tokenops scorecard`)")
 	}
 	if len(m.ByProvider) > 0 {
 		fmt.Fprintln(w, "\nBY PROVIDER  (only clients that route to several record this)")

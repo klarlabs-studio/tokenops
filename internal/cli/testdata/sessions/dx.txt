@@ -17,8 +17,8 @@ FRICTION
   escalation rate:       0.0%       [A]  (instructions delegated to a subagent)
   compactions/session:   0.0        [A]
 
-Overall: F (interrupt rate)  (the worst grade, not the average — an experience is
-         only as good as its sharpest friction)
+Session quality: F (interrupt rate)  (the worst of these, not the average; the scorecard
+                 grades it with the rest: `tokenops scorecard`)
 
 QUALITY vs CONTEXT
   CONTEXT     PROMPTS   REJECTED   REPEATED    TURNS
