@@ -18,7 +18,8 @@ import (
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
-func TestWriteWasteReport(t *testing.T) {
+// wasteFixture is a period's waste report with every part filled.
+func wasteFixture() avoidable.Report {
 	t0 := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
 	cls := func(c waste.Class, tokens int64, usd float64, guard string) avoidable.ClassCost {
 		return avoidable.ClassCost{Class: c, Name: waste.ClassName(c), Guardrail: guard, Turns: 2, Sessions: 1, Method: "how " + string(c),
@@ -28,7 +29,7 @@ func TestWriteWasteReport(t *testing.T) {
 	share := 0.25
 	next := avoidable.Guardrail{Capability: learning.CapabilityReadGuard, Name: "read guard", Stage: learning.StageShadow,
 		Next: learning.StageAdvise, Ready: true, Promote: "tokenops coach set waste advise", Amount: avoidable.Amount{APIEquivalentUSD: 3}}
-	r := avoidable.Report{
+	return avoidable.Report{
 		Since: t0, Until: t0.Add(7 * 24 * time.Hour),
 		Usage: avoidable.Amount{Tokens: 40_000, APIEquivalentUSD: 40,
 			WindowShare: []avoidable.WindowShare{{Provider: "anthropic", Window: "weekly", Pct: 40}}},
@@ -49,6 +50,10 @@ func TestWriteWasteReport(t *testing.T) {
 		ShareMethod:  avoidable.ShareMethod,
 		Notes:        []string{"no rate card: cache rebuilds and over-tiered turns are not priced"},
 	}
+}
+
+func TestWriteWasteReport(t *testing.T) {
+	r := wasteFixture()
 	var b bytes.Buffer
 	writeWasteReport(&b, r)
 	out := b.String()
