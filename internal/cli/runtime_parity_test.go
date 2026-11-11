@@ -154,7 +154,11 @@ func TestRuntimeFiltersAndDenominators(t *testing.T) {
 	srv := cohortServer(t, root)
 	get := func(role string) runtimeDoc {
 		var doc runtimeDoc
-		raw := callTool(t, srv, "tokenops_task_runtime", map[string]any{"all": true, "limit": -1, "source": "codex", "role": role})
+		args := map[string]any{"all": true, "limit": -1, "source": "codex"}
+		if role != "" {
+			args["role"] = role
+		}
+		raw := callTool(t, srv, "tokenops_task_runtime", args)
 		if err := json.Unmarshal([]byte(raw), &doc); err != nil {
 			t.Fatal(err)
 		}
@@ -162,8 +166,12 @@ func TestRuntimeFiltersAndDenominators(t *testing.T) {
 	}
 
 	all := get("all")
-	if all.Cohort.InWindow != 5 || all.Cohort.ByRole["auto_review"] != 3 || all.Cohort.ByRole["primary"] != 2 {
-		t.Errorf("cohort = %+v, want 5 instructions: 3 reviews, 2 primary", all.Cohort)
+	if all.Cohort.InWindow != 5 || all.Cohort.ByRole["auto_review"] != 3 || all.Cohort.ByRole["primary"] != 2 || all.Cohort.Role != "all" {
+		t.Errorf("cohort = %+v, want all 5 instructions: 3 reviews, 2 primary", all.Cohort)
+	}
+	// Unasked, it is the operator's own two.
+	if d := get("").Cohort; d.Role != "primary" || d.Selected != 2 || d.InWindow != 5 {
+		t.Errorf("default cohort = %+v, want the 2 primary of 5", d)
 	}
 	// Reviews, the answered work, and the unanswered instruction, which no
 	// turn served and so has no model.
@@ -214,7 +222,9 @@ func TestRuntimeFiltersAndDenominators(t *testing.T) {
 
 type runtimeDoc struct {
 	Cohort struct {
+		Role     string         `json:"role"`
 		InWindow int            `json:"instructions_in_window"`
+		Selected int            `json:"instructions_selected"`
 		ByRole   map[string]int `json:"instructions_by_role"`
 	} `json:"cohort"`
 	Tasks   []runtimeTask    `json:"tasks"`

@@ -83,7 +83,6 @@ func Grade(m Metrics) Grades {
 		return g
 	}
 	g.Turns = grade(m.MedianTurnsPerPrompt, DefaultThresholds.Turns)
-	g.Interrupt = grade(m.InterruptRatePct, DefaultThresholds.Interrupt)
 	g.Escalation = grade(m.EscalationRatePct, DefaultThresholds.Escalation)
 	g.FirstTry = grade(m.FirstTryRatePct, DefaultThresholds.FirstTry)
 
@@ -99,7 +98,12 @@ func Grade(m Metrics) Grades {
 	if m.MedianContextGrowthTokens > 0 {
 		g.ContextGrowth = grade(float64(m.MedianContextGrowthTokens), DefaultThresholds.ContextGrowth)
 	}
-	if m.Sessions > 0 {
+	// Interrupts and compactions only where the client records them: an
+	// absence a client cannot record is not a clean run.
+	if m.InterruptPrompts > 0 {
+		g.Interrupt = grade(m.InterruptRatePct, DefaultThresholds.Interrupt)
+	}
+	if m.CompactionSessions > 0 {
 		g.Compaction = grade(m.CompactionsPerSession, DefaultThresholds.Compaction)
 	}
 	g.Overall, g.OverallDriver = worstWithDriver(g)

@@ -334,7 +334,7 @@ type sessionsIn struct {
 	Limit     int    `json:"limit,omitempty" jsonschema:"description=story and runtime: most recent tasks (default 10, -1 for all). prompts: most recent instructions"`
 	Source    string `json:"source,omitempty" jsonschema:"description=dx, story and runtime: one client (claude-code, codex, cursor, opencode); default every client present"`
 	Model     string `json:"model,omitempty" jsonschema:"description=dx, story and runtime: only instructions mostly served by this model id (case-insensitive exact match)"`
-	Role      string `json:"role,omitempty" jsonschema:"enum=all,enum=primary,enum=auto_review,enum=subagent,description=dx, story and runtime: all (default), primary (the operator's own instructions), auto_review (reviews the harness ran by itself), or subagent"`
+	Role      string `json:"role,omitempty" jsonschema:"enum=all,enum=primary,enum=auto_review,enum=subagent,description=dx, story and runtime: primary (default: the operator's own instructions), all (every role), auto_review (reviews the harness ran by itself), or subagent"`
 	Since     string `json:"since,omitempty" jsonschema:"description=prompts: RFC3339 time or a duration such as 24h (default 7d)"`
 	Until     string `json:"until,omitempty" jsonschema:"description=prompts: RFC3339 time"`
 	SessionID string `json:"session_id,omitempty" jsonschema:"description=prompts: one Claude Code session"`

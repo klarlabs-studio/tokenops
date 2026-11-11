@@ -9,7 +9,9 @@
     "escalation_rate_pct": 0,
     "median_context_growth_tokens": 3000,
     "compactions_per_session": 0,
+    "compaction_sessions": 2,
     "interrupt_rate_pct": 33.3,
+    "interrupt_prompts": 3,
     "median_seconds_per_prompt": 120,
     "p90_seconds_per_prompt": 168,
     "median_tokens_per_prompt": 53000,
@@ -36,6 +38,7 @@
   },
   "cohort": {
     "source": "claude-code",
+    "role": "primary",
     "instructions_in_window": 3,
     "instructions_by_role": {
       "primary": 3
