@@ -61,7 +61,7 @@ export function activate(context: vscode.ExtensionContext): void {
       // terminal and run it there so output streams in front of the
       // user without bouncing through a webview.
       const terminal = vscode.window.createTerminal({ name: `TokenOps replay ${id}` });
-      terminal.sendText(`tokenops replay --workflow ${shellEscape(id)} --json | less`);
+      terminal.sendText(`tokenops replay --workflow-id ${shellEscape(id)} --json | less`);
       terminal.show();
     }),
   );

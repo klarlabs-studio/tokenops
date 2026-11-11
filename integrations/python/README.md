@@ -2,9 +2,8 @@
 
 Two thin Python packages pair with the TokenOps proxy:
 
-- [`tokenops_langchain`](./tokenops_langchain) — LangChain
-  `BaseCallbackHandler` that stamps attribution headers on every LLM
-  call and configures the SDK base URLs.
+- [`tokenops_langchain`](./tokenops_langchain) — attribution headers
+  for a LangChain model's client, and the SDK base URLs.
 - [`tokenops_openai_agents`](./tokenops_openai_agents) —
   `AsyncOpenAI` subclass for the OpenAI Agents SDK with attribution
   headers pinned and the proxy base URL pre-applied.
@@ -28,7 +27,7 @@ integrations/python/
 │   ├── README.md
 │   └── tokenops_langchain/
 │       ├── __init__.py
-│       ├── callback.py                    # BaseCallbackHandler
+│       ├── callback.py                    # attribution headers
 │       └── env.py                         # configure_environment()
 └── tokenops_openai_agents/                # PyPI: tokenops-openai-agents
     ├── pyproject.toml

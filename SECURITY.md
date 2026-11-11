@@ -2,13 +2,12 @@
 
 ## Supported versions
 
-TokenOps follows semantic versioning. Security fixes land on the latest
-minor; older minors receive only critical patches at maintainer discretion.
+TokenOps follows semantic versioning.
 
-| Version | Supported |
-|---------|-----------|
-| 0.70.x  | ✅        |
-| < 0.70  | ❌        |
+Only the [latest release](https://github.com/klarlabs-studio/tokenops/releases/latest)
+is supported: releases are frequent and each supersedes the last, so a
+fix ships as a new release rather than a backport. Upgrade with
+`brew upgrade --cask tokenops` or your package source.
 
 ## Reporting a vulnerability
 

@@ -1,8 +1,7 @@
 # tokenops-langchain
 
-LangChain callback handler that pairs with the TokenOps proxy:
-emits attribution headers on every LLM call, configures the SDK base
-URLs, and surfaces TokenOps events alongside LangChain runs.
+Attribution headers for LangChain models that call through the
+TokenOps proxy, and the SDK base URLs that point them at it.
 
 ## Install
 
@@ -20,13 +19,12 @@ from tokenops_langchain import TokenOpsCallback, configure_environment
 # Point OpenAI / Anthropic / Gemini SDKs at the local TokenOps proxy.
 configure_environment()
 
-callback = TokenOpsCallback(
-    workflow_id="research-summariser",
-    agent_id="planner",
-    new_session_per_run=True,
-)
+attribution = TokenOpsCallback(workflow_id="research-summariser", agent_id="planner")
+attribution.new_run()  # a fresh session id for this run
 
-llm = ChatOpenAI(model="gpt-4o-mini", callbacks=[callback])
+# The headers go on the model's client: a LangChain callback cannot add
+# headers to a request.
+llm = ChatOpenAI(model="gpt-4o-mini", default_headers=attribution.headers())
 prompt = ChatPromptTemplate.from_messages(
     [("system", "Be brief."), ("user", "{question}")]
 )
@@ -39,11 +37,23 @@ Every request that flows through the proxy will carry:
 ```
 X-Tokenops-Workflow-Id: research-summariser
 X-Tokenops-Agent-Id: planner
-X-Tokenops-Session-Id: <fresh uuid per chain run>
+X-Tokenops-Session-Id: <the uuid new_run() made>
 ```
 
 The TokenOps daemon stitches these into workflow traces visible
-through `tokenops replay --workflow research-summariser`.
+through `tokenops replay --workflow-id research-summariser`.
+
+For a fresh session on each call without a new model, bind the
+headers per call:
+
+```python
+attribution.new_run()
+llm.bind(extra_headers=attribution.headers()).invoke("...")
+```
+
+Versions before this one set the headers from a callback
+(`callbacks=[TokenOpsCallback(...)]`). LangChain hands callbacks a copy
+of the request parameters, so no request carried them.
 
 ## Configuration
 
@@ -53,7 +63,7 @@ through `tokenops replay --workflow research-summariser`.
 | `agent_id`             | Which chain / role made the call              |
 | `session_id`           | Static session grouping                       |
 | `user_id`              | End-user attribution                          |
-| `new_session_per_run`  | Generate a fresh UUID per chain run           |
+| `new_session_per_run`  | Deprecated: call `new_run()` instead          |
 
 `configure_environment()` accepts a `proxy_host` (default
 `127.0.0.1:7878`) and a list of providers; pass `overwrite=True` to

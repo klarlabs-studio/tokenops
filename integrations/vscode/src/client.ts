@@ -3,7 +3,43 @@
 // bundler. Uses Node's global ``fetch`` (Node 18+) which is also what
 // VS Code ships.
 
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import * as vscode from "vscode";
+
+// DaemonHint is what the daemon writes where it binds: its address and
+// the bearer token every API route requires.
+interface DaemonHint {
+  url?: string;
+  local_url?: string;
+  dashboard_token?: string;
+}
+
+// hintPath mirrors the daemon's own rule: $XDG_DATA_HOME/tokenops/daemon.url,
+// else ~/.tokenops/daemon.url.
+function hintPath(): string {
+  const xdg = process.env.XDG_DATA_HOME;
+  return xdg ? path.join(xdg, "tokenops", "daemon.url") : path.join(os.homedir(), ".tokenops", "daemon.url");
+}
+
+// readHint reads the running daemon's address and token; undefined when
+// no daemon has written one or it cannot be read.
+function readHint(): DaemonHint | undefined {
+  try {
+    return JSON.parse(fs.readFileSync(hintPath(), "utf8")) as DaemonHint;
+  } catch {
+    return undefined;
+  }
+}
+
+// configured is a setting's value only when the user set it, so the
+// daemon's own address and token apply otherwise.
+function configured(key: string): string | undefined {
+  const i = vscode.workspace.getConfiguration("tokenops").inspect<string>(key);
+  const v = i?.workspaceFolderValue ?? i?.workspaceValue ?? i?.globalValue;
+  return v && v.length > 0 ? v : undefined;
+}
 
 export interface SeriesRow {
   BucketStart: string;
@@ -52,12 +88,17 @@ export interface OptimizationListResponse {
 }
 
 export class TokenOpsClient {
+  // base is the daemonUrl setting when set, else the address the running
+  // daemon wrote, else the default.
   private base(): string {
-    const cfg = vscode.workspace.getConfiguration("tokenops");
-    return (cfg.get<string>("daemonUrl") ?? "http://127.0.0.1:7878").replace(/\/$/, "");
+    const hint = readHint();
+    const url = configured("daemonUrl") ?? hint?.local_url ?? hint?.url ?? "http://127.0.0.1:7878";
+    return url.replace(/\/$/, "");
   }
+  // bearer is the bearerToken setting when set, else the token the
+  // running daemon wrote: every API route requires one.
   private bearer(): string | undefined {
-    const v = vscode.workspace.getConfiguration("tokenops").get<string>("bearerToken");
+    const v = configured("bearerToken") ?? readHint()?.dashboard_token;
     return v && v.length > 0 ? v : undefined;
   }
   private async request<T>(path: string): Promise<T> {

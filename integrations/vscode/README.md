@@ -22,8 +22,8 @@ host. The "TokenOps" sidebar panel and the three commands appear:
 
 | Setting                | Default                       | Purpose                              |
 |------------------------|-------------------------------|--------------------------------------|
-| `tokenops.daemonUrl`   | `http://127.0.0.1:7878`       | Base URL of the TokenOps daemon.     |
-| `tokenops.bearerToken` | `""`                          | Optional bearer for `dashauth`.      |
+| `tokenops.daemonUrl`   | `""`                          | Daemon URL; empty uses the running daemon's `~/.tokenops/daemon.url`. |
+| `tokenops.bearerToken` | `""`                          | API token; empty uses the running daemon's. |
 
 ## Build
 
@@ -43,4 +43,4 @@ contains plain CommonJS that VS Code loads directly.
 - **Optimizations webview**: table of the last 7 days of
   `OptimizationEvent`s with savings + reasons.
 - **Replay flow**: prompts for a workflow ID and runs
-  `tokenops replay --workflow <id>` in an integrated terminal.
+  `tokenops replay --workflow-id <id>` in an integrated terminal.
