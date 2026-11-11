@@ -399,6 +399,17 @@ type storeReader struct{ store *sqlite.Store }
 // CountBySource satisfies headroom.Reader. The capability needs both
 // reads, and taking them through one port is what stopped the CLI and
 // the MCP server each carrying their own wrapper around this store.
+// LatestAttributesBySource and AttributesBySourceBetween let the
+// capability read a plan meter's earlier readings, for the run-out
+// forecast glance shares with the coach.
+func (s storeReader) LatestAttributesBySource(ctx context.Context, source, key string, since time.Time) (map[string]string, time.Time, bool, error) {
+	return s.store.LatestAttributesBySource(ctx, source, key, since)
+}
+
+func (s storeReader) AttributesBySourceBetween(ctx context.Context, source, key string, since, until time.Time) (map[string]string, time.Time, bool, error) {
+	return s.store.AttributesBySourceBetween(ctx, source, key, since, until)
+}
+
 func (s storeReader) CountBySource(ctx context.Context, since, until time.Time) (map[string]int64, error) {
 	return s.store.CountBySource(ctx, since, until)
 }
