@@ -306,3 +306,29 @@ func TestRetiredTipKind(t *testing.T) {
 		t.Fatalf("retired finding = %+v", f)
 	}
 }
+
+// A window that has reset since its reading is nobody's finding: it does
+// not warn, and its plan is not offered as the one with room, since what
+// the window after it holds has not been read.
+func TestAWindowThatHasResetIsNoFinding(t *testing.T) {
+	g := glance()
+	g.Headroom.Reports[1].Windows = []plans.VendorWindow{
+		{Name: "5h", UsedPct: 100, Lapsed: true, Pace: &plans.WindowPace{Status: plans.PaceUsedUp, DeltaPct: 40}},
+		{Name: "week", UsedPct: 12, ResetsIn: "90h0m0s"},
+	}
+	r := Compute(Inputs{Glance: g})
+	if len(r.Findings) != 1 || r.Findings[0].Provider != "openai" {
+		t.Fatalf("findings %+v", r.Findings)
+	}
+	// The room the plan is offered for is its running window's: the full
+	// window that ended does not count against it.
+	if f := r.Findings[0]; !strings.Contains(f.Action, "Claude (88% left)") {
+		t.Errorf("action %q", f.Action)
+	}
+
+	// With no running window there is nothing to offer the plan on.
+	g.Headroom.Reports[1].Windows = g.Headroom.Reports[1].Windows[:1]
+	if f := Compute(Inputs{Glance: g}).Findings[0]; strings.Contains(f.Action, "Claude") || !strings.Contains(f.Action, "Pace the remaining work") {
+		t.Errorf("a plan with no running window was offered as roomy: %q", f.Action)
+	}
+}

@@ -112,14 +112,15 @@ func NeedsFigures(rules []domain.Rule) bool {
 
 // Figures builds the readings the daemon writes for the pause point: the
 // share of each provider's 5-hour and weekly window left, from the
-// glance's reports, and each budget's share used. A stale or reset window
-// is left out; a missing figure never satisfies a rule.
+// glance's reports, and each budget's share used. A window that is not
+// current (its source stopped, or it has reset since its reading) is left
+// out; a missing figure never satisfies a rule.
 func Figures(reports []plans.HeadroomReport, budgetUsed map[string]float64, now time.Time) boundaryledger.Figures {
 	out := boundaryledger.Figures{ObservedAt: now.UTC(), BudgetUsedPct: budgetUsed}
 	for _, r := range reports {
 		for _, w := range r.Windows {
 			name := windowName(w)
-			if name == "" || w.Stale || (!w.ResetsAt.IsZero() && w.ResetsAt.Before(now)) {
+			if name == "" || !w.Current(now) {
 				continue
 			}
 			if out.PlanLeftPct == nil {

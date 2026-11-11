@@ -487,6 +487,11 @@ func planWindowLines(r headroom.Report) []string {
 	switch {
 	case len(r.Windows) > 0:
 		for _, w := range r.Windows {
+			if w.Lapsed {
+				// Its share is the last window's, so none is given.
+				out = append(out, "  window:  the "+w.Name+" has reset since it was last read")
+				continue
+			}
 			line := "  window:  " + shareLeftOf(w.UsedPct, "%.0f", w.Name)
 			if w.NotStarted {
 				line += " — starts at your next request"

@@ -53,9 +53,13 @@ func LatestAuthoritativeWindow(ctx context.Context, reader EventReader, provider
 	if err != nil {
 		return nil
 	}
+	in, lapsed := resetIn(best.Attributes[resetKey], now)
+	if lapsed {
+		return nil
+	}
 	return &AuthoritativeWindow{
 		UsedPct:  pct,
-		ResetsIn: parseResetsIn(best.Attributes[resetKey], now),
+		ResetsIn: in,
 		Duration: p.RateLimitWindow,
 		Source:   source,
 	}
@@ -142,9 +146,13 @@ func latestCodexWindow(ctx context.Context, reader EventReader, p Plan, now time
 	if err != nil {
 		return nil
 	}
+	in, lapsed := resetIn(best.Attributes[candidate.resetKey], now)
+	if lapsed {
+		return nil
+	}
 	return &AuthoritativeWindow{
 		UsedPct:        pct,
-		ResetsIn:       parseResetsIn(best.Attributes[candidate.resetKey], now),
+		ResetsIn:       in,
 		Duration:       time.Duration(selectedMinutes) * time.Minute,
 		Source:         candidate.source,
 		VendorPlanType: best.Attributes["plan_type"],
@@ -218,7 +226,11 @@ func latestCursorMonthly(ctx context.Context, reader EventReader, now time.Time)
 	}
 	// Cursor's usage summary names the end of the billing cycle; the legacy
 	// requests endpoint names none, and the plan's nominal month applies.
-	return &AuthoritativeWindow{UsedPct: pct, ResetsIn: parseResetsIn(best.Attributes["billing_cycle_end"], now), Source: "cursor:monthly"}
+	in, lapsed := resetIn(best.Attributes["billing_cycle_end"], now)
+	if lapsed {
+		return nil
+	}
+	return &AuthoritativeWindow{UsedPct: pct, ResetsIn: in, Source: "cursor:monthly"}
 }
 
 // latestCopilotMonthly reads the newest Copilot poll. One poll stores a
@@ -249,41 +261,58 @@ func latestCopilotMonthly(ctx context.Context, reader EventReader, now time.Time
 		if err != nil {
 			continue
 		}
+		in, lapsed := resetIn(e.Attributes["quota_reset_date"], now)
+		if lapsed {
+			continue
+		}
 		if best == nil || 100-remaining > best.UsedPct {
-			best = &AuthoritativeWindow{
-				UsedPct:  100 - remaining,
-				ResetsIn: parseResetsIn(e.Attributes["quota_reset_date"], now),
-				Source:   "copilot:monthly",
-			}
+			best = &AuthoritativeWindow{UsedPct: 100 - remaining, ResetsIn: in, Source: "copilot:monthly"}
 		}
 	}
 	return best
 }
 
-// parseResetsIn turns a reset marker into a duration from now. It accepts
-// unix seconds (Codex), RFC3339 (Claude usage meter), and a plain date
-// (Copilot). A missing/unparseable/past marker yields 0, so the caller
-// falls back to the plan's nominal window length.
-func parseResetsIn(s string, now time.Time) time.Duration {
+// A reading says how much of a window is used and when that window resets.
+// Once the reset has passed the window it measured is over, and the reading
+// says nothing about the one that followed: not its share, and not that it
+// is empty, since nothing has read it. Every reader of a stored reading
+// asks resetIn, so "has this window reset" has one answer.
+
+// parseReset reads a reset marker: unix seconds (Codex), RFC3339 (the
+// Claude usage meter), or a plain date (Copilot). ok is false for a missing
+// or unreadable marker, and for the zero Codex sends for a window a plan
+// does not have.
+func parseReset(s string) (time.Time, bool) {
 	if s == "" {
-		return 0
+		return time.Time{}, false
 	}
 	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
-		return positiveOrZero(time.Unix(n, 0).UTC().Sub(now))
+		if n <= 0 {
+			return time.Time{}, false
+		}
+		return time.Unix(n, 0).UTC(), true
 	}
-	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05Z07:00", "2006-01-02"} {
+	for _, layout := range []string{time.RFC3339, "2006-01-02"} {
 		if t, err := time.Parse(layout, s); err == nil {
-			return positiveOrZero(t.UTC().Sub(now))
+			return t.UTC(), true
 		}
 	}
-	return 0
+	return time.Time{}, false
 }
 
-func positiveOrZero(d time.Duration) time.Duration {
-	if d > 0 {
-		return d
+// resetIn reads a reading's reset marker at now: how long until the window
+// resets, or lapsed when it already has. A marker that is missing or
+// unreadable is neither: in is 0 and the caller falls back to the plan's
+// nominal window length, as nothing says the window is over.
+func resetIn(raw string, now time.Time) (in time.Duration, lapsed bool) {
+	at, ok := parseReset(raw)
+	if !ok {
+		return 0, false
 	}
-	return 0
+	if !at.After(now) {
+		return 0, true
+	}
+	return at.Sub(now), false
 }
 
 // VendorSpend is the vendor's own figure for a usage-billed allowance:

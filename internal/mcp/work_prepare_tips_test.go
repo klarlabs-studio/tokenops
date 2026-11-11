@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
@@ -87,5 +88,22 @@ func TestPrepareWorkTipsFollowTheCoach(t *testing.T) {
 				t.Fatalf("coach_tips = %+v, ledger = %+v; want none", prep.CoachTips, l.entries)
 			}
 		})
+	}
+}
+
+// prepare_work gives no tip about a window that has reset since its
+// reading: what it held is the last window's.
+func TestPrepareWorkGivesNoTipOnAWindowThatHasReset(t *testing.T) {
+	// Read twenty minutes ago, so its source has not gone quiet; the reset
+	// alone ends it.
+	d := meterDeps(t, 20*time.Minute, map[string]string{
+		"five_hour_used_pct": "95", "five_hour_reset_at": time.Now().UTC().Add(-5 * time.Minute).Format(time.RFC3339),
+	})
+	l := &tipLedger{}
+	d.CoachLedger = func() coachcap.Ledger { return l }
+	for _, tip := range prepareTipsOnce(t, d).CoachTips {
+		if strings.Contains(tip.Object, "5h window") {
+			t.Errorf("tip on a window that has reset: %+v", tip)
+		}
 	}
 }

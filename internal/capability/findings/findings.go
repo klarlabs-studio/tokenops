@@ -269,9 +269,10 @@ func quotaAt(reports []plans.HeadroomReport, now time.Time) []Finding {
 		expiring := r.Allowances.ExpiringWithin(now, lapseWithin)
 		folded := len(expiring) == 0
 		for _, w := range r.Windows {
-			if w.Stale {
-				// Its share is not known to be current; warning on it
-				// would be advice from a reading that has stopped.
+			if !w.Current(now) {
+				// Its share is not known to be current: its source has
+				// stopped, or the window has reset since. Warning on it
+				// would be advice about a window that is not this one.
 				continue
 			}
 			p := w.Pace
@@ -320,7 +321,7 @@ func quotaAt(reports []plans.HeadroomReport, now time.Time) []Finding {
 				continue
 			}
 			f.Provider, f.Window = r.Provider, w.Name
-			if alt, pct, ok := roomiest(reports, r.Provider); ok {
+			if alt, pct, ok := roomiest(reports, r.Provider, now); ok {
 				f.Action = fmt.Sprintf("Put the work that can move on %s (%.0f%% left) until it resets.", alt, math.Max(0, 100-pct))
 			} else {
 				f.Action = "Pace the remaining work, or keep the long tasks for after the reset."
@@ -348,7 +349,7 @@ func allowanceLapse(r plans.HeadroomReport, expiring []plans.Allowance, now time
 	}
 	evidence := allowanceEvidence(expiring)
 	action := "Redeem it in " + vendor(r) + " before it expires."
-	if week != nil && !week.Stale {
+	if week != nil && week.Current(now) {
 		evidence += fmt.Sprintf("; the %s is %.0f%% used", windowWords(week.Name), week.UsedPct)
 		if in := resetsIn(*week); in > 0 {
 			evidence += " and resets in " + human(in)
@@ -430,18 +431,24 @@ func resetsIn(w plans.VendorWindow) time.Duration {
 	return d
 }
 
-// roomiest is the other plan with the most room, when it has plenty.
-func roomiest(reports []plans.HeadroomReport, except string) (string, float64, bool) {
+// roomiest is the other plan with the most room, when it has plenty. Room
+// is what its busiest running window leaves. A window that has reset since
+// its reading is passed over: it began empty, and the share it held is the
+// last window's. A plan with no running window has nothing to go by.
+func roomiest(reports []plans.HeadroomReport, except string, now time.Time) (string, float64, bool) {
 	best, bestPct := "", math.Inf(1)
 	for _, r := range reports {
 		if r.Provider == except || len(r.Windows) == 0 {
 			continue
 		}
-		busiest := 0.0
+		busiest, running := 0.0, false
 		for _, w := range r.Windows {
-			busiest = math.Max(busiest, w.UsedPct)
+			if w.Over(now) {
+				continue
+			}
+			busiest, running = math.Max(busiest, w.UsedPct), true
 		}
-		if busiest < bestPct {
+		if running && busiest < bestPct {
 			best, bestPct = vendor(r), busiest
 		}
 	}

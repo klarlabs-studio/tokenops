@@ -81,3 +81,30 @@ func TestBurnStaleReading(t *testing.T) {
 		t.Fatalf("a 25-minute-old reading forecast: %+v", v)
 	}
 }
+
+// A reading can be minutes old and still be of a window that has ended.
+// Its share is the last window's: it is neither the live window nor
+// something to forecast from.
+func TestAWindowThatResetSinceItsReadingIsNotLive(t *testing.T) {
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	cfg := *cfgWith(map[string]string{"anthropic": "claude-ultra"})
+	ended := now.Add(-5 * time.Minute)
+	attrs := fiveHourAt("95.00", ended)
+	r := &fakeHistory{readings: []meterReading{{"claude-usage-meter", now.Add(-10 * time.Minute), attrs}}}
+
+	if w, ok := headroom.LiveWindow(context.Background(), cfg, r, eventschema.ProviderAnthropic, now); ok {
+		t.Errorf("live window %+v: it reset five minutes ago", w)
+	}
+	if cur, v := headroom.Burn(context.Background(), cfg, r, eventschema.ProviderAnthropic, now); len(cur.Windows) != 0 || len(v.Warnings) != 0 {
+		t.Errorf("burn read %+v %+v from a window that has ended", cur, v)
+	}
+
+	// The week in the same reading is still running, and is what is live.
+	attrs["seven_day_kind"], attrs["seven_day_used_pct"], attrs["seven_day_reset_at"] = "weekly", "40.00", now.Add(48*time.Hour).Format(time.RFC3339)
+	if w, ok := headroom.LiveWindow(context.Background(), cfg, r, eventschema.ProviderAnthropic, now); !ok || w.UsedPct != 40 {
+		t.Errorf("live window %+v %v, want the week at 40%%", w, ok)
+	}
+	if cur, _ := headroom.Burn(context.Background(), cfg, r, eventschema.ProviderAnthropic, now); len(cur.Windows) != 1 || cur.Windows[0].UsedPct != 40 {
+		t.Errorf("burn read %+v, want the week alone", cur)
+	}
+}

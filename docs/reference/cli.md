@@ -49,6 +49,13 @@ it, so the glance says **starts at your next request** in place of a
 countdown, and such a window has no pace. The API marks it with
 `not_started: true` and leaves out its reset.
 
+A window whose reset has passed since it was last read is over, and
+nothing has read the one that followed. Its last share is not shown as
+current: the glance says it **has reset since it was last read**, it has
+no pace, and it raises no warning, advice or alert. The API marks it with
+`lapsed: true` and leaves out its reset; `used_pct` is then the share of
+the window that ended. The next reading replaces it.
+
 **Early resets** are shown when a window resets well before the time its
 vendor gave: more than an hour early, after it had been at least a fifth
 used, and back to near empty. Nothing the operator did explains it, so the

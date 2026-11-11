@@ -76,6 +76,19 @@ func QuotaWindowsFromAttributes(provider eventschema.Provider, attrs map[string]
 	return out
 }
 
+// OpenAt keeps the windows of a reading that are still running at now. One
+// whose reset has passed is over: its share is the last window's, and the
+// one that followed has not been read.
+func OpenAt(ws []QuotaWindow, now time.Time) []QuotaWindow {
+	var out []QuotaWindow
+	for _, w := range ws {
+		if w.ResetsAt.After(now) {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
 // claudeWindow maps a claude.ai window to its label and length.
 func claudeWindow(name, kind, scope string) (string, time.Duration, bool) {
 	switch {

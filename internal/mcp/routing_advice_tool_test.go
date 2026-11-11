@@ -117,6 +117,13 @@ func TestRoutingAdviseInfersASingleProvider(t *testing.T) {
 // gets as far as the pricing table.
 func tightWindowDeps(t *testing.T) RoutingAdviceDeps {
 	t.Helper()
+	return meterDeps(t, time.Minute, map[string]string{"five_hour_used_pct": "95"})
+}
+
+// meterDeps binds anthropic to a windowed plan and records one reading of
+// the claude.ai meter, age old.
+func meterDeps(t *testing.T, age time.Duration, attrs map[string]string) RoutingAdviceDeps {
+	t.Helper()
 	st, err := sqlite.Open(context.Background(), filepath.Join(t.TempDir(), "r.db"), sqlite.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -124,9 +131,9 @@ func tightWindowDeps(t *testing.T) RoutingAdviceDeps {
 	t.Cleanup(func() { _ = st.Close() })
 	reading := &eventschema.Envelope{
 		ID: "meter", SchemaVersion: eventschema.SchemaVersion,
-		Type: eventschema.EventTypePrompt, Timestamp: time.Now().UTC().Add(-time.Minute),
+		Type: eventschema.EventTypePrompt, Timestamp: time.Now().UTC().Add(-age),
 		Source:     "claude-usage-meter",
-		Attributes: map[string]string{"five_hour_used_pct": "95"},
+		Attributes: attrs,
 		Payload:    &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic, Status: 200},
 	}
 	if err := st.Append(context.Background(), reading); err != nil {
@@ -171,6 +178,24 @@ func TestRoutingAdviseFallsBackToTheDefaultTable(t *testing.T) {
 	if res.Recommendation != "switch" || res.Model == "" || res.Model == "claude-live-card" {
 		t.Fatalf("advice = %s %q (%s), want a switch priced from the default table",
 			res.Recommendation, res.Model, res.Reason)
+	}
+}
+
+// A window left nearly full that has reset since is not this window. Its
+// share drove the advice for as long as nothing read the meter again: a
+// switch to a cheaper model to relieve a shortage that had ended.
+func TestRoutingAdviseDoesNotActOnAWindowThatHasReset(t *testing.T) {
+	reset := func(in time.Duration) map[string]string {
+		return map[string]string{"five_hour_used_pct": "95", "five_hour_reset_at": time.Now().UTC().Add(in).Format(time.RFC3339)}
+	}
+	// Read twenty minutes ago, so its source has not gone quiet; the reset
+	// alone ends it.
+	if res := adviseOpus(t, meterDeps(t, 20*time.Minute, reset(-5*time.Minute))); res.Recommendation == "switch" || res.WindowPct >= 95 {
+		t.Errorf("advice = %s at %.0f%% (%s), from a window that reset five minutes ago", res.Recommendation, res.WindowPct, res.Reason)
+	}
+	// The same reading while its window still runs is acted on.
+	if res := adviseOpus(t, meterDeps(t, time.Hour, reset(time.Hour))); res.Recommendation != "switch" || res.WindowPct != 95 {
+		t.Errorf("advice = %s at %.0f%% (%s), want a switch on the running window", res.Recommendation, res.WindowPct, res.Reason)
 	}
 }
 

@@ -78,6 +78,15 @@ func TestAssessBurn(t *testing.T) {
 			short: at(15*time.Minute, fiveHour(52, 2*time.Hour)),
 		},
 		{
+			// Read twelve minutes ago at 95%, burning fast, two minutes
+			// before a reset that has since passed: the window it would
+			// have run out is over.
+			name:  "reset since the reading",
+			cur:   *at(12*time.Minute, fiveHour(95, -time.Minute)),
+			long:  at(72*time.Minute, fiveHour(65, -time.Minute)),
+			short: at(27*time.Minute, fiveHour(85, -time.Minute)),
+		},
+		{
 			name:  "used up is not a forecast",
 			cur:   *at(0, fiveHour(100, 2*time.Hour)),
 			long:  at(time.Hour, fiveHour(60, 2*time.Hour)),

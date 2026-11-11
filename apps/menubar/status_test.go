@@ -62,6 +62,24 @@ func TestStatusIsTheTightestWindow(t *testing.T) {
 	}
 }
 
+// A window that has reset since its reading is named in the tooltip and
+// measures nothing: the gauge follows the windows that have been read.
+func TestStatusLeavesOutAWindowThatHasReset(t *testing.T) {
+	st := statusOf([]byte(`{"plan_headroom":{"reports":[
+	  {"provider":"openai","windows":[{"name":"5h","used_pct":90,"lapsed":true},{"name":"week","used_pct":40}]}]}}`), "")
+	if st.Pct != 40 || st.Title != "Codex 60% left" || !st.Known || st.Stale {
+		t.Errorf("status %+v", st)
+	}
+	if !strings.Contains(st.Tooltip, "Codex · 5h reset since it was last read") || strings.Contains(st.Tooltip, "10% left") {
+		t.Errorf("tooltip:\n%s", st.Tooltip)
+	}
+	// Nothing read since: no level, and no "100% left" either.
+	st = statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"openai","windows":[{"name":"5h","used_pct":90,"lapsed":true}]}]}}`), "")
+	if gaugeLevel(st) != gaugeUnknown || strings.Contains(st.Title, "left") {
+		t.Errorf("status %+v", st)
+	}
+}
+
 func TestStatusWithNothingToShow(t *testing.T) {
 	if st := statusOf([]byte(`{"plan_headroom":{"error":"plans_unconfigured","hint":"bind a plan"}}`), ""); st.Title != "—" || !strings.Contains(st.Tooltip, "bind a plan") || gaugeLevel(st) != gaugeUnknown {
 		t.Errorf("unconfigured %+v", st)
