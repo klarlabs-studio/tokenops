@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"strings"
 	"time"
@@ -19,7 +20,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/daemonreach"
 	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/presentation"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
 )
 
@@ -347,15 +347,21 @@ func statusStaleWarnings(ctx context.Context, rf *rootFlags, cfg config.Config, 
 	if err != nil {
 		return warnings
 	}
-	store, err := sqlite.Open(ctx, dbPath, sqlite.Options{})
-	if err != nil {
+	var counter config.SourceCounter = nothingRecorded{}
+	store, err := openStoreForRead(ctx, dbPath)
+	switch {
+	case err == nil:
+		defer func() { _ = store.Close() }()
+		counter = store
+	case !errors.Is(err, fs.ErrNotExist):
 		return warnings
 	}
-	defer func() { _ = store.Close() }()
+	// No store is nothing recorded: a source that wrote sessions nothing
+	// ingested is still stale.
 	if fromDaemon {
-		return append(warnings, state.RetentionWarnings(ctx, cfg, store)...)
+		return append(warnings, state.RetentionWarnings(ctx, cfg, counter)...)
 	}
-	return state.LocalWarnings(ctx, cfg, store, time.Now())
+	return state.LocalWarnings(ctx, cfg, counter, time.Now())
 }
 
 // dropWarningFrom renders the telemetry-loss warning carried on /healthz,

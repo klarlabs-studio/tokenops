@@ -244,7 +244,7 @@ func openVerifyStore(cmd *cobra.Command, opt verifyOptions) (*sqlite.Store, func
 	}
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
-	store, err := sqlite.Open(ctx, path, sqlite.Options{})
+	store, err := openStoreForRead(ctx, path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open store %s: %w", path, err)
 	}

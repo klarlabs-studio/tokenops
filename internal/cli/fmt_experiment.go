@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/fmtinsight"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -112,7 +111,7 @@ func fmtExperimentOutcomes(ctx context.Context, override string, since time.Time
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	store, err := sqlite.Open(ctx, path, sqlite.Options{})
+	store, err := openStoreForRead(ctx, path)
 	if err != nil {
 		return nil
 	}
