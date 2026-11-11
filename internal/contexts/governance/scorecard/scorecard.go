@@ -78,8 +78,10 @@ type Scorecard struct {
 	// longest window kind that reset in the period) and coverage (share
 	// of its tokens a plan covered), over PlanUseDays. Reported, not
 	// graded: a plan used at 40% is a fact about the seat, not a fault.
-	PlanUse     *plans.PlanUseReport `json:"plan_use,omitempty"`
-	PlanUseDays int                  `json:"-"`
+	PlanUse *plans.PlanUseReport `json:"plan_use,omitempty"`
+	// PlanUseDays is the period in days, which the plan use and unit
+	// cost lines are worded with.
+	PlanUseDays int `json:"period_days,omitempty"`
 	// UnitCosts is what a unit of finished work cost over the period,
 	// against the four weeks before. Reported, not graded.
 	UnitCosts []UnitCost `json:"unit_costs,omitempty"`
@@ -413,11 +415,13 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 			GeneratedAt  time.Time       `json:"generated_at"`
 			OverallGrade Grade           `json:"overall_grade"`
 			BaselineRef  string          `json:"baseline_ref,omitempty"`
+			Degraded     string          `json:"degraded,omitempty"`
 			Checklist    []ChecklistItem `json:"checklist"`
 		}{
 			GeneratedAt:  s.GeneratedAt,
 			OverallGrade: s.OverallGrade,
 			BaselineRef:  s.BaselineRef,
+			Degraded:     s.Degraded,
 			Checklist:    s.Checklist,
 		}
 		return json.MarshalIndent(warm, "", "  ")
@@ -437,6 +441,8 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 		DestructiveRate      *KPIResult           `json:"destructive_rate,omitempty"`
 		OverallGrade         Grade                `json:"overall_grade"`
 		BaselineRef          string               `json:"baseline_ref,omitempty"`
+		Degraded             string               `json:"degraded,omitempty"`
+		PeriodDays           int                  `json:"period_days,omitempty"`
 		PlanUse              *plans.PlanUseReport `json:"plan_use,omitempty"`
 		UnitCosts            []UnitCost           `json:"unit_costs,omitempty"`
 		SelfBaseline         *SelfBaseline        `json:"self_baseline,omitempty"`
@@ -446,6 +452,8 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 		GeneratedAt:       s.GeneratedAt,
 		OverallGrade:      s.OverallGrade,
 		BaselineRef:       s.BaselineRef,
+		Degraded:          s.Degraded,
+		PeriodDays:        s.PlanUseDays,
 		PlanUse:           s.PlanUse,
 		UnitCosts:         s.UnitCosts,
 		SelfBaseline:      s.SelfBaseline,
@@ -491,6 +499,65 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 	return json.MarshalIndent(out, "", "  ")
 }
 
+// UnmarshalJSON reads what MarshalJSON wrote back into the scorecard it
+// was made from, so a client that asked the daemon renders the same text
+// as one that computed it. A KPI block the wire left out was not
+// measured: FVT, TEU and SAC come back as New makes an unmeasured one
+// (its name, thresholds and a NaN value), an agent KPI as the zero value.
+func (s *Scorecard) UnmarshalJSON(b []byte) error {
+	var w struct {
+		GeneratedAt          time.Time            `json:"generated_at"`
+		FirstValueTime       *KPIResult           `json:"first_value_time"`
+		TokenEfficiency      *KPIResult           `json:"token_efficiency_uplift"`
+		SpendAttribution     *KPIResult           `json:"spend_attribution_completeness"`
+		CacheHitRatio        *KPIResult           `json:"cache_hit_ratio"`
+		ConfirmationGateRate *KPIResult           `json:"confirmation_gate_rate"`
+		RegenerateRate       *KPIResult           `json:"regenerate_rate"`
+		ToolSuccessRate      *KPIResult           `json:"tool_success_rate"`
+		DestructiveRate      *KPIResult           `json:"destructive_rate"`
+		OverallGrade         Grade                `json:"overall_grade"`
+		BaselineRef          string               `json:"baseline_ref"`
+		Degraded             string               `json:"degraded"`
+		PeriodDays           int                  `json:"period_days"`
+		PlanUse              *plans.PlanUseReport `json:"plan_use"`
+		UnitCosts            []UnitCost           `json:"unit_costs"`
+		SelfBaseline         *SelfBaseline        `json:"self_baseline"`
+		PlanUseVsBaseline    []PlanUseComparison  `json:"plan_use_vs_baseline"`
+		Allocation           *AllocationCoverage  `json:"allocation"`
+		Checklist            []ChecklistItem      `json:"checklist"`
+	}
+	if err := json.Unmarshal(b, &w); err != nil {
+		return err
+	}
+	if w.OverallGrade == GradeWarmingUp {
+		*s = Scorecard{GeneratedAt: w.GeneratedAt, OverallGrade: w.OverallGrade, BaselineRef: w.BaselineRef,
+			Degraded: w.Degraded, Checklist: w.Checklist}
+		return nil
+	}
+	unmeasured := New(math.NaN(), math.NaN(), math.NaN(), "")
+	*s = Scorecard{
+		GeneratedAt: w.GeneratedAt, OverallGrade: w.OverallGrade, BaselineRef: w.BaselineRef, Degraded: w.Degraded,
+		PlanUse: w.PlanUse, PlanUseDays: w.PeriodDays, UnitCosts: w.UnitCosts, SelfBaseline: w.SelfBaseline,
+		PlanUseVsBaseline: w.PlanUseVsBaseline, Allocation: w.Allocation, Checklist: w.Checklist,
+		FirstValueTime: unmeasured.FirstValueTime, TokenEfficiency: unmeasured.TokenEfficiency,
+		SpendAttribution: unmeasured.SpendAttribution,
+	}
+	for _, k := range []struct {
+		from *KPIResult
+		to   *KPIResult
+	}{
+		{w.FirstValueTime, &s.FirstValueTime}, {w.TokenEfficiency, &s.TokenEfficiency},
+		{w.SpendAttribution, &s.SpendAttribution}, {w.CacheHitRatio, &s.CacheHitRatio},
+		{w.ConfirmationGateRate, &s.ConfirmationGateRate}, {w.RegenerateRate, &s.RegenerateRate},
+		{w.ToolSuccessRate, &s.ToolSuccessRate}, {w.DestructiveRate, &s.DestructiveRate},
+	} {
+		if k.from != nil {
+			*k.to = *k.from
+		}
+	}
+	return nil
+}
+
 func (s *Scorecard) String() string {
 	if s.OverallGrade == GradeWarmingUp {
 		var b strings.Builder
@@ -504,6 +571,11 @@ func (s *Scorecard) String() string {
 			fmt.Fprintf(&b, "  %s %d. %s\n     run: %s\n", marker, i+1, item.Description, item.NextAction)
 		}
 		fmt.Fprintf(&b, "\nBaseline: %s\n", baselineOrMissing(s.BaselineRef))
+		// A store that could not be read leaves nothing measured too:
+		// warming up must not read as "nothing happened yet" then.
+		if s.Degraded != "" {
+			fmt.Fprintf(&b, "\n⚠ some KPIs could not be computed: %s\n", s.Degraded)
+		}
 		return b.String()
 	}
 	var b strings.Builder
