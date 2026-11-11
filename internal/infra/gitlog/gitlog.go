@@ -104,6 +104,17 @@ func (h *history[T]) from(since time.Time, out []T) []T {
 	return out
 }
 
+// sinceArgs selects what was committed at or after since. git does not
+// read a time at or before the epoch as the distant past: @0 and earlier
+// fall back to about now, and selected nothing older than a second. A
+// window that starts there is all of history, which no --since reads.
+func sinceArgs(since time.Time) []string {
+	if since.Unix() <= 0 {
+		return nil
+	}
+	return []string{"--since=@" + strconv.FormatInt(since.Unix(), 10)}
+}
+
 // refState is what a repository's history is read at: every ref and what
 // it points to, hashed. A commit, a fetch, a merge, a rebase or a branch
 // deleted changes it.
@@ -194,15 +205,15 @@ func readCommits(ctx context.Context, root, email string, since time.Time) (*his
 	// address also matches jimbob@ for bob@, and its dots match any
 	// character. The bracketed address as a fixed string matches the
 	// operator's address whole and nothing else.
-	out, err := git(ctx, root, "log", "--branches", "--no-merges", "--reverse",
-		"--fixed-strings", "--author=<"+email+">",
-		"--since=@"+strconv.FormatInt(since.Unix(), 10),
+	args := append([]string{"log", "--branches", "--no-merges", "--reverse",
+		"--fixed-strings", "--author=<" + email + ">"}, sinceArgs(since)...)
+	out, err := git(ctx, root, append(args,
 		// Decorate with local branches only, so a slash-named branch
 		// (feat/x) is told from a remote copy (origin/feat/x) by where it
 		// lives rather than by the shape of its name.
 		"--decorate-refs=refs/heads/",
 		// The body can span lines, so records end in a record separator.
-		"--format=%H%x1f%at%x1f%ct%x1f%s%x1f%D%x1f%b%x1e")
+		"--format=%H%x1f%at%x1f%ct%x1f%s%x1f%D%x1f%b%x1e")...)
 	if err != nil {
 		return nil, err
 	}
