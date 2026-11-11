@@ -110,7 +110,7 @@ func (g Grok) Read(ctx context.Context, key string) (usage.Reading, error) {
 	return r, nil
 }
 
-// grokCents is {"val": n}.
+// grokCents is {"val": n}; {} is zero, as Grok writes an amount of none.
 type grokCents struct{ v float64 }
 
 func (g *grokCents) UnmarshalJSON(b []byte) error {

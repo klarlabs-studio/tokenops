@@ -86,7 +86,7 @@ func (t TypeSafe) Read(ctx context.Context, key string) (usage.Reading, error) {
 	if err != nil {
 		return usage.Reading{}, err
 	}
-	return usage.Reading{Scope: "account", UsedUSD: billing.Spent.v, HasUsed: true, BalanceUSD: billing.Balance.v, HasBalance: true}, nil
+	return usage.Reading{Scope: "account", UsedUSD: billing.Spent.v, HasUsed: billing.Spent.ok, BalanceUSD: billing.Balance.v, HasBalance: billing.Balance.ok}, nil
 }
 
 // action is the billing overview's server-action ID, from the cache unless

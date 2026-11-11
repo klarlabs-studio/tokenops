@@ -280,6 +280,9 @@ func NewEnvelope(ts time.Time, r Reading) *eventschema.Envelope {
 		},
 		Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderFireworks, Status: 200},
 	}
+	if r.LimitUnknown {
+		env.Attributes["extra_usage_limit_unknown"] = "true"
+	}
 	if !r.BlockedUntil.IsZero() {
 		env.Attributes["extra_usage_blocked_until"] = r.BlockedUntil.UTC().Format(time.RFC3339)
 	}

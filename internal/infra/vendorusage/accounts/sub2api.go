@@ -95,11 +95,11 @@ func (g Sub2API) Read(ctx context.Context, root, key string) (usage.Reading, err
 			{s.WeeklyUsage, s.WeeklyLimit, 7 * 24 * time.Hour},
 			{s.MonthlyUsage, s.MonthlyLimit, 30 * 24 * time.Hour},
 		} {
-			if w.limit.ok && w.limit.v > 0 {
+			if w.limit.ok && w.limit.v > 0 && w.used.ok {
 				r.Windows = append(r.Windows, usage.Window{Name: windowName(w.d), UsedPct: pct(w.used.v, w.limit.v), Duration: w.d})
 			}
 		}
-	} else if q := resp.Quota; q != nil && q.Limit.ok && q.Limit.v > 0 {
+	} else if q := resp.Quota; q != nil && q.Limit.ok && q.Limit.v > 0 && q.Used.ok {
 		if usd(q.Unit, resp.Unit) {
 			r.UsedUSD, r.HasUsed, r.LimitUSD = q.Used.v, true, q.Limit.v
 			r.LimitReached = r.LimitReached || q.Used.v >= q.Limit.v
@@ -109,7 +109,7 @@ func (g Sub2API) Read(ctx context.Context, root, key string) (usage.Reading, err
 	}
 	for _, l := range resp.RateLimits {
 		d, ok := sub2apiWindows[strings.ToLower(l.Window)]
-		if !ok || !l.Limit.ok || l.Limit.v <= 0 {
+		if !ok || !l.Limit.ok || l.Limit.v <= 0 || !l.Used.ok {
 			continue
 		}
 		r.Windows = append(r.Windows, usage.Window{Name: windowName(d), UsedPct: pct(l.Used.v, l.Limit.v), Duration: d, ResetsAt: parseTime(l.ResetAt)})

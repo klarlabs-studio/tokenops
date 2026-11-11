@@ -93,11 +93,14 @@ func (k KiroOverage) ReadAppLogin(ctx context.Context, token string) (usage.Read
 			reset = resp.NextDateReset.t
 		}
 		// Usage counts overage too: the plan's share is what is left.
-		plan := c.Usage.v - c.Overages.v
+		plan := c.Usage.v
+		if c.Overages.ok {
+			plan -= c.Overages.v
+		}
 		r.Windows = append(r.Windows, usage.Window{Name: "month", UsedPct: clampPct(pct(plan, c.Limit.v)),
 			Duration: 30 * 24 * time.Hour, ResetsAt: reset})
 		enabled := resp.OverageConfiguration != nil && strings.EqualFold(resp.OverageConfiguration.OverageStatus, "ENABLED")
-		if enabled && c.OverageCap.ok && c.OverageCap.v > 0 {
+		if enabled && c.OverageCap.ok && c.OverageCap.v > 0 && c.Overages.ok {
 			r.Windows = append(r.Windows, usage.Window{Name: "overage", UsedPct: clampPct(pct(c.Overages.v, c.OverageCap.v)), ResetsAt: reset})
 		}
 		break

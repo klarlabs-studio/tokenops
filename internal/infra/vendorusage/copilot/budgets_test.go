@@ -44,6 +44,25 @@ func TestOrgBudgetsFollowsPages(t *testing.T) {
 	}
 }
 
+// A budget GitHub gave no amount for is left out: read as $0 with usage
+// stopped, it would report its holder as blocked.
+func TestABudgetWithoutAnAmountIsNoCap(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"budgets":[
+			{"id":"b1","budget_product_sku":"copilot","budget_scope":"user","user":"annb","prevent_further_usage":true},
+			{"id":"b2","budget_product_sku":"copilot","budget_scope":"user","user":"zed","budget_amount":0,"prevent_further_usage":true}
+		],"has_next_page":false}`))
+	}))
+	defer srv.Close()
+	got, err := (&BudgetClient{BaseURL: srv.URL, Token: "gt"}).OrgBudgets(context.Background(), "acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != "b2" || got[0].Amount != 0 || !got[0].Stops {
+		t.Errorf("budgets = %+v, want only the one GitHub gave an amount for", got)
+	}
+}
+
 func TestOrgBudgetsAccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, `{"message":"Must have admin rights"}`, http.StatusForbidden)

@@ -333,12 +333,15 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 				}
 				// A spend-denominated plan reports money against the org's
 				// own limit; it has no window and renders none.
-				if r.SpendLimitUSD > 0 {
+				switch {
+				case r.SpendLimitUSD > 0:
 					fmt.Fprintf(cmd.OutOrStdout(),
 						"  spend:   %.2f / %.2f USD (%.1f%%) — %s%s\n",
 						r.SpendUSD, r.SpendLimitUSD, r.SpendPct, spendSourceLabel(r.SpendSource), spendWhose(r.SpendScopeLabel),
 					)
-				} else if r.SpendUSD > 0 {
+				case r.SpendUSD > 0 && r.SpendLimitUnknown:
+					fmt.Fprintf(cmd.OutOrStdout(), "  spend:   %.2f USD (limit not read)%s\n", r.SpendUSD, spendWhose(r.SpendScopeLabel))
+				case r.SpendUSD > 0:
 					fmt.Fprintf(cmd.OutOrStdout(), "  spend:   %.2f USD (no limit configured)%s\n", r.SpendUSD, spendWhose(r.SpendScopeLabel))
 				}
 				if r.BalanceUSD != nil {

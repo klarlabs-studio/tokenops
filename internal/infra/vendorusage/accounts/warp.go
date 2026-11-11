@@ -136,6 +136,9 @@ func (w Warp) Read(ctx context.Context, key string) (usage.Reading, error) {
 	}
 	used := 100.0
 	if info.RequestLimit.v > 0 {
+		if !info.RequestsUsed.ok {
+			return r, nil
+		}
 		used = clampPct(pct(info.RequestsUsed.v, info.RequestLimit.v))
 	}
 	r.Subscription = true

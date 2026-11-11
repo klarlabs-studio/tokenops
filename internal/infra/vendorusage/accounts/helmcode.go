@@ -91,7 +91,7 @@ func (h Helmcode) Read(ctx context.Context, key string) (usage.Reading, error) {
 	r := usage.Reading{Scope: "account"}
 	for _, m := range *quota.Models {
 		name := strings.TrimSpace(m.Model)
-		if name == "" || !m.Cap.ok || m.Cap.v <= 0 || (m.Hours != nil && m.Hours.ok && !premium) {
+		if name == "" || !m.Cap.ok || m.Cap.v <= 0 || !m.Used.ok || (m.Hours != nil && m.Hours.ok && !premium) {
 			continue
 		}
 		w := usage.Window{UsedPct: clampPct(pct(max(0, m.Used.v), m.Cap.v)), ResetsAt: parseTime(m.Period)}

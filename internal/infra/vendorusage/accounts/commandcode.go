@@ -103,10 +103,10 @@ func (c CommandCode) read(ctx context.Context, prefix string, auth http.Header) 
 	if err := get("/billing/credits", &credits); err != nil {
 		return usage.Reading{}, err
 	}
-	if credits.Credits == nil || !credits.Credits.MonthlyCredits.ok {
+	cr := credits.Credits
+	if cr == nil || !cr.MonthlyCredits.ok {
 		return usage.Reading{}, errors.New("accounts: commandcode: no monthly credits in the answer")
 	}
-	cr := credits.Credits
 	r := usage.Reading{Scope: "account", Subscription: true, BalanceUSD: cr.PurchasedCredits.v, HasBalance: cr.PurchasedCredits.ok}
 	wl := credits.WindowLimits
 	if wl == nil {
@@ -118,7 +118,7 @@ func (c CommandCode) read(ctx context.Context, prefix string, auth http.Header) 
 			name string
 			d    time.Duration
 		}{{wl.FiveHour, "5h", 5 * time.Hour}, {wl.Weekly, "week", 7 * 24 * time.Hour}} {
-			if w.l != nil && w.l.Cap.v > 0 {
+			if w.l != nil && w.l.Cap.ok && w.l.Used.ok && w.l.Cap.v > 0 {
 				r.Windows = append(r.Windows, usage.Window{Name: w.name, UsedPct: clampPct(pct(w.l.Used.v, w.l.Cap.v)), Duration: w.d, ResetsAt: w.l.ResetAt.t})
 			}
 		}

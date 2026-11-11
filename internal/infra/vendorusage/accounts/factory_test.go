@@ -109,11 +109,11 @@ func TestFactoryWindowMapping(t *testing.T) {
 		t.Errorf("expired window %+v", r.Windows)
 	}
 	p := factoryPool{UserTokens: number{50, true}, Allowance: number{200, true}, Ratio: number{0, true}}
-	if got := p.percent(); got != 25 {
+	if got, ok := p.percent(); !ok || got != 25 {
 		t.Errorf("computed share = %v", got)
 	}
 	unlimited := factoryPool{UserTokens: number{5e7, true}, Allowance: number{2e12, true}}
-	if got := unlimited.percent(); got != 50 {
+	if got, ok := unlimited.percent(); !ok || got != 50 {
 		t.Errorf("unlimited share = %v", got)
 	}
 }
