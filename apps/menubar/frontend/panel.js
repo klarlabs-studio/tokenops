@@ -219,31 +219,49 @@
   // Usage whose model has no list price yet is left out of the money:
   // mostly unpriced shows no money, partly unpriced marks it with "+".
   function share(s) { return s.requests ? s.unpriced_requests / s.requests : 0; }
-  function amount(s, covered) {
-    if (share(s) > 0.5) return "—";
+  // billed is set when the provider's own bill is drawn above: mostly
+  // unpriced usage then points there instead of showing nothing.
+  function amount(s, covered, billed) {
+    if (share(s) > 0.5) return billed ? "on the bill above" : "—";
     return money(covered ? s.api_equivalent_usd : s.cost_usd) + (share(s) > 0.02 ? "+" : "");
   }
 
-  function usage(main, r, c) {
+  // routerFor is the external router a top "model" names, from the
+  // coach's list of routers in each harness's path (ADR 0009 §5): a
+  // router asks for itself by name and picks the model per turn.
+  function routerFor(v, model) {
+    var m = String(model || "").toLowerCase();
+    var list = (v.coach && v.coach.routers) || [];
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i].router || {};
+      if (m && (m === String(list[i].model || "").toLowerCase() || (r.name && m.indexOf(r.name) >= 0))) return r;
+    }
+    return null;
+  }
+
+  function usage(main, r, c, v) {
     var box = el("section", "metric usage");
     // When the 30 days could not be read, today alone says whether a
     // plan covers the usage.
     var unread = !!c.last_30_days_unread;
     var basis = unread ? c.today : c.last_30_days;
     var covered = basis.cost_usd === 0 && basis.api_equivalent_usd > 0;
+    var billed = r.spend_source === "vendor" && r.spend_usd > 0;
     var grid = el("div", "stats");
-    grid.appendChild(stat("Today", amount(c.today, covered)));
-    grid.appendChild(stat("Last 30 days cost", unread ? "not read in time" : amount(c.last_30_days, covered)));
+    grid.appendChild(stat("Today", amount(c.today, covered, billed)));
+    grid.appendChild(stat("Last 30 days cost", unread ? "not read in time" : amount(c.last_30_days, covered, billed)));
     grid.appendChild(stat("Last 30 days tokens", unread ? "—" : tokens(c.last_30_days.tokens)));
     grid.appendChild(stat("Today tokens", tokens(c.today.tokens)));
     box.appendChild(grid);
     if (c.daily && c.daily.length) box.appendChild(chart(c.daily));
-    if (c.top_model) box.appendChild(el("div", "top-model", "Top model: " + c.top_model));
+    var router = routerFor(v, c.top_model);
+    if (router) box.appendChild(el("div", "top-model", "Top route: " + (router.display || router.name) + ", which picks the model for each turn"));
+    else if (c.top_model) box.appendChild(el("div", "top-model", "Top model: " + c.top_model));
     var notes = ["From local " + name(r.provider) + " logs."], s30 = basis;
     if (covered && share(s30) <= 0.5) notes.push("Cost at API prices; your plan covers it.");
     if (share(s30) > 0.02) {
       notes.push(Math.round(share(s30) * 100) + "% of requests use models without a list price yet" +
-        (share(s30) > 0.5 ? "." : ", left out of the $ figures."));
+        (share(s30) > 0.5 ? (billed ? "; " + name(r.provider) + "'s own bill above is what they cost." : ".") : ", left out of the $ figures."));
     }
     box.appendChild(el("div", "note", notes.join(" ")));
     main.appendChild(box);
@@ -370,7 +388,7 @@
     providerBudgets(main, r, v, cap);
     planUse(main, r, v);
     var c = v.costs && v.costs[r.provider];
-    if (c) usage(main, r, c);
+    if (c) usage(main, r, c, v);
   }
 
   // The coach's findings, ranked by the daemon: a mark by level, the
