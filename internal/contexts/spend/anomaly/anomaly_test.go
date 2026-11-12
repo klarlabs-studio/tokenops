@@ -147,3 +147,41 @@ func TestTodaySoFarIsFlaggedOnceItPassesTheBand(t *testing.T) {
 		t.Errorf("cause = %+v", got[0].Cause)
 	}
 }
+
+// A working week is $40 on each working day and nothing at the weekend.
+// A trend through the last few days reads the weekend as a fall to
+// nothing, so the Monday after reads as a rise far above the forecast.
+func TestTheFirstDayAfterAQuietWeekendIsNotFlagged(t *testing.T) {
+	monday := time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC)
+	today := midnight(monday)
+	var items []Item
+	for n := 1; n <= 28; n++ {
+		d := today.AddDate(0, 0, -n)
+		if wd := d.Weekday(); wd == time.Saturday || wd == time.Sunday {
+			continue
+		}
+		items = append(items, Item{Day: d, Provider: "openai", Model: "gpt", Session: "s", Tokens: 1e6, CostUSD: 40, ValueUSD: 40})
+	}
+	items = append(items, Item{Day: today, Provider: "openai", Model: "gpt", Session: "s", Tokens: 1e6, CostUSD: 40, ValueUSD: 40})
+	if got := Detect(items, monday, Config{}); len(got) != 0 {
+		t.Fatalf("an ordinary Monday was flagged: %+v", got)
+	}
+}
+
+// One burst the day before is not a trend. A trend method read the burst
+// as a steep climb and forecast a day far above anything spent, so a real
+// rise on the day after went unseen.
+func TestARiseTheDayAfterABurstIsFlagged(t *testing.T) {
+	var items []Item
+	for n := 3; n <= 22; n++ {
+		items = append(items, Item{Day: day(n), Provider: "openai", Model: "gpt", Session: "s", Tokens: 1e5, CostUSD: 10, ValueUSD: 10})
+	}
+	items = append(items,
+		Item{Day: day(2), Provider: "openai", Model: "gpt", Session: "s", Tokens: 1e6, CostUSD: 100, ValueUSD: 100},
+		Item{Day: day(1), Provider: "openai", Model: "gpt", Session: "s", Tokens: 8e5, CostUSD: 80, ValueUSD: 80},
+	)
+	got := Detect(items, now, Config{})
+	if len(got) != 1 || !got[0].Day.Equal(day(1)) || got[0].Metric != MetricSpend {
+		t.Fatalf("got %+v, want yesterday's spend flagged", got)
+	}
+}

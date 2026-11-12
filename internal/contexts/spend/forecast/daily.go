@@ -84,18 +84,29 @@ func startOfDay(t time.Time) time.Time { return t.UTC().Truncate(day) }
 // MinDays is the fewest whole days a Daily forecasts from.
 const MinDays = 2
 
-// weekdayDays is how many days a series must hold before each weekday is
-// forecast from its own days: two of every weekday.
+// weekdayDays is how many days a series must hold before each weekday may
+// be forecast from its own days: two of every weekday.
 const weekdayDays = 14
 
 // outlook is what a Daily expects of a day ahead.
 //
-// Spend follows the week: work stops on the days off and resumes after
-// them. A trend through the last few days reads the days off as a fall
-// to nothing and the first day back as a steep climb, so a day ahead is
-// expected to be the mean of the same weekday instead, once the series
-// holds two of each, and the mean of all its days before that. sigma is
-// the spread of the days about those means.
+// A day ahead is expected to bring the mean of the days, never a trend
+// through them. Spend is intermittent: bursts of work with days of nothing
+// between them, and the days off each week. A trend reads each burst as a
+// climb and each quiet stretch as a fall, and forecasts nothing, less than
+// nothing, or a multiple of the spend, depending on the day it is asked.
+// The mean of the days, the empty ones counted, is what a day brings on
+// average, which is what an intermittent-demand method such as Croston's
+// estimates too, without its bias.
+//
+// Spend that follows the week (work stops on the days off and resumes
+// after them) is expected to bring the mean of the same weekday instead,
+// once the series holds two of each, and only when the weekdays explain
+// the days better than one mean day: when their spread about the
+// weekday means, per day not fitted, is the smaller. Bursts that fall on
+// any weekday do not follow the week, and read by weekday they forecast
+// nothing on most days and a share of a burst on the others. sigma is the
+// spread of the days about the means chosen.
 type outlook struct {
 	byWeekday [7]float64
 	sigma     float64
@@ -108,7 +119,6 @@ func (d Daily) outlook() (outlook, bool) {
 		return outlook{}, false
 	}
 	var (
-		o      outlook
 		sums   [7]float64
 		counts [7]int
 		total  float64
@@ -119,25 +129,37 @@ func (d Daily) outlook() (outlook, bool) {
 		counts[wd]++
 		total += p.Value
 	}
-	means := 1 // the means fitted: one, or one for each weekday
+	var o outlook
 	for wd := range o.byWeekday {
 		o.byWeekday[wd] = total / float64(n)
 	}
-	if n >= weekdayDays {
-		means = len(o.byWeekday)
-		for wd := range o.byWeekday {
-			o.byWeekday[wd] = sums[wd] / float64(counts[wd])
-		}
+	o.sigma = d.spread(o.byWeekday, 1)
+	if n < weekdayDays {
+		return o, true
+	}
+	var byWeekday [7]float64
+	for wd := range byWeekday {
+		byWeekday[wd] = sums[wd] / float64(counts[wd])
+	}
+	if sigma := d.spread(byWeekday, len(byWeekday)); sigma < o.sigma {
+		o.byWeekday, o.sigma = byWeekday, sigma
+	}
+	return o, true
+}
+
+// spread is the residual standard error of the days about the means of
+// their weekdays, of which fitted were fitted from the days.
+func (d Daily) spread(byWeekday [7]float64, fitted int) float64 {
+	n := len(d.Points)
+	if n <= fitted {
+		return 0
 	}
 	var ss float64
 	for _, p := range d.Points {
-		diff := p.Value - o.byWeekday[p.At.UTC().Weekday()]
+		diff := p.Value - byWeekday[p.At.UTC().Weekday()]
 		ss += diff * diff
 	}
-	if n > means {
-		o.sigma = math.Sqrt(ss / float64(n-means))
-	}
-	return o, true
+	return math.Sqrt(ss / float64(n-fitted))
 }
 
 // on is the forecast for the whole UTC day that starts at at.

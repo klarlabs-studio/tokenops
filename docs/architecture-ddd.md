@@ -23,7 +23,7 @@ PRs that cross these boundaries must update this document.
 │   rules.LoadCorpus, rules.RunBenchSpec                     │
 │   spending.Scorecard (capability)                          │
 │   coverdebt.Analyze                                        │
-│   forecast.AutoForecast                                    │
+│   spending.Project (capability)                            │
 │                                                            │
 │   - orchestrate domain services                            │
 │   - one entry point per use case                           │
@@ -40,7 +40,7 @@ PRs that cross these boundaries must update this document.
 │   spend: Engine, Table                                     │
 │   workflow: Trace                                          │
 │   redaction: Redactor                                      │
-│   forecast: Daily, Holt, Linear                            │
+│   forecast: Daily, Prediction                              │
 │   pkg/eventschema: PromptEvent, WorkflowEvent, ...         │
 │                                                            │
 │   - pure, framework-free                                   │

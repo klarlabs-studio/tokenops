@@ -295,7 +295,7 @@ func check(byDay map[time.Time][]Item, first, d time.Time, metric string, cfg Co
 		history = append(history, forecast.Point{At: day, Value: total(byDay[day], metric)})
 		past = append(past, byDay[day]...)
 	}
-	preds := forecast.AutoForecast(history, 1, 24*time.Hour)
+	preds := forecast.Daily{Points: history, Now: d}.Ahead(1)
 	if len(preds) == 0 {
 		return Anomaly{}, false
 	}
