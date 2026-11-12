@@ -33,6 +33,12 @@ type appsEntry struct {
 // idle, log at debug, retry on next tick" rather than a fatal error.
 var ErrNoToken = errors.New("copilot: no oauth token found in apps.json / hosts.json")
 
+// ErrUnauthorized is GitHub refusing the token: it was revoked, expired
+// or rotated. The poller does not send a refused token again; it looks
+// for the token again on each poll and reads with a new one once the
+// operator has signed in again.
+var ErrUnauthorized = errors.New("copilot: GitHub refused the token; sign in to Copilot again")
+
 // DefaultTokenPaths returns the candidate locations Copilot writes
 // its credentials to. Newer versions of the CLI / IDE plugins use
 // apps.json; older ones used hosts.json. We try both, in order.
