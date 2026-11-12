@@ -37,6 +37,55 @@ type Reading struct {
 	FiveHour   *Window   `json:"five_hour,omitempty"`
 	SevenDay   *Window   `json:"seven_day,omitempty"`
 	SpendLimit *Window   `json:"spend_limit,omitempty"`
+	// Earlier are the readings before this one, oldest first, at least
+	// keepEvery apart and none older than KeepFor: what a hook reads the
+	// last hour's rate from (the run-out forecast) without the event
+	// store. Their own Earlier is empty.
+	Earlier []Reading `json:"earlier,omitempty"`
+}
+
+// KeepFor is how far back Earlier reaches: the burn-rate forecast reads
+// the newest reading between two hours and one hour before the current
+// one (plans.BurnLongLookback), with a few minutes to spare.
+const KeepFor = 2*time.Hour + 5*time.Minute
+
+// keepEvery thins Earlier: Claude Code updates the status line on every
+// turn, and a reading a minute is plenty for an hour's rate.
+const keepEvery = time.Minute
+
+// Between is the newest of r and its earlier readings observed in [since,
+// until], without its own earlier readings; false when none was.
+func (r Reading) Between(since, until time.Time) (Reading, bool) {
+	if !r.ObservedAt.Before(since) && !r.ObservedAt.After(until) {
+		r.Earlier = nil
+		return r, true
+	}
+	for i := len(r.Earlier) - 1; i >= 0; i-- {
+		if e := r.Earlier[i]; !e.ObservedAt.Before(since) && !e.ObservedAt.After(until) {
+			e.Earlier = nil
+			return e, true
+		}
+	}
+	return Reading{}, false
+}
+
+// withEarlier is r keeping prev and prev's earlier readings as its own:
+// those within KeepFor of r, at least keepEvery apart.
+func (r Reading) withEarlier(prev Reading) Reading {
+	floor := r.ObservedAt.Add(-KeepFor)
+	candidates := append(append([]Reading(nil), prev.Earlier...), prev)
+	r.Earlier = nil
+	for _, e := range candidates {
+		e.Earlier = nil
+		if e.ObservedAt.Before(floor) || !e.ObservedAt.Before(r.ObservedAt) {
+			continue
+		}
+		if n := len(r.Earlier); n > 0 && e.ObservedAt.Sub(r.Earlier[n-1].ObservedAt) < keepEvery {
+			continue
+		}
+		r.Earlier = append(r.Earlier, e)
+	}
+	return r
 }
 
 // Empty reports whether the reading carries no window.
@@ -62,15 +111,21 @@ func resolve(path string) string {
 	return DefaultPath()
 }
 
-// Write replaces the stored reading. It writes a temporary file and
-// renames it, so the daemon never reads half a reading. An empty reading
-// is not written: a turn before the first API response carries no
-// rate_limits, and that says nothing about the limits.
+// Write replaces the stored reading, keeping the one it replaces among the
+// earlier readings. It writes a temporary file and renames it, so the
+// daemon never reads half a reading. An empty reading is not written: a
+// turn before the first API response carries no rate_limits, and that says
+// nothing about the limits. A reading no newer than the stored one keeps
+// only the earlier readings that came before it.
 func Write(path string, r Reading) error {
 	if r.Empty() {
 		return nil
 	}
 	path = resolve(path)
+	r.Earlier = nil
+	if prev, ok, err := Read(path); err == nil && ok {
+		r = r.withEarlier(prev)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
