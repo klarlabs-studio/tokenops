@@ -122,9 +122,6 @@ func (s *Server) mountReverseProxy(mux *http.ServeMux, route ProviderRoute) erro
 		}
 		handler = s.observerMiddleware(route.Provider, inner)
 	}
-	if s.cache != nil {
-		handler = s.cacheMiddleware(route.Provider, handler)
-	}
 	// Resilience wraps last so the breaker / streamtimeout observe the
 	// full request including cache + observer overhead, and any
 	// breaker-synthesised 503/504 isn't itself recorded as a successful

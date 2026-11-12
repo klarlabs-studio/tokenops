@@ -65,18 +65,17 @@ func (c Config) VendorUsageSources() []VendorUsageSource {
 // on unless switched off). TestEveryConfigSourceHasASwitch holds it to the
 // registry's SwitchConfig sources.
 var configSwitches = map[string]func(Config) (enabled, alwaysOn bool){
-	"claude-code-jsonl":       func(c Config) (bool, bool) { return c.VendorUsage.ClaudeCodeJSONL.Enabled, false },
-	"codex-jsonl":             func(c Config) (bool, bool) { return c.VendorUsage.CodexJSONL.Enabled, false },
-	"opencode":                func(c Config) (bool, bool) { return c.VendorUsage.OpenCode.Enabled, false },
-	"gemini-cli":              func(c Config) (bool, bool) { return c.VendorUsage.GeminiCLI.Enabled, false },
-	"pi-sessions":             func(c Config) (bool, bool) { return c.VendorUsage.Pi.Enabled, false },
-	"claude-code-stats-cache": func(c Config) (bool, bool) { return c.VendorUsage.ClaudeCode.Enabled, false },
-	"vendor-usage-anthropic":  func(c Config) (bool, bool) { return c.VendorUsage.Anthropic.Enabled, false },
-	"github-copilot":          func(c Config) (bool, bool) { return c.VendorUsage.GitHubCopilot.Enabled, false },
-	"cursor-web":              func(c Config) (bool, bool) { return c.VendorUsage.Cursor.Enabled, false },
-	"claude-usage-meter":      func(c Config) (bool, bool) { return c.VendorUsage.ClaudeUsageMeter.Enabled, false },
-	"claude-code-oauth":       func(c Config) (bool, bool) { return c.VendorUsage.ClaudeCodeOAuth.Enabled, false },
-	"codex-app-server":        func(c Config) (bool, bool) { return false, c.VendorUsage.CodexAppServer.On() },
+	"claude-code-jsonl":      func(c Config) (bool, bool) { return c.VendorUsage.ClaudeCodeJSONL.Enabled, false },
+	"codex-jsonl":            func(c Config) (bool, bool) { return c.VendorUsage.CodexJSONL.Enabled, false },
+	"opencode":               func(c Config) (bool, bool) { return c.VendorUsage.OpenCode.Enabled, false },
+	"gemini-cli":             func(c Config) (bool, bool) { return c.VendorUsage.GeminiCLI.Enabled, false },
+	"pi-sessions":            func(c Config) (bool, bool) { return c.VendorUsage.Pi.Enabled, false },
+	"vendor-usage-anthropic": func(c Config) (bool, bool) { return c.VendorUsage.Anthropic.Enabled, false },
+	"github-copilot":         func(c Config) (bool, bool) { return c.VendorUsage.GitHubCopilot.Enabled, false },
+	"cursor-web":             func(c Config) (bool, bool) { return c.VendorUsage.Cursor.Enabled, false },
+	"claude-usage-meter":     func(c Config) (bool, bool) { return c.VendorUsage.ClaudeUsageMeter.Enabled, false },
+	"claude-code-oauth":      func(c Config) (bool, bool) { return c.VendorUsage.ClaudeCodeOAuth.Enabled, false },
+	"codex-app-server":       func(c Config) (bool, bool) { return false, c.VendorUsage.CodexAppServer.On() },
 	// Fireworks' reader is on unless switched off and reads only when a
 	// Fireworks key is on the machine, so like the hook ledger it is
 	// always on rather than enabled: it is no ingestion source, and a

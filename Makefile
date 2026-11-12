@@ -16,7 +16,7 @@ LDFLAGS := -s -w \
   -X go.klarlabs.de/tokenops/internal/version.Commit=$(COMMIT) \
   -X go.klarlabs.de/tokenops/internal/version.Date=$(DATE)
 
-.PHONY: FORCE menubar menubar-test all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-review sec-remediate policy-guard install-hooks cover-debt cover-debt-gate config-matrix
+.PHONY: FORCE menubar menubar-test all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-review sec-remediate policy-guard install-hooks cover-debt cover-debt-gate config-matrix tidy-check fmt-check integrations integrations-vscode integrations-python
 
 all: build
 
@@ -72,7 +72,32 @@ cover-debt:
 config-matrix: $(BIN_DIR)/tokenops
 	python3 scripts/config-matrix.py --bin $(BIN_DIR)/tokenops $(ARGS)
 
-verify: fmt vet lint test bench-gate sec-gate proto-verify
+# verify runs what CI runs, so a green verify means a green CI: it checks
+# formatting and go.mod rather than rewriting them, and covers the menu
+# bar module and the integrations. (fmt still rewrites, for local use.)
+verify: tidy-check fmt-check vet lint test menubar-test bench-gate integrations sec-gate proto-verify
+
+tidy-check:
+	$(GO) mod tidy
+	git diff --exit-code -- go.mod go.sum
+
+fmt-check:
+	@out=$$(gofmt -l .); if [ -n "$$out" ]; then echo "gofmt issues:"; echo "$$out"; exit 1; fi
+
+# integrations type-checks the VS Code extension and installs and tests the
+# Python adapters in a virtualenv (CI's Integrations job).
+integrations: integrations-vscode integrations-python
+
+integrations-vscode:
+	cd integrations/vscode && npm ci --ignore-scripts --no-audit --no-fund && npm run lint
+
+PY_VENV ?= $(CURDIR)/.venv-integrations
+
+integrations-python:
+	python3 -m venv $(PY_VENV)
+	$(PY_VENV)/bin/pip install --quiet ./integrations/python/tokenops_langchain ./integrations/python/tokenops_openai_agents pytest
+	$(PY_VENV)/bin/python -m pytest -q integrations/python/tokenops_langchain/tests
+	$(PY_VENV)/bin/python -c "import tokenops_openai_agents"
 
 # proto-verify runs proto-check only when protoc is on PATH; CI without
 # protoc skips the gate (the targets exist for local devs who modify

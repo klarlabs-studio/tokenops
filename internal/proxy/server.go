@@ -24,7 +24,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/events"
-	"go.klarlabs.de/tokenops/internal/proxy/cache"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -44,7 +43,6 @@ type Server struct {
 	tokenizer      *tokenizer.Registry
 	source         string
 	observerActive bool
-	cache          *cache.Cache
 	analytics      *AnalyticsHandlers
 	rulesAPI       *RulesHandlers
 	auditAPI       *AuditHandlers
@@ -215,14 +213,6 @@ func WithEventBus(b events.Bus) Option {
 // disable estimation; the observer still emits events with zero counts.
 func WithTokenizer(reg *tokenizer.Registry) Option {
 	return func(s *Server) { s.tokenizer = reg }
-}
-
-// WithCache installs a response cache in front of the provider routes.
-// Cache hits are served without contacting upstream and emit a synthetic
-// PromptEvent with CacheHit=true. Streaming responses are never cached.
-// Pass nil to disable caching (the default).
-func WithCache(c *cache.Cache) Option {
-	return func(s *Server) { s.cache = c }
 }
 
 // WithSource overrides the Source field stamped on emitted envelopes.

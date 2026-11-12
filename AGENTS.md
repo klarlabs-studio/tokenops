@@ -22,7 +22,7 @@ The local daemon is canonical. Keep entitlements outside core domains. Model ins
 ```bash
 make build        # build bin/tokenops and bin/tokenopsd
 make test         # race-enabled Go tests with coverage
-make verify       # format, vet, lint, test, bench, security, and proto gates
+make verify       # what CI runs: tidy, format, vet, lint, tests (incl. menu bar), bench, integrations, security, proto
 make install-hooks
 ```
 

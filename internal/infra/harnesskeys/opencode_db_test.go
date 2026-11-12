@@ -59,7 +59,7 @@ func byProvider(creds []Credential) map[string]Credential {
 	return out
 }
 
-func TestOpencodeDBCountsTheActiveGoKeyAndAPlainOAuthLogin(t *testing.T) {
+func TestOpencodeDBCountsOnlyTheActiveGoKey(t *testing.T) {
 	data := t.TempDir()
 	future := time.Now().Add(time.Hour).UnixMilli()
 	writeOpencodeDB(t, filepath.Join(data, "opencode.db"), []opencodeRow{
@@ -73,24 +73,26 @@ func TestOpencodeDBCountsTheActiveGoKeyAndAPlainOAuthLogin(t *testing.T) {
 	if got["opencode-go"].Key != "TEST-GO-KEY" || got["opencode-go"].Origin != "opencode.db" {
 		t.Errorf("go key %+v", got["opencode-go"])
 	}
-	if got["opencode"].Key != "TEST-ACCESS" {
-		t.Errorf("oauth login %+v", got["opencode"])
-	}
 	for _, c := range findOpencode(t, data, nil) {
-		if strings.Contains(c.Key, "TEST-ZEN") || strings.Contains(c.Key, "TEST-GO-OLD") || strings.Contains(c.Key, "TEST-OTHER") {
+		if strings.Contains(c.Key, "TEST-ZEN") || strings.Contains(c.Key, "TEST-ACCESS") ||
+			strings.Contains(c.Key, "TEST-GO-OLD") || strings.Contains(c.Key, "TEST-OTHER") {
 			t.Errorf("counted a row that does not count: %+v", c)
 		}
 	}
 }
 
-func TestOpencodeDBSkipsAnExpiredOAuthLogin(t *testing.T) {
+// A plain opencode sign-in is an OAuth subscription token. No account
+// reader takes it, so it is never read, live or expired.
+func TestOpencodeDBNeverReadsAnOAuthLogin(t *testing.T) {
 	data := t.TempDir()
-	past := time.Now().Add(-time.Hour).UnixMilli()
-	writeOpencodeDB(t, filepath.Join(data, "opencode.db"), []opencodeRow{
-		{"opencode", `{"type":"oauth","access":"TEST-EXPIRED","expires":` + strconv.FormatInt(past, 10) + `}`, 1},
-	})
-	if _, ok := byProvider(findOpencode(t, data, nil))["opencode"]; ok {
-		t.Error("an expired login was used; a token is never refreshed here")
+	for _, at := range []time.Time{time.Now().Add(time.Hour), time.Now().Add(-time.Hour)} {
+		writeOpencodeDB(t, filepath.Join(data, "opencode.db"), []opencodeRow{
+			{"opencode", `{"type":"oauth","access":"TEST-ACCESS","expires":` + strconv.FormatInt(at.UnixMilli(), 10) + `}`, 1},
+		})
+		if c, ok := byProvider(findOpencode(t, data, nil))["opencode"]; ok {
+			t.Errorf("an OAuth login was read: %+v", c.Origin)
+		}
+		_ = os.Remove(filepath.Join(data, "opencode.db"))
 	}
 }
 

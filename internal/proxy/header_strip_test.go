@@ -111,7 +111,7 @@ func TestProxyStripsTokenopsHeadersBeforeUpstream(t *testing.T) {
 			req.Header.Set(headerSessionID, "session:1")
 			req.Header.Set(headerUserID, "someone@example.test")
 			req.Header.Set(headerExecutionID, "exec:1")
-			req.Header.Set(headerCacheControl, "bypass")
+			req.Header.Set("X-Tokenops-Cache", "bypass")
 			req.Header.Set("x-tokenops-future-header", "anything")
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {

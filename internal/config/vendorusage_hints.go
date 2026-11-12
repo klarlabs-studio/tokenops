@@ -40,8 +40,6 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 			return "set vendor_usage.pi.enabled: true (reads Pi's and OMP's session transcripts under ~/.pi/agent/sessions and ~/.omp/agent/sessions — per-turn tokens per provider and model)"
 		}
 		return ""
-	case "claude-code-stats-cache":
-		return configHintClaudeCode(c.VendorUsage.ClaudeCode.Enabled)
 	case "vendor-usage-anthropic":
 		return configHintAnthropic(c.VendorUsage.Anthropic)
 	case "github-copilot":
@@ -189,13 +187,6 @@ func (c Config) sessionHint(s providers.SourceOf) string {
 		how += ", or set " + strings.Join(d.EnvVars, " or ")
 	}
 	return "connect it: " + how
-}
-
-func configHintClaudeCode(enabled bool) string {
-	if enabled {
-		return "DEPRECATED — switch to vendor_usage.claude_code_jsonl"
-	}
-	return "deprecated; use vendor_usage.claude_code_jsonl instead"
 }
 
 func configHintClaudeCodeJSONL(enabled bool) string {

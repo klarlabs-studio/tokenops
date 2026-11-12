@@ -64,7 +64,6 @@ func SignalFromCounts(counts map[string]int64, provider string) SignalInputs {
 	return SignalInputs{
 		ProxyEventsInWindow:      c("proxy"),
 		MCPPingsInWindow:         c("mcp-session"),
-		ClaudeCodeCacheInWindow:  c("claude-code-stats-cache"),
 		ClaudeCodeJSONLInWindow:  c("claude-code-jsonl"),
 		CodexJSONLInWindow:       c("codex-jsonl"),
 		CodexAppServerInWindow:   c("codex-app-server"),
