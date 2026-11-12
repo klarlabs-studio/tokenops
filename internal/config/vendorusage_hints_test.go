@@ -26,19 +26,6 @@ func TestConfigHintAnthropic(t *testing.T) {
 	}
 }
 
-// configHintClaudeCode signals "deprecated" in both states — the
-// stats-cache source is being phased out in favour of the JSONL
-// reader. Enabled = deprecation warning; disabled = pointer at the
-// replacement.
-func TestConfigHintClaudeCode(t *testing.T) {
-	if got := configHintClaudeCode(true); !strings.Contains(strings.ToLower(got), "deprecat") {
-		t.Errorf("enabled state should warn of deprecation; got %q", got)
-	}
-	if got := configHintClaudeCode(false); got == "" {
-		t.Errorf("disabled hint should be set")
-	}
-}
-
 // configHintClaudeCodeJSONL is symmetric — empty when on, hint with
 // "recommended" framing when off (this is the v0.12+ default path).
 func TestConfigHintClaudeCodeJSONL(t *testing.T) {

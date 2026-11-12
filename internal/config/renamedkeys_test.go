@@ -64,3 +64,26 @@ func TestSourceTagMatchesTheNewName(t *testing.T) {
 		t.Error("claude-usage-meter is not in the source registry")
 	}
 }
+
+// The stats-cache reader was retired, not renamed: a config that still
+// enables it loads, binds the block (so the daemon can say the reader is
+// gone) and registers no source for it.
+func TestRetiredStatsCacheBlockStillLoads(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	body := "vendor_usage:\n  claude_code:\n    enabled: true\n    path: ~/.claude/stats-cache.json\n    interval: 1m\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("a config with the retired block must load: %v", err)
+	}
+	if !cfg.VendorUsage.ClaudeCode.Enabled {
+		t.Error("the retired block did not bind, so the daemon cannot say it was retired")
+	}
+	for _, s := range cfg.VendorUsageSources() {
+		if s.SourceTag == "claude-code-stats-cache" {
+			t.Error("the retired stats-cache source is still registered")
+		}
+	}
+}

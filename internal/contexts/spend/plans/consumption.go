@@ -147,7 +147,7 @@ func perRequest(env *eventschema.Envelope) bool {
 // finer- or coarser-grained events declare it via the granularity
 // attribute: the claude-code / codex JSONL readers emit one event per
 // ASSISTANT TURN (a single prompt fans out into many tool-use turns)
-// and the legacy stats-cache poller emits one event per (day, model).
+// and the retired stats-cache poller emitted one event per (day, model).
 // Counting those against a 200-messages-per-window cap would inflate
 // the meter by an order of magnitude; their tokens still count.
 func countsAsMessage(env *eventschema.Envelope) bool {

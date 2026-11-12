@@ -6,11 +6,8 @@
 // live record of every prompt/response Claude Code makes — the file is
 // updated on every turn, so a poll catches activity within seconds.
 //
-// This replaces the v0.10.2 stats-cache reader (which read
-// ~/.claude/stats-cache.json — that file lags by days on active users
-// and is effectively useless as a live signal). Both pollers can run
-// side-by-side during the transition; the stats-cache one is now
-// deprecated and will be removed in a future release.
+// This replaced the stats-cache reader (~/.claude/stats-cache.json, which
+// lags by days on active users), since retired.
 //
 // Each JSONL line is a single conversation turn:
 //

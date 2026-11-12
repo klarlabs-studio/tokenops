@@ -296,11 +296,11 @@ type AnthropicUsageConfig struct {
 	AnalyticsKey string `yaml:"analytics_key"`
 }
 
-// ClaudeCodeUsageConfig enables reading ~/.claude/stats-cache.json and
-// emitting envelopes for the per-model daily token totals Claude Code
-// records there. Empty Path defaults to the conventional location.
-// Interval below 15s is clamped at the poller level to avoid
-// hammering the file on caches that rotate frequently.
+// ClaudeCodeUsageConfig is the retired stats-cache reader's block
+// (~/.claude/stats-cache.json, which lags by days). Nothing reads the file
+// any more. The block is still parsed so a config that has it loads, and
+// the daemon says the reader was retired when it is enabled; the Claude
+// Code JSONL reader replaced it.
 type ClaudeCodeUsageConfig struct {
 	Enabled  bool          `yaml:"enabled"`
 	Path     string        `yaml:"path"`

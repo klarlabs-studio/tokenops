@@ -160,7 +160,6 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudestatusline",
-	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecode",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexappserver",

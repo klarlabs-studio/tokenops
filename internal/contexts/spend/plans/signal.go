@@ -39,7 +39,6 @@ const (
 	SignalSourceMCPPings         = "mcp_tool_pings"
 	SignalSourceProxy            = "proxy_traffic"
 	SignalSourceVendorAPI        = "vendor_usage_api"
-	SignalSourceClaudeCodeCache  = "claude_code_stats_cache"
 	SignalSourceClaudeCodeJSONL  = "claude_code_jsonl"
 	SignalSourceCodexJSONL       = "codex_jsonl"
 	SignalSourceCodexAppServer   = "codex_app_server"
@@ -57,7 +56,6 @@ const (
 type SignalInputs struct {
 	ProxyEventsInWindow      int64
 	MCPPingsInWindow         int64
-	ClaudeCodeCacheInWindow  int64
 	ClaudeCodeJSONLInWindow  int64
 	CodexJSONLInWindow       int64
 	CodexAppServerInWindow   int64
@@ -157,15 +155,6 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 			Caveat: "Partial proxy coverage: some Claude turns flow through TokenOps, the rest are inferred from MCP-ping activity.",
 			UpgradePaths: []string{
 				"route every client request through the proxy for full coverage",
-				"enable the Claude Code JSONL reader (`vendor_usage.claude_code_jsonl.enabled: true`)",
-			},
-		}
-	case in.ClaudeCodeCacheInWindow > 0:
-		return SignalQuality{
-			Level:  SignalLevelMedium,
-			Source: SignalSourceClaudeCodeCache,
-			Caveat: "Reads ~/.claude/stats-cache.json — DEPRECATED, lags by days on active users. Switch to vendor_usage.claude_code_jsonl for live data.",
-			UpgradePaths: []string{
 				"enable the Claude Code JSONL reader (`vendor_usage.claude_code_jsonl.enabled: true`)",
 			},
 		}
