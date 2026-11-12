@@ -40,8 +40,9 @@ X-Tokenops-Agent-Id: planner
 X-Tokenops-Session-Id: <the uuid new_run() made>
 ```
 
-The TokenOps daemon stitches these into workflow traces visible
-through `tokenops replay --workflow-id research-summariser`.
+The TokenOps daemon stitches these into workflow traces, served at
+`GET /api/workflows/research-summariser` and to your agent by
+`tokenops_records` (view=workflow).
 
 For a fresh session on each call without a new model, bind the
 headers per call:

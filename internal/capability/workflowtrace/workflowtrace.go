@@ -2,8 +2,7 @@
 // did it waste": the workflow's steps reconstructed from the event store,
 // priced, with the waste detector's findings attached. The daemon's
 // GET /api/workflows/{id}, the tokenops_workflow_trace and
-// tokenops_review_work tools, and `tokenops replay --workflow-id` all
-// answer from it (ADR 0010).
+// tokenops_review_work tools all answer from it (ADR 0010).
 package workflowtrace
 
 import (

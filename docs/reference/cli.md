@@ -1165,8 +1165,8 @@ Graded (thresholds for A / B / C):
   - **replies you rejected** (RGR): ≤5 / 10 / 20%
   - **tool calls that succeeded** (TCS): ≥95 / 85 / 70%
   - **destructive commands** (DAR): ≤0.5 / 2 / 5%
-  - **optimizer savings** (TEU), only where the proxy carries traffic:
-    ≥20 / 10 / 5%
+  - **tokens saved** (TEU): what the read guard, `fmt` and the proxy's
+    router saved, over input tokens: ≥20 / 10 / 5%
 
 Reported, not graded: first prompt after a session starts (FVT), prompts
 with a workflow or session id (SAC; every transcript has a session id),

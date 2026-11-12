@@ -57,7 +57,7 @@ func RegisterParityTools(s *Server, d ParityDeps) error {
 		return errors.New("mcp: server must not be nil")
 	}
 	s.Tool("tokenops_scorecard").
-		Description("TokenOps' one grade: the worst of the measures it grades (session quality from the DX analysis, cache hits, confirmations, rejected replies, tool success, destructive commands, and optimizer savings where the proxy runs), with overall_driver naming the measure that set it; first-value time and spend attribution are reported (reported: true), not graded. Each measure is set against your own trailing baseline (vs_baseline). Mirrors `tokenops scorecard`.").
+		Description("TokenOps' one grade: the worst of the measures it grades (session quality from the DX analysis, cache hits, confirmations, rejected replies, tool success, destructive commands, and tokens saved by the read guard, fmt and routing), with overall_driver naming the measure that set it; first-value time and spend attribution are reported (reported: true), not graded. Each measure is set against your own trailing baseline (vs_baseline). Mirrors `tokenops scorecard`.").
 		OutputSchema(spending.ScorecardReport{}).
 		Handler(func(ctx context.Context, in scorecardInput) (*spending.ScorecardReport, error) {
 			return runScorecard(ctx, d, in)

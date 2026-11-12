@@ -56,7 +56,7 @@ func TestAnomalyFindings(t *testing.T) {
 			want: []string{
 				"one session in warden carried 90% of the rise, as a runaway loop does",
 				"the waste detector found: Repeated agent loop detected",
-				"`tokenops replay --workflow claude-code:p:loop`",
+				"`tokenops spend waste`", "workflow_id=claude-code:p:loop",
 			},
 		},
 	}

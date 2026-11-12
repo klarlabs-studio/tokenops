@@ -8,7 +8,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay"
 	"go.klarlabs.de/tokenops/internal/contexts/rules"
 	"go.klarlabs.de/tokenops/internal/presentation"
 )
@@ -49,7 +48,6 @@ func TestOutputSchemasGenerate(t *testing.T) {
 		"rules.BenchmarkResult": rules.BenchmarkResult{},
 		"coverdebt.Report":      coverdebt.Report{},
 		"scorecard.Scorecard":   scorecard.Scorecard{},
-		"replay.Result":         replay.Result{},
 		"auditResult":           auditResult{},
 		// rules_tools.go
 		"rulesAnalyzeResult":    rulesAnalyzeResult{},

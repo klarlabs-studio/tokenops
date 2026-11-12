@@ -14,9 +14,8 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 )
 
-// newCoachCmd is the tree for prompt + workflow coaching. For now
-// only the `prompts` subcommand is wired — workflow-trace coaching
-// lives in `tokenops replay` (which the docs cross-reference).
+// newCoachCmd is the tree for prompt + workflow coaching. Workflow-trace
+// coaching is the tokenops_records (view=workflow) MCP tool's.
 func newCoachCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{

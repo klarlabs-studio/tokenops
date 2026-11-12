@@ -50,22 +50,6 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand("tokenops.openReplay", async () => {
-      const id = await vscode.window.showInputBox({
-        prompt: "Workflow ID to replay",
-        placeHolder: "e.g. research-summariser",
-      });
-      if (!id) return;
-      // The CLI is the canonical replay surface. Open an integrated
-      // terminal and run it there so output streams in front of the
-      // user without bouncing through a webview.
-      const terminal = vscode.window.createTerminal({ name: `TokenOps replay ${id}` });
-      terminal.sendText(`tokenops replay --workflow-id ${shellEscape(id)} --json | less`);
-      terminal.show();
-    }),
-  );
-
   // Refresh the sidebar summary every 60s so the user does not have to
   // poke it manually after running a few prompts.
   const interval = setInterval(() => summary.refresh(), 60_000);
@@ -90,8 +74,4 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] ?? c),
   );
-}
-
-function shellEscape(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
 }

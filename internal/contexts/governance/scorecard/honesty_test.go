@@ -18,7 +18,7 @@ func TestUncomputedTEURendersNotApplicable(t *testing.T) {
 		t.Errorf("TEU graded %q, want no grade when uncomputed", sc.TokenEfficiency.Grade)
 	}
 	out := sc.String()
-	if strings.Contains(out, "optimizer savings") {
+	if strings.Contains(out, "tokens saved") {
 		t.Errorf("an unmeasured TEU is listed:\n%s", out)
 	}
 	if strings.Contains(out, "15.0 [B]") {
@@ -32,7 +32,7 @@ func TestUncomputedTEURendersNotApplicable(t *testing.T) {
 // there is no grade, rather than an invented F.
 func TestUncomputedAndReportedMetricsExcludedFromOverall(t *testing.T) {
 	all := NewWithAgentKPIs(12, 40, 95, AgentKPIInputs{}, "")
-	if all.OverallGrade != GradeA || all.OverallDriver != "optimizer savings" {
+	if all.OverallGrade != GradeA || all.OverallDriver != "tokens saved" {
 		t.Errorf("overall = %q from %q, want A from TEU alone", all.OverallGrade, all.OverallDriver)
 	}
 	partial := NewWithAgentKPIs(500, math.NaN(), 10, AgentKPIInputs{}, "")
@@ -63,7 +63,7 @@ func TestComputedMetricsRender(t *testing.T) {
 	sc := NewWithAgentKPIs(12, 40, 95, AgentKPIInputs{}, "")
 	out := sc.String()
 	for _, want := range []string{
-		"optimizer savings (% of input):            40.0 [A]",
+		"tokens saved (% of input):                 40.0 [A]",
 		"first prompt after a session starts (s):   12.0\n",
 		"prompts with a workflow or session (%):    95.0\n",
 	} {

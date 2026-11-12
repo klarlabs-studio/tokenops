@@ -36,8 +36,6 @@ var cliOnly = map[string]string{
 	"hooks":            "edits client hook configuration on this machine",
 	"coach-hook":       "is a hook entry point invoked by a client, not a user",
 	"read-guard":       "is a hook entry point invoked by a client, not a user",
-	"eval":             "is a tool for working on TokenOps itself",
-	"replay":           "is a tool for working on TokenOps itself",
 	"coverage-debt":    "is a tool for working on TokenOps itself",
 	"route-guard":      "is a hook entry point invoked by a client, not a user",
 	"boundary-guard":   "is a hook entry point invoked by a client, not a user",

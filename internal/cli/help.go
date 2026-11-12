@@ -55,9 +55,7 @@ var hiddenCommands = map[string]string{
 	"anthropic-bridge": "launched by `hooks install`",
 	"serve":            "the MCP server, started by the client",
 	"start":            "the daemon's foreground process, started by `daemon install`",
-	"eval":             "TokenOps' own optimizer eval",
 	"coverage-debt":    "TokenOps' own test-coverage report",
-	"replay":           "optimizer development",
 }
 
 // daemonOverrides are the root's daemon overrides. Every command that

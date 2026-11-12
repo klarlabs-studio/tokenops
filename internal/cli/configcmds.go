@@ -357,7 +357,7 @@ func newRoutingRuleSetCmd() *cobra.Command {
 		Short: "Add or update a routing rule (upsert by provider + from-model)",
 		Long: `A trailing * in from-model is a prefix match, e.g. claude-fable-5*.
 
-Rules show would-be savings in ` + "`tokenops replay`" + `; with mode=active the
+Rules record would-be savings, listed by ` + "`tokenops optimizations`" + `; with mode=active the
 proxy rewrites matching live requests.`,
 		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {

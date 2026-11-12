@@ -59,7 +59,7 @@ export function renderOptimizationsHtml(opts: OptimizationListResponse): string 
     <h1>Optimization suggestions · last 7d</h1>
     ${
       items.length === 0
-        ? '<p class="hint">No optimization events yet. Run <code>tokenops replay &lt;workflow&gt;</code>.</p>'
+        ? '<p class="hint">No optimization events yet: they come from the read guard, <code>tokenops fmt</code> and the proxy\'s model router.</p>'
         : `<table>
             <thead>
               <tr>

@@ -49,7 +49,7 @@ X-Tokenops-Agent-Id: extractor
 ## Inspect
 
 ```bash
-tokenops replay --workflow invoice-extractor
+tokenops optimizations --since 24h
 tokenops spend --by agent --top 5
 ```
 
