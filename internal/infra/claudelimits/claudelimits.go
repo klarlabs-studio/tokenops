@@ -16,6 +16,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 )
 
 // Window is one limit as Claude Code reports it.
@@ -78,7 +80,7 @@ func Write(path string, r Reading) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), fileName+".*")
+	tmp, err := tempfile.Create(filepath.Dir(path), fileName+".*")
 	if err != nil {
 		return err
 	}

@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 )
 
 // The week's report reads five weeks of turns, every workflow of the
@@ -62,7 +64,7 @@ func WriteSnapshot(dir string, s Snapshot) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, snapshotFile+".*")
+	tmp, err := tempfile.Create(dir, snapshotFile+".*")
 	if err != nil {
 		return err
 	}

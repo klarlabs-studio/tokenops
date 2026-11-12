@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 	"go.klarlabs.de/tokenops/pkg/teamwire"
 )
 
@@ -106,7 +107,7 @@ func writePrivateJSON(path string, v any) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".team-*.json")
+	tmp, err := tempfile.Create(filepath.Dir(path), ".team-*.json")
 	if err != nil {
 		return err
 	}
