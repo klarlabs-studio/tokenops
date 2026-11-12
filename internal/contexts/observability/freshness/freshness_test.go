@@ -99,21 +99,57 @@ func TestASourceMissingDataItsOriginHasIsStale(t *testing.T) {
 }
 
 // An origin that cannot be read is an unknown, not a clean bill of
-// health: the time-based judgement stands.
-func TestAnUnreadableOriginDoesNotClearTheWarning(t *testing.T) {
+// health: the source stays stale. But it does not escalate. An unreadable
+// origin is as often a client the operator removed or stopped using as a
+// reader that died, and the gap since the last event measures neither:
+// escalating on it put a source the operator had stopped using weeks ago
+// at critical on every status. Escalation needs evidence there was data to
+// miss, which only a readable origin or a remote poller gives.
+func TestAnUnreadableOriginStaysStaleWithoutEscalating(t *testing.T) {
+	cases := []struct {
+		name   string
+		silent time.Duration
+	}{
+		{"two days", 2 * 24 * time.Hour},
+		{"ten days", 10 * 24 * time.Hour},
+		{"forty-three days", 43 * 24 * time.Hour},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := only(t, freshness.Assess(inputs(func(in *freshness.Inputs) {
+				in.EventsInWindow["claude_usage_meter"] = 0
+				in.LastEventAt["claude_usage_meter"] = ago(tc.silent)
+				in.OriginNewest = map[string]freshness.Origin{
+					"claude_usage_meter": {Known: false},
+				}
+			})))
+
+			if r.State != freshness.StateStale {
+				t.Errorf("state = %q, want stale when the origin cannot be read", r.State)
+			}
+			if r.Severity != freshness.SeverityWarning {
+				t.Errorf("severity = %q, want warning: an unreadable origin is no evidence of an outage", r.Severity)
+			}
+			if !r.OriginUnknown {
+				t.Error("the report does not say its origin could not be read")
+			}
+		})
+	}
+}
+
+// A reader that stopped, or one being refused, is a fact about the reader,
+// not about the origin, and keeps its grade when the origin is unreadable.
+func TestAnUnreadableOriginDoesNotSoftenAStoppedReader(t *testing.T) {
 	r := only(t, freshness.Assess(inputs(func(in *freshness.Inputs) {
 		in.EventsInWindow["claude_usage_meter"] = 0
-		in.LastEventAt["claude_usage_meter"] = ago(10 * 24 * time.Hour)
+		in.LastEventAt["claude_usage_meter"] = ago(20 * 24 * time.Hour)
 		in.OriginNewest = map[string]freshness.Origin{
 			"claude_usage_meter": {Known: false},
 		}
+		in.Stopped = map[string]error{"claude_usage_meter": errors.New("panic")}
 	})))
-
-	if r.State != freshness.StateStale {
-		t.Errorf("state = %q, want stale when the origin cannot be read", r.State)
-	}
-	if r.Severity != freshness.SeverityDegraded {
-		t.Errorf("severity = %q, want degraded after 10 days", r.Severity)
+	if r.Severity != freshness.SeverityCritical {
+		t.Errorf("severity = %q, want critical for a reader stopped 20 days", r.Severity)
 	}
 }
 
