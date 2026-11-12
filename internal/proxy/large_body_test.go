@@ -8,8 +8,6 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
-
-	"go.klarlabs.de/tokenops/internal/proxy/cache"
 )
 
 // largeBodyUpstream records the SHA-256 of every request body it receives.
@@ -49,9 +47,6 @@ func TestProxyForwardsBodiesLargerThanCaptureLimit(t *testing.T) {
 		{name: "observer, chunked", chunked: true, start: func(t *testing.T, up *httptest.Server) string {
 			base, _ := startProxyForObservation(t, up)
 			return base
-		}},
-		{name: "cache", start: func(t *testing.T, up *httptest.Server) string {
-			return "http://" + startCacheProxy(t, up.URL, cache.New(cache.Options{}))
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

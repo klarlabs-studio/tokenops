@@ -57,9 +57,6 @@ Client Request
   │    X-Tokenops-Session-Id, X-Tokenops-User-Id,
   │    X-Tokenops-Execution-Id)
   │
-  ├─ proxy/cache_middleware.go: [optional] serve from cache,
-  │   emit synthetic PromptEvent with CacheHit=true
-  │
   ├─ ReverseProxy → upstream provider
   │    └─ meteredBody: measure TTFT, count output tokens
   │        └─ Done() → build PromptEvent Envelope
