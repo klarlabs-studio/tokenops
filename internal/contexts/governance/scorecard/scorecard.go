@@ -333,7 +333,7 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 	teu := kpiOrNA(KPIResult{
 		Name:        "Token Efficiency Uplift (TEU)",
 		Polarity:    HigherIsBetter,
-		Description: "Percent of input tokens saved by the optimizer (saved / input). Higher is better.",
+		Description: "Percent of input tokens saved by the read guard, fmt and the model router (saved / input). Higher is better.",
 		Unit:        "%",
 		Threshold:   DefaultThresholds.TokenEfficiency,
 	}, teuPct, gradeTEU)
@@ -377,7 +377,7 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 		}
 	}
 	if teu.Grade != "" {
-		graded = append(graded, gradedKPI{"optimizer savings", teu.Grade})
+		graded = append(graded, gradedKPI{"tokens saved", teu.Grade})
 	}
 	if agent.CacheHitRatioComputed {
 		k := KPIResult{
@@ -683,7 +683,7 @@ func (s *Scorecard) String() string {
 		{"replies you rejected (%)", s.RegenerateRate, kpiValueDecimals},
 		{"tool calls that succeeded (%)", s.ToolSuccessRate, kpiValueDecimals},
 		{"destructive commands (%)", s.DestructiveRate, darValueDecimals},
-		{"optimizer savings (% of input)", s.TokenEfficiency, 1},
+		{"tokens saved (% of input)", s.TokenEfficiency, 1},
 	} {
 		if row.k.Grade != "" {
 			fmt.Fprintf(&b, "  %-42s %s\n", row.label+":", renderKPI(row.k, row.decimals))
@@ -757,7 +757,7 @@ func writeThresholds(b *strings.Builder, s *Scorecard) {
 		{"replies you rejected", s.RegenerateRate, false, "%.0f%%"},
 		{"tool calls that succeeded", s.ToolSuccessRate, true, "%.0f%%"},
 		{"destructive commands", s.DestructiveRate, false, "%.2f%%"},
-		{"optimizer savings", s.TokenEfficiency, true, "%.0f%%"},
+		{"tokens saved", s.TokenEfficiency, true, "%.0f%%"},
 	} {
 		if row.k.Grade == "" {
 			continue

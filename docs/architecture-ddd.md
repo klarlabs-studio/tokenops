@@ -21,11 +21,9 @@ PRs that cross these boundaries must update this document.
 ┌────────────────────────────────────────────────────────────┐
 │ application services (per bounded context)                 │
 │   rules.LoadCorpus, rules.RunBenchSpec                     │
-│   eval.Run, eval.PersistBaseline                           │
 │   spending.Scorecard (capability)                          │
 │   coverdebt.Analyze                                        │
 │   forecast.AutoForecast                                    │
-│   replay.DefaultPipeline + Engine.Replay                   │
 │                                                            │
 │   - orchestrate domain services                            │
 │   - one entry point per use case                           │
@@ -73,7 +71,7 @@ Infrastructure imports application/domain interfaces only; nothing in
 domain may import an infrastructure package by concrete type. Documented
 sqlite exemptions (enforced by `internal/archlint` `storageExempt`):
 
-- `workflows/workflow`, `optimization/replay`, `telemetry/retention`, `tasks`
+- `workflows/workflow`, `telemetry/retention`, `tasks`
   take `*sqlite.Store` as an isolated adapter.
 - `security/audit`, `observability/analytics` and `governance/scorecard`
   are the pattern the rest should follow: the domain declares a port
@@ -101,7 +99,7 @@ list that recorded them, is empty and may only stay so
 |------------------|--------------------------------------------|--------------------|-----------------------------------------------|
 | Prompts          | `pkg/eventschema`, `internal/contexts/prompts/{tokenizer,providers,llm}` | `PromptEvent` | provider, model, prompt, tokens, hash |
 | Workflows        | `internal/contexts/workflows/workflow` | `WorkflowEvent` | workflow, step, agent, cumulative tokens |
-| Optimization     | `internal/contexts/optimization/optimizer/*`, `eval`, `formatter`, `fmtlearn`, `replay` | `OptimizationEvent` | optimizer kind, formatter, loss level, critical line |
+| Optimization     | `internal/contexts/optimization/optimizer` (the router), `eval` (fmt recall), `formatter`, `fmtlearn` | `OptimizationEvent` | optimizer kind, formatter, loss level, critical line |
 | Coaching         | `internal/contexts/coaching/{coaching,efficiency,waste,prompts,replies,tools}` | `CoachingEvent` | recommendation kind, efficiency score |
 | Rule Intelligence| `internal/contexts/rules` | `RuleDocument` | rule source, section, scope, ROI score |
 | Spend            | `internal/contexts/spend/{spend,forecast,plans,pricing,session,vendorusage/*}` | `Engine` (svc) | cost, pricing table, plan, poller |
@@ -127,7 +125,6 @@ list that recorded them, is empty and may only stay so
 | TEU               | Token Efficiency Uplift. `sum(EstimatedSavings) / sum(InputTokens)`.                                  |
 | SAC               | Spend Attribution Completeness. % of PromptEvents carrying any attribution signal.                   |
 | gate              | A regression check that compares a current report against a baseline and emits violations.            |
-| optimizer pipeline| The ordered set of optimizers (prompt_compress, command_fmt, dedupe, retrieval_prune, context_trim) applied to a request. |
 | formatter         | A deterministic command-output compressor for one command (built-in or user config), guaranteeing critical-line survival at every loss level. |
 | loss level        | How aggressively a formatter strips noise: conservative, balanced, or aggressive. Critical lines survive at all levels. |
 | critical line     | An output line a formatter must never drop (error, failure, changed state); enforced by the engine, not the individual formatter. |

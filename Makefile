@@ -16,7 +16,7 @@ LDFLAGS := -s -w \
   -X go.klarlabs.de/tokenops/internal/version.Commit=$(COMMIT) \
   -X go.klarlabs.de/tokenops/internal/version.Date=$(DATE)
 
-.PHONY: FORCE menubar menubar-test all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-review sec-remediate policy-guard install-hooks eval eval-gate cover-debt cover-debt-gate config-matrix
+.PHONY: FORCE menubar menubar-test all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-review sec-remediate policy-guard install-hooks cover-debt cover-debt-gate config-matrix
 
 all: build
 
@@ -46,19 +46,6 @@ bench-gate:
 	$(GO) test -run TestProxyP99OverheadGate -count=1 ./internal/proxy/
 	$(GO) test -run TestGuardIsWithinItsBudget -count=1 ./internal/capability/boundaries/
 
-# eval runs the full optimizer quality eval suite against offline
-# fixtures. Reports per-optimizer quality scores, compression ratios,
-# and success rates. Use this locally to iterate on optimizer changes.
-eval:
-	$(GO) test -count=1 -run TestEvalSuitesPass -v ./internal/contexts/optimization/eval/
-
-# eval-gate is the CI regression gate for optimizer quality. It asserts
-# that the aggregate success rate across all eval fixtures stays above
-# the minimum threshold defined in the test. Add new eval fixtures to
-# internal/contexts/optimization/eval/testdata/ to expand coverage.
-eval-gate:
-	$(GO) test -count=1 -run TestEvalSuitesPass ./internal/contexts/optimization/eval/
-
 fmt:
 	$(GO) fmt $(PKG)
 
@@ -85,7 +72,7 @@ cover-debt:
 config-matrix: $(BIN_DIR)/tokenops
 	python3 scripts/config-matrix.py --bin $(BIN_DIR)/tokenops $(ARGS)
 
-verify: fmt vet lint test bench-gate eval-gate sec-gate proto-verify
+verify: fmt vet lint test bench-gate sec-gate proto-verify
 
 # proto-verify runs proto-check only when protoc is on PATH; CI without
 # protoc skips the gate (the targets exist for local devs who modify

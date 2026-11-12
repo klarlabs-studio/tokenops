@@ -22,7 +22,7 @@ The local daemon is canonical. Keep entitlements outside core domains. Model ins
 ```bash
 make build        # build bin/tokenops and bin/tokenopsd
 make test         # race-enabled Go tests with coverage
-make verify       # format, vet, lint, test, eval, security, and proto gates
+make verify       # format, vet, lint, test, bench, security, and proto gates
 make install-hooks
 ```
 
@@ -30,7 +30,7 @@ Before pushing, explicitly run `gofmt -l .`, `golangci-lint run ./...`, and `go 
 
 ## Code and Test Conventions
 
-Use idiomatic Go, `gofmt`, and GoDoc for exported APIs. Keep TypeScript strict and follow repository ESLint/Prettier settings. Tests live beside code as `*_test.go`; prefer table-driven tests and real migration paths. Add optimizer fixtures under `internal/contexts/optimization/eval/testdata`.
+Use idiomatic Go, `gofmt`, and GoDoc for exported APIs. Keep TypeScript strict and follow repository ESLint/Prettier settings. Tests live beside code as `*_test.go`; prefer table-driven tests and real migration paths. Add fmt recall fixtures under `internal/contexts/optimization/eval/testdata/fmtrecall`.
 
 Register new `internal/contexts` domains in `internal/archlint`'s `domainPackages`. Formatter safety belongs only in the engine's `enforceCritical` guard; shared engine changes require golden survival and monotonic tests. Never log secrets or prompt bodies; redact outbound data.
 

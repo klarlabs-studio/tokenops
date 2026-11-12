@@ -111,10 +111,9 @@ func anomalyAction(a anomalies.Anomaly) string {
 	case anomaly.CausePricierModel:
 		do = "Check which model your client starts sessions on."
 	case anomaly.CauseRunawayLoop:
+		do = "`tokenops spend waste` shows where the loop's tokens went."
 		if a.Workflow != "" {
-			do = fmt.Sprintf("`tokenops replay --workflow %s` shows the session step by step, with the waste detector's findings.", a.Workflow)
-		} else {
-			do = fmt.Sprintf("`tokenops replay %s` shows the session step by step.", a.Cause.Value)
+			do += fmt.Sprintf(" Your agent's tokenops_records (view=workflow, workflow_id=%s) walks the session step by step, with the waste detector's findings.", a.Workflow)
 		}
 	}
 	answer := fmt.Sprintf("If this is normal for you, `tokenops coach tip expected --id %s` stops flagging it; `ack` or `snooze` answer it too.", a.ID)

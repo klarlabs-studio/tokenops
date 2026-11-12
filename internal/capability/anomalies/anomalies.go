@@ -46,7 +46,8 @@ const expectedFor = 90 * 24 * time.Hour
 // session a runaway loop names.
 type Anomaly struct {
 	anomaly.Anomaly
-	// Workflow is the runaway session's workflow, for `tokenops replay`.
+	// Workflow is the runaway session's workflow, for its trace
+	// (tokenops_records, view=workflow).
 	Workflow string `json:"workflow,omitempty"`
 	// Waste is what the waste detector reported for it.
 	Waste []string `json:"waste,omitempty"`

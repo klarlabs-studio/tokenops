@@ -24,7 +24,6 @@ func TestReadCommandsDoNotCreateTheStore(t *testing.T) {
 		{"spend", "waste"},
 		{"events"},
 		{"audit"},
-		{"replay"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "events.db")

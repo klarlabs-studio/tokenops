@@ -37,7 +37,6 @@ var forbiddenInfra = []string{
 // docs/architecture-ddd.md.
 var storageExempt = map[string]bool{
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow":  true,
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay": true,
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention": true,
 	"go.klarlabs.de/tokenops/internal/contexts/tasks":               true,
 }
@@ -136,14 +135,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/modeltier",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer",
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/contexttrim",
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/dedupe",
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/promptcompress",
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/qualitygate",
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/retrievalprune",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router",
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/toolfmt",
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass",
 	"go.klarlabs.de/tokenops/internal/contexts/policy",

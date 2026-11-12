@@ -19,9 +19,11 @@ The scorecard's letter was the worst of:
 - **First-value time (FVT):** the latency of each session's first prompt.
   It was written for the first install, not for a week's work, and it says
   nothing the operator can act on.
-- **Token efficiency uplift (TEU):** optimizer savings over input tokens.
-  It exists only for traffic through the proxy, and it is already ungraded
-  without optimizer events.
+- **Token efficiency uplift (TEU):** the tokens TokenOps' interventions
+  saved over input tokens, from the optimization events the read guard,
+  `fmt` and the proxy's router record. It is already ungraded without
+  them. (Corrected 2026-11-12: this said the measure exists only for proxy
+  traffic.)
 - **Spend attribution completeness (SAC):** the share of prompt events
   carrying a workflow, agent or session id. Every transcript reader
   records a session id, so on a machine that reads transcripts it is 100%
@@ -47,8 +49,8 @@ the scorecard's.
 2. **FVT and SAC are reported, not graded.** Their values stay on the
    scorecard and in its JSON (`reported: true`), but neither counts toward
    the letter.
-3. **TEU stays graded where it is measured**, which is only when the proxy
-   carries traffic.
+3. **TEU stays graded where it is measured**: where the read guard, `fmt`
+   or the router recorded a saving.
 4. **The letter names what set it.** `overall_driver` is the KPI with the
    worst grade.
 5. **`dx` and `checkup` show no letter of their own.** `dx` shows each
