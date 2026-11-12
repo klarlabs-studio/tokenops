@@ -97,6 +97,11 @@ func TestNewEnvelopeCarriesRateLimitsInAttributes(t *testing.T) {
 	if env.Attributes["reasoning_output"] != "5" {
 		t.Errorf("reasoning_output attr = %q", env.Attributes["reasoning_output"])
 	}
+	// The storage migration that corrects turns stored before the fix
+	// (sqlite migration 9) skips rows carrying this mark.
+	if env.Attributes["parser_version"] != "2" {
+		t.Errorf("parser_version attr = %q, want 2", env.Attributes["parser_version"])
+	}
 	if env.Attributes["plan_type"] != "plus" {
 		t.Errorf("plan_type attr missing")
 	}
