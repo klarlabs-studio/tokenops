@@ -479,22 +479,46 @@ func costNotes(cost *spending.ProviderCost) []string {
 }
 
 // paceLine words a window's pace; its tone warns when it runs out first.
+// "Behind (-42%)" read as bad news and meant room to spare, so the line
+// says how far use is from an even spread and what that means.
 func paceLine(pc *plans.WindowPace) (string, rgb) {
 	if pc == nil {
 		return "", muted
 	}
-	switch pc.Status {
-	case plans.PaceOnPace:
-		return "Pace: on pace", muted
-	case plans.PaceBehind:
-		return fmt.Sprintf("Pace: behind (%.0f%%) · lasts to reset", pc.DeltaPct), muted
-	case plans.PaceUsedUp:
+	if pc.Status == plans.PaceUsedUp {
 		return "Pace: used up until reset", warnC
 	}
-	if pc.LastsToReset {
-		return fmt.Sprintf("Pace: ahead (+%.0f%%) · lasts to reset", pc.DeltaPct), muted
+	outlook, tone := paceOutlook(pc)
+	return "Pace: " + spreadWords(pc) + " · " + outlook, tone
+}
+
+// spreadWords is how far use is from an even spread over the window, in
+// points: slower than even leaves room, faster than even spends it early.
+func spreadWords(pc *plans.WindowPace) string {
+	switch pc.Status {
+	case plans.PaceBehind:
+		return fmt.Sprintf("%.0f pts slow", -pc.DeltaPct)
+	case plans.PaceAhead:
+		return fmt.Sprintf("%.0f pts fast", pc.DeltaPct)
 	}
-	return fmt.Sprintf("Pace: ahead (+%.0f%%) · out in %s", pc.DeltaPct, humanDuration(pc.RunsOutIn)), warnC
+	return "even"
+}
+
+// paceOutlook is whether the window lasts to its reset, and at which rate.
+func paceOutlook(pc *plans.WindowPace) (string, rgb) {
+	rate := ""
+	if pc.Basis == plans.BasisRecent {
+		rate = " (last hour)"
+	}
+	switch {
+	case pc.TooEarly:
+		return "too early to tell", muted
+	case pc.LastsToReset:
+		return "lasts to reset" + rate, muted
+	case pc.RunsOutIn > 0:
+		return "out in " + humanDuration(pc.RunsOutIn) + rate, warnC
+	}
+	return "lasts to reset", muted
 }
 
 // card draws one plan width columns wide.
@@ -729,10 +753,12 @@ func briefPace(pc *plans.WindowPace) (string, rgb) {
 		return "on pace", muted
 	case pc.Status == plans.PaceUsedUp:
 		return "used up", warnC
-	case pc.LastsToReset:
-		return fmt.Sprintf("%+.0f%% · lasts", pc.DeltaPct), muted
+	case pc.TooEarly:
+		return fmt.Sprintf("%+.0f pts · early", pc.DeltaPct), muted
+	case pc.RunsOutIn > 0 && !pc.LastsToReset:
+		return fmt.Sprintf("%+.0f pts · out in %s", pc.DeltaPct, humanDuration(pc.RunsOutIn)), warnC
 	}
-	return fmt.Sprintf("%+.0f%% · out in %s", pc.DeltaPct, humanDuration(pc.RunsOutIn)), warnC
+	return fmt.Sprintf("%+.0f pts · lasts", pc.DeltaPct), muted
 }
 
 // windowLabel names a message window from its Go duration.

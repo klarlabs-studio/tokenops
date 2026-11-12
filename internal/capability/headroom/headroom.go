@@ -165,6 +165,7 @@ func Compute(ctx context.Context, d Deps, now time.Time) (Result, error) {
 		if err != nil {
 			return Result{}, fmt.Errorf("headroom inputs[%s]: %w", provider, err)
 		}
+		applyRecentRate(ctx, d.Reader, provider, inputs.VendorWindows, now)
 		report, err := plans.ComputeHeadroom(planName, inputs)
 		if err != nil {
 			return Result{}, fmt.Errorf("headroom[%s]: %w", provider, err)
