@@ -28,6 +28,12 @@ DX the same way across harnesses, and pauses an agent before a plan window
 runs out when you set a boundary on `plan_left_pct`. The core needs no
 upload at all; a team gets derived figures only, never prompts or code.
 
+Boundaries stop mistakes and drift, not an agent that sets out to get past
+them: they run as your user, so an agent with an unrestricted shell can
+step around them. A presence-checked approval (Touch ID) proves who let an
+agent go further; it does not prove the agent could not have gone around
+the rule.
+
 Docs: <https://team.klarlabs.de/> · Releases: <https://github.com/klarlabs-studio/tokenops/releases>
 
 ## Install
