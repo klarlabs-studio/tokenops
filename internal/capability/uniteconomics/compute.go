@@ -14,9 +14,10 @@ import (
 )
 
 // EventReader reads recorded events: the outcomes and the plan window
-// readings.
+// readings. It hands over every event the filter matches, without a cap:
+// a figure over a period is computed over all of the period.
 type EventReader interface {
-	Query(ctx context.Context, f sqlite.Filter) ([]*eventschema.Envelope, error)
+	EachMatching(ctx context.Context, f sqlite.Filter, fn func(*eventschema.Envelope) error) error
 }
 
 // Deps are the readers the report draws on.
@@ -30,9 +31,6 @@ type Deps struct {
 	// plan shares out.
 	Events EventReader
 }
-
-// maxEvents bounds each read of recorded events.
-const maxEvents = 50_000
 
 // DefaultDays is the period when none is asked for.
 const DefaultDays = 7
@@ -69,19 +67,37 @@ func Gather(ctx context.Context, d Deps, start, since, until time.Time) (Inputs,
 		in.PRsOf[root], _ = w.Repos.MergedPRs(ctx, root, start)
 	}
 	if d.Events != nil {
-		in.Outcomes, err = d.Events.Query(ctx, sqlite.Filter{Type: eventschema.EventTypeOutcome, Since: start, Until: until, Limit: maxEvents})
-		if err != nil {
+		if in.Outcomes, in.Windows, err = ReadRecorded(ctx, d.Events, start, until); err != nil {
 			return Inputs{}, err
 		}
-		var readings []*eventschema.Envelope
-		for _, src := range plans.WindowSources() {
-			envs, err := d.Events.Query(ctx, sqlite.Filter{Source: src, Since: start, Until: until, Limit: maxEvents})
-			if err != nil {
-				return Inputs{}, err
-			}
-			readings = append(readings, envs...)
-		}
-		in.Windows = plans.WindowReadings(readings)
 	}
 	return in, nil
+}
+
+// ReadRecorded reads the outcomes and the plan window readings recorded
+// in [start, until): every outcome, and each window at its peak. The
+// window readings are taken in as they are read, so a busy period's
+// thousands of readings of the same window are never all held.
+func ReadRecorded(ctx context.Context, r EventReader, start, until time.Time) ([]*eventschema.Envelope, map[string][]plans.QuotaWindow, error) {
+	var outcomes []*eventschema.Envelope
+	err := r.EachMatching(ctx, sqlite.Filter{Type: eventschema.EventTypeOutcome, Since: start, Until: until},
+		func(e *eventschema.Envelope) error {
+			outcomes = append(outcomes, e)
+			return nil
+		})
+	if err != nil {
+		return nil, nil, err
+	}
+	var peaks plans.WindowPeaks
+	for _, src := range plans.WindowSources() {
+		err := r.EachMatching(ctx, sqlite.Filter{Source: src, Since: start, Until: until},
+			func(e *eventschema.Envelope) error {
+				peaks.Add(e)
+				return nil
+			})
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return outcomes, peaks.Readings(), nil
 }

@@ -108,3 +108,74 @@ func TestEachEventMatchesReadEvents(t *testing.T) {
 		t.Errorf("err %v after %d events, want stop after 3", err, n)
 	}
 }
+
+// EachMatching reads every event the filter matches, across more pages
+// than one and with ties at the page boundary, whatever Limit says; it
+// keeps to the filter's source and its [Since, Until) bounds.
+func TestEachMatchingHasNoCap(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	base := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	total := readPage*2 + 11
+	prompt := func(id, source string, at time.Time) *eventschema.Envelope {
+		return &eventschema.Envelope{ID: id, SchemaVersion: eventschema.SchemaVersion,
+			Type: eventschema.EventTypePrompt, Timestamp: at, Source: source,
+			Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderOpenAI}}
+	}
+	envs := make([]*eventschema.Envelope, 0, 2*total+2)
+	for i := range total {
+		at := base.Add(time.Duration(i/700) * time.Second)
+		envs = append(envs, prompt(fmt.Sprintf("e%06d", i), "codex-jsonl", at))
+		envs = append(envs, prompt(fmt.Sprintf("x%06d", i), "other", at))
+	}
+	until := base.Add(time.Duration(total/700+1) * time.Second)
+	envs = append(envs,
+		prompt("before", "codex-jsonl", base.Add(-time.Nanosecond)),
+		prompt("at-until", "codex-jsonl", until))
+	if err := s.AppendBatch(ctx, envs); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name string
+		f    Filter
+		want int
+	}{
+		{"bounded", Filter{Source: "codex-jsonl", Since: base, Until: until, Limit: 10}, total},
+		{"unbounded", Filter{Source: "codex-jsonl"}, total + 2},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []*eventschema.Envelope
+			if err := s.EachMatching(ctx, tc.f, func(e *eventschema.Envelope) error {
+				got = append(got, e)
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != tc.want {
+				t.Fatalf("got %d events, want %d", len(got), tc.want)
+			}
+			seen := map[string]bool{}
+			for i, e := range got {
+				if seen[e.ID] || e.Source != "codex-jsonl" {
+					t.Fatalf("%s (%s) returned twice or off the filter", e.ID, e.Source)
+				}
+				seen[e.ID] = true
+				if i > 0 && e.Timestamp.Before(got[i-1].Timestamp) {
+					t.Fatalf("out of order at %d", i)
+				}
+			}
+		})
+	}
+	stop := errors.New("stop")
+	n := 0
+	err := s.EachMatching(ctx, Filter{Source: "codex-jsonl"}, func(*eventschema.Envelope) error {
+		if n++; n == 3 {
+			return stop
+		}
+		return nil
+	})
+	if !errors.Is(err, stop) || n != 3 {
+		t.Errorf("err = %v after %d events, want stop after 3", err, n)
+	}
+}
