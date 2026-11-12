@@ -394,3 +394,72 @@ func TestRestScalesTheBand(t *testing.T) {
 		t.Errorf("half a day = %+v, want half of %+v", half, full)
 	}
 }
+
+// bursts is cost on each of the given days before noon's, and nothing on
+// the days between from the first of them on.
+func bursts(cost float64, ago ...int) []analytics.Row {
+	rows := make([]analytics.Row, 0, len(ago))
+	for _, n := range ago {
+		rows = append(rows, analytics.Row{BucketStart: daysAgo(n), CostUSD: cost})
+	}
+	return rows
+}
+
+// Spend that comes in bursts, with many days of nothing between them, is
+// the series a trend method gets most wrong: it reads each burst as a
+// climb and each quiet stretch as a fall, and forecasts nothing, less than
+// nothing, or a multiple of the spend. A day ahead is what the days
+// brought on average, never below zero.
+func TestAheadOnIntermittentSpend(t *testing.T) {
+	tests := map[string]struct {
+		rows []analytics.Row
+		// want is the forecast for each of the seven days ahead, or nil
+		// when there is too little history to forecast.
+		want func(at time.Time) float64
+	}{
+		"steady": {
+			rows: steady(20, 28),
+			want: func(time.Time) float64 { return 20 },
+		},
+		// Five bursts on five different weekdays: no weekday is
+		// a spending day, so each day ahead is the mean day, not $0 on
+		// most days and a quarter of a burst on the others.
+		"sparse bursts": {
+			rows: bursts(100, 28, 25, 17, 9, 1),
+			want: func(time.Time) float64 { return 500.0 / 28 },
+		},
+		"all zero": {
+			rows: steady(0, 28),
+			want: func(time.Time) float64 { return 0 },
+		},
+		"single day": {
+			rows: steady(20, 1),
+		},
+		"a month at $20 and a morning at $1": {
+			rows: append(steady(20, 30), analytics.Row{BucketStart: daysAgo(0), CostUSD: 1}),
+			want: func(time.Time) float64 { return 20 },
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := DailyFrom(tc.rows, CostUSD, noon.AddDate(0, 0, -30), noon).Ahead(7)
+			if tc.want == nil {
+				if got != nil {
+					t.Fatalf("got %+v, want no forecast", got)
+				}
+				return
+			}
+			if len(got) != 7 {
+				t.Fatalf("got %d predictions, want 7", len(got))
+			}
+			for _, p := range got {
+				if want := tc.want(p.At); !near(p.Value, want) {
+					t.Errorf("%s forecast at $%.4f, want $%.4f", p.At.Format(time.DateOnly), p.Value, want)
+				}
+				if p.Lower < 0 || p.Lower > p.Value || p.Upper < p.Value {
+					t.Errorf("%s band %v..%v about %v", p.At.Format(time.DateOnly), p.Lower, p.Upper, p.Value)
+				}
+			}
+		})
+	}
+}
