@@ -26,6 +26,12 @@ import (
 // OpenAI's authoritative rate-limit percentages.
 const SourceTag = "codex-jsonl"
 
+// ParserVersion is the parser_version attribute on every turn this poller
+// stores. Version 2 stores Codex's output_tokens as given; turns without
+// the attribute were stored with reasoning_output added to it a second
+// time (and to total_tokens), which the store's migration 9 undoes.
+const ParserVersion = "2"
+
 // PollerOptions configures the Codex JSONL scanner.
 type PollerOptions struct {
 	// Root defaults to ~/.codex/sessions.
@@ -278,13 +284,17 @@ func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eve
 		// One event per token_count record (assistant turn), not per
 		// user message — plan window math must not count these as
 		// messages (see plans.ConsumptionInWindow).
-		"granularity":          "assistant_turn",
-		"endpoint":             endpoint,
-		"model_provider":       t.ModelProvider,
-		"session_id":           t.SessionID,
-		"sequence":             strconv.Itoa(t.RecordSequence),
-		"cached_input":         fmt.Sprintf("%d", t.CachedTokens),
-		"reasoning_output":     fmt.Sprintf("%d", t.ReasoningTok),
+		"granularity":      "assistant_turn",
+		"endpoint":         endpoint,
+		"model_provider":   t.ModelProvider,
+		"session_id":       t.SessionID,
+		"sequence":         strconv.Itoa(t.RecordSequence),
+		"cached_input":     fmt.Sprintf("%d", t.CachedTokens),
+		"reasoning_output": fmt.Sprintf("%d", t.ReasoningTok),
+		// parser_version 2: output_tokens is Codex's own, reasoning
+		// included. Turns stored without it added the reasoning a second
+		// time; the store's migration 9 corrects those and skips these.
+		"parser_version":       ParserVersion,
 		"context_window":       fmt.Sprintf("%d", t.ContextWindow),
 		"plan_type":            t.RateLimits.PlanType,
 		"primary_used_pct":     fmt.Sprintf("%.2f", t.RateLimits.PrimaryUsedPercent),

@@ -1,7 +1,8 @@
 // Package attribution corrects which provider bills usage recorded before
 // TokenOps knew the endpoint it went through (ADR 0009), re-marks usage a
-// spend report recorded as covered by a plan, and answers whether a plan
-// covers a turn at all.
+// spend report recorded as covered by a plan, takes reasoning tokens that
+// Codex turns counted twice back out of their output, and answers whether
+// a plan covers a turn at all.
 //
 // The corrections are TokenOps' own: they run at daemon start without
 // asking, each one is audited, and a second pass changes nothing.

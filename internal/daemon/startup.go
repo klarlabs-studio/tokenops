@@ -311,10 +311,12 @@ func (s *startup) startEventRuntime(ctx context.Context) error {
 }
 
 // runStartupCorrections is the corrections a start applies to recorded
-// usage: the ADR 0009 attribution moves, the plan-coverage re-marks, and
-// the plans a vendor renamed. Tests replace it.
+// usage: the ADR 0009 attribution moves, the plan-coverage re-marks, the
+// plans a vendor renamed, and Codex output that counted reasoning twice.
+// Tests replace it.
 var runStartupCorrections = func(ctx context.Context, cfg config.Config, store *sqlite.Store, routes *routehistory.Tracker, logger *slog.Logger) {
 	renameRetiredPlans(cfg, logger)
+	correctCodexOutput(ctx, store, logger)
 	correctAttribution(ctx, cfg, store, routes, logger)
 	correctSpendCoverage(ctx, cfg, store, logger)
 }
