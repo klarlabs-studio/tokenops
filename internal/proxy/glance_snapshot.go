@@ -14,6 +14,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 )
 
 // glanceRefreshBudget bounds one background computation of the glance.
@@ -172,7 +173,7 @@ func (c *snapshots[T]) save(v T, at time.Time) {
 	if err := os.MkdirAll(filepath.Dir(c.path), 0o700); err != nil {
 		return
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(c.path), ".glance-*")
+	tmp, err := tempfile.Create(filepath.Dir(c.path), ".glance-*")
 	if err != nil {
 		return
 	}

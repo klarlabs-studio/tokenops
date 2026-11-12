@@ -65,8 +65,13 @@ type Poller struct {
 	bus  events.Bus
 	opts PollerOptions
 
+	// client, token and refused belong to the scanning goroutine. token
+	// is the one client is bound to; refused the last one GitHub refused,
+	// which is not sent again.
+	client         UserSource
+	token, refused string
+
 	mu          sync.Mutex
-	client      UserSource
 	publishes   int64
 	lastErr     error
 	lastErrTime time.Time
@@ -145,10 +150,13 @@ func (p *Poller) ensureClient(ctx context.Context) error {
 		}
 		token = t
 	}
+	if token == p.refused {
+		return ErrUnauthorized
+	}
 	if p.opts.NewClient == nil {
 		return errNoClientFactory
 	}
-	p.client = p.opts.NewClient(token)
+	p.client, p.token, p.refused = p.opts.NewClient(token), token, ""
 	return nil
 }
 
@@ -160,6 +168,10 @@ func (p *Poller) scan(ctx context.Context) {
 				p.opts.Logger.Debug("copilot poller: no oauth token available; idle")
 				return
 			}
+			if errors.Is(err, ErrUnauthorized) {
+				p.opts.Logger.Debug("copilot poller: only the refused token is available; idle")
+				return
+			}
 			p.opts.Logger.Warn("copilot poller: client init failed", "err", err)
 			return
 		}
@@ -169,6 +181,12 @@ func (p *Poller) scan(ctx context.Context) {
 		p.recordErr(err)
 		if errors.Is(err, ErrNoToken) {
 			return
+		}
+		if errors.Is(err, ErrUnauthorized) {
+			// Revoked, expired or rotated: the client is dropped, and the
+			// next poll looks for the token again rather than send this
+			// one every interval until the daemon restarts.
+			p.client, p.refused = nil, p.token
 		}
 		p.opts.Logger.Warn("copilot poller: User() failed", "err", err)
 		return

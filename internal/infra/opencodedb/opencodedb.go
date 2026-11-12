@@ -53,6 +53,9 @@ func Read(path string, opts opencodedb.Options, visit func(opencodedb.Message) e
 
 	v2, v1 := hasTable(db, "session_message"), hasTable(db, "message")
 	if !v1 && !v2 {
+		if isEmpty(db) {
+			return nil
+		}
 		return fmt.Errorf("%w: no message table in %s", opencodedb.ErrSchema, path)
 	}
 	seen := map[string]bool{}
@@ -96,7 +99,7 @@ func Newest(path string) (time.Time, bool) {
 		}
 	}
 	if newest == 0 {
-		return time.Time{}, read
+		return time.Time{}, read || isEmpty(db)
 	}
 	return time.UnixMilli(newest).UTC(), true
 }
@@ -119,6 +122,18 @@ func hasColumn(db *sql.DB, table, column string) bool {
 		return false
 	}
 	return n > 0
+}
+
+// isEmpty reports whether the store holds no schema at all: a zero-byte
+// file, or a database opencode created and never wrote to. Such a store has
+// nothing to read, which is a known empty. A store with tables but no
+// message table is not empty: its schema is one this reader does not know.
+func isEmpty(db *sql.DB) bool {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master`).Scan(&n); err != nil {
+		return false
+	}
+	return n == 0
 }
 
 func hasTable(db *sql.DB, name string) bool {

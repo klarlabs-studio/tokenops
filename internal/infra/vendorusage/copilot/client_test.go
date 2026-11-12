@@ -2,8 +2,10 @@ package copilot
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -105,5 +107,39 @@ func TestClientUserRefusalDoesNotEchoTheToken(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "401") {
 		t.Errorf("error %q lost the status", err)
+	}
+}
+
+// A 401 is GitHub refusing the token, which the poller must tell apart
+// from any other failure: it stops sending that token. Other statuses
+// are not a refusal of the token.
+func TestClientUserSaysWhenTheTokenIsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		status  int
+		refused bool
+	}{
+		{http.StatusUnauthorized, true},
+		{http.StatusForbidden, false},
+		{http.StatusNotFound, false},
+		{http.StatusBadGateway, false},
+	} {
+		t.Run(http.StatusText(tc.status), func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+			}))
+			defer srv.Close()
+			c := NewClient("tok")
+			c.BaseURL = srv.URL
+			_, err := c.User(context.Background())
+			if err == nil {
+				t.Fatal("want error")
+			}
+			if got := errors.Is(err, usage.ErrUnauthorized); got != tc.refused {
+				t.Errorf("errors.Is(%v, ErrUnauthorized) = %v, want %v", err, got, tc.refused)
+			}
+			if !strings.Contains(err.Error(), strconv.Itoa(tc.status)) {
+				t.Errorf("error %q lost the status", err)
+			}
+		})
 	}
 }

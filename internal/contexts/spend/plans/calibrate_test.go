@@ -2,6 +2,8 @@ package plans
 
 import (
 	"math"
+	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -82,5 +84,46 @@ func TestWindowReadingsCollectsEachProvidersWindows(t *testing.T) {
 	got := WindowReadings(envs)
 	if len(got) != 1 || len(got["anthropic"]) != 1 || got["anthropic"][0].UsedPct != 40 {
 		t.Fatalf("readings = %+v", got)
+	}
+}
+
+// Window peaks keep one reading per window, at its peak: a meter that
+// reads every turn records the same window thousands of times, and the
+// calibration over the peaks is the calibration over every reading.
+func TestWindowPeaksKeepEachWindowsPeak(t *testing.T) {
+	now := time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)
+	codex := func(pct float64, reset time.Time) *eventschema.Envelope {
+		return &eventschema.Envelope{Source: "codex-jsonl", Attributes: map[string]string{
+			"primary_used_pct": strconv.FormatFloat(pct, 'f', -1, 64), "primary_window_min": "10080",
+			"primary_resets_at": strconv.FormatInt(reset.Unix(), 10),
+		}}
+	}
+	first, second := now.Add(-14*24*time.Hour), now.Add(-7*24*time.Hour)
+	envs := make([]*eventschema.Envelope, 0, 2000)
+	for i := range 1000 {
+		envs = append(envs, codex(float64(i%60), first), codex(float64(i%80), second))
+	}
+	var peaks WindowPeaks
+	for _, e := range envs {
+		peaks.Add(e)
+	}
+	got := peaks.Readings()["openai"]
+	want := []QuotaWindow{
+		{Label: "weekly", UsedPct: 59, ResetsAt: first.UTC(), Duration: week},
+		{Label: "weekly", UsedPct: 79, ResetsAt: second.UTC(), Duration: week},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("peaks = %+v, want %+v", got, want)
+	}
+	tokensIn := func(from, to time.Time) int64 { return to.Sub(from).Milliseconds() }
+	all := WindowReadings(nil)
+	for _, e := range envs {
+		all["openai"] = append(all["openai"], QuotaWindowsFromAttributes(eventschema.ProviderOpenAI, e.Attributes)...)
+	}
+	since := now.Add(-28 * 24 * time.Hour)
+	fromAll, okAll := Calibrate("openai", all["openai"], since, now, tokensIn)
+	fromPeaks, okPeaks := Calibrate("openai", got, since, now, tokensIn)
+	if !okAll || fromAll != fromPeaks || okAll != okPeaks {
+		t.Errorf("calibration over peaks = %+v (%v), over every reading = %+v (%v)", fromPeaks, okPeaks, fromAll, okAll)
 	}
 }

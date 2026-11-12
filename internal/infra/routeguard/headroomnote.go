@@ -47,12 +47,16 @@ type NoteWindow struct {
 	// Duration is the window's length, zero when unknown; with ResetsAt
 	// it gives the pace.
 	Duration time.Duration
+	// Pace is the window's forecast from the last hour's rate, when the
+	// reading's history measured it (plans.ApplyBurn); nil projects the
+	// average so far.
+	Pace *plans.WindowPace
 }
 
-// runsOutAt is when w runs out at the pace so far, zero when it lasts to
-// its reset or its pace is unknown.
+// runsOutAt is when w runs out on the one forecast glance shows, zero when
+// it lasts to its reset or its pace is unknown.
 func (w NoteWindow) runsOutAt(now time.Time) time.Time {
-	p := plans.VendorWindow{UsedPct: 100 - w.LeftPct, Duration: w.Duration, ResetsAt: w.ResetsAt}.PaceAt(now)
+	p := plans.VendorWindow{UsedPct: 100 - w.LeftPct, Duration: w.Duration, ResetsAt: w.ResetsAt, Pace: w.Pace}.Forecast(now)
 	if p == nil || p.LastsToReset || p.RunsOutIn <= 0 {
 		return time.Time{}
 	}
@@ -66,6 +70,10 @@ func (w NoteWindow) runsOutAt(now time.Time) time.Time {
 func ReadHeadroom(limitsPath string, figures boundaryledger.Dir, provider string, now time.Time) []NoteWindow {
 	if provider == "anthropic" {
 		if r, ok, err := claudelimits.Read(limitsPath); err == nil && ok && now.Sub(r.ObservedAt) <= pressureLimitsFreshFor {
+			forecast := map[string]*plans.WindowPace{}
+			for _, vw := range r.Windows(now) {
+				forecast[vw.Name] = vw.Pace
+			}
 			var out []NoteWindow
 			for _, w := range []struct {
 				name string
@@ -78,7 +86,7 @@ func ReadHeadroom(limitsPath string, figures boundaryledger.Dir, provider string
 				}
 				nw := NoteWindow{Name: w.name, LeftPct: math.Max(0, 100-w.win.UsedPct), Duration: w.dur}
 				if w.win.ResetsAt > 0 {
-					nw.ResetsAt = time.Unix(w.win.ResetsAt, 0).UTC()
+					nw.ResetsAt, nw.Pace = time.Unix(w.win.ResetsAt, 0).UTC(), forecast[w.name]
 				}
 				out = append(out, nw)
 			}

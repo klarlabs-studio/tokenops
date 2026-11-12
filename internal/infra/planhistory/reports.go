@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 )
 
 // Report is the plan a client last reported for a provider, and when it
@@ -65,7 +67,7 @@ func (r Reports) Save(reports map[string]Report) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(r.Path), ".plan-reports-*.json")
+	tmp, err := tempfile.Create(filepath.Dir(r.Path), ".plan-reports-*.json")
 	if err != nil {
 		return err
 	}

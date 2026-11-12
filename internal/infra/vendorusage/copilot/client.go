@@ -58,6 +58,9 @@ func (c *Client) User(ctx context.Context) (*usage.UserResponse, error) {
 		return nil, fmt.Errorf("copilot user: do request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, fmt.Errorf("copilot user: %w: %s", usage.ErrUnauthorized, errbody.Status(resp.StatusCode, errbody.Read(resp.Body)))
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("copilot user: %s", errbody.Status(resp.StatusCode, errbody.Read(resp.Body)))
 	}

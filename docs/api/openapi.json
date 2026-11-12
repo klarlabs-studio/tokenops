@@ -2534,6 +2534,9 @@
                             "format": "date-time",
                             "type": "string"
                           },
+                          "origin_unknown": {
+                            "type": "boolean"
+                          },
                           "reader_stopped": {
                             "type": "boolean"
                           },
@@ -4240,6 +4243,9 @@
                           "pressure": {
                             "additionalProperties": false,
                             "properties": {
+                              "basis": {
+                                "type": "string"
+                              },
                               "fresh_until": {
                                 "format": "date-time",
                                 "type": "string"
@@ -6996,6 +7002,9 @@
                           "origin_newest_at": {
                             "format": "date-time",
                             "type": "string"
+                          },
+                          "origin_unknown": {
+                            "type": "boolean"
                           },
                           "reader_stopped": {
                             "type": "boolean"

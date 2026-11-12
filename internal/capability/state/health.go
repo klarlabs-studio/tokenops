@@ -84,6 +84,7 @@ func SourceWarnings(reports []SourceReport) Warnings {
 				// the store answered; without it, the last event is
 				// unknown, not absent.
 				LastSeenUnknown: !r.NeverSeen && r.LastEventAt.IsZero(),
+				OriginUnknown:   r.OriginUnknown,
 			}.Warning())
 		}
 	}
