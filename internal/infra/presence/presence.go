@@ -26,6 +26,7 @@ import (
 	"time"
 
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 )
 
 // Files in the store.
@@ -126,7 +127,7 @@ func (d Dir) put(name string, b []byte) error {
 	if err := os.MkdirAll(string(d), 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(string(d), name+".*")
+	tmp, err := tempfile.Create(string(d), name+".*")
 	if err != nil {
 		return err
 	}

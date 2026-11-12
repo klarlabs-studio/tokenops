@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 )
 
 // DefaultMode is the permission of a file that did not exist before.
@@ -270,7 +272,7 @@ func WriteAtomic(path string, b []byte, mode fs.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tokenops-*")
+	tmp, err := tempfile.Create(filepath.Dir(path), "."+filepath.Base(path)+".tokenops-*")
 	if err != nil {
 		return err
 	}

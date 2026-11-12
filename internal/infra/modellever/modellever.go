@@ -24,6 +24,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 )
 
 // Status is what became of the setting.
@@ -228,7 +229,7 @@ func writeAtomic(path string, b []byte, mode fs.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tokenops-*")
+	tmp, err := tempfile.Create(filepath.Dir(path), "."+filepath.Base(path)+".tokenops-*")
 	if err != nil {
 		return err
 	}

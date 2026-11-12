@@ -40,6 +40,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -693,7 +694,7 @@ func (d Dir) RemoveOrg() error {
 }
 
 func writeAtomic(path string, b []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*")
+	tmp, err := tempfile.Create(filepath.Dir(path), filepath.Base(path)+".*")
 	if err != nil {
 		return err
 	}

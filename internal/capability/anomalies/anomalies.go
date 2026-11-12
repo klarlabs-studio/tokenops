@@ -25,6 +25,7 @@ import (
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/anomaly"
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 )
 
 // KindPrefix opens the follow-through kind of every anomaly tip:
@@ -357,7 +358,7 @@ func WriteSnapshot(dir string, s Snapshot) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, snapshotFile+".*")
+	tmp, err := tempfile.Create(dir, snapshotFile+".*")
 	if err != nil {
 		return err
 	}
