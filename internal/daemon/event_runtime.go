@@ -7,12 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
-	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/capability/auditlog"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/budgets"
@@ -28,9 +26,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/domainmigration"
 	"go.klarlabs.de/tokenops/internal/infra/followthrough"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
-	"go.klarlabs.de/tokenops/internal/infra/observedlimits"
-	"go.klarlabs.de/tokenops/internal/infra/planevidence"
-	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
 	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 	"go.klarlabs.de/tokenops/internal/otlp"
@@ -271,14 +266,15 @@ func plansDeps(cfg config.Config, events *sqlite.EventCache, engine *spending.En
 	// One replay of the plan advice serves an hour of glances.
 	advice := headroom.NewAdviceCache()
 	return func() headroom.Deps {
-		deps := headroom.Deps{Config: &cfg, Accounts: signedInAccounts, PlanFollows: actions.RecentPlanFollows,
-			PlanHistory: planhistory.LoadDefault, AdviceCache: advice, Observed: observedlimits.Loader()}
+		var r headroom.Reader
 		if events != nil {
-			deps.Reader = events
+			r = events
 		}
+		deps := headroom.LocalDeps(&cfg, r, nil)
 		if engine != nil {
 			deps.Price = engine.ComputeAt
 		}
+		deps.AdviceCache = advice
 		return deps
 	}
 }
@@ -367,16 +363,6 @@ func coachEnv(cfg config.Config) (coachcap.Ledger, coachcap.ContextLevers) {
 		levers = l
 	}
 	return ledger, levers
-}
-
-// signedInAccounts reads which account each client is signed in with, on
-// every glance: signing in as someone else must show at once.
-func signedInAccounts() map[string]string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-	return planevidence.Accounts(home)
 }
 
 // configKey names cfg for the saved glance: a glance saved under another
