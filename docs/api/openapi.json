@@ -2534,6 +2534,9 @@
                             "format": "date-time",
                             "type": "string"
                           },
+                          "origin_unknown": {
+                            "type": "boolean"
+                          },
                           "reader_stopped": {
                             "type": "boolean"
                           },
@@ -6996,6 +6999,9 @@
                           "origin_newest_at": {
                             "format": "date-time",
                             "type": "string"
+                          },
+                          "origin_unknown": {
+                            "type": "boolean"
                           },
                           "reader_stopped": {
                             "type": "boolean"

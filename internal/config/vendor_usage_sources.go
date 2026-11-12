@@ -170,7 +170,8 @@ type SourceLastSeen interface {
 // reads, which is how the outage it was built for happened.
 //
 // ok=false means the origin could not be read. That is an unknown, not a
-// clean bill of health, and the time-based warning stands.
+// clean bill of health: the warning stands, but it does not escalate,
+// because nothing shows there was data to miss.
 type SourceProbe func() (time.Time, bool)
 
 // StaleSource names an enabled vendor-usage source that produced no
@@ -196,6 +197,12 @@ type StaleSource struct {
 	// lookup missed its deadline and the warning claimed nothing had ever
 	// been ingested from sources holding thousands of events.
 	LastSeenUnknown bool `json:"last_seen_unknown,omitempty"`
+
+	// OriginUnknown says the source's local origin could not be read, so
+	// whether the operator still uses it is unknown. A client removed or
+	// no longer used looks the same from here as a reader that died, so
+	// the gap is no evidence of an outage and Severity does not escalate.
+	OriginUnknown bool `json:"origin_unknown,omitempty"`
 }
 
 // Staleness severity tiers. A warning that never escalates gets tuned out,
@@ -206,7 +213,13 @@ const (
 )
 
 // Severity grades the gap so a caller can escalate rather than repeat itself.
+// A source whose origin could not be read stays a warning: escalating on a
+// gap that may only mean the operator stopped using the client put such a
+// source at critical on every status, weeks after its last use.
 func (s StaleSource) Severity() string {
+	if s.OriginUnknown {
+		return "warning"
+	}
 	switch {
 	case s.SilentFor >= staleCriticalAfter:
 		return "critical"
@@ -252,6 +265,11 @@ const DaemonRunRemedy = "'tokenops daemon restart' if it is supervised, 'tokenop
 func (s StaleSource) Warning() string {
 	const remedy = "if you've been using it, make sure the ingestion daemon runs (" + DaemonRunRemedy + ") — note that 'tokenops serve' is the MCP server and does not ingest"
 
+	if s.OriginUnknown {
+		return fmt.Sprintf(
+			"ingestion stale [%s]: %s has produced no events %s, and its local data could not be read to tell whether it is still in use — if you no longer use it, set its reader's enabled: false under vendor_usage in the config; otherwise make sure the ingestion daemon runs (%s)",
+			s.Severity(), s.SourceTag, s.quietFor(), DaemonRunRemedy)
+	}
 	if s.SilentFor <= 0 && s.LastSeenUnknown {
 		return fmt.Sprintf(
 			"ingestion stale [%s]: %s has produced no events in the last %dh — %s",
@@ -265,6 +283,15 @@ func (s StaleSource) Warning() string {
 	return fmt.Sprintf(
 		"ingestion stale [%s]: %s has produced no events for %s (checked a %dh window) — %s",
 		s.Severity(), s.SourceTag, s.silence(), s.WindowHours, remedy)
+}
+
+// quietFor words how long the source has been quiet: the gap when the
+// store knows it, otherwise the window that was checked.
+func (s StaleSource) quietFor() string {
+	if s.SilentFor > 0 {
+		return fmt.Sprintf("for %s (checked a %dh window)", s.silence(), s.WindowHours)
+	}
+	return fmt.Sprintf("in the last %dh", s.WindowHours)
 }
 
 // CheckStaleIngestion returns the enabled vendor-usage sources that
@@ -321,18 +348,20 @@ func (c Config) CheckStaleIngestion(ctx context.Context, counter SourceCounter, 
 		// source whose newest data predates the window produced nothing
 		// to miss. That makes an unused vendor quiet without making a
 		// dead reader quiet, which is the whole distinction.
+		originUnknown := false
 		if probe, ok := probes[s.SourceTag]; ok && probe != nil {
-			if newest, known := probe(); known {
-				if newest.IsZero() || newest.Before(now.Add(-window)) {
-					continue
-				}
+			newest, known := probe()
+			if known && (newest.IsZero() || newest.Before(now.Add(-window))) {
+				continue
 			}
+			originUnknown = !known
 		}
 		entry := StaleSource{
 			Name:            s.Name,
 			SourceTag:       s.SourceTag,
 			WindowHours:     windowHours,
 			LastSeenUnknown: lastSeenUnknown,
+			OriginUnknown:   originUnknown,
 		}
 		if last, ok := lastSeen[s.SourceTag]; ok && !last.IsZero() && now.After(last) {
 			entry.SilentFor = now.Sub(last)
