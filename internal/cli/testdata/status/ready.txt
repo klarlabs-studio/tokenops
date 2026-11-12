@@ -1,7 +1,6 @@
 daemon: http://127.0.0.1:7878
 status: attention — TokenOps is running with reduced coverage; inspect blockers, warnings, and next_actions.
-  health   200  {"status":"ok"}
-  ready    200  {"status":"ready"}
-  version  200  {"version":"dev"}
+  daemon   running, version dev
+  ready    yes
 warnings:
   ! retention.keep_by_source["no-such-source"] matches no source that has produced events — the rule is doing nothing; check the tag with `tokenops vendor-usage status`

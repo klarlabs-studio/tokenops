@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -430,20 +431,37 @@ func deliveryOverridden(cfg config.Config) string {
 	return ""
 }
 
-// tipLabel says when a tip kind is given ("budget_50", "quota_90").
+// tipLabel says when a tip kind is given ("budget_50", "quota_90"). A
+// kind whose suffix is not a percentage is worded for itself: quota_burn
+// read "at burn% of a quota window".
 func tipLabel(kind string) string {
 	switch kind {
 	case "budget_over":
 		return "past the session budget"
+	case "spend_over":
+		return "past a spend budget"
 	case "compact_now":
 		return "to compact after a long stretch near the context ceiling"
+	case "quota_burn":
+		return "when a plan window is on course to run out before it resets"
+	case "quota_100":
+		return "when a plan window is used up"
+	case "reading_lost":
+		return "when a plan's usage reading stops arriving"
 	}
-	for _, p := range []struct{ prefix, of string }{{"budget_", "the session budget"}, {"quota_", "a quota window"}} {
-		if pct, ok := strings.CutPrefix(kind, p.prefix); ok {
+	for _, p := range []struct{ prefix, of string }{{"budget_", "the session budget"}, {"quota_", "a quota window"}, {"spend_", "a spend budget"}} {
+		if pct, ok := strings.CutPrefix(kind, p.prefix); ok && isPercent(pct) {
 			return "at " + pct + "% of " + p.of
 		}
 	}
+	// Any other kind keeps its name: it is what `coach reinstate` takes.
 	return "on " + kind
+}
+
+// isPercent reports whether s is a whole percentage, as tip kinds carry.
+func isPercent(s string) bool {
+	n, err := strconv.Atoi(s)
+	return err == nil && n >= 0 && n <= 100
 }
 
 // quotaStatusLines reads the live plan window for each provider with a

@@ -8,7 +8,10 @@ import "github.com/spf13/cobra"
 // the tools for working on TokenOps itself. Hidden commands run exactly as
 // before; they are only absent from the list.
 
-// helpGroups are the sections of `tokenops --help`, in order.
+// helpGroups are the sections of `tokenops --help`, in order. Every day
+// holds the five commands the product is used through (the review of
+// 2026-11-10: about fifty top-level commands, five of them daily); the
+// rest are grouped and run as before.
 var helpGroups = []*cobra.Group{
 	{ID: "everyday", Title: "Every day:"},
 	{ID: "setup", Title: "Set up:"},
@@ -19,26 +22,26 @@ var helpGroups = []*cobra.Group{
 // helpOrder lists the commands in each section most used first; the help
 // keeps this order rather than sorting alphabetically.
 var helpOrder = []string{
-	"glance", "checkup", "spend", "story", "dx", "status", "explain",
+	"glance", "spend", "coach", "boundaries", "status",
 	"init", "detect", "daemon", "hooks", "statusline", "menubar", "plan", "budget", "provider",
 	"vendor-usage", "pricing", "otel", "team", "config", "version",
-	"coach", "boundaries", "approve", "deny", "mode", "routing", "preferred-model", "experiment", "rules", "fmt", "task", "outcome",
-	"scorecard", "optimizations", "verify", "audit", "events",
+	"approve", "deny", "mode", "routing", "preferred-model", "experiment", "rules", "fmt", "task", "outcome",
+	"scorecard", "checkup", "story", "dx", "explain", "optimizations", "verify", "audit", "events",
 }
 
 // commandGroup files each command under its section.
 var commandGroup = map[string]string{
-	"glance": "everyday", "checkup": "everyday", "spend": "everyday", "story": "everyday", "dx": "everyday",
-	"status": "everyday", "explain": "everyday",
+	"glance": "everyday", "spend": "everyday", "coach": "everyday", "boundaries": "everyday", "status": "everyday",
 
 	"init": "setup", "detect": "setup", "daemon": "setup", "hooks": "setup", "statusline": "setup",
 	"menubar": "setup", "plan": "setup", "budget": "setup", "provider": "setup",
 	"vendor-usage": "setup", "config": "setup", "pricing": "setup", "version": "setup", "otel": "setup", "team": "setup",
 
-	"coach": "control", "boundaries": "control", "approve": "control", "deny": "control", "mode": "control", "preferred-model": "control", "routing": "control",
+	"approve": "control", "deny": "control", "mode": "control", "preferred-model": "control", "routing": "control",
 	"experiment": "control", "task": "control", "outcome": "control", "rules": "control", "fmt": "control",
 
-	"scorecard": "analysis", "optimizations": "analysis", "audit": "analysis",
+	"scorecard": "analysis", "checkup": "analysis", "story": "analysis", "dx": "analysis", "explain": "analysis",
+	"optimizations": "analysis", "audit": "analysis",
 	"events": "analysis", "verify": "analysis",
 }
 
@@ -90,13 +93,9 @@ account your agents draw on, steps in during the session before a limit,
 a budget or a rule you set is crossed, and coaches how you use them. On
 its own, ` + "`tokenops`" + ` shows every plan at a glance.
 
-Start here:
-  tokenops init            set up this machine (plans, hooks, the daemon)
-  tokenops                 every plan's windows, pace, cost and the coach's findings
-  tokenops spend           what you spent and where it went
-  tokenops story           what you asked for and what the agent did
-  tokenops coach           how much the coach says and does
-  tokenops boundaries      the limits you set, and what waits on you
+Start with ` + "`tokenops init`" + `: it sets up the plans, the client hooks and the
+daemon. After that, the five commands under "Every day" are the ones
+you use; the rest are grouped below and run as they always have.
 
 Every command also takes the daemon's overrides, left out of the lists
 below: --listen, --tls, --cert-dir, --log-level, --log-format.`

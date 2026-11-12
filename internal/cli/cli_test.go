@@ -171,18 +171,25 @@ func TestStatusTextFormat(t *testing.T) {
 	prev := statusClient
 	t.Cleanup(func() { SetStatusClient(prev) })
 	SetStatusClient(&fakeDoer{responses: map[string]fakeResponse{
-		"/healthz": {status: 200, body: `{"status":"ok"}`},
-		"/readyz":  {status: 503, body: `{"status":"not_ready"}`},
-		"/version": {status: 200, body: `{"version":"dev"}`},
+		"/healthz": {status: 200, body: `{"status":"ok","uptime_ns":93600000000000}`},
+		"/readyz": {status: 503, body: `{"status":"not_ready","blockers":["no plan is bound"],` +
+			`"next_actions":["run tokenops plan set anthropic claude-max"]}`},
+		"/version": {status: 200, body: `{"version":"0.118.18","commit":"990e89f1a3fd","date":"2026-11-10T19:48:36Z"}`},
 	}})
 	out, err := executeRoot(t, "status", "--addr", "127.0.0.1:7878")
 	if err != nil {
 		t.Fatalf("status: %v", err)
 	}
-	for _, want := range []string{"daemon: http://127.0.0.1:7878", "health", "ready", "503", "version"} {
+	// In words, not the probes' JSON bodies.
+	for _, want := range []string{"daemon: http://127.0.0.1:7878",
+		"daemon   running, up 1d 2h, version 0.118.18 (990e89f, 2026-11-10)",
+		"ready    no (not ready)", "    - no plan is bound", "    → run tokenops plan set anthropic claude-max"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "{") {
+		t.Errorf("a JSON body in the text:\n%s", out)
 	}
 }
 

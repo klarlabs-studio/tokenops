@@ -185,10 +185,11 @@ Every day
   glance                    every plan's windows, pace, cost and the coach's findings
   spend [--forecast]        what you spent, where it went, where it is heading
   spend --by commit         what each of your commits cost
-  story                     what you asked for, what the agent did, where it went sideways
-  dx [--fresh]              how sessions go: turns, rework, interrupts, the one change to make
+  coach [preset|verbosity|set|off|stats]
+                            how much the coach says and does, and what came of it
+  boundaries [status|promote|demote|extra]
+                            the limits you set, and where each stands
   status                    whether TokenOps is working, and what to fix
-  explain [term | decision] what a figure means, or why TokenOps decided what it did
 
 Set up
   init                      set up this machine: plans, client hooks, the daemon
@@ -206,7 +207,7 @@ Set up
   config show
 
 Coach, routing and policy
-  coach [preset|autonomy|verbosity|set|off|stats|prompts|replies]
+  approve · deny            answer a boundary waiting on you
   mode [passive|active]
   routing {proposals|rule}
   preferred-model {list|set|unset}
@@ -217,7 +218,12 @@ Coach, routing and policy
   outcome {record|detect|check-json}
 
 Look closer
-  scorecard · optimizations · verify · audit · events
+  scorecard                 the one grade, and the measure that set it
+  checkup                   a week of agent work in one read
+  story                     what you asked for, what the agent did, where it went sideways
+  dx [--fresh]              how sessions go: turns, rework, interrupts, the one change to make
+  explain [term | decision] what a figure means, or why TokenOps decided what it did
+  optimizations · verify · audit · events
 ```
 
 The hooks your clients call (`coach-hook`, `read-guard`, `route-guard`),

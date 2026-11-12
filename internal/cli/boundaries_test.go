@@ -510,3 +510,21 @@ func TestBoundaryHookOnCodex(t *testing.T) {
 		t.Fatalf("attribution = %q", p.Actor.AgentID)
 	}
 }
+
+// On its own, `tokenops boundaries` shows the rules and where each stands,
+// as `status` does, rather than its help.
+func TestBareBoundariesShowsTheStatus(t *testing.T) {
+	boundaryHome(t, spendBoundary, 0)
+	bare, err := runCLI(t, nil, "boundaries")
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := runCLI(t, nil, "boundaries", "status")
+	if err != nil || bare != status || strings.Contains(bare, "Available Commands") {
+		t.Fatalf("bare = %q, status = %q, %v", bare, status, err)
+	}
+	asJSON, err := runCLI(t, nil, "boundaries", "--json")
+	if err != nil || !strings.HasPrefix(strings.TrimSpace(asJSON), "{") {
+		t.Errorf("--json = %q, %v", asJSON, err)
+	}
+}

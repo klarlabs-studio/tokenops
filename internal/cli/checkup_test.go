@@ -20,7 +20,7 @@ func TestRenderCheckup(t *testing.T) {
 		Window: "last 7d", Usage: []checkup.Usage{u, {Harness: "Codex", Model: "codex-auto-review", Turns: 3, UnpricedTurns: 3}},
 		Total:    checkup.Usage{Turns: 15, InputTokens: 5_400_000_000, CostUSD: 1609.92, UnpricedTurns: 3},
 		Findings: []checkup.Finding{{Level: checkup.LevelNotice, Title: "Agents re-read 10 unchanged files", Evidence: "11 re-reads", Fix: "tokenops hooks install --read-guard"}},
-	})
+	}, false)
 	out := b.String()
 	for _, want := range []string{"last 7d", "claude-opus-5-5", "5.40B", "$1609.92", "unpriced", "$1609.92+", "a measure, not a bill",
 		"● Agents re-read 10 unchanged files", "fix: tokenops hooks install --read-guard"} {
@@ -29,9 +29,24 @@ func TestRenderCheckup(t *testing.T) {
 		}
 	}
 	b.Reset()
-	renderCheckup(&b, checkup.Report{Window: "last 7d"})
+	renderCheckup(&b, checkup.Report{Window: "last 7d"}, false)
 	if !strings.Contains(b.String(), "No agent turns found") {
 		t.Errorf("empty week:\n%s", b.String())
+	}
+}
+
+// A machine the coach is set up on is not told to set it up.
+func TestCheckupSuggestsInitOnlyWithoutTheCoach(t *testing.T) {
+	r := checkup.Report{Window: "last 7d", Usage: []checkup.Usage{{Harness: "Claude Code", Model: "m", Turns: 1}}, Total: checkup.Usage{Turns: 1}}
+	var b bytes.Buffer
+	renderCheckup(&b, r, false)
+	if !strings.Contains(b.String(), "`tokenops init` sets up the coach") {
+		t.Errorf("without the coach:\n%s", b.String())
+	}
+	b.Reset()
+	renderCheckup(&b, r, true)
+	if strings.Contains(b.String(), "tokenops init") {
+		t.Errorf("with the coach installed:\n%s", b.String())
 	}
 }
 

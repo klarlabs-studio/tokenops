@@ -223,15 +223,21 @@ then required — allow, ask, approver:<role> or deny.
       require: ask
 
 Every rule starts in shadow: it records what it would have done and binds
-nothing. 'status' shows how often each rule matched and, per client, whether
-it is enforced or advice only; 'promote' makes a rule bind.
+nothing. On its own, or as 'status', it shows how often each rule matched
+and, per client, whether it is enforced or advice only; 'promote' makes a
+rule bind.
 
 'tokenops init' writes the headroom pause and the loop breaker on a new
 config, in shadow; on an older one, 'headroom-pause' and 'loop-breaker'
 add them.`,
 		Args: cobra.NoArgs,
 	}
-	cmd.AddCommand(newBoundariesStatusCmd(), newBoundariesStageCmd("promote"), newBoundariesStageCmd("demote"), newBoundariesHeadroomPauseCmd(),
+	// On its own it answers what the daily command is asked: the rules and
+	// where each stands. It printed this help.
+	status := newBoundariesStatusCmd()
+	cmd.RunE = status.RunE
+	cmd.Flags().AddFlag(status.Flags().Lookup("json"))
+	cmd.AddCommand(status, newBoundariesStageCmd("promote"), newBoundariesStageCmd("demote"), newBoundariesHeadroomPauseCmd(),
 		newBoundariesLoopBreakerCmd(), newBoundariesPresenceCmd(), newBoundariesExtraCmd())
 	return cmd
 }
