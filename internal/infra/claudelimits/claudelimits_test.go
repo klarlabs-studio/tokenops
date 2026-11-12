@@ -87,3 +87,68 @@ func TestWriteClearsStaleTemporaryFiles(t *testing.T) {
 		t.Fatalf("Read = ok %v, err %v", ok, err)
 	}
 }
+
+// Each write keeps the readings before it, a minute or more apart and no
+// older than KeepFor, so a hook can read the last hour's rate from this
+// one file (the run-out forecast) without the event store.
+func TestWriteKeepsEarlierReadings(t *testing.T) {
+	path := filepath.Join(t.TempDir(), fileName)
+	start := time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
+	// One reading every 30 seconds for three hours.
+	for i := 0; i <= 3*120; i++ {
+		at := start.Add(time.Duration(i) * 30 * time.Second)
+		if err := Write(path, Reading{ObservedAt: at, FiveHour: &Window{UsedPct: float64(i) / 10, ResetsAt: 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, ok, err := Read(path)
+	if err != nil || !ok {
+		t.Fatalf("Read = %v, %v", ok, err)
+	}
+	newest := start.Add(3 * time.Hour)
+	if !got.ObservedAt.Equal(newest) {
+		t.Fatalf("newest %v", got.ObservedAt)
+	}
+	if len(got.Earlier) == 0 || len(got.Earlier) > int(KeepFor/time.Minute)+1 {
+		t.Fatalf("kept %d earlier readings", len(got.Earlier))
+	}
+	for i, e := range got.Earlier {
+		if len(e.Earlier) != 0 || newest.Sub(e.ObservedAt) > KeepFor || !e.ObservedAt.Before(newest) {
+			t.Fatalf("earlier[%d] = %v (nested %d)", i, e.ObservedAt, len(e.Earlier))
+		}
+		if i > 0 && e.ObservedAt.Sub(got.Earlier[i-1].ObservedAt) < time.Minute {
+			t.Fatalf("earlier[%d] %v within a minute of %v", i, e.ObservedAt, got.Earlier[i-1].ObservedAt)
+		}
+	}
+	// The newest reading in a span, the current one included.
+	if r, ok := got.Between(newest.Add(-2*time.Hour), newest.Add(-time.Hour)); !ok ||
+		r.ObservedAt.After(newest.Add(-time.Hour)) || r.ObservedAt.Before(newest.Add(-time.Hour-time.Minute)) {
+		t.Errorf("Between an hour ago = %v, %v", r.ObservedAt, ok)
+	}
+	if r, ok := got.Between(newest.Add(-time.Minute), newest); !ok || !r.ObservedAt.Equal(newest) {
+		t.Errorf("Between now = %v, %v", r.ObservedAt, ok)
+	}
+	if _, ok := got.Between(start.Add(-time.Hour), start); ok {
+		t.Errorf("a reading older than kept was found")
+	}
+}
+
+// A reading older than the stored one replaces it, and keeps as earlier
+// only the readings that came before it.
+func TestAnOlderWriteKeepsOnlyWhatCameBefore(t *testing.T) {
+	path := filepath.Join(t.TempDir(), fileName)
+	at := time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
+	for _, r := range []Reading{
+		{ObservedAt: at, FiveHour: &Window{UsedPct: 10, ResetsAt: 1}},
+		{ObservedAt: at.Add(2 * time.Minute), FiveHour: &Window{UsedPct: 12, ResetsAt: 1}},
+		{ObservedAt: at.Add(time.Minute), FiveHour: &Window{UsedPct: 11, ResetsAt: 1}},
+	} {
+		if err := Write(path, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, _, _ := Read(path)
+	if got.FiveHour.UsedPct != 11 || len(got.Earlier) != 1 || got.Earlier[0].FiveHour.UsedPct != 10 {
+		t.Fatalf("got %+v, earlier %d", got.FiveHour, len(got.Earlier))
+	}
+}

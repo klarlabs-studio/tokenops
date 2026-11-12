@@ -85,3 +85,55 @@ func TestFiguresCarryThePace(t *testing.T) {
 		t.Error("a pace rule needs the daemon's figures")
 	}
 }
+
+// writeRecentBurn leaves the status line's readings of a five-hour window
+// that lasts on average but not at the last hour's rate: 50% used three
+// hours in, resetting in two, after 40 points in the last hour. At that
+// rate it runs out about 46 minutes before its reset.
+func writeRecentBurn(t *testing.T, path string) {
+	t.Helper()
+	reset := testNow.Add(2 * time.Hour).Unix()
+	for _, r := range []struct {
+		ago  time.Duration
+		used float64
+	}{{61 * time.Minute, 10}, {16 * time.Minute, 40}, {time.Minute, 50}} {
+		if err := claudelimits.Write(path, claudelimits.Reading{
+			ObservedAt: testNow.Add(-r.ago), FiveHour: &claudelimits.Window{UsedPct: r.used, ResetsAt: reset},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// The pace rule reads the one forecast glance shows: a window whose
+// average lasts but whose last hour would exhaust it runs out early.
+func TestPaceRuleReadsTheLastHourFromTheStatusLine(t *testing.T) {
+	env := testEnv(t, false)
+	rule := rules(t, domain.RuleSpec{Name: "pace", Action: "continue", Require: "deny", Stage: "enforce",
+		When: map[string]string{"plan_runs_out_early_min": ">= 30"}})
+	writeRecentBurn(t, env.LimitsPath)
+	res, _ := Guard(rule, call("s1"), env)
+	if res.Verdict != VerdictDeny || !strings.Contains(res.Reason, "Claude 5h runs out 46m before its reset") {
+		t.Fatalf("running out at the last hour's rate = %+v", res)
+	}
+	// The same share with no earlier reading: the average lasts.
+	other := testEnv(t, false)
+	if err := claudelimits.Write(other.LimitsPath, claudelimits.Reading{ObservedAt: testNow.Add(-time.Minute),
+		FiveHour: &claudelimits.Window{UsedPct: 50, ResetsAt: testNow.Add(2 * time.Hour).Unix()}}); err != nil {
+		t.Fatal(err)
+	}
+	if res, _ := Guard(rule, call("s2"), other); res.Verdict != VerdictNone {
+		t.Fatalf("the average paused: %+v", res)
+	}
+}
+
+// The daemon's figures carry the same forecast: a window glance forecasts
+// at the last hour's rate runs out early by that rate, not its average.
+func TestFiguresCarryTheRecentForecast(t *testing.T) {
+	w := plans.VendorWindow{Name: "5h", UsedPct: 50, Duration: 5 * time.Hour, ResetsAt: testNow.Add(2 * time.Hour),
+		Pace: &plans.WindowPace{Status: plans.PaceBehind, DeltaPct: -10, RunsOutIn: 75 * time.Minute, Basis: plans.BasisRecent}}
+	f := Figures([]plans.HeadroomReport{{Provider: "anthropic", Windows: []plans.VendorWindow{w}}}, nil, testNow)
+	if got := f.PlanEarlyMin["anthropic"]["5h"]; got != 45 {
+		t.Errorf("early = %v, want 45", got)
+	}
+}
