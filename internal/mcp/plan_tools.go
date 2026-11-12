@@ -55,6 +55,17 @@ type planStoreReader struct{ store *sqlite.Store }
 
 // CountBySource satisfies headroom.Reader, so the capability can be
 // handed one port instead of a reader plus a loose function value.
+// LatestAttributesBySource and AttributesBySourceBetween let the
+// capability read a plan meter's earlier readings, for the run-out
+// forecast glance shares with the coach.
+func (r planStoreReader) LatestAttributesBySource(ctx context.Context, source, key string, since time.Time) (map[string]string, time.Time, bool, error) {
+	return r.store.LatestAttributesBySource(ctx, source, key, since)
+}
+
+func (r planStoreReader) AttributesBySourceBetween(ctx context.Context, source, key string, since, until time.Time) (map[string]string, time.Time, bool, error) {
+	return r.store.AttributesBySourceBetween(ctx, source, key, since, until)
+}
+
 func (r planStoreReader) CountBySource(ctx context.Context, since, until time.Time) (map[string]int64, error) {
 	return r.store.CountBySource(ctx, since, until)
 }

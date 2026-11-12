@@ -64,6 +64,23 @@ func newMemoReader(r Reader, now time.Time) Reader {
 	return &memoReader{r: r, floor: memoFloor(now), events: map[eventschema.EventType][]*eventschema.Envelope{}, counts: map[[2]time.Time]map[string]int64{}}
 }
 
+// LatestAttributesBySource and AttributesBySourceBetween pass a meter's
+// readings through from the reader underneath, uncached, so the run-out
+// forecast reads them through the memo; a reader without them has none.
+func (m *memoReader) LatestAttributesBySource(ctx context.Context, source, key string, since time.Time) (map[string]string, time.Time, bool, error) {
+	if h, ok := m.r.(AttributeReader); ok {
+		return h.LatestAttributesBySource(ctx, source, key, since)
+	}
+	return nil, time.Time{}, false, nil
+}
+
+func (m *memoReader) AttributesBySourceBetween(ctx context.Context, source, key string, since, until time.Time) (map[string]string, time.Time, bool, error) {
+	if h, ok := m.r.(HistoryReader); ok {
+		return h.AttributesBySourceBetween(ctx, source, key, since, until)
+	}
+	return nil, time.Time{}, false, nil
+}
+
 func (m *memoReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
 	if since.Before(m.floor) {
 		// Older than anything memoised: ask the store.

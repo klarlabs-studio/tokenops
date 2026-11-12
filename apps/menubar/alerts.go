@@ -159,7 +159,7 @@ func warning(m measure, step int) note {
 		return note{Title: m.words + " is used up", Body: capitalize(resets)}
 	}
 	body := resets
-	if p := m.pace; p != nil && p.Status == "ahead" && !p.LastsToReset && p.RunsOutInNs > 0 {
+	if p := m.pace; p != nil && !p.LastsToReset && p.RunsOutInNs > 0 {
 		body = strings.TrimSuffix(fmt.Sprintf("Runs out in %s at this pace; %s", humanDuration(time.Duration(p.RunsOutInNs).String()), resets), "; ")
 	}
 	return note{Title: fmt.Sprintf("%s: %.0f%% left", m.words, math.Floor(left(m.used))), Body: capitalize(body)}

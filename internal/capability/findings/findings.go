@@ -308,13 +308,17 @@ func quotaAt(reports []plans.HeadroomReport, now time.Time) []Finding {
 				}
 				out = append(out, f)
 				continue
-			case p.Status == plans.PaceAhead && !p.LastsToReset:
+			case !p.LastsToReset && p.RunsOutIn > 0:
+				rate := "at this pace"
+				if p.Basis == plans.BasisRecent {
+					rate = "at the last hour's rate"
+				}
 				f = Finding{
 					Key:   key(KindQuota, r.Provider, w.Name),
 					Kind:  KindQuota,
 					Level: LevelWarn,
-					Title: fmt.Sprintf("%s's %s runs out in %s at this pace", vendor(r), windowWords(w.Name), human(p.RunsOutIn)),
-					Evidence: fmt.Sprintf("%.0f%% left, %.0f points ahead of an even pace; it resets in %s",
+					Title: fmt.Sprintf("%s's %s runs out in %s %s", vendor(r), windowWords(w.Name), human(p.RunsOutIn), rate),
+					Evidence: fmt.Sprintf("%.0f%% left, %+.0f points against an even spread; it resets in %s",
 						math.Max(0, 100-w.UsedPct), p.DeltaPct, human(resetsIn(w))),
 				}
 			default:

@@ -128,6 +128,11 @@ func Burn(ctx context.Context, cfg config.Config, r HistoryReader, provider even
 	if _, ok := plans.Lookup(cfg.Plans[string(provider)]); !ok {
 		return plans.QuotaReading{}, plans.BurnVerdict{}
 	}
+	return burnOf(ctx, r, provider, now)
+}
+
+// burnOf is Burn for a provider whose plan is known to be bound.
+func burnOf(ctx context.Context, r HistoryReader, provider eventschema.Provider, now time.Time) (plans.QuotaReading, plans.BurnVerdict) {
 	cur, ok := readingBetween(ctx, r, provider, now.Add(-LiveFreshness), now)
 	if !ok {
 		return plans.QuotaReading{}, plans.BurnVerdict{}
@@ -166,4 +171,17 @@ func readingBetween(ctx context.Context, r HistoryReader, provider eventschema.P
 	}
 	ws := plans.QuotaWindowsFromAttributes(provider, plans.MergeReadings(newest))
 	return plans.QuotaReading{At: at, Windows: ws}, len(ws) > 0
+}
+
+// applyRecentRate makes windows forecast what the coach's run-out warning
+// reads, the rate of the last hour and quarter hour, wherever it measured
+// a window (plans.ApplyBurn): one forecast on every surface. A reader that
+// cannot read earlier readings leaves the windows' average pace.
+func applyRecentRate(ctx context.Context, r Reader, provider string, windows []plans.VendorWindow, now time.Time) {
+	hr, ok := r.(HistoryReader)
+	if !ok || len(windows) == 0 {
+		return
+	}
+	_, burn := burnOf(ctx, hr, eventschema.Provider(provider), now)
+	plans.ApplyBurn(windows, burn, now)
 }

@@ -121,8 +121,8 @@ func TestCardContents(t *testing.T) {
 	for _, want := range []string{
 		"TokenOps • AI Usage & Limits", "Oct",
 		"Codex [local]", "PLAN Pro Standard ($100)", "Claude", "PLAN Ultra",
-		"Weekly", "9% left", "Resets in 30m", "Pace: ahead (+37%) · out in 23h 47m",
-		"Session", "Pace: behind (-3%) · lasts to reset", "Weekly · Fable", "100% left",
+		"Weekly", "9% left", "Resets in 30m", "Pace: 37 pts fast · out in 23h 47m",
+		"Session", "Pace: 3 pts slow · lasts to reset", "Weekly · Fable", "100% left",
 		"Extra usage", "$41.50 / $100", "Credit left:", "$12.50", "Overage risk:", "HIGH",
 		"$745+ · 2.24B tok", "15% of requests have no price yet.", "At API prices; the plan covers it.",
 		"$10,948 · 20.00B tok",
@@ -171,7 +171,7 @@ func TestOrderAndLayout(t *testing.T) {
 
 func TestBriefAndUnconfigured(t *testing.T) {
 	b := Render(sample(), Options{Brief: true, Width: 100})
-	for _, want := range []string{"PLAN", "PACE", "Codex Pro Standard ($100)", "Weekly · Fable", "LEFT", "   9%", "+37% · out in 23h 47m", "-3% · lasts"} {
+	for _, want := range []string{"PLAN", "PACE", "Codex Pro Standard ($100)", "Weekly · Fable", "LEFT", "   9%", "+37 pts · out in 23h 47m", "-3 pts · lasts"} {
 		if !strings.Contains(b, want) {
 			t.Errorf("brief lacks %q:\n%s", want, b)
 		}
@@ -431,5 +431,26 @@ func TestCardMarksOldFiguresThatHaveNoBar(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The pace line says which way it leans in plain terms, whether it is too
+// early to tell, and when its forecast is the last hour's rate.
+func TestPaceLineWords(t *testing.T) {
+	for _, tc := range []struct {
+		pace plans.WindowPace
+		want string
+	}{
+		{plans.WindowPace{Status: plans.PaceBehind, DeltaPct: -42, LastsToReset: true}, "Pace: 42 pts slow · lasts to reset"},
+		{plans.WindowPace{Status: plans.PaceAhead, DeltaPct: 12, TooEarly: true}, "Pace: 12 pts fast · too early to tell"},
+		{plans.WindowPace{Status: plans.PaceBehind, DeltaPct: -20, RunsOutIn: 2 * time.Hour, Basis: plans.BasisRecent}, "Pace: 20 pts slow · out in 2h 0m (last hour)"},
+		{plans.WindowPace{Status: plans.PaceOnPace, LastsToReset: true}, "Pace: even · lasts to reset"},
+	} {
+		if got, _ := paceLine(&tc.pace); got != tc.want {
+			t.Errorf("%+v: %q, want %q", tc.pace, got, tc.want)
+		}
+	}
+	if got, _ := briefPace(&plans.WindowPace{Status: plans.PaceAhead, DeltaPct: 5, TooEarly: true}); got != "+5 pts · early" {
+		t.Errorf("brief too early: %q", got)
 	}
 }

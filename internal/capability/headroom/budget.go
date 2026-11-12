@@ -74,6 +74,8 @@ func sessionBudget(ctx context.Context, r Reader, provider, planName string, p p
 	if err != nil {
 		return plans.SessionBudget{}, fmt.Errorf("signal[%s]: %w", provider, err)
 	}
+	windows := plans.VendorWindows(ctx, r, eventschema.Provider(provider), now)
+	applyRecentRate(ctx, r, provider, windows, now)
 	budget, err := plans.ComputeSessionBudget(planName, plans.SessionBudgetInputs{
 		WindowMessages:  window.MessagesInWindow,
 		WindowStartedAt: window.FirstActivityAt,
@@ -82,7 +84,7 @@ func sessionBudget(ctx context.Context, r Reader, provider, planName string, p p
 		Signal:          plans.SignalFromCounts(counts, provider),
 		Now:             now,
 		Authoritative:   plans.LatestAuthoritativeWindow(ctx, r, eventschema.Provider(provider), p, now),
-		VendorWindows:   plans.VendorWindows(ctx, r, eventschema.Provider(provider), now),
+		VendorWindows:   windows,
 	})
 	if err != nil {
 		return plans.SessionBudget{}, fmt.Errorf("budget[%s]: %w", provider, err)

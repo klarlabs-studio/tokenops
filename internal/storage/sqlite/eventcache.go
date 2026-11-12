@@ -123,6 +123,18 @@ func (c *EventCache) CountBySource(ctx context.Context, since, until time.Time) 
 	return c.store.CountBySource(ctx, since, until)
 }
 
+// LatestAttributesBySource is Store.LatestAttributesBySource: one indexed
+// query, uncached.
+func (c *EventCache) LatestAttributesBySource(ctx context.Context, source, key string, since time.Time) (map[string]string, time.Time, bool, error) {
+	return c.store.LatestAttributesBySource(ctx, source, key, since)
+}
+
+// AttributesBySourceBetween is Store.AttributesBySourceBetween: one indexed
+// query, uncached.
+func (c *EventCache) AttributesBySourceBetween(ctx context.Context, source, key string, since, until time.Time) (map[string]string, time.Time, bool, error) {
+	return c.store.AttributesBySourceBetween(ctx, source, key, since, until)
+}
+
 // Warm reads t's events from since into the cache, so the first caller
 // does not wait for the full read. Like a read, it starts the idle
 // countdown.
