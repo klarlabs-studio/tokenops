@@ -23,6 +23,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/followthrough"
 	"go.klarlabs.de/tokenops/internal/infra/jsonfinite"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 )
 
 // The session analysis reads every transcript of the last week, which
@@ -89,7 +90,7 @@ func WriteSnapshot(dir string, s SessionsSnapshot) (dropped []string, err error)
 	if err != nil {
 		return dropped, err
 	}
-	tmp, err := os.CreateTemp(dir, snapshotFile+".*")
+	tmp, err := tempfile.Create(dir, snapshotFile+".*")
 	if err != nil {
 		return dropped, err
 	}

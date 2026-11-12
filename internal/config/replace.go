@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"go.klarlabs.de/tokenops/internal/infra/filelock"
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 )
 
 // WriteFile replaces the config at path with data, whole or not at all,
@@ -79,7 +80,7 @@ func lockBeside(path string) (func(), error) {
 // writeAtomic replaces path with data at the config's permissions.
 func writeAtomic(path string, data []byte) error {
 	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".config-*.yaml")
+	tmp, err := tempfile.Create(dir, ".config-*.yaml")
 	if err != nil {
 		return err
 	}

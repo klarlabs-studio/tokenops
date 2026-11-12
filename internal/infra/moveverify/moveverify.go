@@ -25,6 +25,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/moveverdict"
 	"go.klarlabs.de/tokenops/internal/infra/filelock"
+	"go.klarlabs.de/tokenops/internal/infra/tempfile"
 )
 
 // Store is the move-verify directory.
@@ -226,7 +227,7 @@ func writeAtomic(path string, b []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	tmp, err := tempfile.Create(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return err
 	}
