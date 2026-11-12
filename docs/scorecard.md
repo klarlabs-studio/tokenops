@@ -30,16 +30,16 @@ FVT = timestamp(first_prompt_event) - timestamp(daemon_start)
 
 ### Token Efficiency Uplift (TEU)
 
-*How much the optimizer pipeline reduces token consumption.*
+*How many input tokens TokenOps' own interventions saved.*
 
-**Definition:** Percentage reduction in input+output tokens when
-the optimizer pipeline is active (`mode=interactive`) compared to
-passive (`mode=passive`). Computed via the replay engine over a
-representative session window.
+**Definition:** the tokens the optimization events of the period say were
+saved, over the period's input tokens. The events come from the read
+guard (a re-read refused), `tokenops fmt` (command output compressed)
+and the proxy's model router. Without any, the measure is not graded.
 
 **Formula:**
 ```
-TEU (%) = (passive_tokens - optimized_tokens) / passive_tokens * 100
+TEU (%) = sum(OptimizationEvent.EstimatedSavingsTokens) / sum(PromptEvent.InputTokens) * 100
 ```
 
 **Thresholds:**

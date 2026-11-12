@@ -207,7 +207,7 @@ func TestNewScorecard(t *testing.T) {
 func TestScorecardString(t *testing.T) {
 	s := New(30, 25, 95, "v1.0.0")
 	out := s.String()
-	if !strings.Contains(out, "Grade: A  (the worst graded measure: optimizer savings)") {
+	if !strings.Contains(out, "Grade: A  (the worst graded measure: tokens saved)") {
 		t.Errorf("expected overall grade A in output:\n%s", out)
 	}
 	if !strings.Contains(out, "v1.0.0") {

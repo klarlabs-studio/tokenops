@@ -42,7 +42,7 @@ Graded:
   replies you rejected        instructions that reject the last reply
   tool calls that succeeded   calls that returned without an error
   destructive commands        rm -rf, force-push, drop table
-  optimizer savings           only where the proxy carries traffic
+  tokens saved                what the read guard, fmt and routing saved
 
 Reported, not graded: first prompt after a session starts, prompts
 with a workflow or session id, plan use, unit costs and allocation.
