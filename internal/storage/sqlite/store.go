@@ -541,15 +541,9 @@ type Filter struct {
 
 const defaultQueryLimit = 1000
 
-// Query returns envelopes matching the filter, ordered by timestamp (then
-// id) ascending. When more rows match than the limit, the newest rows are
-// kept: the limit trims the oldest end of the window.
-func (s *Store) Query(ctx context.Context, f Filter) ([]*eventschema.Envelope, error) {
-	limit := f.Limit
-	if limit <= 0 {
-		limit = defaultQueryLimit
-	}
-
+// where is the filter's predicates, every field but Limit, and their
+// arguments.
+func (f Filter) where() ([]string, []any) {
 	var (
 		conds []string
 		args  []any
@@ -614,6 +608,19 @@ func (s *Store) Query(ctx context.Context, f Filter) ([]*eventschema.Envelope, e
 		conds = append(conds, "timestamp_ns < ?")
 		args = append(args, f.Until.UTC().UnixNano())
 	}
+	return conds, args
+}
+
+// Query returns envelopes matching the filter, ordered by timestamp (then
+// id) ascending. When more rows match than the limit, the newest rows are
+// kept: the limit trims the oldest end of the window.
+func (s *Store) Query(ctx context.Context, f Filter) ([]*eventschema.Envelope, error) {
+	limit := f.Limit
+	if limit <= 0 {
+		limit = defaultQueryLimit
+	}
+
+	conds, args := f.where()
 
 	// The limit keeps the newest rows in the window — a capped read is a
 	// "latest N" view, and the oldest rows are the ones that matter least —
@@ -659,6 +666,26 @@ func (s *Store) EachEvent(ctx context.Context, t eventschema.EventType, since ti
 	})
 }
 
+// EachMatching hands fn every event matching f, oldest first, one page
+// in memory at a time. Unlike Query it has no cap and ignores f.Limit: a
+// figure computed over a window needs every event in it, and a capped
+// read of a busy window silently dropped its oldest rows. An error from
+// fn stops the read and is returned.
+func (s *Store) EachMatching(ctx context.Context, f Filter, fn func(*eventschema.Envelope) error) error {
+	conds, args := f.where()
+	after := int64(math.MinInt64)
+	if !f.Since.IsZero() {
+		after = f.Since.UTC().UnixNano() - 1
+	}
+	return readPages(ctx, s.db, selectSQL, conds, args, after, func(rs *sql.Rows) (*eventschema.Envelope, error) {
+		env, err := scanEnvelope(rs)
+		if err != nil {
+			return nil, err
+		}
+		return env, fn(env)
+	})
+}
+
 // querier is what a read runs on: the pool, or one transaction when
 // several reads must see the same snapshot.
 type querier interface {
@@ -686,16 +713,28 @@ func readEvents(ctx context.Context, q querier, t eventschema.EventType, since t
 // returns the envelope the row decoded to.
 func readEventPages(ctx context.Context, q querier, sel string, t eventschema.EventType, since time.Time,
 	scan func(*sql.Rows) (*eventschema.Envelope, error)) error {
+	return readPages(ctx, q, sel, []string{"type = ?"}, []any{string(t)}, since.UTC().UnixNano()-1, scan)
+}
+
+// readPages reads the rows of sel matching conds (with args) after the
+// nanosecond after, oldest first, in pages keyed on (timestamp, id), handing each
+// row to scan, which returns the envelope the row decoded to.
+func readPages(ctx context.Context, q querier, sel string, conds []string, args []any, after int64,
+	scan func(*sql.Rows) (*eventschema.Envelope, error)) error {
 	var (
-		lastTS = since.UTC().UnixNano() - 1
+		lastTS = after
 		lastID = ""
 	)
-	// The plain range bound lets SQLite seek on (type, timestamp_ns); the
-	// OR alone made every page a scan.
+	where := ""
+	if len(conds) > 0 {
+		where = strings.Join(conds, " AND ") + " AND "
+	}
+	// The plain range bound lets SQLite seek on (column, timestamp_ns);
+	// the OR alone made every page a scan.
 	for {
 		rs, err := q.QueryContext(ctx, sel+`
-WHERE type = ? AND timestamp_ns >= ? AND (timestamp_ns > ? OR id > ?)
-ORDER BY timestamp_ns ASC, id ASC LIMIT ?`, string(t), lastTS, lastTS, lastID, readPage)
+WHERE `+where+`timestamp_ns >= ? AND (timestamp_ns > ? OR id > ?)
+ORDER BY timestamp_ns ASC, id ASC LIMIT ?`, append(append([]any{}, args...), lastTS, lastTS, lastID, readPage)...)
 		if err != nil {
 			return fmt.Errorf("sqlite: read events: %w", err)
 		}
@@ -768,70 +807,7 @@ func scanEnvelope(rs *sql.Rows, lead ...any) (*eventschema.Envelope, error) {
 // Count returns the number of rows matching the filter. It uses the same
 // predicates as Query but ignores Limit.
 func (s *Store) Count(ctx context.Context, f Filter) (int64, error) {
-	var (
-		conds []string
-		args  []any
-	)
-	if f.Type != "" {
-		conds = append(conds, "type = ?")
-		args = append(args, string(f.Type))
-	}
-	if f.Source != "" {
-		conds = append(conds, "source = ?")
-		args = append(args, f.Source)
-	}
-	if f.WorkflowID != "" {
-		conds = append(conds, "workflow_id = ?")
-		args = append(args, f.WorkflowID)
-	}
-	if f.AgentID != "" {
-		conds = append(conds, "agent_id = ?")
-		args = append(args, f.AgentID)
-	}
-	if f.SessionID != "" {
-		conds = append(conds, "session_id = ?")
-		args = append(args, f.SessionID)
-	}
-	if f.Work != "" {
-		conds = append(conds, "work_id = ?")
-		args = append(args, f.Work)
-	}
-	if f.Execution != "" {
-		conds = append(conds, "execution_id = ?")
-		args = append(args, f.Execution)
-	}
-	if f.Actor != "" {
-		conds = append(conds, "actor_id = ?")
-		args = append(args, f.Actor)
-	}
-	if f.Decision != "" {
-		conds = append(conds, "decision_id = ?")
-		args = append(args, f.Decision)
-	}
-	if f.Intervention != "" {
-		conds = append(conds, "intervention_id = ?")
-		args = append(args, f.Intervention)
-	}
-	if f.Experiment != "" {
-		conds = append(conds, "experiment_id = ?")
-		args = append(args, f.Experiment)
-	}
-	if f.Provider != "" {
-		conds = append(conds, "provider = ?")
-		args = append(args, f.Provider)
-	}
-	if f.Model != "" {
-		conds = append(conds, "model = ?")
-		args = append(args, f.Model)
-	}
-	if !f.Since.IsZero() {
-		conds = append(conds, "timestamp_ns >= ?")
-		args = append(args, f.Since.UTC().UnixNano())
-	}
-	if !f.Until.IsZero() {
-		conds = append(conds, "timestamp_ns < ?")
-		args = append(args, f.Until.UTC().UnixNano())
-	}
+	conds, args := f.where()
 	q := "SELECT COUNT(*) FROM events"
 	if len(conds) > 0 {
 		q += " WHERE " + strings.Join(conds, " AND ")

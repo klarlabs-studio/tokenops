@@ -43,18 +43,76 @@ func WindowSources() []string {
 }
 
 // WindowReadings collects every window reading in envs, by the provider
-// whose plan it is.
+// whose plan it is, one per window at its peak (see WindowPeaks).
 func WindowReadings(envs []*eventschema.Envelope) map[string][]QuotaWindow {
-	out := map[string][]QuotaWindow{}
+	var p WindowPeaks
 	for _, e := range envs {
-		if e == nil || e.Attributes == nil {
-			continue
+		p.Add(e)
+	}
+	return p.Readings()
+}
+
+// WindowPeaks collects window readings as they are read, keeping one per
+// window: its kind, its length and when it resets, at the highest share
+// read of it. A meter that reads every turn records the same window
+// thousands of times; what WindowInstances and Calibrate take from those
+// readings is each window's peak, so the peaks are all they need, and a
+// long period's readings need not be held.
+type WindowPeaks struct {
+	peak map[string]map[windowKey]float64
+}
+
+// windowKey is one window: what WindowInstances groups readings by.
+type windowKey struct {
+	label    string
+	resetsAt time.Time
+	duration time.Duration
+}
+
+// Add takes in the windows e reports, when it is a window reading.
+func (p *WindowPeaks) Add(e *eventschema.Envelope) {
+	if e == nil || e.Attributes == nil {
+		return
+	}
+	provider, ok := windowSourceProvider[e.Source]
+	if !ok {
+		return
+	}
+	for _, w := range QuotaWindowsFromAttributes(provider, e.Attributes) {
+		if p.peak == nil {
+			p.peak = map[string]map[windowKey]float64{}
 		}
-		if p, ok := windowSourceProvider[e.Source]; ok {
-			if ws := QuotaWindowsFromAttributes(p, e.Attributes); len(ws) > 0 {
-				out[string(p)] = append(out[string(p)], ws...)
+		byWindow := p.peak[string(provider)]
+		if byWindow == nil {
+			byWindow = map[windowKey]float64{}
+			p.peak[string(provider)] = byWindow
+		}
+		k := windowKey{label: w.Label, resetsAt: w.ResetsAt, duration: w.Duration}
+		if used, seen := byWindow[k]; !seen || w.UsedPct > used {
+			byWindow[k] = w.UsedPct
+		}
+	}
+}
+
+// Readings are the windows taken in, by provider, each at its peak,
+// ordered by when they reset, then by kind.
+func (p *WindowPeaks) Readings() map[string][]QuotaWindow {
+	out := map[string][]QuotaWindow{}
+	for provider, byWindow := range p.peak {
+		ws := make([]QuotaWindow, 0, len(byWindow))
+		for k, used := range byWindow {
+			ws = append(ws, QuotaWindow{Label: k.label, UsedPct: used, ResetsAt: k.resetsAt, Duration: k.duration})
+		}
+		sort.Slice(ws, func(i, j int) bool {
+			if !ws[i].ResetsAt.Equal(ws[j].ResetsAt) {
+				return ws[i].ResetsAt.Before(ws[j].ResetsAt)
 			}
-		}
+			if ws[i].Label != ws[j].Label {
+				return ws[i].Label < ws[j].Label
+			}
+			return ws[i].Duration < ws[j].Duration
+		})
+		out[provider] = ws
 	}
 	return out
 }
