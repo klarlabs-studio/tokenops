@@ -2872,6 +2872,16 @@ them or are idle. `promote` writes `stage: enforce`
 to the rule in `config.yaml`; `demote` puts it back in shadow. Neither
 has an MCP equivalent: an agent must not change the limits set on it.
 
+**What boundaries are.** They stop mistakes and drift, not an agent that
+sets out to get past them. The pause point, `config.yaml` and the record
+of answers run as your user, so an agent with an unrestricted shell can
+remove the pause point from its harness's settings or edit the files.
+With a [presence key](#tokenops-boundaries-presence-enroll-enforce-status-rotate)
+enforced, an approval proves who approved it; it does not prove the agent
+could not have gone around the rule. Keep agents from running `tokenops`,
+`script` and curl to the daemon unasked (in Claude Code, permission rules
+such as `Bash(tokenops approve:*)` set to ask).
+
 **The headroom pause** is the boundary `tokenops init` writes on a new
 config: once the tightest plan window TokenOps knows is down to 10% left, the
 agent's next tool call asks first (`action: continue`, `when: { plan_left_pct: "<= 10" }`, `require: ask`). It starts in shadow, and the

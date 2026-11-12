@@ -229,7 +229,16 @@ rule bind.
 
 'tokenops init' writes the headroom pause and the loop breaker on a new
 config, in shadow; on an older one, 'headroom-pause' and 'loop-breaker'
-add them.`,
+add them.
+
+What boundaries are: they stop mistakes and drift,
+not an agent that sets out to get past them. The pause point, the rules
+and the record of answers run as your user, so an agent with an
+unrestricted shell can remove the pause point from its harness or edit
+the files. With a presence key
+enforced ('tokenops boundaries presence'), an approval proves who approved
+it; it does not prove an agent could not have gone around the rule. See
+'tokenops approve --help' for what an approval guarantees.`,
 		Args: cobra.NoArgs,
 	}
 	// On its own it answers what the daily command is asked: the rules and
@@ -520,8 +529,8 @@ api, prompt) and, when signed, with which presence key.
 With a presence key enrolled ('tokenops boundaries presence enroll'), this
 command asks for Touch ID, a paired Apple Watch or your password and signs
 the approval; with boundary_approval: presence, an approval without that
-signature is not honoured, so 'script -q /dev/null tokenops approve <id>'
-or a hand-written answer file gets an agent nowhere. A paired Watch is
+signature is not honoured, so an approval through 'script -q /dev/null
+tokenops approve <id>' or a hand-written answer file is not honoured. A paired Watch is
 offered every dialog: approve only a dialog you started, and read what it
 names (rule, action, session).
 
@@ -529,8 +538,10 @@ What it does not: without presence enforced, the terminal check only asks
 whether stdin is a terminal. A process running as you can get one (script
 -q /dev/null tokenops approve <id>), read the daemon's token in ~/.tokenops
 and call its API, or write the boundary ledger. Even with it, a process
-running as you can edit config.yaml (until rules are sealed) or replace
-TokenOps' binaries; a replaced key is held 15 minutes and announced.
+running as you can edit config.yaml (until rules are sealed), replace
+TokenOps' binaries (a replaced key is held 15 minutes and announced), or
+remove the pause point from the harness's settings, after which no rule
+is checked at all.
 
 Recommended: do not give agents an unrestricted shell for tokenops. Have
 your harness ask before 'tokenops approve', 'tokenops mode', 'tokenops
