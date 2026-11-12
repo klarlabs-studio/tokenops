@@ -14,8 +14,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/infra/gitlog"
 	"go.klarlabs.de/tokenops/internal/infra/sessiondirs"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
-	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Deps are the readers the report draws on. Nil readers leave their
@@ -48,9 +46,6 @@ type Deps struct {
 	Savings func(ctx context.Context, since, now time.Time) savings.Report
 	Steps   func(ctx context.Context, now time.Time) []savings.Step
 }
-
-// maxEvents bounds each read of recorded events.
-const maxEvents = 50_000
 
 // Compute builds the report for [since, until). A zero until is now.
 func Compute(ctx context.Context, d Deps, since, until time.Time) (Report, error) {
@@ -123,18 +118,9 @@ func gather(ctx context.Context, d Deps, since, until time.Time) (Inputs, error)
 		}
 	}
 	if d.Events != nil {
-		if in.Outcomes, err = d.Events.Query(ctx, sqlite.Filter{Type: eventschema.EventTypeOutcome, Since: start, Until: until, Limit: maxEvents}); err != nil {
+		if in.Outcomes, in.Windows, err = uniteconomics.ReadRecorded(ctx, d.Events, start, until); err != nil {
 			return Inputs{}, err
 		}
-		var readings []*eventschema.Envelope
-		for _, src := range plans.WindowSources() {
-			envs, err := d.Events.Query(ctx, sqlite.Filter{Source: src, Since: start, Until: until, Limit: maxEvents})
-			if err != nil {
-				return Inputs{}, err
-			}
-			readings = append(readings, envs...)
-		}
-		in.Windows = plans.WindowReadings(readings)
 	}
 	if d.Trace != nil {
 		for _, id := range workflowsIn(in) {
