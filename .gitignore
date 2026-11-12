@@ -56,8 +56,13 @@ nox-findings.json
 ai.inventory.json
 .relicta/
 menubar-dist/
+# `go build` in apps/menubar names the binary after the module directory
+/apps/menubar/menubar
+/apps/menubar/tokenops-menubar
 
 # npm channel: assembled at release time
 /npm/packages/
 /npm-dist/
 /release-archives/
+/.venv-integrations/
+__pycache__/

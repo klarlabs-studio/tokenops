@@ -518,7 +518,7 @@ func newVendorUsageStatusCmd() *cobra.Command {
 		Long: `status reads ~/.config/tokenops/config.yaml plus the event store
 (~/.tokenops/events.db) and reports per-source state:
 
-  - claude-code-stats-cache: ~/.claude/stats-cache.json poller
+  - claude-code-jsonl:       Claude Code's session transcripts
   - vendor-usage-anthropic:  Anthropic Admin API poller
 
 For each source it prints whether the config block is enabled and how
@@ -642,7 +642,6 @@ func renderVendorUsageText(cmd *cobra.Command, r vendorUsageReport) {
 	fmt.Fprintln(out, "Signal_quality classifier consumes these counts:")
 	fmt.Fprintln(out, "  events_in_window > 0 for vendor-usage-anthropic     -> high")
 	fmt.Fprintln(out, "  events_in_window > 0 for claude-code-jsonl          -> high (real per-turn)")
-	fmt.Fprintln(out, "  events_in_window > 0 for claude-code-stats-cache    -> medium (deprecated)")
 	fmt.Fprintln(out, "  otherwise                                           -> low (mcp pings only)")
 }
 

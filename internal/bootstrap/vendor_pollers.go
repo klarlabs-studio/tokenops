@@ -12,7 +12,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecode"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudestatusline"
@@ -76,13 +75,8 @@ func StartVendorUsagePollers(
 ) SourcesRefresh {
 	sig := pollnow.New(RefreshGap)
 	if cfg.VendorUsage.ClaudeCode.Enabled {
-		p := claudecode.NewPoller(bus, claudecode.PollerOptions{
-			Path: cfg.VendorUsage.ClaudeCode.Path, Interval: cfg.VendorUsage.ClaudeCode.Interval,
-			Logger: logger, CostSource: PlanCostSource(cfg, eventschema.ProviderAnthropic),
-		})
-		sup.Go("claude-code-stats-cache", refreshable(sig, p.Run))
-		logger.Warn("claude-code stats cache poller is DEPRECATED — switch to vendor_usage.claude_code_jsonl for live per-turn data",
-			"interval", cfg.VendorUsage.ClaudeCode.Interval, "path", cfg.VendorUsage.ClaudeCode.Path)
+		logger.Warn("vendor_usage.claude_code (the stats-cache reader) was retired and reads nothing; " +
+			"set vendor_usage.claude_code_jsonl.enabled: true for per-turn data")
 	}
 	if cfg.VendorUsage.ClaudeCodeJSONL.Enabled {
 		p := claudecodejsonl.NewPoller(bus, claudecodejsonl.PollerOptions{
