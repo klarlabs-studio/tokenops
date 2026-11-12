@@ -367,6 +367,31 @@ func TestApproveHelpStatesItsLimits(t *testing.T) {
 	}
 }
 
+// Boundaries run as the operator's user, so an agent with a shell can step
+// around them. The help says so, so nobody reads them as a lock.
+func TestBoundariesHelpSaysTheyAreCooperative(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want []string
+	}{
+		{[]string{"boundaries", "--help"}, []string{"mistakes and drift", "not an agent that sets out", "who approved"}},
+		{[]string{"approve", "--help"}, []string{"remove the pause point", "is not honoured"}},
+	} {
+		out, err := executeRoot(t, tc.args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range tc.want {
+			if !strings.Contains(out, want) {
+				t.Errorf("%v lacks %q", tc.args, want)
+			}
+		}
+		if strings.Contains(out, "gets an agent nowhere") {
+			t.Errorf("%v still promises an agent gets nowhere", tc.args)
+		}
+	}
+}
+
 func TestBoundaryHookAppliesAFolderRuleOnlyInItsFolder(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_SESSION_ATTENDED", "0")
 	home := boundaryHome(t, `boundaries:
