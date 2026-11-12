@@ -71,7 +71,7 @@ observed'; the catalog itself changes only by pull request).`,
 				enc.SetIndent("", "  ")
 				return enc.Encode(r)
 			}
-			renderCheckup(cmd.OutOrStdout(), r)
+			renderCheckup(cmd.OutOrStdout(), r, opts.Installed["coach-hook"])
 			return nil
 		},
 	}
@@ -126,7 +126,9 @@ func installedHooks() map[string]bool {
 	return out
 }
 
-func renderCheckup(w io.Writer, r checkup.Report) {
+// renderCheckup writes the report; coached says the coach's hook is
+// already installed, so the closing pointer to `tokenops init` is left out.
+func renderCheckup(w io.Writer, r checkup.Report, coached bool) {
 	fmt.Fprintf(w, "TokenOps checkup — %s\n\n", r.Window)
 	if r.Total.Turns == 0 {
 		fmt.Fprintln(w, "No agent turns found in this window. TokenOps reads Claude Code, Codex, Gemini CLI and opencode where they keep their records.")
@@ -155,7 +157,9 @@ func renderCheckup(w io.Writer, r checkup.Report) {
 	for _, warn := range r.Warnings {
 		fmt.Fprintf(w, "note: %s\n", warn)
 	}
-	fmt.Fprintln(w, "`tokenops init` sets up the coach, which acts on these as they happen.")
+	if !coached {
+		fmt.Fprintln(w, "`tokenops init` sets up the coach, which acts on these as they happen.")
+	}
 }
 
 func levelMark(l checkup.Level) string {

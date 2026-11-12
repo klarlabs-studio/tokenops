@@ -168,3 +168,22 @@ func TestRenderFollowThroughReportsRetiredKindsAndOverrides(t *testing.T) {
 		t.Errorf("a retired kind is reported as retired, not quiet:\n%s", got)
 	}
 }
+
+// Every tip kind reads as words: a kind whose suffix is no percentage is
+// not "at burn% of a quota window".
+func TestTipLabelWordsEveryKind(t *testing.T) {
+	for kind, want := range map[string]string{
+		"budget_50":    "at 50% of the session budget",
+		"quota_90":     "at 90% of a quota window",
+		"spend_75":     "at 75% of a spend budget",
+		"quota_burn":   "when a plan window is on course to run out before it resets",
+		"quota_100":    "when a plan window is used up",
+		"spend_over":   "past a spend budget",
+		"reading_lost": "when a plan's usage reading stops arriving",
+		"reread_churn": "on reread_churn",
+	} {
+		if got := tipLabel(kind); got != want {
+			t.Errorf("tipLabel(%q) = %q, want %q", kind, got, want)
+		}
+	}
+}

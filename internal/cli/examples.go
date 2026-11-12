@@ -149,6 +149,8 @@ tokenops mode active`,
 	"routing rule list":    `tokenops routing rule list`,
 	"routing rule unset":   `tokenops routing rule unset anthropic claude-opus-5`,
 	"preferred-model list": `tokenops preferred-model list`,
+	"boundaries": `tokenops boundaries               # each rule, how often it matched, where it binds
+tokenops boundaries promote session-spend`,
 	"boundaries status": `tokenops boundaries status        # each rule, how often it matched, where it binds
 tokenops boundaries status --json`,
 	"boundaries promote": `tokenops boundaries promote session-spend`,
