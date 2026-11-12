@@ -64,3 +64,5 @@ menubar-dist/
 /npm/packages/
 /npm-dist/
 /release-archives/
+/.venv-integrations/
+__pycache__/
