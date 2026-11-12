@@ -7,12 +7,9 @@ import (
 	"strconv"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/infra/observedlimits"
-	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -188,14 +185,15 @@ func sessionBudgetData(ctx context.Context, d PlanDeps) (*sessionBudgetResult, e
 // nil store stays a nil reader, which the capability answers as storage
 // disabled.
 func (d PlanDeps) headroomDeps() headroom.Deps {
-	deps := headroom.Deps{Config: d.activeConfig(), PlanFollows: actions.RecentPlanFollows,
-		PlanHistory: planhistory.LoadDefault, AdviceCache: d.AdviceCache, Observed: observedlimits.Loader()}
+	var r headroom.Reader
 	if d.Store != nil {
-		deps.Reader = planStoreReader{store: d.Store}
+		r = planStoreReader{store: d.Store}
 	}
+	deps := headroom.LocalDeps(d.activeConfig(), r, nil)
 	if d.Spend != nil {
 		deps.Price = d.Spend.ComputeAt
 	}
+	deps.AdviceCache = d.AdviceCache
 	return deps
 }
 
