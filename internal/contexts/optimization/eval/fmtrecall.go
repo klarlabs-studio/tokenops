@@ -1,3 +1,6 @@
+// Package eval measures how much of a command's output the fmt formatters
+// keep: labelled outputs, each formatter's recall of the critical lines at
+// every loss level, and the gate that holds it.
 package eval
 
 import (

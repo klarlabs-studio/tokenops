@@ -8,7 +8,7 @@ DDD with bounded contexts under `internal/contexts/*`, enforced by `internal/arc
 
 ## Contexts
 - **Prompts** — tokenizer, providers, llm.
-- **Optimization** — `optimizer/*` (pipeline: prompt_compress, command_fmt, dedupe, retrieval_prune, context_trim, router), `eval`, `replay`, `formatter` (fmt engine), `fmtlearn` (learn analysis).
+- **Optimization** — `optimizer` (the proxy's model router), `eval` (fmt recall), `formatter` (fmt engine), `fmtlearn` (learn analysis).
 - **Coaching** — coaching, efficiency, waste.
 - **Spend / Observability / Governance / Security / Workflows / Rules** — see architecture-ddd.md.
 

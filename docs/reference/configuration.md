@@ -17,12 +17,12 @@ run again.
 
 | Mode | What runs |
 |---|---|
-| `passive` (default) | Collect + analyze on demand. Proxy observes traffic and stamps costs; pollers ingest vendor usage; `spend` / `replay` / `coach` answer when asked. Nothing is altered, nothing fires on its own. |
+| `passive` (default) | Collect + analyze on demand. Proxy observes traffic and stamps costs; pollers ingest vendor usage; `spend` / `optimizations` / `coach` answer when asked. Nothing is altered, nothing fires on its own. |
 | `active` | Everything in passive, plus interventions: the proxy **applies `optimizer.routing_rules` to live traffic** (requests for `from_model` are rewritten to `to_model` before reaching the upstream, recorded as applied optimization events), and the daemon runs a **background spend watcher** that evaluates `budgets` every `watch.interval` and warns about budget threshold/forecast breaches and unpriced models. |
 
-Recommended path: run passive, use `tokenops replay` to validate what a
-routing rule would have saved on real history, then flip `mode: active`
-to enforce it.
+Recommended path: run passive, read what each routing rule would have
+saved on the live traffic it saw (`tokenops optimizations`), then flip
+`mode: active` to enforce it.
 
 ### The coach: who decides, and how much it says
 
@@ -570,25 +570,18 @@ upload has no field for them, so `tokenops team preview` never shows them.
 
 ## Model routing rules
 
-`optimizer.routing_rules` feeds the model-routing optimizer used by
-`tokenops replay` and the ``tokenops replay`` MCP tool. Each rule says
+`optimizer.routing_rules` feeds the proxy's model router. Each rule says
 "traffic asking for `from_model` could run on `to_model`"; `quality` is
 your confidence (0–1] that the cheaper model preserves task quality.
-Replay then reports what each rule would have saved on real history:
-
-```
-Model routing opportunities:
-  - route claude-fable-5 -> claude-opus-4-8: 124 requests, would save $9.43
-```
-
-Replay never resends traffic upstream — routing rules are evaluated
-offline against the local event store, so you can validate a rule's
-savings before changing any client configuration.
+In passive mode the proxy changes nothing: for each request a rule
+matches it records what the rule would have saved, as a skipped
+optimization event, which `tokenops optimizations` lists. That is how a
+rule's savings are read before it changes any request.
 
 With `mode: active`, the same rules are **enforced on live proxied
 traffic**: the proxy rewrites the request's model before forwarding,
 logs the intervention, and records an applied optimization event
-(visible in MCP/CLI results and `tokenops replay`). The observation keeps
+(listed by `tokenops optimizations`). The observation keeps
 the originally requested model, so you can always audit what clients
 asked for versus what was served. Routing never breaks a request — any
 parse failure forwards the original body untouched.
@@ -804,8 +797,8 @@ proxy produced it.
 
 ## Waste-detector context limits
 
-The workflow waste detector (`tokenops replay --workflow-id`, the
-`tokenops_records (view=workflow)` MCP tool)
+The workflow waste detector (the `tokenops_records (view=workflow)` MCP
+tool, `GET /api/workflows/{id}` and `tokenops spend waste`)
 ships built-in thresholds per workflow type: `claude-code:` sessions
 flag context above 900k tokens, `codex:` above 250k, everything else
 above 32k. `coaching.context_limits` overrides them per workflow-ID

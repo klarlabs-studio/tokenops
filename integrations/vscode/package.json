@@ -35,8 +35,7 @@
     },
     "commands": [
       { "command": "tokenops.showBurnGraph", "title": "TokenOps: Show burn graph" },
-      { "command": "tokenops.showOptimizations", "title": "TokenOps: Show optimization suggestions" },
-      { "command": "tokenops.openReplay", "title": "TokenOps: Open replay for workflow…" }
+      { "command": "tokenops.showOptimizations", "title": "TokenOps: Show optimization suggestions" }
     ],
     "viewsContainers": {
       "activitybar": [

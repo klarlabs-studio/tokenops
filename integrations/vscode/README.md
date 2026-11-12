@@ -42,5 +42,3 @@ contains plain CommonJS that VS Code loads directly.
   24 hours.
 - **Optimizations webview**: table of the last 7 days of
   `OptimizationEvent`s with savings + reasons.
-- **Replay flow**: prompts for a workflow ID and runs
-  `tokenops replay --workflow-id <id>` in an integrated terminal.

@@ -228,8 +228,8 @@ Look closer
 
 The hooks your clients call (`coach-hook`, `read-guard`, `route-guard`),
 the MCP server (`serve`), the daemon's foreground process (`start`) and
-the tools for working on TokenOps itself (`eval`, `coverage-debt`,
-`replay`) run as before but stay out of the help.
+the tool for working on TokenOps itself (`coverage-debt`) run as before
+but stay out of the help.
 
 Most CLI verbs have a matching MCP tool (`tokenops_<name>`). `fmt` is
 CLI-first (it wraps a shell command); its learning report is exposed to

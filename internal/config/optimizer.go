@@ -9,8 +9,8 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// OptimizerConfig tunes the optimizer pipeline shared by `tokenops
-// replay` and the “tokenops replay“ MCP tool.
+// OptimizerConfig tunes the proxy's model router: whether it rewrites a
+// request, refers the choice to you, or only records what it would do.
 type OptimizerConfig struct {
 	// Mode says what the optimizer may do with a request: "automatic"
 	// rewrites it in flight, "in_request" refers the decision to you

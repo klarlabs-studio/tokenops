@@ -8,9 +8,9 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 )
 
-// CoachingConfig tunes the waste detector behind `tokenops replay
-// --workflow`, the tokenops_records (view=workflow) MCP tool, and the dashboard
-// workflow view.
+// CoachingConfig tunes the waste detector behind the tokenops_records
+// (view=workflow) MCP tool, GET /api/workflows/{id} and `tokenops spend
+// waste`.
 type CoachingConfig struct {
 	// Delivery selects how far coaching goes. It is a ladder graded by
 	// interference — how much of your session the coach is allowed to
