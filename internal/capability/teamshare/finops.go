@@ -12,7 +12,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 	"go.klarlabs.de/tokenops/pkg/teamwire"
@@ -46,11 +45,11 @@ type FinOps struct {
 func finOpsFor(cfg config.Config, store *sqlite.Store, eng *spend.Engine, waste avoidable.Deps) FinOps {
 	return FinOps{
 		Plans: func() headroom.Deps {
-			d := headroom.Deps{Config: &cfg, Reader: store, PlanHistory: planhistory.LoadDefault}
+			var price plans.Pricer
 			if eng != nil {
-				d.Price = eng.ComputeAt
+				price = eng.ComputeAt
 			}
-			return d
+			return headroom.LocalDeps(&cfg, store, price)
 		},
 		Waste: func(ctx context.Context, turns TurnReader, since, until time.Time) ([]avoidable.Day, error) {
 			d := waste

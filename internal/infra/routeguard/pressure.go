@@ -50,12 +50,13 @@ func ReadPressureKnown(limitsPath string, figures boundaryledger.Dir, now time.T
 }
 
 // PressureFromLimits judges the status line's 5h and weekly windows by
-// plans.WindowPressure and returns the tightest pressed one.
+// plans.WindowPressure on the one forecast (the last hour's rate where the
+// reading's history measures it) and returns the tightest pressed one.
 func PressureFromLimits(r claudelimits.Reading, now time.Time) (*Pressure, bool) {
 	if r.ObservedAt.IsZero() || now.Sub(r.ObservedAt) > pressureLimitsFreshFor {
 		return nil, false
 	}
-	p := plans.WindowPressure("Claude", limitsWindows(r), now)
+	p := plans.WindowPressure("Claude", r.Windows(now), now)
 	if p == nil {
 		return nil, false
 	}
@@ -77,27 +78,6 @@ func PressureFromFigures(fig boundaryledger.Figures, now time.Time) (*Pressure, 
 	p.ObservedAt, p.FreshUntil = fig.ObservedAt.UTC(), fig.ObservedAt.Add(pressureFiguresFreshFor).UTC()
 	p.Source = "daemon_glance"
 	return p, true
-}
-
-// limitsWindows are the status line's 5h and weekly windows with their
-// lengths and resets.
-func limitsWindows(r claudelimits.Reading) []plans.VendorWindow {
-	var windows []plans.VendorWindow
-	for _, w := range []struct {
-		name string
-		win  *claudelimits.Window
-		dur  time.Duration
-	}{{"5h", r.FiveHour, 5 * time.Hour}, {"week", r.SevenDay, 7 * 24 * time.Hour}} {
-		// A window without a reset cannot be told apart from one that
-		// has reset since the reading.
-		if w.win == nil || w.win.ResetsAt <= 0 {
-			continue
-		}
-		windows = append(windows, plans.VendorWindow{
-			Name: w.name, UsedPct: w.win.UsedPct, Duration: w.dur, ResetsAt: time.Unix(w.win.ResetsAt, 0).UTC(),
-		})
-	}
-	return windows
 }
 
 // figuresWindows are the Claude plan's windows in the daemon's figures:

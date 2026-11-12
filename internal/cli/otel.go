@@ -54,7 +54,7 @@ file or commit subject is among them, and this is how to check.`,
 			if err != nil {
 				return err
 			}
-			deps := headroom.Deps{Config: &cfg, Reader: storeReader{store: store}, Price: eng.ComputeAt}
+			deps := headroom.LocalDeps(&cfg, storeReader{store: store}, eng.ComputeAt)
 			g := &telemetry.Gatherer{
 				Glance: func() headroom.Deps { return deps },
 				Agg:    spending.NewAggregator(store, eng),

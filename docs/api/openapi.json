@@ -4243,6 +4243,9 @@
                           "pressure": {
                             "additionalProperties": false,
                             "properties": {
+                              "basis": {
+                                "type": "string"
+                              },
                               "fresh_until": {
                                 "format": "date-time",
                                 "type": "string"

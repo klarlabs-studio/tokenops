@@ -118,3 +118,20 @@ func TestReadHeadroomWindows(t *testing.T) {
 		t.Errorf("windows for a provider with none = %+v", ws)
 	}
 }
+
+// The note's run-out is the one forecast too: at the last hour's rate a
+// window that lasts on average runs out before its reset.
+func TestHeadroomNoteReadsTheLastHour(t *testing.T) {
+	limits := t.TempDir() + "/claude-limits.json"
+	r := recentBurnReading()
+	for _, e := range append(r.Earlier, claudelimits.Reading{ObservedAt: r.ObservedAt, FiveHour: r.FiveHour}) {
+		if err := claudelimits.Write(limits, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ws := ReadHeadroom(limits, boundaryledger.Dir(t.TempDir()), "anthropic", pressureNow)
+	note := HeadroomNote(ws, pressureNow, time.UTC)
+	if !strings.Contains(note, "runs out ~13:1") {
+		t.Errorf("note = %q, want a run-out at the last hour's rate", note)
+	}
+}

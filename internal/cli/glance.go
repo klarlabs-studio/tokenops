@@ -13,15 +13,11 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/capability/cards"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
-	"go.klarlabs.de/tokenops/internal/infra/observedlimits"
-	"go.klarlabs.de/tokenops/internal/infra/planevidence"
-	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -96,13 +92,7 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView
 		return fmt.Errorf("open store: %w (run `tokenops init`)", err)
 	}
 	defer func() { _ = store.Close() }()
-	deps := headroom.Deps{Config: &cfg, Reader: storeReader{store: store}, Accounts: func() map[string]string {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil
-		}
-		return planevidence.Accounts(home)
-	}, PlanFollows: actions.RecentPlanFollows, PlanHistory: planhistory.LoadDefault, Observed: observedlimits.Loader()}
+	deps := headroom.LocalDeps(&cfg, storeReader{store: store}, nil)
 	eng, engErr := buildSpendEngine(cfg)
 	if engErr == nil {
 		deps.Price = eng.ComputeAt

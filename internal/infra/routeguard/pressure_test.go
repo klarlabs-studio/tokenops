@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 )
@@ -241,5 +242,40 @@ func TestSubagentRetractedMoveIsNotMade(t *testing.T) {
 				t.Errorf("held = %q, want held %v", d.Held, tc.held)
 			}
 		})
+	}
+}
+
+// recentBurnReading is the status line's reading of a five-hour window
+// that lasts on average but not at the last hour's rate: 50% used three
+// hours in, resetting in two, after 40 points in the last hour.
+func recentBurnReading() claudelimits.Reading {
+	reset := pressureNow.Add(2 * time.Hour).Unix()
+	at := pressureNow.Add(-time.Minute)
+	return claudelimits.Reading{ObservedAt: at, FiveHour: &claudelimits.Window{UsedPct: 50, ResetsAt: reset},
+		Earlier: []claudelimits.Reading{
+			{ObservedAt: at.Add(-time.Hour), FiveHour: &claudelimits.Window{UsedPct: 10, ResetsAt: reset}},
+			{ObservedAt: at.Add(-15 * time.Minute), FiveHour: &claudelimits.Window{UsedPct: 40, ResetsAt: reset}},
+		}}
+}
+
+// Routing judges the one forecast glance shows: a window whose average
+// lasts but whose last hour would exhaust it is pressed and priced.
+func TestPressureReadsTheLastHour(t *testing.T) {
+	r := recentBurnReading()
+	p, ok := PressureFromLimits(r, pressureNow)
+	if !ok || p.Window != "5h" || p.Basis != plans.BasisRecent || p.RunsOutBeforeReset < 40*time.Minute {
+		t.Fatalf("pressure %+v ok=%v", p, ok)
+	}
+	price := PriceFromLimits(r, pressureNow)
+	if price == nil || price.Basis != PriceBasisRecent || price.Lambda <= 0 {
+		t.Fatalf("price %+v", price)
+	}
+	// The same reading without its history: the average lasts.
+	r.Earlier = nil
+	if p, ok := PressureFromLimits(r, pressureNow); ok {
+		t.Errorf("average pressed: %+v", p)
+	}
+	if price := PriceFromLimits(r, pressureNow); price == nil || price.Lambda != 0 || price.Basis != PriceBasisPace {
+		t.Errorf("average priced: %+v", price)
 	}
 }

@@ -188,6 +188,13 @@ func writeQuotaPrice(w io.Writer, v quotaPriceView) {
 	case routeguard.PriceBasisPace:
 		fmt.Fprintf(w, "  At the pace so far the rest of the window wants ~%.0f%% of the plan; %.0f%% is left.\n", p.WantedPct, p.LeftPct)
 		fmt.Fprintln(w, "  λ = 1 − left ÷ wanted: 0 while the window lasts to its reset, nearer 1 the longer it would stand empty.")
+	case routeguard.PriceBasisRecent:
+		if p.WantedPct > 0 {
+			fmt.Fprintf(w, "  At the last hour's rate the rest of the window wants ~%.0f%% of the plan; %.0f%% is left.\n", p.WantedPct, p.LeftPct)
+		} else {
+			fmt.Fprintf(w, "  At the last hour's rate the window lasts to its reset; %.0f%% is left.\n", p.LeftPct)
+		}
+		fmt.Fprintln(w, "  λ = 1 − left ÷ wanted: the rate of the last hour and quarter hour, the forecast glance shows.")
 	case routeguard.PriceBasisShareLeft:
 		fmt.Fprintf(w, "  %.0f%% is left and the pace cannot be judged yet (too early in the window, or no reset known).\n", p.LeftPct)
 		fmt.Fprintln(w, "  λ = 1 − left ÷ 33%: 0 at a third left or more, 1 at none.")

@@ -20,6 +20,7 @@ type QuotaPrice = plans.QuotaPrice
 // How a price was worked out (plans.PriceBasisPace and the rest).
 const (
 	PriceBasisPace      = plans.PriceBasisPace
+	PriceBasisRecent    = plans.PriceBasisRecent
 	PriceBasisShareLeft = plans.PriceBasisShareLeft
 	PriceBasisUsedUp    = plans.PriceBasisUsedUp
 )
@@ -48,7 +49,7 @@ func PriceFromLimits(r claudelimits.Reading, now time.Time) *QuotaPrice {
 	if r.ObservedAt.IsZero() || now.Sub(r.ObservedAt) > pressureLimitsFreshFor {
 		return nil
 	}
-	p := plans.BindingPrice("Claude", limitsWindows(r), now)
+	p := plans.BindingPrice("Claude", r.Windows(now), now)
 	if p == nil {
 		return nil
 	}
