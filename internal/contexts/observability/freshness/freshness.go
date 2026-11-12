@@ -86,7 +86,8 @@ type Source struct {
 // newest transcript on disk, the newest row in a client's own store.
 //
 // Known=false means the origin could not be read. That is an unknown,
-// not a clean bill of health, and the time-based judgement stands.
+// not a clean bill of health: the source stays stale, but its warning does
+// not escalate, because nothing shows there was data to miss.
 type Origin struct {
 	At    time.Time
 	Known bool
@@ -203,6 +204,10 @@ type Report struct {
 	// OriginNewestAt is the newest data the upstream holds, when it could
 	// be read.
 	OriginNewestAt time.Time `json:"origin_newest_at,omitzero"`
+	// OriginUnknown says this source's local origin could not be read, so
+	// whether the operator still uses it is unknown. Its silence is then
+	// no evidence of an outage, and its severity does not escalate.
+	OriginUnknown bool `json:"origin_unknown,omitempty"`
 	// ReaderStopped reports that this source's reader exited. Events may
 	// still be inside the window — they are from before it died, and
 	// reporting healthy on the strength of them is the delay that lets
@@ -271,6 +276,7 @@ func assessOne(s Source, in Inputs, window time.Duration, now time.Time) Report 
 	if hasOrigin && origin.Known {
 		r.OriginNewestAt = origin.At
 	}
+	r.OriginUnknown = hasOrigin && !origin.Known
 
 	if err, stopped := in.Stopped[s.Tag]; stopped && err != nil {
 		r.LastError = err.Error()
@@ -391,9 +397,21 @@ func stateOf(s Source, r Report, origin Origin, hasOrigin bool, poll Poll, hasPo
 
 // severityOf escalates with the size of the gap, so repeated warnings
 // stop reading identically as an outage lengthens.
+//
+// The gap is evidence of an outage only when something says there was data
+// to miss: a remote poller always has an answer, and a readable origin
+// shows what it holds. A local source whose origin cannot be read is as
+// often a client the operator removed or stopped using as a reader that
+// died, so it stays a warning however long it has been quiet. Graded on the
+// gap, a machine that stopped using a client weeks ago reported it as
+// critical on every status, and an alarm that is always on is one nobody
+// reads.
 func severityOf(r Report) string {
 	if r.State == StateHealthy || r.State == StateIdle {
 		return SeverityOK
+	}
+	if r.State == StateStale && r.OriginUnknown {
+		return SeverityWarning
 	}
 	switch {
 	case r.SilentFor >= criticalAfter:
