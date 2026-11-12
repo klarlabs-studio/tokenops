@@ -29,8 +29,8 @@ const (
 	pressureMinMargin = 0.10
 )
 
-// Pressed reports whether w is running short: on course, at the pace so
-// far (PaceAt, the glance's own pace), to run out well before its reset
+// Pressed reports whether w is running short: on course, on the one
+// forecast (Forecast, the glance's own pace), to run out well before its reset
 // once enough of it has gone by to trust that; or, while the pace cannot
 // be trusted yet, at PressureFloorPct or less. before is how long ahead of
 // the reset it runs out, zero when only the floor or a used-up window
@@ -44,7 +44,7 @@ func (w VendorWindow) Pressed(now time.Time) (before time.Duration, pressed bool
 	var pace *WindowPace
 	trusted := false
 	if w.Duration > 0 && !w.ResetsAt.IsZero() {
-		pace = w.PaceAt(now)
+		pace = w.Forecast(now)
 		elapsed := w.Duration - w.ResetsAt.Sub(now)
 		trusted = pace != nil && float64(elapsed) >= pressureMinElapsed*float64(w.Duration)
 	}
@@ -70,9 +70,12 @@ type Pressure struct {
 	// RunsOutBeforeReset is how long before its reset the window runs out
 	// at the pace so far; zero when only the floor pressed it.
 	RunsOutBeforeReset time.Duration `json:"runs_out_before_reset_ns,omitempty"`
-	ResetsAt           time.Time     `json:"resets_at,omitzero"`
-	ObservedAt         time.Time     `json:"observed_at,omitzero"`
-	FreshUntil         time.Time     `json:"fresh_until,omitzero"`
+	// Basis is the rate RunsOutBeforeReset projects: empty for the
+	// window's average so far, BasisRecent for the last hour's.
+	Basis      string    `json:"basis,omitempty"`
+	ResetsAt   time.Time `json:"resets_at,omitzero"`
+	ObservedAt time.Time `json:"observed_at,omitzero"`
+	FreshUntil time.Time `json:"fresh_until,omitzero"`
 	// Source is where the reading came from (claude_code_statusline,
 	// daemon_glance, or the vendor window's own source).
 	Source string `json:"source,omitempty"`
@@ -84,8 +87,12 @@ func (p *Pressure) Why() string {
 		return ""
 	}
 	if p.RunsOutBeforeReset > 0 {
-		return fmt.Sprintf("%s %s runs out ~%s before it resets at this pace (%s left)",
-			p.Vendor, p.Window, pressureSpan(p.RunsOutBeforeReset), pressureLeft(p.LeftPct))
+		rate := "at this pace"
+		if p.Basis == BasisRecent {
+			rate = "at the last hour's rate"
+		}
+		return fmt.Sprintf("%s %s runs out ~%s before it resets %s (%s left)",
+			p.Vendor, p.Window, pressureSpan(p.RunsOutBeforeReset), rate, pressureLeft(p.LeftPct))
 	}
 	return fmt.Sprintf("%s %s has %s left", p.Vendor, p.Window, pressureLeft(p.LeftPct))
 }
@@ -131,6 +138,9 @@ func WindowPressure(vendor string, windows []VendorWindow, now time.Time) *Press
 			Vendor: vendor, Window: label, LeftPct: max(0, 100-w.UsedPct), RunsOutBeforeReset: before,
 			ResetsAt: w.ResetsAt, ObservedAt: w.ObservedAt, Source: w.Source,
 		}
+		if f := w.Forecast(now); before > 0 && f != nil {
+			p.Basis = f.Basis
+		}
 		if p.Tighter(best) {
 			best = p
 		}
@@ -156,8 +166,8 @@ func pressureSpan(d time.Duration) string {
 	return fmt.Sprintf("%dm", mins)
 }
 
-// RunsOutEarly is how long before its reset w runs out at the pace so far
-// (PaceAt): zero when it lasts to the reset, the time to the reset when it
+// RunsOutEarly is how long before its reset w runs out on the one forecast
+// (Forecast): zero when it lasts to the reset, the time to the reset when it
 // is used up already. Unknown without a length or reset, or before
 // pressureMinElapsed of the window has gone by, when one burst would
 // project a run-out the rest of the window never sees.
@@ -175,7 +185,7 @@ func (w VendorWindow) RunsOutEarly(now time.Time) (time.Duration, bool) {
 	if elapsed := w.Duration - toReset; float64(elapsed) < pressureMinElapsed*float64(w.Duration) {
 		return 0, false
 	}
-	pace := w.PaceAt(now)
+	pace := w.Forecast(now)
 	if pace == nil || pace.LastsToReset {
 		return 0, pace != nil
 	}

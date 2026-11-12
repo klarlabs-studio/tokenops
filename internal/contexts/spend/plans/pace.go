@@ -44,6 +44,18 @@ type WindowPace struct {
 // quarter hour, the coach's run-out warning.
 const BasisRecent = "recent"
 
+// Forecast is the one forecast of w at now: the pace ApplyBurn set from the
+// rate of the last hour and quarter hour where the look-backs measured the
+// window, else its average pace so far (PaceAt). Glance shows it, and the
+// pressure rule, the price of quota and the boundaries judge by it, so no
+// surface calls a window short that another says lasts.
+func (w VendorWindow) Forecast(now time.Time) *WindowPace {
+	if w.Pace != nil && w.Pace.Basis == BasisRecent {
+		return w.Pace
+	}
+	return w.PaceAt(now)
+}
+
 // PaceAt is w's pace at now; nil when its length or reset is unknown,
 // nothing is used yet, or no time has passed.
 func (w VendorWindow) PaceAt(now time.Time) *WindowPace {

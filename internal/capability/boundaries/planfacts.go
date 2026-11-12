@@ -5,7 +5,6 @@ import (
 	"time"
 
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -132,7 +131,7 @@ func figuresByWindow(byProvider map[string]map[string]float64, provider string, 
 }
 
 // limitsPlan is the share of each Claude plan window left, and how many
-// minutes ahead of its reset it runs out at the pace so far, from the
+// minutes ahead of its reset it runs out on the one forecast, from the
 // reading the status line keeps. A window that has reset since is
 // unknown, not full: the reading no longer says anything about it.
 func limitsPlan(path string, now time.Time) (left, early map[domain.Window]float64, observed time.Time, ok bool) {
@@ -141,19 +140,20 @@ func limitsPlan(path string, now time.Time) (left, early map[domain.Window]float
 		return nil, nil, time.Time{}, false
 	}
 	left, early = map[domain.Window]float64{}, map[domain.Window]float64{}
-	for w, win := range map[domain.Window]struct {
-		reading *claudelimits.Window
-		length  time.Duration
-	}{domain.Window5h: {r.FiveHour, 5 * time.Hour}, domain.WindowWeek: {r.SevenDay, 7 * 24 * time.Hour}} {
-		if win.reading == nil || (win.reading.ResetsAt > 0 && time.Unix(win.reading.ResetsAt, 0).Before(now)) {
+	for w, win := range map[domain.Window]*claudelimits.Window{domain.Window5h: r.FiveHour, domain.WindowWeek: r.SevenDay} {
+		if win == nil || (win.ResetsAt > 0 && time.Unix(win.ResetsAt, 0).Before(now)) {
 			continue
 		}
-		left[w] = max(0, 100-win.reading.UsedPct)
-		if win.reading.ResetsAt > 0 {
-			vw := plans.VendorWindow{UsedPct: win.reading.UsedPct, Duration: win.length, ResetsAt: time.Unix(win.reading.ResetsAt, 0)}
-			if before, known := vw.RunsOutEarly(now); known {
-				early[w] = before.Minutes()
-			}
+		left[w] = max(0, 100-win.UsedPct)
+	}
+	// How early each runs out is the one forecast glance shows: the last
+	// hour's rate where the reading's history measures it.
+	for _, vw := range r.Windows(now) {
+		if _, kept := left[domain.Window(vw.Name)]; !kept {
+			continue
+		}
+		if before, known := vw.RunsOutEarly(now); known {
+			early[domain.Window(vw.Name)] = before.Minutes()
 		}
 	}
 	return left, early, r.ObservedAt.UTC(), len(left) > 0

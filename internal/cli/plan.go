@@ -292,11 +292,7 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 			// which limits. This command decides how to print them, which
 			// is the only part that legitimately differs from the MCP
 			// tool answering the same question.
-			deps := headroom.Deps{Config: &cfg, Reader: storeReader{store: store}}
-			if eng, err := buildSpendEngine(cfg); err == nil {
-				deps.Price = eng.ComputeAt
-			}
-			res, err := headroom.Compute(ctx, deps, time.Now().UTC())
+			res, err := headroom.Compute(ctx, localHeadroomDeps(&cfg, store), time.Now().UTC())
 			if err != nil {
 				return err
 			}
@@ -390,6 +386,17 @@ func newPlanCatalogCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
+}
+
+// localHeadroomDeps is the headroom capability's inputs for a command
+// reading store: the same ones every surface reads (headroom.LocalDeps),
+// priced by the rate card when it loads.
+func localHeadroomDeps(cfg *config.Config, store *sqlite.Store) headroom.Deps {
+	deps := headroom.LocalDeps(cfg, storeReader{store: store}, nil)
+	if eng, err := buildSpendEngine(*cfg); err == nil {
+		deps.Price = eng.ComputeAt
+	}
+	return deps
 }
 
 // storeReader adapts *sqlite.Store to the ports the domain and the

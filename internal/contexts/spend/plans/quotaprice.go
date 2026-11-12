@@ -28,6 +28,10 @@ const (
 	// PriceBasisPace is the projected use at the pace so far against
 	// what is left.
 	PriceBasisPace = "pace"
+	// PriceBasisRecent is the projected use at the rate of the last hour
+	// and quarter hour against what is left: the one forecast glance
+	// shows (Forecast), where the look-backs measured the window.
+	PriceBasisRecent = "recent_pace"
 	// PriceBasisShareLeft is the share left alone: too early in the
 	// window to trust its pace, or a reading with no reset.
 	PriceBasisShareLeft = "share_left"
@@ -83,6 +87,10 @@ func (w VendorWindow) Price(now time.Time) QuotaPrice {
 		remaining := w.ResetsAt.Sub(now)
 		elapsed := w.Duration - remaining
 		if remaining > 0 && remaining <= w.Duration && float64(elapsed) >= pressureMinElapsed*float64(w.Duration) {
+			if f := w.Forecast(now); f != nil && f.Basis == BasisRecent {
+				priceRecent(&p, f, left, remaining)
+				return p
+			}
 			p.Basis = PriceBasisPace
 			p.WantedPct = w.UsedPct * float64(remaining) / float64(elapsed)
 			if p.WantedPct > left {
@@ -97,6 +105,25 @@ func (w VendorWindow) Price(now time.Time) QuotaPrice {
 	p.Basis = PriceBasisShareLeft
 	p.Lambda = max(0, 1-left/quotaPriceShareLeftZeroPct)
 	return p
+}
+
+// priceRecent prices a window by the rate of the last hour and quarter
+// hour (ApplyBurn). That rate runs what is left out in f.RunsOutIn, so the
+// rest of the window wants left × remaining ÷ RunsOutIn points and
+//
+//	λ = 1 − left ÷ wanted = 1 − RunsOutIn ÷ remaining
+//
+// which is 0 while the window lasts to its reset. A window that lasts at
+// that rate has no run-out to scale by, so its wanted share is not given.
+func priceRecent(p *QuotaPrice, f *WindowPace, left float64, remaining time.Duration) {
+	p.Basis = PriceBasisRecent
+	if f.LastsToReset || f.RunsOutIn >= remaining {
+		return
+	}
+	runsOut := max(time.Minute, f.RunsOutIn)
+	p.WantedPct = left * float64(remaining) / float64(runsOut)
+	p.Lambda = min(MaxQuotaPrice, 1-float64(runsOut)/float64(remaining))
+	p.RunsOutBeforeReset = remaining - f.RunsOutIn
 }
 
 // BindingPrice is the price of the plan: that of its binding window, the
@@ -136,6 +163,12 @@ func (p *QuotaPrice) Why() string {
 	case p.Basis == PriceBasisPace:
 		return fmt.Sprintf("%s %s lasts to its reset at this pace (%s left, ~%s wanted; %s)",
 			p.Vendor, p.Window, pressureLeft(p.LeftPct), pressureLeft(p.WantedPct), price)
+	case p.Basis == PriceBasisRecent && p.RunsOutBeforeReset > 0:
+		return fmt.Sprintf("%s %s runs out ~%s before it resets at the last hour's rate (%s left, ~%s wanted; %s)",
+			p.Vendor, p.Window, pressureSpan(p.RunsOutBeforeReset), pressureLeft(p.LeftPct), pressureLeft(p.WantedPct), price)
+	case p.Basis == PriceBasisRecent:
+		return fmt.Sprintf("%s %s lasts to its reset at the last hour's rate (%s left; %s)",
+			p.Vendor, p.Window, pressureLeft(p.LeftPct), price)
 	}
 	return fmt.Sprintf("%s %s has %s left (%s)", p.Vendor, p.Window, pressureLeft(p.LeftPct), price)
 }
