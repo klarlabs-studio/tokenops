@@ -1323,6 +1323,21 @@
                       },
                       "type": "object"
                     },
+                    "reach": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "acts": {
+                          "type": "boolean"
+                        },
+                        "fix": {
+                          "type": "string"
+                        },
+                        "why": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "retired": {
                       "items": {
                         "additionalProperties": false,
@@ -1382,6 +1397,48 @@
                     },
                     "verbosity_source": {
                       "type": "string"
+                    },
+                    "wiring": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "claude_code": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "coach": {
+                              "type": "boolean"
+                            },
+                            "present": {
+                              "type": "boolean"
+                            },
+                            "read_guard": {
+                              "type": "boolean"
+                            },
+                            "route_guard": {
+                              "type": "boolean"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "opencode": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "coach": {
+                              "type": "boolean"
+                            },
+                            "present": {
+                              "type": "boolean"
+                            },
+                            "read_guard": {
+                              "type": "boolean"
+                            },
+                            "route_guard": {
+                              "type": "boolean"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
                     }
                   },
                   "type": "object"
@@ -2052,6 +2109,21 @@
                       },
                       "type": "object"
                     },
+                    "reach": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "acts": {
+                          "type": "boolean"
+                        },
+                        "fix": {
+                          "type": "string"
+                        },
+                        "why": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "retired": {
                       "items": {
                         "additionalProperties": false,
@@ -2111,6 +2183,48 @@
                     },
                     "verbosity_source": {
                       "type": "string"
+                    },
+                    "wiring": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "claude_code": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "coach": {
+                              "type": "boolean"
+                            },
+                            "present": {
+                              "type": "boolean"
+                            },
+                            "read_guard": {
+                              "type": "boolean"
+                            },
+                            "route_guard": {
+                              "type": "boolean"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "opencode": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "coach": {
+                              "type": "boolean"
+                            },
+                            "present": {
+                              "type": "boolean"
+                            },
+                            "read_guard": {
+                              "type": "boolean"
+                            },
+                            "route_guard": {
+                              "type": "boolean"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
                     }
                   },
                   "type": "object"

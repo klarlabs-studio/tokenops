@@ -299,6 +299,9 @@ func Status(cfg config.Config, l Ledger, levers ContextLevers, now time.Time) Re
 	if v := Verdicts(MoveStore(), now); len(v.Lines) > 0 {
 		r.Moves = &v
 	}
+	w := DetectWiring(WiringSources{})
+	r.Reach = reachOf(r.Powers, w, r.Compaction)
+	r.Wiring = &w
 	r.Graduation = savings.Graduations(savings.Build(context.Background(), SavingsDeps(), now), r.Effective, r.FollowThrough)
 	for i, p := range r.Powers {
 		if p.Name != config.PowerModels || len(r.Routers) == 0 {
