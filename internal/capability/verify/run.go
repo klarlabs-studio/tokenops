@@ -7,13 +7,15 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
+	"go.klarlabs.de/tokenops/internal/contexts/work"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// EventReader is the store the comparison reads its events from.
+// EventReader is the store the comparison reads its events from: every
+// event a filter matches, oldest first.
 type EventReader interface {
-	Query(ctx context.Context, f sqlite.Filter) ([]*eventschema.Envelope, error)
+	EachMatching(ctx context.Context, f sqlite.Filter, fn func(*eventschema.Envelope) error) error
 }
 
 // Window selects the work compared: the transcripts the attempts are
@@ -33,9 +35,6 @@ type Window struct {
 	Savings *savings.Deps
 }
 
-// maxEvents bounds the events one comparison reads.
-const maxEvents = 200_000
-
 // Run reconstructs the attempts in w, reads the events over the same
 // window, and compares them; experimentID picks one trial when several
 // are present. readErr names transcripts that could not be read: what the
@@ -47,17 +46,68 @@ const maxEvents = 200_000
 func Run(ctx context.Context, events EventReader, w Window, experimentID string, now time.Time) (report Report, readErr error, err error) {
 	units, readErr := sessions.Units(sessions.Window{Root: w.Root, Days: w.Days, All: w.All}, now)
 	reconstructed := reconstruct.FromUnits(units, reconstruct.Options{IdleGap: w.IdleGap})
-	filter := sqlite.Filter{Limit: maxEvents}
+	var since time.Time
 	if !w.All && w.Days > 0 {
-		filter.Since = now.AddDate(0, 0, -w.Days)
+		since = now.AddDate(0, 0, -w.Days)
 	}
-	envs, err := events.Query(ctx, filter)
+	report, err = CompareStored(ctx, events, reconstructed, since, experimentID)
 	if err != nil {
 		return Report{}, readErr, err
 	}
-	report = CompareReconstructedExperiment(reconstructed, envs, experimentID)
 	if w.Savings != nil {
 		report.Holdout = savings.Build(ctx, *w.Savings, now).Holdouts()
 	}
 	return report, readErr, nil
+}
+
+// CompareStored compares rs against every event recorded at or after
+// since (zero reads them all), as CompareReconstructedExperiment does.
+//
+// A busy store holds hundreds of thousands of events in a period, and a
+// capped read dropped the oldest without saying so. The events are
+// streamed instead, and only those that can bear on the comparison are
+// kept, so the read covers the whole period without holding it.
+func CompareStored(ctx context.Context, events EventReader, rs []reconstruct.Work, since time.Time, experimentID string) (Report, error) {
+	relevant := bearsOn(rs)
+	var kept []*eventschema.Envelope
+	err := events.EachMatching(ctx, sqlite.Filter{Since: since}, func(env *eventschema.Envelope) error {
+		if relevant(env) {
+			kept = append(kept, env)
+		}
+		return nil
+	})
+	if err != nil {
+		return Report{}, err
+	}
+	return CompareReconstructedExperiment(rs, kept, experimentID), nil
+}
+
+// bearsOn reports whether an event can change the comparison of rs.
+//
+// An event linked to an execution or an experiment can: it may be an
+// attempt's, an assignment, route evidence, or name an execution no
+// transcript recorded. Any other event joins an attempt only by its
+// actor and time, as Attribute joins it; one that joins none is counted
+// nowhere and is dropped.
+func bearsOn(rs []reconstruct.Work) func(*eventschema.Envelope) bool {
+	byActor := make(map[string][]work.Execution)
+	for _, r := range rs {
+		if by := string(r.Execution.By); by != "" {
+			byActor[by] = append(byActor[by], r.Execution)
+		}
+	}
+	return func(env *eventschema.Envelope) bool {
+		if env == nil {
+			return false
+		}
+		if env.Association.Execution != "" || env.Correlation.Experiment != "" {
+			return true
+		}
+		for _, e := range byActor[env.Association.Actor] {
+			if within(e, env) {
+				return true
+			}
+		}
+		return false
+	}
 }
