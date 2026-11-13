@@ -1,6 +1,6 @@
 # ADR 0019 — Derived figures follow changes, not the clock
 
-- **Status:** Proposed 2026-11-13
+- **Status:** Accepted 2026-11-13
 - **Date:** 2026-11-13
 - **Deciders:** TokenOps maintainers
 - **Related:** ADR 0010 (the daemon API serves every surface), ADR 0012
