@@ -187,3 +187,38 @@ func TestTipLabelWordsEveryKind(t *testing.T) {
 		}
 	}
 }
+
+// Autopilot's reach prints the same words as the menu bar panel: the why,
+// then the fix. It prints nothing when autopilot can act.
+func TestCoachStatusShowsWhereAutopilotCannotAct(t *testing.T) {
+	const why = "Autopilot has nowhere to act on this machine: refusing re-reads needs the read guard in Claude Code or opencode."
+	const fix = "tokenops hooks install --read-guard --coach --route-guard --client claude-code"
+	cases := []struct {
+		name  string
+		reach *coachcap.Reach
+		want  string
+	}{
+		{name: "no reach reported", reach: nil},
+		{name: "autopilot can act", reach: &coachcap.Reach{Acts: true}},
+		{name: "cannot act with a fix", reach: &coachcap.Reach{Why: why, Fix: fix}, want: why + " Run: " + fix},
+		{name: "cannot act without an agent to wire", reach: &coachcap.Reach{Why: why}, want: why},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := coachcap.Build(config.Default())
+			r.Reach = tc.reach
+			var out bytes.Buffer
+			renderCoachStatus(&out, r, nil)
+			got := out.String()
+			if tc.want == "" {
+				if strings.Contains(got, "Autopilot has nowhere") || strings.Contains(got, "Run: ") {
+					t.Errorf("reach line printed when autopilot can act:\n%s", got)
+				}
+				return
+			}
+			if !strings.Contains(got, "\n  "+tc.want+"\n") {
+				t.Errorf("reach line %q missing:\n%s", tc.want, got)
+			}
+		})
+	}
+}

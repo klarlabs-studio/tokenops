@@ -67,6 +67,7 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 			fmt.Fprintln(out, "\n  models: the subagent hook is not installed, so nothing is moved yet; run `tokenops hooks install --route-guard`")
 		}
 	}
+	renderReach(out, r.Reach)
 	activity := []string{}
 	if s, err := coachhook.ReadStats(""); err == nil && s.Events > 0 {
 		tips := fmt.Sprintf("%d tips", s.Alerts+totalOf(s.QuotaNudges)+s.PromotionNudges+s.CompactTips)
@@ -107,6 +108,20 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 	}
 	fmt.Fprintln(out, "\n  change: tokenops coach preset <observe|advise|guided|autopilot> · autonomy <off|advise|ask|autonomous> · verbosity <quiet|normal|verbose>")
 	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models|context> <rung> · tokenops coach off · tokenops coach holdout <off|on|percent> · tokenops coach headroom-note <on|off>")
+}
+
+// renderReach says, when autopilot has no hook to act through here, why
+// and the command that wires one. It prints the same words as the menu bar
+// panel. Nothing prints when autopilot can act.
+func renderReach(out io.Writer, reach *coachcap.Reach) {
+	if reach == nil || reach.Acts {
+		return
+	}
+	line := reach.Why
+	if reach.Fix != "" {
+		line += " Run: " + reach.Fix
+	}
+	fmt.Fprintf(out, "\n  %s\n", line)
 }
 
 // renderMoveVerdicts shows, per kind of autonomous model move, whether it
