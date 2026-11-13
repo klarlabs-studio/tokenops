@@ -451,11 +451,15 @@
   // such. Nothing is said for a daemon that does not report it.
   function activityLine(v) {
     var periods = (v.coach && v.coach.activity) || [];
-    if (!periods.length) return null;
+    var reach = v.coach && v.coach.reach;
     var today = periods.filter(function (a) { return a.period === "today"; })[0];
     var week = periods.filter(function (a) { return a.period === "7d"; })[0];
     if (today && today.summary) return "Today: " + today.summary + ".";
     if (week && week.summary) return "Last 7 days: " + week.summary + ".";
+    // Autopilot with no hook to act through: nothing was done because
+    // nothing could be, so say what to install instead.
+    if (reach && !reach.acts) return reach.why + (reach.fix ? " Run: " + reach.fix : "");
+    if (!periods.length) return null;
     return "Nothing done on its own in the last 7 days.";
   }
 

@@ -85,6 +85,13 @@ type Report struct {
 	// prompt cache going cold. The daemon's API fills it from the event
 	// store; absent with no session current.
 	PromptCache *waste.CacheCountdown `json:"prompt_cache,omitempty"`
+	// Reach says whether autopilot has a hook to act through on this
+	// machine, and what to install when it has none. Only Status fills it,
+	// and only when the waste or models power is autonomous.
+	Reach *Reach `json:"reach,omitempty"`
+	// Wiring is which TokenOps hooks Claude Code and opencode have wired
+	// here. Only Status fills it.
+	Wiring *Wiring `json:"wiring,omitempty"`
 }
 
 // FollowThroughSummary is the follow-through evidence for one kind.
