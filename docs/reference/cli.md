@@ -2127,6 +2127,9 @@ prompt:
 Plan headroom: 5h window 38% left (runs out ~13:38 at this pace, resets 14:20), week 61% left.
 ```
 
+Where the status line's last hour measures the window, the run-out is
+forecast at that rate and the note says "at the last hour's rate" instead.
+
 Only the binding window is named, the one with the least left, plus another
 within 25 points of it. A window that will not last to its reset at the
 pace it has been used so far says when it runs out. The line is said at a
@@ -2915,8 +2918,10 @@ stopped it is unknown and the call goes ahead. opencode already compares
 the tightest plan of every provider.
 
 **Pause on pace.** `plan_runs_out_early_min` compares how many minutes
-before its reset a plan window runs out at the pace so far (0 while it
-lasts to the reset), so a rule can pause on the pace instead of a share
+before its reset a plan window runs out on the forecast glance shows: the
+last hour's rate where it was measured, else the average so far (0 while
+it lasts to the reset). The reason names which ("at the last hour's rate"
+or "at this pace"), so a rule can pause on the pace instead of a share
 left: a 5-hour window 75% used half way through runs out 1h 40m early, and
 `when: { plan_runs_out_early_min: ">= 60" }` holds there while
 `plan_left_pct: "<= 10"` does not yet. `window: 5h` or `week` names one window; without it
