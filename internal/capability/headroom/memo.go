@@ -2,6 +2,7 @@ package headroom
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -23,8 +24,26 @@ type memoReader struct {
 	floor time.Time
 
 	mu     sync.Mutex
-	events map[eventschema.EventType][]*eventschema.Envelope
+	events map[eventschema.EventType]*memoEvents
 	counts map[[2]time.Time]map[string]int64
+}
+
+// memoEvents is one type's events from the floor on, as the store gave them.
+type memoEvents struct {
+	all []*eventschema.Envelope
+	// sorted is whether all is in time order with no nil, so a read from a
+	// moment is a suffix of it, found by search rather than by a filter.
+	sorted bool
+}
+
+// inTimeOrder reports whether events are all set and in time order.
+func inTimeOrder(events []*eventschema.Envelope) bool {
+	for i, e := range events {
+		if e == nil || (i > 0 && e.Timestamp.Before(events[i-1].Timestamp)) {
+			return false
+		}
+	}
+	return true
 }
 
 // memoFloor is how far back a headroom computation reads: the start of the
@@ -61,7 +80,7 @@ func newMemoReader(r Reader, now time.Time) Reader {
 	if _, already := r.(*memoReader); already {
 		return r
 	}
-	return &memoReader{r: r, floor: memoFloor(now), events: map[eventschema.EventType][]*eventschema.Envelope{}, counts: map[[2]time.Time]map[string]int64{}}
+	return &memoReader{r: r, floor: memoFloor(now), events: map[eventschema.EventType]*memoEvents{}, counts: map[[2]time.Time]map[string]int64{}}
 }
 
 // LatestAttributesBySource and AttributesBySourceBetween pass a meter's
@@ -81,25 +100,38 @@ func (m *memoReader) AttributesBySourceBetween(ctx context.Context, source, key 
 	return nil, time.Time{}, false, nil
 }
 
+// ReadEvents answers from the floor's read. The events a question gets
+// are shared with the memo and with every other question: callers must not
+// modify the slice, and the slice's capacity is its length, so an append
+// copies it. A read the memo holds in time order costs a search, not a copy
+// of the month.
 func (m *memoReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
 	if since.Before(m.floor) {
 		// Older than anything memoised: ask the store.
 		return m.r.ReadEvents(ctx, t, since)
 	}
 	m.mu.Lock()
-	all, ok := m.events[t]
+	held, ok := m.events[t]
 	m.mu.Unlock()
 	if !ok {
-		var err error
-		if all, err = m.r.ReadEvents(ctx, t, m.floor); err != nil {
+		all, err := m.r.ReadEvents(ctx, t, m.floor)
+		if err != nil {
 			return nil, err
 		}
+		held = &memoEvents{all: all, sorted: inTimeOrder(all)}
 		m.mu.Lock()
-		m.events[t] = all
+		m.events[t] = held
 		m.mu.Unlock()
 	}
-	out := make([]*eventschema.Envelope, 0, len(all))
-	for _, e := range all {
+	if held.sorted {
+		from := sort.Search(len(held.all), func(i int) bool { return !held.all[i].Timestamp.Before(since) })
+		if from == len(held.all) {
+			return []*eventschema.Envelope{}, nil
+		}
+		return held.all[from:len(held.all):len(held.all)], nil
+	}
+	out := make([]*eventschema.Envelope, 0, len(held.all))
+	for _, e := range held.all {
 		if e != nil && !e.Timestamp.Before(since) {
 			out = append(out, e)
 		}
