@@ -2915,8 +2915,10 @@ stopped it is unknown and the call goes ahead. opencode already compares
 the tightest plan of every provider.
 
 **Pause on pace.** `plan_runs_out_early_min` compares how many minutes
-before its reset a plan window runs out at the pace so far (0 while it
-lasts to the reset), so a rule can pause on the pace instead of a share
+before its reset a plan window runs out on the forecast glance shows: the
+last hour's rate where it was measured, else the average so far (0 while
+it lasts to the reset). The reason names which ("at the last hour's rate"
+or "at this pace"), so a rule can pause on the pace instead of a share
 left: a 5-hour window 75% used half way through runs out 1h 40m early, and
 `when: { plan_runs_out_early_min: ">= 60" }` holds there while
 `plan_left_pct: "<= 10"` does not yet. `window: 5h` or `week` names one window; without it
