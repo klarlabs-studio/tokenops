@@ -813,8 +813,8 @@ Unit costs since 8 Oct 00:05, against the 4 weeks before
 ```
 
 - **Work that did not stand**: the work on a commit of yours that a later
-  commit of yours reverted within 14 days (git revert writes "This reverts
-  commit <sha>" into its message), and the work under an execution whose
+  commit of yours reverted within 14 days (git revert writes
+  `This reverts commit <sha>` into its message), and the work under an execution whose
   recorded outcome is not achieved. It costs the same as work that stood,
   so its share of the period is the expensive failures. A revert by
   someone else, or one written by hand without that line, is not seen.

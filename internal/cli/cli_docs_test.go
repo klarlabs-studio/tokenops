@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -56,6 +57,42 @@ func TestCLIDocsPageCoversEveryCommand(t *testing.T) {
 			t.Errorf("docs/reference/cli.md has a section for `tokenops %s`, which --help hides", name)
 		case !visible[name]:
 			t.Errorf("docs/reference/cli.md has a section for `tokenops %s`, which is not a command", name)
+		}
+	}
+}
+
+// bareTag is a "<word" outside code: GitHub drops it as an unknown HTML
+// tag, and the website, which builds these pages with VitePress, reads it
+// as an unclosed element and fails to build.
+var bareTag = regexp.MustCompile(`<[A-Za-z]`)
+
+// inlineCode and autolink are the spans where a "<word" is shown as written.
+var inlineCode = regexp.MustCompile("`[^`]*`|<https?://[^>]*>")
+
+// The reference pages render the same on GitHub and on the website: a
+// placeholder such as <sha> stays inside code.
+func TestReferencePagesHaveNoBareTags(t *testing.T) {
+	pages, err := filepath.Glob("../../docs/reference/*.md")
+	if err != nil || len(pages) == 0 {
+		t.Fatalf("no reference pages (%v)", err)
+	}
+	for _, page := range pages {
+		b, err := os.ReadFile(filepath.Clean(page))
+		if err != nil {
+			t.Fatal(err)
+		}
+		fence := false
+		for i, line := range strings.Split(string(b), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "```") {
+				fence = !fence
+				continue
+			}
+			if fence {
+				continue
+			}
+			if bareTag.MatchString(inlineCode.ReplaceAllString(line, "")) {
+				t.Errorf("%s:%d: a <placeholder> outside code: %s", filepath.Base(page), i+1, strings.TrimSpace(line))
+			}
 		}
 	}
 }
