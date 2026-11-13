@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.119.1 - 2026-11-13
+
+### Fixed
+
+- **menu bar:** a provider reached through a router points its turns at the provider's own bill. When a router (FireRouter, for example) picked the model for each turn, the panel showed "—" for today and the last 30 days while the provider's billed spend sat right above it, and named the router as the top model. Turns the provider bills are now marked "on the bill above", the top line reads "Top route: <router>, which picks the model for each turn", and the note on unpriced turns says the provider's own bill is what they cost.
+
+### Changed
+
+- **boundaries:** the help, the README and the CLI reference say plainly what boundaries are: they stop mistakes and drift, not an agent that sets out to get past them. The pause point, the rules and the record of answers run as your user, so an agent with an unrestricted shell can remove the pause point or edit the files; a presence-checked approval proves who approved, not that the agent could not have gone around the rule. `approve --help` no longer says a scripted or hand-written approval "gets an agent nowhere", and names removing the pause point among the routes.
+
 ## 0.119.0 - 2026-11-12
 
 ### Changed
