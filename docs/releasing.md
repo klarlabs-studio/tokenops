@@ -47,7 +47,9 @@ Then bring the website's release highlights up to date. The page at
 <https://team.klarlabs.de/changelog> is written by hand in the private
 `tokenops-team` repository (`site/changelog.md`): add a short headline and
 paragraph for the release, set its `Current release` line (the landing page
-reads its version from it), and deploy the team server (tag, then the
+reads its version from it), run `scripts/sync-reference.sh` there to copy
+this release's `docs/reference` pages into the site, and deploy the team server (tag, then the
 `newTag` bump RollOps applies). A daily check there,
 `scripts/ci/site-current.sh`, fails while the page names an older release
-than the latest one here.
+than the latest one here, or while the reference pages are not that
+release's.
