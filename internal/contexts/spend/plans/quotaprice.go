@@ -158,17 +158,17 @@ func (p *QuotaPrice) Why() string {
 	case p.Basis == PriceBasisUsedUp:
 		return fmt.Sprintf("%s %s is used up (%s)", p.Vendor, p.Window, price)
 	case p.Basis == PriceBasisPace && p.RunsOutBeforeReset > 0:
-		return fmt.Sprintf("%s %s runs out ~%s before it resets at this pace (%s left, ~%s wanted; %s)",
-			p.Vendor, p.Window, pressureSpan(p.RunsOutBeforeReset), pressureLeft(p.LeftPct), pressureLeft(p.WantedPct), price)
+		return fmt.Sprintf("%s %s runs out ~%s before it resets %s (%s left, ~%s wanted; %s)",
+			p.Vendor, p.Window, pressureSpan(p.RunsOutBeforeReset), RateWords(""), pressureLeft(p.LeftPct), pressureLeft(p.WantedPct), price)
 	case p.Basis == PriceBasisPace:
-		return fmt.Sprintf("%s %s lasts to its reset at this pace (%s left, ~%s wanted; %s)",
-			p.Vendor, p.Window, pressureLeft(p.LeftPct), pressureLeft(p.WantedPct), price)
+		return fmt.Sprintf("%s %s lasts to its reset %s (%s left, ~%s wanted; %s)",
+			p.Vendor, p.Window, RateWords(""), pressureLeft(p.LeftPct), pressureLeft(p.WantedPct), price)
 	case p.Basis == PriceBasisRecent && p.RunsOutBeforeReset > 0:
-		return fmt.Sprintf("%s %s runs out ~%s before it resets at the last hour's rate (%s left, ~%s wanted; %s)",
-			p.Vendor, p.Window, pressureSpan(p.RunsOutBeforeReset), pressureLeft(p.LeftPct), pressureLeft(p.WantedPct), price)
+		return fmt.Sprintf("%s %s runs out ~%s before it resets %s (%s left, ~%s wanted; %s)",
+			p.Vendor, p.Window, pressureSpan(p.RunsOutBeforeReset), RateWords(BasisRecent), pressureLeft(p.LeftPct), pressureLeft(p.WantedPct), price)
 	case p.Basis == PriceBasisRecent:
-		return fmt.Sprintf("%s %s lasts to its reset at the last hour's rate (%s left; %s)",
-			p.Vendor, p.Window, pressureLeft(p.LeftPct), price)
+		return fmt.Sprintf("%s %s lasts to its reset %s (%s left; %s)",
+			p.Vendor, p.Window, RateWords(BasisRecent), pressureLeft(p.LeftPct), price)
 	}
 	return fmt.Sprintf("%s %s has %s left (%s)", p.Vendor, p.Window, pressureLeft(p.LeftPct), price)
 }

@@ -48,7 +48,7 @@ func TestBurnWarningSaysWhenItRunsOut(t *testing.T) {
 	if !d.Nudge || !d.QuotaBurn || d.TipKind != burnKind {
 		t.Fatalf("want a run-out warning, got %+v", d)
 	}
-	for _, want := range []string{"5-hour Claude limit", "runs out in ~1h 20m", "40m before it resets", "40% left"} {
+	for _, want := range []string{"5-hour Claude limit", "at the last hour's rate", "runs out in ~1h 20m", "40m before it resets", "40% left"} {
 		if !strings.Contains(d.Message, want) {
 			t.Errorf("message %q missing %q", d.Message, want)
 		}
@@ -224,7 +224,7 @@ func TestQuotaStatusSaysWhatTheCoachWatches(t *testing.T) {
 		t.Errorf("status = %q", got)
 	}
 	q = burningQuota(60, 2*time.Hour, 80*time.Minute)
-	if got := QuotaStatus(dir, q, fixedNow); !strings.Contains(got, "5-hour runs out in ~1h 20m at this pace, 40m before the reset") {
+	if got := QuotaStatus(dir, q, fixedNow); !strings.Contains(got, "5-hour runs out in ~1h 20m at the last hour's rate, 40m before the reset") {
 		t.Errorf("burning status = %q", got)
 	}
 	q.Burn = plans.BurnVerdict{Stale: true}

@@ -148,7 +148,7 @@ func prepareTips(d RoutingAdviceDeps, in prepareWorkInput, workflowID string, re
 				}
 				pw := coachcap.PrepareWindow{Name: r.Provider + " " + w.Name + " window", UsedPct: w.UsedPct, ResetsIn: w.ResetsIn}
 				if w.Pace != nil && !w.Pace.LastsToReset && w.Pace.RunsOutIn > 0 {
-					pw.RunsOutIn = w.Pace.RunsOutIn
+					pw.RunsOutIn, pw.Basis = w.Pace.RunsOutIn, w.Pace.Basis
 				}
 				tin.Windows = append(tin.Windows, pw)
 			}

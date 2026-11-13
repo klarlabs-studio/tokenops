@@ -232,12 +232,13 @@ func usedUpMessage(provider string, w plans.QuotaWindow, now time.Time) string {
 		windowName(provider, w), formatSpan(w.ResetsAt.Sub(now)))
 }
 
-// burnMessage says when the window runs out at the pace of both look-backs,
-// how long before its reset, and what stretches it.
+// burnMessage says when the window runs out at the pace of both look-backs
+// (the last hour's rate, plans.BasisRecent), how long before its reset,
+// and what stretches it.
 func burnMessage(q *Quota, b plans.BurnWarning, now time.Time, verbosity string) string {
 	w := b.Window
-	msg := fmt.Sprintf("tokenops: at this pace your %s runs out in ~%s, %s before it resets (%s).",
-		windowName(q.Provider, w), formatSpan(b.RunsOutAt.Sub(now)), formatSpan(b.BeforeReset()), shareLeft(w.UsedPct))
+	msg := fmt.Sprintf("tokenops: %s your %s runs out in ~%s, %s before it resets (%s).",
+		plans.RateWords(plans.BasisRecent), windowName(q.Provider, w), formatSpan(b.RunsOutAt.Sub(now)), formatSpan(b.BeforeReset()), shareLeft(w.UsedPct))
 	if verbosity == verbosityVerbose {
 		msg += fmt.Sprintf(" That is %.1f× the even pace over the last hour and %.1f× over the last %d minutes.",
 			b.LongBurn, b.ShortBurn, int(plans.BurnShortLookback/time.Minute))
@@ -303,8 +304,8 @@ func QuotaStatus(dir string, q *Quota, now time.Time) string {
 		line += " · reading too old to forecast a run-out"
 	case len(q.Burn.Warnings) > 0:
 		b := q.Burn.Warnings[0]
-		line += fmt.Sprintf(" · %s runs out in ~%s at this pace, %s before the reset",
-			b.Window.Label, formatSpan(b.RunsOutAt.Sub(now)), formatSpan(b.BeforeReset()))
+		line += fmt.Sprintf(" · %s runs out in ~%s %s, %s before the reset",
+			b.Window.Label, formatSpan(b.RunsOutAt.Sub(now)), plans.RateWords(plans.BasisRecent), formatSpan(b.BeforeReset()))
 		if e := loadWatches(resolveDir(dir))[windowKey(q.Provider, b.Window)]; e != nil && e.Warned {
 			line += " (warned)"
 		}

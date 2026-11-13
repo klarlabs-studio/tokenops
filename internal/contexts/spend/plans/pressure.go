@@ -87,12 +87,8 @@ func (p *Pressure) Why() string {
 		return ""
 	}
 	if p.RunsOutBeforeReset > 0 {
-		rate := "at this pace"
-		if p.Basis == BasisRecent {
-			rate = "at the last hour's rate"
-		}
 		return fmt.Sprintf("%s %s runs out ~%s before it resets %s (%s left)",
-			p.Vendor, p.Window, pressureSpan(p.RunsOutBeforeReset), rate, pressureLeft(p.LeftPct))
+			p.Vendor, p.Window, pressureSpan(p.RunsOutBeforeReset), RateWords(p.Basis), pressureLeft(p.LeftPct))
 	}
 	return fmt.Sprintf("%s %s has %s left", p.Vendor, p.Window, pressureLeft(p.LeftPct))
 }

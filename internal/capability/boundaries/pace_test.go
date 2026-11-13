@@ -113,7 +113,7 @@ func TestPaceRuleReadsTheLastHourFromTheStatusLine(t *testing.T) {
 		When: map[string]string{"plan_runs_out_early_min": ">= 30"}})
 	writeRecentBurn(t, env.LimitsPath)
 	res, _ := Guard(rule, call("s1"), env)
-	if res.Verdict != VerdictDeny || !strings.Contains(res.Reason, "Claude 5h runs out 46m before its reset") {
+	if res.Verdict != VerdictDeny || !strings.Contains(res.Reason, "Claude 5h runs out 46m before its reset at the last hour's rate (>= 30m)") {
 		t.Fatalf("running out at the last hour's rate = %+v", res)
 	}
 	// The same share with no earlier reading: the average lasts.
@@ -135,5 +135,45 @@ func TestFiguresCarryTheRecentForecast(t *testing.T) {
 	f := Figures([]plans.HeadroomReport{{Provider: "anthropic", Windows: []plans.VendorWindow{w}}}, nil, testNow)
 	if got := f.PlanEarlyMin["anthropic"]["5h"]; got != 45 {
 		t.Errorf("early = %v, want 45", got)
+	}
+	if got := f.PlanEarlyBasis["anthropic"]["5h"]; got != plans.BasisRecent {
+		t.Errorf("basis = %q, want %q", got, plans.BasisRecent)
+	}
+}
+
+// The reason from the daemon's figures names the rate each window's
+// run-out was forecast at, and keeps it with the window when another
+// agent's plan is the tighter one.
+func TestPaceReasonFromFiguresNamesTheRate(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		basis  map[string]map[string]string
+		spends []string
+		want   string
+	}{
+		{"average", nil, nil, "Claude week runs out 10h 0m before its reset at this pace"},
+		{"recent", map[string]map[string]string{"anthropic": {"week": plans.BasisRecent}}, nil,
+			"Claude week runs out 10h 0m before its reset at the last hour's rate"},
+		{"another agent's recent", map[string]map[string]string{"openai": {"week": plans.BasisRecent}}, []string{"openai"},
+			"Codex week runs out 20h 0m before its reset at the last hour's rate"},
+		{"the session's recent, another agent's average", map[string]map[string]string{"anthropic": {"week": plans.BasisRecent}}, []string{"openai"},
+			"Codex week runs out 20h 0m before its reset at this pace"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := testEnv(t, false)
+			if err := env.Dir.PutFigures(boundaryledger.Figures{ObservedAt: testNow,
+				PlanLeftPct:    map[string]map[string]float64{"anthropic": {"week": 60}, "openai": {"week": 30}},
+				PlanEarlyMin:   map[string]map[string]float64{"anthropic": {"week": 600}, "openai": {"week": 1200}},
+				PlanEarlyBasis: tc.basis,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			c := call("s1")
+			c.Harness, c.Provider, c.Spends = "", "anthropic", tc.spends
+			res, _ := Guard(paceRule(t), c, env)
+			if res.Verdict != VerdictDeny || !strings.Contains(res.Reason, tc.want) {
+				t.Fatalf("reason = %q, want %q", res.Reason, tc.want)
+			}
+		})
 	}
 }

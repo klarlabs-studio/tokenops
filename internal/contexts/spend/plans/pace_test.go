@@ -38,3 +38,18 @@ func TestPaceAt(t *testing.T) {
 		}
 	}
 }
+
+// Every surface names a forecast's rate in the same words.
+func TestRateWords(t *testing.T) {
+	for _, tc := range []struct {
+		basis, want string
+	}{
+		{"", "at this pace"},
+		{BasisRecent, "at the last hour's rate"},
+		{"unknown", "at this pace"},
+	} {
+		if got := RateWords(tc.basis); got != tc.want {
+			t.Errorf("RateWords(%q) = %q, want %q", tc.basis, got, tc.want)
+		}
+	}
+}

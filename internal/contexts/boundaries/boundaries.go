@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/policy"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
 // Action is what the agent is about to do. Only resource actions: what
@@ -67,7 +68,7 @@ const (
 	FieldSessionCost Field = "session_cost_usd"
 	FieldPlanLeft    Field = "plan_left_pct"
 	// FieldPlanEarly is how many minutes before its reset a plan window
-	// runs out at the pace so far: 0 while it lasts to the reset.
+	// runs out on the one forecast: 0 while it lasts to the reset.
 	FieldPlanEarly   Field = "plan_runs_out_early_min"
 	FieldBudgetUsed  Field = "budget_used_pct"
 	FieldModelTier   Field = "model_tier"
@@ -615,12 +616,17 @@ type Facts struct {
 	// each window keeps the tighter. A window absent here is PlanVendor's.
 	PlanVendors map[Window]string
 	// PlanEarlyMin is how many minutes before its reset each plan window
-	// runs out at the pace so far, by window; 0 while it lasts. A window
+	// runs out on the one forecast (plans.VendorWindow.Forecast), by
+	// window; 0 while it lasts. A window
 	// absent is unknown: no reading, or too early in it to judge a pace.
 	PlanEarlyMin map[Window]float64
 	// PlanEarlyVendors names whose plan each PlanEarlyMin window reads
 	// when it is not PlanVendor's.
 	PlanEarlyVendors map[Window]string
+	// PlanEarlyBasis is the rate each PlanEarlyMin window's run-out was
+	// forecast at (plans.BasisRecent for the last hour's); a window
+	// absent was forecast at its average so far.
+	PlanEarlyBasis map[Window]string
 	// BudgetUsedPct is the share of each configured budget used in its
 	// current window, by budget name. A budget absent is unknown.
 	BudgetUsedPct map[string]float64
@@ -737,8 +743,8 @@ func (c Condition) holds(f Facts) (string, bool) {
 		if v := f.PlanEarlyVendors[window]; v != "" {
 			vendor = v
 		}
-		return strings.TrimSpace(fmt.Sprintf("%s %s runs out %s before its reset at this pace (%s %gm)",
-			vendor, window, minutesWords(early), c.Op, c.Number)), true
+		return strings.TrimSpace(fmt.Sprintf("%s %s runs out %s before its reset %s (%s %gm)",
+			vendor, window, minutesWords(early), plans.RateWords(f.PlanEarlyBasis[window]), c.Op, c.Number)), true
 	case FieldBudgetUsed:
 		used, name, ok := budgetUsed(f.BudgetUsedPct, c.Budget)
 		if !ok || !compare(used, c.Op, c.Number) {

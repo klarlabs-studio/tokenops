@@ -53,14 +53,15 @@ type NoteWindow struct {
 	Pace *plans.WindowPace
 }
 
-// runsOutAt is when w runs out on the one forecast glance shows, zero when
-// it lasts to its reset or its pace is unknown.
-func (w NoteWindow) runsOutAt(now time.Time) time.Time {
+// runsOutAt is when w runs out on the one forecast glance shows, and the
+// rate that forecast read; zero when it lasts to its reset or its pace is
+// unknown.
+func (w NoteWindow) runsOutAt(now time.Time) (time.Time, string) {
 	p := plans.VendorWindow{UsedPct: 100 - w.LeftPct, Duration: w.Duration, ResetsAt: w.ResetsAt, Pace: w.Pace}.Forecast(now)
 	if p == nil || p.LastsToReset || p.RunsOutIn <= 0 {
-		return time.Time{}
+		return time.Time{}, ""
 	}
-	return now.Add(p.RunsOutIn)
+	return now.Add(p.RunsOutIn), p.Basis
 }
 
 // ReadHeadroom reads the provider's plan windows from what is already on
@@ -140,8 +141,8 @@ func HeadroomNote(ws []NoteWindow, now time.Time, loc *time.Location) string {
 		p := fmt.Sprintf("%s %.0f%% left", label, math.Round(w.LeftPct))
 		if !w.ResetsAt.IsZero() && w.ResetsAt.After(now) {
 			resets := "resets " + clockAt(w.ResetsAt, now, loc)
-			if out := w.runsOutAt(now); !out.IsZero() {
-				resets = "runs out ~" + clockAt(out, now, loc) + " at this pace, " + resets
+			if out, basis := w.runsOutAt(now); !out.IsZero() {
+				resets = "runs out ~" + clockAt(out, now, loc) + " " + plans.RateWords(basis) + ", " + resets
 			}
 			p += " (" + resets + ")"
 		}
@@ -203,7 +204,7 @@ func DecideHeadroomNote(dir, session string, ws []NoteWindow, now time.Time, loc
 		cur.Steps[w.Name] = step(w.LeftPct)
 		// A window starting to run out before its reset is news, even
 		// within a step.
-		if !w.runsOutAt(now).IsZero() {
+		if out, _ := w.runsOutAt(now); !out.IsZero() {
 			cur.Steps[w.Name+":runs_out"] = 1
 		}
 	}
