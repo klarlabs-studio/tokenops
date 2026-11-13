@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/infra/tempfile"
+	"go.klarlabs.de/tokenops/internal/tempfile"
 )
 
 // Window is one limit as Claude Code reports it.

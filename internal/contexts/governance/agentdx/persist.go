@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/tempfile"
 )
 
 // A saved cache lets a restarted daemon pick up where the last one
@@ -75,7 +77,7 @@ func (c *TranscriptCache) Save(path, key string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".transcripts-*")
+	tmp, err := tempfile.Create(filepath.Dir(path), ".transcripts-*")
 	if err != nil {
 		return err
 	}

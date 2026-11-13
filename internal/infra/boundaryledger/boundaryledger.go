@@ -40,7 +40,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
-	"go.klarlabs.de/tokenops/internal/infra/tempfile"
+	"go.klarlabs.de/tokenops/internal/tempfile"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 

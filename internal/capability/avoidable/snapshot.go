@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/infra/tempfile"
+	"go.klarlabs.de/tokenops/internal/tempfile"
 )
 
 // The week's report reads five weeks of turns, every workflow of the

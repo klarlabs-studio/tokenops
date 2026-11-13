@@ -112,3 +112,24 @@ func TestCheckpointerWritesBehindTheReads(t *testing.T) {
 		t.Fatal("loaded an unreadable checkpoint")
 	}
 }
+
+// A checkpoint's temp file left by a writer killed before its rename is
+// cleared by the next write, instead of staying beside the checkpoint.
+func TestCheckpointWriteClearsALeftoverTempFile(t *testing.T) {
+	dir := t.TempDir()
+	leftover := filepath.Join(dir, ".checkpoint-123456")
+	if err := os.WriteFile(leftover, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(leftover, old, old); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checkpointer[int]{Path: filepath.Join(dir, "checkpoint.json"), Version: 1}
+	if err := c.write(1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(leftover); !os.IsNotExist(err) {
+		t.Fatalf("leftover temp file still there (stat err %v)", err)
+	}
+}

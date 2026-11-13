@@ -166,3 +166,23 @@ func TestLoadedCacheSharesRepeatedStrings(t *testing.T) {
 	}
 	scanBoth(t, "after a load", second, cc, cx, cacheEpoch)
 }
+
+// A saved cache's temp file left by a daemon killed before its rename is
+// cleared by the next save; the cache is large, so each one left is costly.
+func TestSaveClearsALeftoverTempFile(t *testing.T) {
+	dir := t.TempDir()
+	leftover := filepath.Join(dir, ".transcripts-123456")
+	if err := os.WriteFile(leftover, []byte("partial"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(leftover, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := NewTranscriptCache().Save(filepath.Join(dir, "transcripts.gob"), "r1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(leftover); !os.IsNotExist(err) {
+		t.Fatalf("leftover temp file still there (stat err %v)", err)
+	}
+}

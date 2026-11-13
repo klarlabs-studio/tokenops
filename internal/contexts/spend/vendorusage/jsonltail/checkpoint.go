@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/tempfile"
 )
 
 // A daemon start used to read every transcript again from byte zero: the
@@ -138,7 +140,7 @@ func (c *Checkpointer[P]) write(v P) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("jsonltail: checkpoint: %w", err)
 	}
-	tmp, err := os.CreateTemp(dir, ".checkpoint-*")
+	tmp, err := tempfile.Create(dir, ".checkpoint-*")
 	if err != nil {
 		return fmt.Errorf("jsonltail: checkpoint: %w", err)
 	}

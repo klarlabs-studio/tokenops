@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/infra/tempfile"
+	"go.klarlabs.de/tokenops/internal/tempfile"
 )
 
 // Report is the plan a client last reported for a provider, and when it
