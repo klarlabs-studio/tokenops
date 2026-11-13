@@ -147,11 +147,30 @@ func Figures(reports []plans.HeadroomReport, budgetUsed map[string]float64, now 
 				}
 				if cur, ok := early[name]; !ok || before.Minutes() > cur {
 					early[name] = before.Minutes()
+					setBasis(&out, r.Provider, name, w.Forecast(now))
 				}
 			}
 		}
 	}
 	return out
+}
+
+// setBasis records the rate the provider's window was forecast at; the
+// window's average so far is the default and leaves it absent.
+func setBasis(fig *boundaryledger.Figures, provider, window string, pace *plans.WindowPace) {
+	if pace == nil || pace.Basis == "" {
+		if byWindow := fig.PlanEarlyBasis[provider]; byWindow != nil {
+			delete(byWindow, window)
+		}
+		return
+	}
+	if fig.PlanEarlyBasis == nil {
+		fig.PlanEarlyBasis = map[string]map[string]string{}
+	}
+	if fig.PlanEarlyBasis[provider] == nil {
+		fig.PlanEarlyBasis[provider] = map[string]string{}
+	}
+	fig.PlanEarlyBasis[provider][window] = pace.Basis
 }
 
 // WithBudgets adds the measured budget windows to fig, each hard window

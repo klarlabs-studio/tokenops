@@ -44,7 +44,8 @@ func AdviceNow(rules []domain.Rule, env Env, reports []plans.HeadroomReport) []A
 	if len(plan.PlanLeftPct) == 0 {
 		plan = Figures(reports, nil, now)
 	}
-	facts := domain.Facts{PlanLeftPct: figuresPlanLeft(plan, ""), PlanEarlyMin: figuresPlanEarly(plan, ""),
+	early, basis := figuresPlanEarly(plan, "")
+	facts := domain.Facts{PlanLeftPct: figuresPlanLeft(plan, ""), PlanEarlyMin: early, PlanEarlyBasis: basis,
 		BudgetUsedPct: fig.BudgetUsedPct, Now: env.localNow()}
 	var out []Advice
 	for _, r := range judged {

@@ -3,6 +3,8 @@ package boundaries
 import (
 	"strings"
 	"testing"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
 func TestPlanRunsOutEarly(t *testing.T) {
@@ -54,5 +56,32 @@ func TestPlanRunsOutEarly(t *testing.T) {
 	if _, err := Parse([]RuleSpec{{Name: "x", Action: "spend", Require: "ask",
 		When: map[string]string{"plan_runs_out_early_min": ">= 60"}}}); err == nil {
 		t.Error("a spend rule took a plan pace")
+	}
+}
+
+// The reason names the rate the run-out was forecast at, in the words
+// glance and the coach use for it.
+func TestPlanRunsOutEarlyNamesTheRate(t *testing.T) {
+	rs, err := Parse([]RuleSpec{{Name: "pace", Action: "continue", Require: "ask",
+		When: map[string]string{"plan_runs_out_early_min": ">= 30"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		basis map[Window]string
+		want  string
+	}{
+		{"average", nil, "Claude 5h runs out 46m before its reset at this pace (>= 30m)"},
+		{"recent", map[Window]string{Window5h: plans.BasisRecent}, "Claude 5h runs out 46m before its reset at the last hour's rate (>= 30m)"},
+		{"another window's basis", map[Window]string{WindowWeek: plans.BasisRecent}, "Claude 5h runs out 46m before its reset at this pace (>= 30m)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := Facts{PlanVendor: "Claude", PlanEarlyMin: map[Window]float64{Window5h: 46}, PlanEarlyBasis: tc.basis}
+			m, ok := rs[0].Match(ActionContinue, f)
+			if !ok || m.Crossed() != tc.want {
+				t.Errorf("crossed = %v %q, want %q", ok, m.Crossed(), tc.want)
+			}
+		})
 	}
 }

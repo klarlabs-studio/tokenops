@@ -44,6 +44,16 @@ type WindowPace struct {
 // quarter hour, the coach's run-out warning.
 const BasisRecent = "recent"
 
+// RateWords names the rate a forecast with basis projects, in the words
+// every surface uses for it: "at the last hour's rate" for BasisRecent,
+// "at this pace" for the window's average so far.
+func RateWords(basis string) string {
+	if basis == BasisRecent {
+		return "at the last hour's rate"
+	}
+	return "at this pace"
+}
+
 // Forecast is the one forecast of w at now: the pace ApplyBurn set from the
 // rate of the last hour and quarter hour where the look-backs measured the
 // window, else its average pace so far (PaceAt). Glance shows it, and the
