@@ -2127,6 +2127,9 @@ prompt:
 Plan headroom: 5h window 38% left (runs out ~13:38 at this pace, resets 14:20), week 61% left.
 ```
 
+Where the status line's last hour measures the window, the run-out is
+forecast at that rate and the note says "at the last hour's rate" instead.
+
 Only the binding window is named, the one with the least left, plus another
 within 25 points of it. A window that will not last to its reset at the
 pace it has been used so far says when it runs out. The line is said at a

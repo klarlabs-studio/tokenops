@@ -131,7 +131,7 @@ func TestHeadroomNoteReadsTheLastHour(t *testing.T) {
 	}
 	ws := ReadHeadroom(limits, boundaryledger.Dir(t.TempDir()), "anthropic", pressureNow)
 	note := HeadroomNote(ws, pressureNow, time.UTC)
-	if !strings.Contains(note, "runs out ~13:1") {
+	if !strings.Contains(note, "runs out ~13:1") || !strings.Contains(note, "at the last hour's rate") {
 		t.Errorf("note = %q, want a run-out at the last hour's rate", note)
 	}
 }
