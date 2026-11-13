@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"go.klarlabs.de/tokenops/internal/hookconfig"
 	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
 )
 
@@ -42,10 +43,7 @@ func loadSettings(path string) (map[string]any, bool, error) {
 
 // hooksMap returns settings["hooks"] as a map, creating/normalising it.
 func hooksMap(settings map[string]any) map[string]any {
-	if h, ok := settings["hooks"].(map[string]any); ok {
-		return h
-	}
-	return map[string]any{}
+	return hookconfig.Hooks(settings)
 }
 
 // mergeHook idempotently inserts entry into hooks[event] under the group with
@@ -128,22 +126,10 @@ func retireMatchers(hooks map[string]any, event, marker string, matchers ...stri
 	return removed
 }
 
-// eventEntries decomposes one element of an event's list into the hook
-// entries it holds.
-//
-// Claude Code and Codex nest entries under a group carrying an optional
-// matcher; Cursor puts the entry straight in the list. Returning the group
-// (nil when the shape is flat) is what lets a caller write a filtered list
-// back into the right place without knowing which client wrote the file.
+// eventEntries is hookconfig.EventEntries: a nested element is its group,
+// its matcher and its hooks; a flat one is itself the entry.
 func eventEntries(elem any) (group map[string]any, matcher string, entries []any) {
-	m, ok := elem.(map[string]any)
-	if !ok {
-		return nil, "", nil
-	}
-	if hlist, nested := m["hooks"].([]any); nested {
-		return m, matcherOf(m), hlist
-	}
-	return nil, "", []any{m}
+	return hookconfig.EventEntries(elem)
 }
 
 // removeMarker deletes every tokenops entry carrying marker, across every
@@ -203,97 +189,30 @@ type markerLoc struct {
 	command string
 }
 
+// findMarkerEntries lists the entries under every event that run marker.
 func findMarkerEntries(hooks map[string]any, marker string) []markerLoc {
-	var out []markerLoc
-	for event, raw := range hooks {
-		list, _ := raw.([]any)
-		for _, elem := range list {
-			_, matcher, entries := eventEntries(elem)
-			for _, h := range entries {
-				hm, ok := h.(map[string]any)
-				if !ok || !isMarkerEntry(hm, marker) {
-					continue
-				}
-				cmdStr, _ := hm["command"].(string)
-				out = append(out, markerLoc{event: event, matcher: matcher, command: cmdStr})
-			}
-		}
+	found := hookconfig.Find(hooks, marker)
+	out := make([]markerLoc, 0, len(found))
+	for _, l := range found {
+		out = append(out, markerLoc{event: l.Event, matcher: l.Matcher, command: l.Command})
 	}
 	return out
 }
 
 func matcherOf(group map[string]any) string {
-	s, _ := group["matcher"].(string)
-	return s
+	return hookconfig.MatcherOf(group)
 }
 
-// isMarkerEntry reports whether a hook entry is one tokenops owns.
-//
-// Three on-disk shapes reach here and only the first carries the verb in
-// args[0]. Claude Code takes `command` plus an `args` array; Codex takes the
-// whole invocation as one `command` string with type "command"; Cursor takes
-// the same string with no `type` key at all. A matcher that knew only the
-// Claude Code shape answered "no hooks wired" for two clients whose files
-// had them — so match args[0] when there is an args array, and the command
-// line's verb when there is not.
 func isMarkerEntry(entry map[string]any, marker string) bool {
-	if t, _ := entry["type"].(string); t != "" && t != "command" {
-		return false
-	}
-	if args, _ := entry["args"].([]any); len(args) > 0 {
-		first, _ := args[0].(string)
-		return first == marker
-	}
-	cmd, _ := entry["command"].(string)
-	return cmd != "" && commandVerb(cmd) == marker
+	return hookconfig.IsEntry(entry, marker)
 }
 
-// commandVerb returns the tokenops subcommand in a one-string invocation,
-// i.e. the token after the binary path.
-//
-// It cannot be strings.Fields(cmd)[1]: the writers quote a binary path
-// holding spaces, so "'/Applications/My Tools/tokenops' route-guard" would
-// report "Tools/tokenops'" and the entry would be invisible to status and
-// survive an uninstall — on exactly the machines whose paths have spaces.
 func commandVerb(cmd string) string {
-	fields := splitCommandLine(cmd)
-	if len(fields) < 2 {
-		return ""
-	}
-	return fields[1]
+	return hookconfig.CommandVerb(cmd)
 }
 
-// splitCommandLine splits on whitespace, treating a single-quoted run as one
-// token. Single quotes are all shellQuote ever emits, so a full shell lexer
-// would be answering a question nothing asks.
 func splitCommandLine(s string) []string {
-	var (
-		out     []string
-		cur     strings.Builder
-		quoted  bool
-		started bool
-	)
-	flush := func() {
-		if started {
-			out = append(out, cur.String())
-			cur.Reset()
-			started = false
-		}
-	}
-	for _, r := range s {
-		switch {
-		case r == '\'':
-			quoted = !quoted
-			started = true
-		case !quoted && (r == ' ' || r == '\t'):
-			flush()
-		default:
-			cur.WriteRune(r)
-			started = true
-		}
-	}
-	flush()
-	return out
+	return hookconfig.SplitCommand(s)
 }
 
 // shellQuote wraps a path holding spaces so the command string survives
