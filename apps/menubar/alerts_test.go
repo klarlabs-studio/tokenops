@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // glanceAt is a glance with Claude's week and session and a pay-as-you-go
@@ -217,5 +218,21 @@ func TestAlertsWhenASpendReadingStops(t *testing.T) {
 	b.observe(none(false))
 	if got := titles(b.observe(none(true))) + titles(b.observe(none(false))); got != "" {
 		t.Errorf("no limit: %q", got)
+	}
+}
+
+// The run-out names the rate the daemon's forecast projected, in the
+// glance's words: the window's average so far, or the last hour's rate.
+func TestWarningNamesTheForecastRate(t *testing.T) {
+	for _, tc := range []struct {
+		basis, want string
+	}{
+		{"", "Runs out in 2h 0m at this pace; resets in 1d 6h."},
+		{"recent", "Runs out in 2h 0m at the last hour's rate; resets in 1d 6h."},
+	} {
+		m := measure{words: "Weekly window", used: 81, resetsIn: "30h0m0s", pace: &pace{RunsOutInNs: int64(2 * time.Hour), Basis: tc.basis}}
+		if got := warning(m, 1).Body; got != tc.want {
+			t.Errorf("basis %q: %q, want %q", tc.basis, got, tc.want)
+		}
 	}
 }
