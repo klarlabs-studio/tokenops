@@ -537,6 +537,13 @@ type Filter struct {
 	Since        time.Time
 	Until        time.Time
 	Limit        int
+	// Linked keeps only the events that can join work: those linked to an
+	// execution or an experiment, and those whose actor is one of Actors.
+	// Every other event is left out, so a read of a busy window never
+	// decodes the events no attempt can claim. The association columns
+	// decide it, the same columns the decoded envelope carries.
+	Linked bool
+	Actors []string
 }
 
 const defaultQueryLimit = 1000
@@ -599,6 +606,17 @@ func (f Filter) where() ([]string, []any) {
 	if f.Model != "" {
 		conds = append(conds, "model = ?")
 		args = append(args, f.Model)
+	}
+	if f.Linked {
+		linked := []string{"execution_id IS NOT NULL", "experiment_id IS NOT NULL"}
+		if len(f.Actors) > 0 {
+			marks := strings.TrimSuffix(strings.Repeat("?,", len(f.Actors)), ",")
+			linked = append(linked, "actor_id IN ("+marks+")")
+			for _, a := range f.Actors {
+				args = append(args, a)
+			}
+		}
+		conds = append(conds, "("+strings.Join(linked, " OR ")+")")
 	}
 	if !f.Since.IsZero() {
 		conds = append(conds, "timestamp_ns >= ?")
