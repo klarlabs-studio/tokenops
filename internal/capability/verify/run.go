@@ -70,7 +70,10 @@ func Run(ctx context.Context, events EventReader, w Window, experimentID string,
 func CompareStored(ctx context.Context, events EventReader, rs []reconstruct.Work, since time.Time, experimentID string) (Report, error) {
 	relevant := bearsOn(rs)
 	var kept []*eventschema.Envelope
-	err := events.EachMatching(ctx, sqlite.Filter{Since: since}, func(env *eventschema.Envelope) error {
+	// The store drops the rows bearsOn would drop on their columns alone,
+	// so they are never decoded; bearsOn still checks the time of the rest.
+	f := sqlite.Filter{Since: since, Linked: true, Actors: actorsOf(rs)}
+	err := events.EachMatching(ctx, f, func(env *eventschema.Envelope) error {
 		if relevant(env) {
 			kept = append(kept, env)
 		}
@@ -80,6 +83,21 @@ func CompareStored(ctx context.Context, events EventReader, rs []reconstruct.Wor
 		return Report{}, err
 	}
 	return CompareReconstructedExperiment(rs, kept, experimentID), nil
+}
+
+// actorsOf lists the distinct actors that ran an execution in rs, the only
+// actors whose events can join an attempt by time.
+func actorsOf(rs []reconstruct.Work) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, r := range rs {
+		by := string(r.Execution.By)
+		if by != "" && !seen[by] {
+			seen[by] = true
+			out = append(out, by)
+		}
+	}
+	return out
 }
 
 // bearsOn reports whether an event can change the comparison of rs.
