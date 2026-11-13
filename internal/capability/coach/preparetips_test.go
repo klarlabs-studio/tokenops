@@ -6,6 +6,7 @@ import (
 	"time"
 
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
 func TestPrepareWorkTips(t *testing.T) {
@@ -23,7 +24,9 @@ func TestPrepareWorkTips(t *testing.T) {
 		{"a nearly used window", PrepareTipInput{Windows: []PrepareWindow{{Name: "Claude week window", UsedPct: 93, ResetsIn: "1d 2h"}}},
 			[]string{TipWindowLow}, []string{"Claude week window"}, []string{"Claude week window is 93% used (resets in 1d 2h)"}},
 		{"a window running out before its reset", PrepareTipInput{Windows: []PrepareWindow{{Name: "Claude 5h window", UsedPct: 40, RunsOutIn: 95 * time.Minute}}},
-			[]string{TipWindowLow}, []string{"Claude 5h window"}, []string{"runs out in 1h35m at the pace so far"}},
+			[]string{TipWindowLow}, []string{"Claude 5h window"}, []string{"runs out in 1h35m at this pace"}},
+		{"a window running out at the last hour's rate", PrepareTipInput{Windows: []PrepareWindow{{Name: "Claude 5h window", UsedPct: 40, RunsOutIn: 95 * time.Minute, Basis: plans.BasisRecent}}},
+			[]string{TipWindowLow}, []string{"Claude 5h window"}, []string{"runs out in 1h35m at the last hour's rate"}},
 		{"a window with room says nothing", PrepareTipInput{Windows: []PrepareWindow{{Name: "Claude 5h window", UsedPct: 40}}}, nil, nil, nil},
 		{"one window is named once", PrepareTipInput{ShareAction: "defer", ShareWindow: "Claude 5h window", ShareReason: "r",
 			Windows: []PrepareWindow{{Name: "Claude 5h window", UsedPct: 95}}}, []string{TipWindowFit}, []string{"Claude 5h window"}, nil},

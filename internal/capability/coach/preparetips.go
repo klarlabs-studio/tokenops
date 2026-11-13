@@ -6,6 +6,7 @@ import (
 	"time"
 
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
 // PrepareTipInput is what tokenops_prepare_work knows about the work
@@ -35,9 +36,12 @@ type PrepareWindow struct {
 	Name     string
 	UsedPct  float64
 	ResetsIn string
-	// RunsOutIn is when the window runs out at the pace so far, zero
-	// when it lasts to its reset or the pace is unknown.
+	// RunsOutIn is when the window runs out on the glance's forecast,
+	// zero when it lasts to its reset or the pace is unknown.
 	RunsOutIn time.Duration
+	// Basis is the rate RunsOutIn projects (plans.WindowPace.Basis):
+	// empty for the average so far, plans.BasisRecent for the last hour's.
+	Basis string
 }
 
 // WindowLowPct is how full a plan window must be for prepare_work to tip
@@ -67,7 +71,7 @@ func PrepareWorkTips(in PrepareTipInput) []DecisionTip {
 		case w.UsedPct >= WindowLowPct:
 			msg = fmt.Sprintf("tokenops: the %s is %.0f%% used", w.Name, w.UsedPct)
 		case w.RunsOutIn > 0:
-			msg = fmt.Sprintf("tokenops: the %s runs out in %s at the pace so far", w.Name, shortDuration(w.RunsOutIn))
+			msg = fmt.Sprintf("tokenops: the %s runs out in %s %s", w.Name, shortDuration(w.RunsOutIn), plans.RateWords(w.Basis))
 		default:
 			continue
 		}
