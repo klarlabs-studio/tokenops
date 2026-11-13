@@ -15,6 +15,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/infra/teamclient"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
 )
 
@@ -76,7 +77,18 @@ func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components,
 			now := time.Now()
 			o := opts
 			o.Days, o.FullDays = cadence.days(now, full), full
-			cadence.done(now, o.Days, full, uploadTeamOnce(ctx, deps, o, path, logger))
+			// Read before the upload, so events that arrive while it is
+			// built make the next one run.
+			pos, known := storePosition(ctx, components.Store)
+			if known && cadence.quiet(now, o.Days, pos) {
+				logger.Debug("team upload skipped: no event changed since the last one")
+			} else {
+				err := uploadTeamOnce(ctx, deps, o, path, logger)
+				cadence.done(now, o.Days, full, err)
+				if known {
+					cadence.sent(now, o.Days, pos, err)
+				}
+			}
 			select {
 			case <-ctx.Done():
 				return nil
@@ -115,6 +127,12 @@ type teamCadence struct {
 	full time.Time
 	// failed is whether the last upload did not reach the server.
 	failed bool
+	// sentAt, sentDays and sentPos are when the last upload the server
+	// took was built, how many days it covered, and where the event store
+	// stood as it was built.
+	sentAt   time.Time
+	sentDays int
+	sentPos  sqlite.Position
 }
 
 // days is how many days the upload at now covers, of the full n.
@@ -134,6 +152,41 @@ func (c *teamCadence) done(now time.Time, days, n int, err error) {
 	if err == nil && days == n {
 		c.full = now
 	}
+}
+
+// storePosition is where store stands, and whether it could be read.
+func storePosition(ctx context.Context, store *sqlite.Store) (sqlite.Position, bool) {
+	if store == nil {
+		return sqlite.Position{}, false
+	}
+	pos, err := store.Position(ctx)
+	return pos, err == nil
+}
+
+// teamQuietMax is the longest an upload is skipped because the event
+// store has not moved. The upload also reads transcripts, git and, on an
+// owner's machine, a provider's cost API, which change without an event;
+// those reach the team within this long.
+const teamQuietMax = 6 * time.Hour
+
+// quiet is whether the upload at now, covering days, can be skipped: the
+// event store stands at pos, where it stood when the last upload was sent,
+// that upload covered at least these days of the same UTC day, and it was
+// sent less than teamQuietMax ago (ADR 0019). Overnight, with nobody
+// working, each hourly upload rebuilt the same two days for minutes and
+// sent the server what it already had.
+func (c *teamCadence) quiet(now time.Time, days int, pos sqlite.Position) bool {
+	return !c.failed && !c.sentAt.IsZero() && pos == c.sentPos && days <= c.sentDays &&
+		sameUTCDay(c.sentAt, now) && now.Sub(c.sentAt) < teamQuietMax
+}
+
+// sent notes the store's position pos when the upload at now, covering
+// days, was built; only an upload the server took counts.
+func (c *teamCadence) sent(now time.Time, days int, pos sqlite.Position, err error) {
+	if err != nil {
+		return
+	}
+	c.sentAt, c.sentDays, c.sentPos = now, days, pos
 }
 
 func sameUTCDay(a, b time.Time) bool {
