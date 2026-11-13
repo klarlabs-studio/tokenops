@@ -25,7 +25,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/moveverdict"
 	"go.klarlabs.de/tokenops/internal/infra/filelock"
-	"go.klarlabs.de/tokenops/internal/infra/tempfile"
+	"go.klarlabs.de/tokenops/internal/tempfile"
 )
 
 // Store is the move-verify directory.

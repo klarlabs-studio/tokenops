@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/infra/tempfile"
+	"go.klarlabs.de/tokenops/internal/tempfile"
 	"go.klarlabs.de/tokenops/pkg/teamwire"
 )
 

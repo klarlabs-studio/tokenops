@@ -24,7 +24,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
-	"go.klarlabs.de/tokenops/internal/infra/tempfile"
+	"go.klarlabs.de/tokenops/internal/tempfile"
 )
 
 // Status is what became of the setting.

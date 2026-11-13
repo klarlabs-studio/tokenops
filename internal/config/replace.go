@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	"go.klarlabs.de/tokenops/internal/infra/filelock"
-	"go.klarlabs.de/tokenops/internal/infra/tempfile"
+	"go.klarlabs.de/tokenops/internal/tempfile"
 )
 
 // WriteFile replaces the config at path with data, whole or not at all,
