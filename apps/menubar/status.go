@@ -68,6 +68,9 @@ type pace struct {
 	Status       string `json:"status"`
 	LastsToReset bool   `json:"lasts_to_reset"`
 	RunsOutInNs  int64  `json:"runs_out_in_ns"`
+	// Basis is the rate RunsOutInNs projects: empty for the window's
+	// average so far, "recent" for the last hour's (plans.BasisRecent).
+	Basis string `json:"basis"`
 }
 
 // status is what the tray shows. The icon is a fuel gauge: the headroom

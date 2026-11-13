@@ -160,9 +160,18 @@ func warning(m measure, step int) note {
 	}
 	body := resets
 	if p := m.pace; p != nil && !p.LastsToReset && p.RunsOutInNs > 0 {
-		body = strings.TrimSuffix(fmt.Sprintf("Runs out in %s at this pace; %s", humanDuration(time.Duration(p.RunsOutInNs).String()), resets), "; ")
+		body = strings.TrimSuffix(fmt.Sprintf("Runs out in %s %s; %s", humanDuration(time.Duration(p.RunsOutInNs).String()), rateWords(p.Basis), resets), "; ")
 	}
 	return note{Title: fmt.Sprintf("%s: %.0f%% left", m.words, math.Floor(left(m.used))), Body: capitalize(body)}
+}
+
+// rateWords names the rate a forecast projects, in the words the daemon's
+// surfaces use (plans.RateWords): this module does not import the daemon's.
+func rateWords(basis string) string {
+	if basis == "recent" {
+		return "at the last hour's rate"
+	}
+	return "at this pace"
 }
 
 // windowWords names a window in a sentence: "weekly window".
