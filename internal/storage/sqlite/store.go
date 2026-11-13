@@ -973,10 +973,23 @@ func (s *Store) EachEventID(ctx context.Context, fn func(id []byte)) error {
 // in-memory store).
 func (s *Store) Path() string { return s.path }
 
-// lastEventBySourceQuery groups the raw source column, so the newest event
-// of each source is read from events_source_ts_idx alone. Grouping an
-// expression over the column read every row of the table instead.
-const lastEventBySourceQuery = `SELECT source, MAX(timestamp_ns) FROM events GROUP BY source`
+// lastEventBySourceQuery answers, for each source, the newest event's time.
+// It seeks each source rather than grouping every event: the distinct
+// sources are walked through the (source, timestamp_ns) index, and each
+// one's newest event is the last entry under it. Grouping every event read
+// the whole table on each call, every thirty seconds for the freshness
+// check. Unsourced events are their own row (NULL); the Go side folds them
+// and the empty string together under "(none)".
+const lastEventBySourceQuery = `WITH RECURSIVE sources(source) AS (
+	SELECT MIN(source) FROM events WHERE source IS NOT NULL
+	UNION ALL
+	SELECT (SELECT MIN(e.source) FROM events e WHERE e.source > sources.source)
+	FROM sources WHERE sources.source IS NOT NULL
+)
+SELECT source, (SELECT MAX(timestamp_ns) FROM events WHERE events.source = sources.source)
+FROM sources WHERE source IS NOT NULL
+UNION ALL
+SELECT NULL, MAX(timestamp_ns) FROM events WHERE source IS NULL`
 
 // LastEventBySource returns the most recent event timestamp per source.
 //
