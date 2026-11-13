@@ -22,7 +22,7 @@ import (
 	"sort"
 	"strings"
 
-	"go.klarlabs.de/tokenops/internal/infra/tempfile"
+	"go.klarlabs.de/tokenops/internal/tempfile"
 )
 
 // DefaultMode is the permission of a file that did not exist before.
