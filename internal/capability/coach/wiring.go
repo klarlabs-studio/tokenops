@@ -1,12 +1,11 @@
 package coach
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"go.klarlabs.de/tokenops/internal/claudehome"
+	"go.klarlabs.de/tokenops/internal/hookconfig"
 	"go.klarlabs.de/tokenops/internal/infra/opencodeplugin"
 )
 
@@ -54,17 +53,11 @@ func DetectWiring(src WiringSources) Wiring {
 	var w Wiring
 	w.ClaudeCode.Present = isDir(src.ClaudeDir)
 	for _, f := range src.ClaudeSettings {
-		b, err := os.ReadFile(f) //nolint:gosec // the operator's own client settings
+		settings, err := hookconfig.Load(f)
 		if err != nil {
 			continue
 		}
-		var settings struct {
-			Hooks map[string]json.RawMessage `json:"hooks"`
-		}
-		if json.Unmarshal(b, &settings) != nil {
-			continue
-		}
-		w.ClaudeCode.merge(settings.Hooks)
+		w.ClaudeCode.merge(hookconfig.Hooks(settings))
 	}
 	w.Opencode.Present = isDir(src.OpencodeDir)
 	if b, err := os.ReadFile(filepath.Join(src.OpencodePluginDir, opencodeplugin.FileName)); err == nil { //nolint:gosec // TokenOps' own plugin
@@ -97,52 +90,11 @@ func isDir(path string) bool {
 	return err == nil && fi.IsDir()
 }
 
-// merge records the hooks one settings file wires. Claude Code keeps a
-// hook under its event, in groups that each name a matcher and hold the
-// commands; a command is ours when its first argument is our verb.
-func (h *HarnessWiring) merge(hooks map[string]json.RawMessage) {
-	var stop, preTool []claudeGroup
-	_ = json.Unmarshal(hooks["Stop"], &stop)
-	_ = json.Unmarshal(hooks["PreToolUse"], &preTool)
-	h.Coach = h.Coach || anyCommand(stop, "", verbCoachHook)
-	h.ReadGuard = h.ReadGuard || anyCommand(preTool, "", verbReadGuard)
-	h.RouteGuard = h.RouteGuard || anyCommand(preTool, "Agent", verbRouteGuard)
-}
-
-type claudeGroup struct {
-	Matcher string        `json:"matcher"`
-	Hooks   []claudeEntry `json:"hooks"`
-}
-
-type claudeEntry struct {
-	Command string   `json:"command"`
-	Args    []string `json:"args"`
-}
-
-// anyCommand reports whether a group with the matcher (any when empty)
-// runs verb.
-func anyCommand(groups []claudeGroup, matcher, verb string) bool {
-	for _, g := range groups {
-		if matcher != "" && g.Matcher != matcher {
-			continue
-		}
-		for _, e := range g.Hooks {
-			if e.verb() == verb {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// verb is the TokenOps verb an entry runs: args[0] when the entry has an
-// args array, else the word after the binary on its command line.
-func (e claudeEntry) verb() string {
-	if len(e.Args) > 0 {
-		return e.Args[0]
-	}
-	if f := strings.Fields(e.Command); len(f) > 1 {
-		return f[1]
-	}
-	return ""
+// merge records the hooks one settings file wires. Each hook is read where
+// its client runs it: the end-of-turn hook on Stop, the guards on PreToolUse,
+// and the subagent hook on the Agent matcher.
+func (h *HarnessWiring) merge(hooks map[string]any) {
+	h.Coach = h.Coach || hookconfig.Has(hooks, verbCoachHook, hookconfig.Where{Event: "Stop"})
+	h.ReadGuard = h.ReadGuard || hookconfig.Has(hooks, verbReadGuard, hookconfig.Where{Event: "PreToolUse"})
+	h.RouteGuard = h.RouteGuard || hookconfig.Has(hooks, verbRouteGuard, hookconfig.Where{Event: "PreToolUse", Matcher: "Agent"})
 }

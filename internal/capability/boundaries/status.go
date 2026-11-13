@@ -9,6 +9,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/config"
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
+	"go.klarlabs.de/tokenops/internal/hookconfig"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
 	"go.klarlabs.de/tokenops/internal/infra/opencodeplugin"
@@ -184,10 +185,11 @@ func Installed(claudeSettings, opencodePluginDir string) map[string]bool {
 		opencodePluginDir = filepath.Join(home, ".config", "opencode", "plugins")
 	}
 	out := map[string]bool{}
-	if b, err := os.ReadFile(claudeSettings); err == nil { //nolint:gosec // the operator's own client settings
-		out[HarnessClaudeCode] = strings.Contains(string(b), `"`+HookVerb+`"`)
+	if settings, err := hookconfig.Load(claudeSettings); err == nil {
+		hooks := hookconfig.Hooks(settings)
+		out[HarnessClaudeCode] = hookconfig.Has(hooks, HookVerb, hookconfig.Where{})
 		// subagent_model rules are evaluated by route-guard's Agent hook.
-		out[claudeSubagentHook] = strings.Contains(string(b), `"route-guard"`) && strings.Contains(string(b), `"Agent"`)
+		out[claudeSubagentHook] = hookconfig.Has(hooks, "route-guard", hookconfig.Where{Matcher: "Agent"})
 	}
 	if b, err := os.ReadFile(filepath.Join(opencodePluginDir, opencodeplugin.FileName)); err == nil { //nolint:gosec // TokenOps' own plugin
 		out[HarnessOpencode] = opencodeplugin.Has(string(b), HookVerb)
