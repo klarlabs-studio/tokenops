@@ -155,33 +155,79 @@ func vendorWindows(ctx context.Context, reader EventReader, provider eventschema
 // that reports several Codex limits is read per limit, so one limit's
 // newest reading does not hide another's.
 func newestTwo(events []*eventschema.Envelope, sources []string, usable func(*eventschema.Envelope) bool) (newest, prior map[string]*eventschema.Envelope) {
-	type candidate struct {
-		e   *eventschema.Envelope
-		key string
-	}
-	var cands []candidate
-	for _, e := range events {
-		if e == nil || !slices.Contains(sources, e.Source) || e.Attributes == nil {
-			continue
-		}
-		cands = append(cands, candidate{e: e, key: readingKey(e)})
-	}
-	// Newest first, and usable asked only until a reading has its two:
-	// asking it parses the reading, and the glance asked it of two weeks
-	// of readings to keep two of each.
-	sort.SliceStable(cands, func(i, j int) bool { return cands[i].e.Timestamp.After(cands[j].e.Timestamp) })
 	newest, prior = map[string]*eventschema.Envelope{}, map[string]*eventschema.Envelope{}
-	for _, c := range cands {
-		if prior[c.key] != nil || !usable(c.e) {
-			continue
+	visit := func(e *eventschema.Envelope) {
+		if e == nil || !slices.Contains(sources, e.Source) || e.Attributes == nil {
+			return
 		}
-		if newest[c.key] == nil {
-			newest[c.key] = c.e
+		// Usable is asked only until a reading has its two: asking it parses
+		// the reading, and the glance asked it of two weeks of readings to
+		// keep two of each.
+		key := readingKey(e)
+		if prior[key] != nil || !usable(e) {
+			return
+		}
+		if newest[key] == nil {
+			newest[key] = e
 		} else {
-			prior[c.key] = c.e
+			prior[key] = e
 		}
 	}
+	// The store gives events in time order, so they are walked as they
+	// are; out of order, a sorted copy is walked (the caller's slice is
+	// shared and not reordered).
+	if timeOrdered(events) {
+		walkNewestFirst(events, visit)
+		return newest, prior
+	}
+	sorted := make([]*eventschema.Envelope, 0, len(events))
+	for _, e := range events {
+		if e != nil {
+			sorted = append(sorted, e)
+		}
+	}
+	slices.SortStableFunc(sorted, func(a, b *eventschema.Envelope) int { return a.Timestamp.Compare(b.Timestamp) })
+	walkNewestFirst(sorted, visit)
 	return newest, prior
+}
+
+// timeOrdered reports whether the non-nil events are oldest first.
+func timeOrdered(events []*eventschema.Envelope) bool {
+	var last time.Time
+	for _, e := range events {
+		if e == nil {
+			continue
+		}
+		if e.Timestamp.Before(last) {
+			return false
+		}
+		last = e.Timestamp
+	}
+	return true
+}
+
+// walkNewestFirst calls visit on events newest first. Events with the same
+// timestamp are visited in the order they are held in, as a stable sort
+// newest first would visit them.
+func walkNewestFirst(events []*eventschema.Envelope, visit func(*eventschema.Envelope)) {
+	for hi := len(events); hi > 0; {
+		i := hi - 1
+		if events[i] == nil {
+			hi = i
+			continue
+		}
+		at := events[i].Timestamp
+		lo := i
+		for lo > 0 && (events[lo-1] == nil || events[lo-1].Timestamp.Equal(at)) {
+			lo--
+		}
+		for _, e := range events[lo : i+1] {
+			if e != nil {
+				visit(e)
+			}
+		}
+		hi = lo
+	}
 }
 
 // newestPerWindow parses each source's newest reading on its own, so every
