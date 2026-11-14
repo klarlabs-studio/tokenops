@@ -232,6 +232,9 @@ type MoveVerdicts struct {
 	Beliefs     []mv.Belief     `json:"beliefs,omitempty"`
 	Retractions []mv.Retraction `json:"retractions,omitempty"`
 	Lines       []string        `json:"lines,omitempty"`
+	// Rule says when a move kind holds: what "not enough evidence yet"
+	// means, so every surface reads the verdicts the same way.
+	Rule string `json:"rule"`
 }
 
 // Verdicts judges the evidence in s as it stands, without deciding
@@ -243,7 +246,7 @@ func Verdicts(s moveverify.Store, now time.Time) MoveVerdicts {
 	}
 	rs := s.Load().Retractions
 	bs := mv.Judge(obs, rs, now)
-	return MoveVerdicts{Beliefs: bs, Retractions: rs, Lines: mv.Lines(bs, rs)}
+	return MoveVerdicts{Beliefs: bs, Retractions: rs, Lines: mv.Lines(bs, rs), Rule: mv.HoldsRule()}
 }
 
 // MoveStore is the move-verify store Status reads; a variable so tests do

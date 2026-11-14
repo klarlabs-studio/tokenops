@@ -19,23 +19,38 @@ func held(prefix, scope string, n, bad int, start time.Time) []Observation {
 // With enough randomly held runs a move kind is judged against them, not
 // against whatever unmoved work happened nearby: the observational
 // baseline here is spotless, the randomized one fails as often as the
-// moved runs, and the move holds.
+// moved runs, and the move holds once the sample could see a drop.
 func TestJudgeComparesMovesWithTheRandomizedHoldout(t *testing.T) {
 	now := t0.Add(48 * time.Hour)
 	obs := join(
-		calls("moved", "edit", "sonnet", "proj", true, 10, 5, t0),
-		calls("nearby", "edit", "opus", "proj", false, 10, 0, t0),
-		held("held", "other-proj", 8, 4, t0),
+		calls("moved", "edit", "sonnet", "proj", true, 300, 30, t0),
+		calls("nearby", "edit", "opus", "proj", false, 300, 0, t0),
+		held("held", "other-proj", 100, 10, t0),
 	)
 	b := beliefFor(t, Judge(obs, nil, now), editOpusSonnet)
 	if !b.Randomized || b.Verdict != VerdictHolds {
 		t.Fatalf("belief = %+v, want a randomized comparison that holds", b)
 	}
-	if b.Baseline != 8 || b.BaselineBad != 4 || b.Judged != 10 {
+	if b.Baseline != 100 || b.BaselineBad != 10 || b.Judged != 300 {
 		t.Errorf("compared %d/%d against %d/%d", b.Bad, b.Judged, b.BaselineBad, b.Baseline)
 	}
 	if !strings.Contains(b.Scope, "held back at random") {
 		t.Errorf("scope = %q", b.Scope)
+	}
+}
+
+// A tenth of the moves held back is a small arm: eight held runs against
+// seventy-two moved ones is not evidence the move holds, and the reason
+// names both arms and what they could detect.
+func TestJudgeSaysASmallHoldoutIsNotEnough(t *testing.T) {
+	now := t0.Add(48 * time.Hour)
+	obs := join(calls("moved", "edit", "sonnet", "proj", true, 72, 14, t0), held("held", "proj", 8, 2, t0))
+	b := beliefFor(t, Judge(obs, nil, now), editOpusSonnet)
+	if !b.Randomized || b.Verdict != VerdictNotEnoughEvidence {
+		t.Fatalf("belief = %+v", b)
+	}
+	if !strings.Contains(b.Why, "72 moved, 8 held out") {
+		t.Errorf("why = %q", b.Why)
 	}
 }
 

@@ -2108,8 +2108,12 @@ kind of move (task kind, from-model → to-model) is then judged against the
 runs chance held back rather than against whatever unmoved work happened
 nearby, once at least 8 have settled; until then it falls back to the
 nearby comparison. A kind that does worse than its holdout by 15 points or
-more, at z 1.645, is retracted as before. `tokenops explain moves` says
-which comparison each verdict rests on.
+more, at z 1.645, is retracted as before. A kind holds only once the
+runs on each side could detect a 15-point drop; until then `tokenops
+explain moves` reads "not enough evidence yet" with the moved and held-out
+counts and the smallest drop they could detect. With a tenth of the moves
+held back, the held-out side is the short one. `tokenops explain moves`
+says which comparison each verdict rests on.
 
 `tokenops verify` and `tokenops coach stats` compare the sessions that got a
 tip with the ones it was held from: the spend after the tip, whether the
