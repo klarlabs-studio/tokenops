@@ -166,3 +166,13 @@ func (g Glance) Payload() *GlancePayload {
 // VendorWindow is one of the vendor's own rate-limit windows as a session
 // budget carries it.
 type VendorWindow = plans.VendorWindow
+
+// PromptCacheTurns is when g's prompt cache countdown next changes state
+// with no request: to expiring, then to cold. Empty with no session.
+func (g Glance) PromptCacheTurns() []time.Time {
+	if g.PromptCache == nil {
+		return nil
+	}
+	e := g.PromptCache.ExpiresAt
+	return []time.Time{e.Add(-waste.CacheExpiringWithin), e}
+}

@@ -65,6 +65,11 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.Storage.IncrementalReads = &off
 		}
 	}
+	if v := os.Getenv("TOKENOPS_STORAGE_DERIVED_MAX_AGE"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.Storage.DerivedMaxAge = d
+		}
+	}
 	if v := os.Getenv("TOKENOPS_OTEL_ENABLED"); v != "" {
 		switch strings.ToLower(v) {
 		case "1", "true", "yes", "on":

@@ -122,6 +122,9 @@ func (c Config) Validate() error {
 	if c.Watch.Interval < 0 {
 		return fmt.Errorf("watch.interval must be non-negative, got %s", c.Watch.Interval)
 	}
+	if err := c.Storage.validateDerivedMaxAge(); err != nil {
+		return err
+	}
 	if c.Retention.Interval < 0 {
 		return fmt.Errorf("retention.interval must be non-negative, got %s", c.Retention.Interval)
 	}
