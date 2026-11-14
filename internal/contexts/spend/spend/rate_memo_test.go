@@ -119,3 +119,25 @@ func TestLookupAtMemoUnderReplace(t *testing.T) {
 		t.Fatalf("after the last Replace, priced at %+v", r)
 	}
 }
+
+// Revision moves with every card set Replace installs, and not otherwise.
+func TestRevisionFollowsReplace(t *testing.T) {
+	var none *Engine
+	if none.Revision() != 0 {
+		t.Fatal("a nil engine has a revision")
+	}
+	eng := NewDatedEngine(memoCards(1))
+	r0 := eng.Revision()
+	_, _ = eng.LookupAt(eventschema.ProviderOpenAI, "gpt-5", time.Time{})
+	if eng.Revision() != r0 {
+		t.Fatal("a lookup moved the revision")
+	}
+	eng.Replace(nil)
+	if eng.Revision() != r0 {
+		t.Fatal("an ignored Replace moved the revision")
+	}
+	eng.Replace(memoCards(2))
+	if eng.Revision() == r0 {
+		t.Fatal("Replace kept the revision")
+	}
+}
