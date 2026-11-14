@@ -1015,6 +1015,9 @@
                               "confidence": {
                                 "type": "number"
                               },
+                              "detectable_drop": {
+                                "type": "number"
+                              },
                               "judged": {
                                 "type": "integer"
                               },
@@ -1147,6 +1150,9 @@
                                   "confidence": {
                                     "type": "number"
                                   },
+                                  "detectable_drop": {
+                                    "type": "number"
+                                  },
                                   "judged": {
                                     "type": "integer"
                                   },
@@ -1242,6 +1248,9 @@
                             "type": "object"
                           },
                           "type": "array"
+                        },
+                        "rule": {
+                          "type": "string"
                         }
                       },
                       "type": "object"
@@ -1801,6 +1810,9 @@
                               "confidence": {
                                 "type": "number"
                               },
+                              "detectable_drop": {
+                                "type": "number"
+                              },
                               "judged": {
                                 "type": "integer"
                               },
@@ -1933,6 +1945,9 @@
                                   "confidence": {
                                     "type": "number"
                                   },
+                                  "detectable_drop": {
+                                    "type": "number"
+                                  },
                                   "judged": {
                                     "type": "integer"
                                   },
@@ -2028,6 +2043,9 @@
                             "type": "object"
                           },
                           "type": "array"
+                        },
+                        "rule": {
+                          "type": "string"
                         }
                       },
                       "type": "object"

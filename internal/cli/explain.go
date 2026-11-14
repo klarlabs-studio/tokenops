@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-
 	"time"
 
 	"github.com/spf13/cobra"
@@ -145,6 +144,7 @@ func writeMoveVerdicts(w io.Writer, v coachcap.MoveVerdicts) {
 	}
 	fmt.Fprintln(w, "\nA bad outcome is a subagent that failed, was re-run, had its files reworked, or whose turn was interrupted or")
 	fmt.Fprintln(w, "rejected; for new sessions, an instruction reworked, interrupted or rejected (first 20 per session).")
+	fmt.Fprintln(w, v.Rule)
 }
 
 // quotaPriceView is `tokenops explain price`: the price of quota on the

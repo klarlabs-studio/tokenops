@@ -133,6 +133,9 @@ func TestVerifyMovesRetractsASubagentMoveThatHurtQuality(t *testing.T) {
 			t.Errorf("verdict lines lack %q:\n%s", want, text)
 		}
 	}
+	if !strings.Contains(v.Rule, "not enough evidence yet") {
+		t.Errorf("verdicts carry no rule for when a move holds: %q", v.Rule)
+	}
 	// The operator can reinstate it.
 	ended, err := Reinstate(store, "edit", e.Now)
 	if err != nil || len(ended) != 1 || store.Retracted()("edit", "opus", "sonnet") {

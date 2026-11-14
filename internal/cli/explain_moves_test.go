@@ -46,7 +46,8 @@ func TestExplainMovesAndReinstate(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := runRoot(t, "explain", "moves")
-	for _, want := range []string{"edit work, opus → sonnet: 10 moves, 10 judged against 10 comparable runs", "quality dropped", "retracted", "tokenops coach reinstate edit"} {
+	for _, want := range []string{"edit work, opus → sonnet: 10 moves, 10 judged against 10 comparable runs", "quality dropped", "retracted", "tokenops coach reinstate edit",
+		"holds only when its sample could detect a drop of 15 points (80% power)", "not enough evidence yet"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("explain moves lacks %q:\n%s", want, out)
 		}

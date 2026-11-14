@@ -226,10 +226,17 @@ comparable work and the gap is significant (one-sided two-proportion z of
 1.645 or more, 95%). A retracted kind is no longer made on its own, nor
 proposed at `ask`: it goes back to advice for that kind of work only, a
 default model the coach set is removed at once, and the move is recorded
-as undone with the reason. The coach says so once. It is restored when
-work of that kind run on the cheaper model since the retraction (by the
-agent's or your own choice) holds quality on the same rule, or when you
-say so: `tokenops coach reinstate <kind|all>`. Evidence older than 28
+as undone with the reason. The coach says so once. Finding no drop is
+not the same as quality holding: each verdict states the smallest drop
+its sample could detect (80% power at the same z, counted in runs, or in
+sessions for the default model), and a move kind **holds** only when that
+is 15 points or less. Until then it reads *not enough evidence yet*, with
+the runs on each side and the drops they could detect; at a 20% failure
+rate that takes about 100 runs a side. Autonomous moves continue while
+the evidence is short; only a confident drop stops them. A retracted kind
+is restored when work of that kind run on the cheaper model since the
+retraction (by the agent's or your own choice) holds quality on the same
+rule, or when you say so: `tokenops coach reinstate <kind|all>`. Evidence older than 28
 days is not judged, and evidence that ages out never restores a move.
 `tokenops explain moves` shows per move kind the moves made, the outcomes
 judged, the verdict and why; `tokenops coach` and `tokenops_coach` show

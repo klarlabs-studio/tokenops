@@ -134,6 +134,9 @@ func renderMoveVerdicts(out io.Writer, r coachcap.Report) {
 	for _, l := range r.Moves.Lines {
 		fmt.Fprintf(out, "    %s\n", l)
 	}
+	if r.Moves.Rule != "" {
+		fmt.Fprintf(out, "    %s\n", r.Moves.Rule)
+	}
 }
 
 // renderGraduation prints each capability's stage and the published bar
