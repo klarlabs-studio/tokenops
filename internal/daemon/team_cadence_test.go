@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/teamshare"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 func TestTeamCadence(t *testing.T) {
@@ -42,6 +43,56 @@ func TestTeamCadence(t *testing.T) {
 					t.Fatalf("upload %d covers %d days, want %d", i, got, u.want)
 				}
 				c.done(u.at, got, tt.n, u.err)
+			}
+		})
+	}
+}
+
+// An upload whose inputs have not moved is not built again (ADR 0019):
+// overnight, with nobody working, each hourly upload rebuilt the same two
+// days for six to nine minutes and sent nothing new. Only what the event
+// store holds is compared, so an upload is still built at least every
+// teamQuietMax for what it reads elsewhere (transcripts, git, a
+// provider's cost API).
+func TestTeamCadenceSkipsAnUnchangedStore(t *testing.T) {
+	day := time.Date(2026, 11, 13, 2, 0, 0, 0, time.UTC)
+	at := sqlite.Position{Rowid: 700, Seq: 40}
+	moved := sqlite.Position{Rowid: 701, Seq: 40}
+	changed := sqlite.Position{Rowid: 700, Seq: 41}
+	failed := errors.New("server unreachable")
+	unsent := &teamshare.IncompleteError{Unread: []string{"transcripts: deadline"}}
+	type upload struct {
+		at   time.Time
+		pos  sqlite.Position
+		err  error
+		want bool // built and sent, rather than skipped
+	}
+	tests := []struct {
+		name    string
+		uploads []upload
+	}{
+		{"the first upload is built", []upload{{day, at, nil, true}}},
+		{"an unchanged store skips the next", []upload{{day, at, nil, true}, {day.Add(time.Hour), at, nil, false}, {day.Add(2 * time.Hour), at, nil, false}}},
+		{"a new event builds it", []upload{{day, at, nil, true}, {day.Add(time.Hour), moved, nil, true}}},
+		{"an updated or deleted event builds it", []upload{{day, at, nil, true}, {day.Add(time.Hour), changed, nil, true}}},
+		{"a skip does not hold back the next change", []upload{{day, at, nil, true}, {day.Add(time.Hour), at, nil, false}, {day.Add(2 * time.Hour), moved, nil, true}}},
+		{"it is built again after teamQuietMax", []upload{{day, at, nil, true}, {day.Add(teamQuietMax - time.Minute), at, nil, false}, {day.Add(teamQuietMax), at, nil, true}}},
+		{"the next UTC day builds it", []upload{{day.Add(21 * time.Hour), at, nil, true}, {day.Add(22 * time.Hour), at, nil, true}}},
+		{"a failed upload is not skipped", []upload{{day, at, failed, true}, {day.Add(time.Hour), at, nil, true}, {day.Add(2 * time.Hour), at, nil, false}}},
+		{"an unsent upload is not skipped", []upload{{day, at, nil, true}, {day.Add(time.Hour), moved, unsent, true}, {day.Add(2 * time.Hour), moved, nil, true}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var c teamCadence
+			for i, u := range tt.uploads {
+				days := c.days(u.at, 14)
+				if built := !c.quiet(u.at, days, u.pos); built != u.want {
+					t.Fatalf("upload %d built = %v, want %v", i, built, u.want)
+				}
+				if u.want {
+					c.done(u.at, days, 14, u.err)
+					c.sent(u.at, days, u.pos, u.err)
+				}
 			}
 		})
 	}
