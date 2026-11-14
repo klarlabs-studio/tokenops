@@ -39,8 +39,24 @@ def load_waivers(path: Path) -> Any:
         return json.load(fh)
 
 
+# Where `nox scan` writes findings.json: the working directory up to nox
+# 1.65, .nox/reports from 1.66 on (its new default output directory).
+FINDINGS_PATHS = (Path("findings.json"), Path(".nox/reports/findings.json"))
+
+
+def findings_file(candidates: tuple[Path, ...] = FINDINGS_PATHS) -> Path:
+    """The findings.json the last scan wrote: the newest of candidates that
+    exist, so a stale file from an older nox does not stand in for the scan
+    that just ran. The first candidate when none exists, which load_json
+    then reports missing."""
+    present = [p for p in candidates if p.exists()]
+    if not present:
+        return candidates[0]
+    return max(present, key=lambda p: p.stat().st_mtime)
+
+
 def main() -> int:
-    findings_path = Path("findings.json")
+    findings_path = findings_file()
     vex_path = Path("security/vex.json")
     findings_doc = load_json(findings_path)
     vex_doc = load_waivers(vex_path)
