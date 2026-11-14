@@ -12,6 +12,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
+	"go.klarlabs.de/tokenops/internal/infra/derived"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -30,50 +31,21 @@ const budgetFiguresEvery = 5
 // reads one small file instead of the event store. It measures every
 // minute while a rule, local or the organisation's, compares one of them;
 // otherwise, with budgets configured, it measures the budget windows every
-// five minutes for the coach and the glance.
-func startBoundaryFiguresRuntime(cfg config.Config, glance func() headroom.Deps, bill budgets.Bill, source budgets.Source, sup *lifecycle.Supervisor, logger *slog.Logger) {
+// five minutes for the coach and the glance. The figures follow the event
+// log (ADR 0019): inputs reads where it stands.
+func startBoundaryFiguresRuntime(cfg config.Config, glance func() headroom.Deps, bill budgets.Bill, source budgets.Source, inputs func(context.Context) (string, bool), sup *lifecycle.Supervisor, logger *slog.Logger) {
 	if sup == nil {
 		return
 	}
-	rules := bcap.LiveRules(cfg)
-	limits := cfg.BudgetLimits()
-	dir := boundaryledger.DefaultDir()
-	ticks := 0
-	measure := func(ctx context.Context) {
-		live := rules()
-		needs := bcap.NeedsFigures(live)
-		ticks++
-		hasBudgets := source != nil && len(limits) > 0
-		if !needs && (!hasBudgets || (ticks-1)%budgetFiguresEvery != 0) {
-			return
-		}
-		now := time.Now().UTC()
-		var readings []budgets.Reading
-		if hasBudgets {
-			readings = budgets.ReadBilled(ctx, source, bill, limits, now)
-		}
-		used := budgets.UsedPctOf(readings)
-		fig := bcap.Figures(nil, used, now)
-		// Plan headroom is read only when a rule compares it, and only the
-		// headroom: the full glance (session budgets, plan use, a month's
-		// plan advice) cost seconds and hundreds of MB a minute (#825).
-		if needs {
-			if head, err := headroom.Compute(ctx, glance(), now); err == nil {
-				fig = bcap.Figures(head.Reports, used, now)
-			} else if ctx.Err() == nil {
-				logger.Warn("boundary figures: plan headroom unreadable; plan rules see no figure", "err", err)
-			}
-		}
-		fig = bcap.WithBudgets(fig, readings, live)
-		if err := dir.PutFigures(fig); err != nil {
-			logger.Warn("boundary figures not written; plan and budget rules see no figure", "err", err)
-		}
+	b := &boundaryFigures{
+		rules: bcap.LiveRules(cfg), limits: cfg.BudgetLimits(), source: source, bill: bill, glance: glance,
+		dir: boundaryledger.DefaultDir(), inputs: inputs, maxAge: cfg.Storage.EffectiveDerivedMaxAge(), logger: logger,
 	}
 	sup.Go("boundary-figures", func(ctx context.Context) error {
 		tick := time.NewTicker(boundaryFiguresEvery)
 		defer tick.Stop()
 		for {
-			measure(ctx)
+			b.measure(ctx, time.Now().UTC())
 			select {
 			case <-ctx.Done():
 				return nil
@@ -81,6 +53,94 @@ func startBoundaryFiguresRuntime(cfg config.Config, glance func() headroom.Deps,
 			}
 		}
 	})
+}
+
+// boundaryFigures measures the figures the pause point compares. The plan
+// headroom and the budget windows are read from events; they are read
+// again only when the inputs moved, a boundary they hold passed (a
+// window's reset), or they reached maxAge, and kept in between.
+type boundaryFigures struct {
+	rules  func() []bcap.Rule
+	limits []budgets.Limit
+	source budgets.Source
+	bill   budgets.Bill
+	glance func() headroom.Deps
+	dir    boundaryledger.Dir
+	// inputs is where the figures' inputs other than the clock stand; nil
+	// reads them on every measurement.
+	inputs func(context.Context) (string, bool)
+	maxAge time.Duration
+	logger *slog.Logger
+
+	ticks int
+	last  figuresRead
+}
+
+// figuresRead is what one measurement read from events.
+type figuresRead struct {
+	reports  []headroom.Report
+	readings []budgets.Reading
+	// head is whether the plan headroom was read: only while a rule
+	// compares it.
+	head bool
+	// at is the now they were read for, good until until; in is the
+	// inputs they were read from, and kept whether they may be kept.
+	at, until time.Time
+	in        string
+	kept      bool
+}
+
+// measure writes the figures for now, when they are due.
+func (b *boundaryFigures) measure(ctx context.Context, now time.Time) {
+	live := b.rules()
+	needs := bcap.NeedsFigures(live)
+	b.ticks++
+	hasBudgets := b.source != nil && len(b.limits) > 0
+	if !needs && (!hasBudgets || (b.ticks-1)%budgetFiguresEvery != 0) {
+		return
+	}
+	in, known := "", false
+	if b.inputs != nil {
+		in, known = b.inputs(ctx)
+	}
+	r := b.last
+	if !r.kept || r.head != needs || !derived.Keep(now, r.at, r.until, r.in, in, known) {
+		r = b.read(ctx, needs, hasBudgets, now)
+		r.in, r.kept = in, r.kept && known
+		b.last = r
+	}
+	// Plan headroom is read only when a rule compares it, and only the
+	// headroom: the full glance (session budgets, plan use, a month's
+	// plan advice) cost seconds and hundreds of MB a minute (#825).
+	fig := bcap.Figures(r.reports, budgets.UsedPctOf(r.readings), now)
+	// Observed now: nothing they read has changed since they were
+	// computed, and no boundary they hold has passed.
+	fig.ComputedAt = r.at
+	fig = bcap.WithBudgets(fig, r.readings, live)
+	if err := b.dir.PutFigures(fig); err != nil {
+		b.logger.Warn("boundary figures not written; plan and budget rules see no figure", "err", err)
+	}
+}
+
+// read reads the figures from events for now. A headroom that could not
+// be read is not kept: the next measurement tries again.
+func (b *boundaryFigures) read(ctx context.Context, needs, hasBudgets bool, now time.Time) figuresRead {
+	r := figuresRead{head: needs, at: now, kept: true}
+	if hasBudgets {
+		r.readings = budgets.ReadBilled(ctx, b.source, b.bill, b.limits, now)
+	}
+	if needs {
+		if head, err := headroom.Compute(ctx, b.glance(), now); err == nil {
+			r.reports = head.Reports
+		} else {
+			r.kept = false
+			if ctx.Err() == nil {
+				b.logger.Warn("boundary figures: plan headroom unreadable; plan rules see no figure", "err", err)
+			}
+		}
+	}
+	r.until = derived.Until(now, b.maxAge, nil, r.reports, r.readings)
+	return r
 }
 
 // shareGateEvery is how often the event exporter's share boundary is
