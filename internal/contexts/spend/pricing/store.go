@@ -34,6 +34,10 @@ func snapshotsDir(dir string) string {
 	return filepath.Join(ResolveDir(dir), snapshotsSubdir)
 }
 
+// SnapshotsDir is the directory dir's snapshots are kept in: a snapshot
+// added or removed changes its modification time.
+func SnapshotsDir(dir string) string { return snapshotsDir(dir) }
+
 // snapshotFilename derives a filesystem-safe filename from a snapshot's
 // FetchedAt. RFC3339 contains ':' which is legal on POSIX but reserved on
 // Windows and awkward in shells, so colons are replaced with '-'. The result
