@@ -59,6 +59,9 @@ func TestPollerKeepsAnUnchangedReadingCurrent(t *testing.T) {
 		if d, ok := heartbeat.FreshFor(env.Attributes); !ok || d != 25*time.Minute {
 			t.Errorf("reading %d stands for %s (%v), want 25m", i, d, ok)
 		}
+		if got := heartbeat.IsRepeat(env.Attributes); got != (i > 0) {
+			t.Errorf("reading %d: repeat = %v, want %v", i, got, i > 0)
+		}
 		if env.Attributes["extra_usage_used"] != bus.envelopes[0].Attributes["extra_usage_used"] {
 			t.Errorf("reading %d is not the same reading: %v", i, env.Attributes)
 		}

@@ -9,7 +9,7 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-func newTestStore(t *testing.T) *Store {
+func newTestStore(t testing.TB) *Store {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "events.db")
 	s, err := Open(context.Background(), path, Options{})
@@ -20,7 +20,7 @@ func newTestStore(t *testing.T) *Store {
 	return s
 }
 
-func mustPromptEnvelope(t *testing.T, id string, ts time.Time, p *eventschema.PromptEvent) *eventschema.Envelope {
+func mustPromptEnvelope(t testing.TB, id string, ts time.Time, p *eventschema.PromptEvent) *eventschema.Envelope {
 	t.Helper()
 	return &eventschema.Envelope{
 		ID:            id,

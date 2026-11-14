@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -151,6 +152,92 @@ func TestGlanceAfterAQuietIntervalIsAFreshOne(t *testing.T) {
 	}
 	if len(kept.Glance.PlanHeadroom.Reports) != 2 {
 		t.Fatalf("reports = %+v, want both plans", kept.Glance.PlanHeadroom)
+	}
+}
+
+// claudeReadingAt is the seeded Claude window reading again at at, with
+// pct as its five-hour share and, when repeat, marked as the same reading
+// stored again (eventschema.AttrRepeat).
+func claudeReadingAt(id string, now, at time.Time, pct string, repeat bool) *eventschema.Envelope {
+	attrs := map[string]string{
+		"five_hour_used_pct": pct, "five_hour_reset_at": now.Add(3 * time.Hour).Format(time.RFC3339),
+		"seven_day_used_pct": "63.00", "seven_day_reset_at": now.Add(50 * time.Hour).Format(time.RFC3339),
+		"granularity": "quota_snapshot",
+	}
+	if repeat {
+		attrs[eventschema.AttrRepeat] = eventschema.AttrRepeatValue
+	}
+	return &eventschema.Envelope{ID: id, SchemaVersion: eventschema.SchemaVersion, Type: eventschema.EventTypePrompt,
+		Timestamp: at, Source: "claude-code-statusline",
+		Payload:    &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic},
+		Attributes: attrs}
+}
+
+// A reading stored again unchanged does not make the glance compute its
+// figures again, and the figures it keeps are a fresh computation's but
+// for the time-only fields and the reading's observed time, which the
+// repeat moved. A reading with new figures is computed at once.
+func TestGlanceKeptAcrossARepeatedReadingIsAFreshOne(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	now := time.Now().UTC().Truncate(time.Second)
+	store := seededGlanceStore(t, now, 200)
+	ctx := context.Background()
+	following := glanceServer(store, true)
+	if _, err := following.computeView(ctx, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Append(ctx, claudeReadingAt("claude-repeat", now, now.Add(time.Minute), "41.00", true)); err != nil {
+		t.Fatal(err)
+	}
+	later := now.Add(2 * time.Minute)
+	kept, err := following.computeView(ctx, later)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !kept.Glance.ComputedAt.Equal(now) {
+		t.Fatalf("computed_at %s after a repeated reading, want the figures of %s kept", kept.Glance.ComputedAt, now)
+	}
+	fresh, err := glanceServer(store, false).computeView(ctx, later)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, want := timeOnly(t, kept.Glance), timeOnly(t, fresh.Glance)
+	blankKeys(got, "observed_at")
+	blankKeys(want, "observed_at")
+	gb, _ := json.MarshalIndent(got, "", " ")
+	wb, _ := json.MarshalIndent(want, "", " ")
+	if string(gb) != string(wb) {
+		t.Errorf("glance kept across a repeat differs from a fresh one beyond the time-only fields:\nkept:  %s\nfresh: %s", gb, wb)
+	}
+
+	if err := store.Append(ctx, claudeReadingAt("claude-moved", now, later.Add(time.Second), "44.00", false)); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := following.computeView(ctx, later.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !moved.Glance.ComputedAt.Equal(later.Add(time.Minute)) {
+		t.Errorf("computed_at %s after a reading with new figures, want them computed again", moved.Glance.ComputedAt)
+	}
+}
+
+// blankKeys marks every value under one of keys in m as "time-only".
+func blankKeys(m any, keys ...string) {
+	switch v := m.(type) {
+	case map[string]any:
+		for k, x := range v {
+			if slices.Contains(keys, k) {
+				v[k] = "time-only"
+				continue
+			}
+			blankKeys(x, keys...)
+		}
+	case []any:
+		for _, x := range v {
+			blankKeys(x, keys...)
+		}
 	}
 }
 

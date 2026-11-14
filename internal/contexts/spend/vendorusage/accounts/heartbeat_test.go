@@ -48,10 +48,17 @@ func TestPollerKeepsEachSourcesUnchangedReadingCurrent(t *testing.T) {
 		t.Errorf("the changing reading was stored %d times in 6 scans: %v", len(got), got)
 	}
 	ids := map[string]bool{}
+	first := map[string]bool{}
 	for i, env := range bus.got {
 		if d, ok := heartbeat.FreshFor(env.Attributes); !ok || d != 25*time.Minute {
 			t.Errorf("reading %d (%s) stands for %s (%v), want 25m", i, env.Source, d, ok)
 		}
+		// Only the steady source repeats a reading, and not its first.
+		wantRepeat := env.Source == "openrouter-account" && first[env.Source]
+		if got := heartbeat.IsRepeat(env.Attributes); got != wantRepeat {
+			t.Errorf("reading %d (%s): repeat = %v, want %v", i, env.Source, got, wantRepeat)
+		}
+		first[env.Source] = true
 		ids[env.ID] = true
 	}
 	if len(ids) != len(bus.got) {

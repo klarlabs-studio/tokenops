@@ -131,7 +131,7 @@ func (p *Poller) Scan(ctx context.Context) {
 	if p.bus == nil || !p.kept.Due(key, now) {
 		return
 	}
-	heartbeat.Stamp(env.Attributes, p.opts.Interval)
+	p.kept.Stamp(env.Attributes, key, p.opts.Interval)
 	if err := p.bus.PublishWait(ctx, env); err != nil {
 		p.opts.Logger.Warn("usage event not stored", "err", err)
 		return

@@ -556,7 +556,9 @@ the prompt cache, each provider's costs) are computed from weeks of
 events, so the daemon keeps the last ones and computes them again only
 when something they read changed: an event was added, corrected or
 deleted, the observed limits or the plan history were written, or a new
-rate card was applied. It also computes them again at the first boundary
+rate card was applied. A window reading its reader stores again only
+because ten minutes passed with nothing changed (the attribute
+`repeat: "true"`) is not such a change. It also computes them again at the first boundary
 they show (a window's reset, a reading's freshness limit, an expiry, the
 prompt cache turning to expiring, midnight), and at the latest once they
 are `derived_max_age` old (default `5m`, at most `1h`). The coach, the
@@ -567,7 +569,9 @@ A kept glance is what a fresh computation gives at the same moment except
 for what moves with the clock alone, which lags by at most
 `derived_max_age`: a window's "resets in", its pace and days of headroom,
 a rolling window easing as old work leaves it, a reading turning stale,
-and the end of the periods plan use and the plan advice replay. The
+the time a window was read (`observed_at`, which a repeated reading moves),
+which of two sources reporting the same window read it last, and the end
+of the periods plan use and the plan advice replay. The
 glance's `computed_at` is when its figures were computed for, so the menu
 bar's "Updated" line says how old they are.
 

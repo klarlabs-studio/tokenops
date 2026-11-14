@@ -61,7 +61,8 @@ sign-in that expired, a key that was revoked, a vendor that no longer
 answers. A reader that asks a vendor on a schedule stores its reading
 again every ten minutes while nothing changes, and writes on each one for
 how long it stands (the attribute `fresh_for_min`: ten minutes and three
-of its polls). A reading older than that is stale. An account nobody is
+of its polls). Each such repeat is marked `repeat: "true"`. A reading
+older than that is stale. An account nobody is
 using is therefore not stale while its reader works. Readings taken as
 you work (Claude Code's status line, Codex's session files) make no such
 promise and are never stale for their age alone; any other reading that
