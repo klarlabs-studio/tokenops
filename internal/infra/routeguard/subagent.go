@@ -22,7 +22,7 @@ type SubagentInput struct {
 	// Prompt is the work handed to the subagent, used when the
 	// description says nothing classifiable.
 	Prompt string
-	// Requested is the model the agent asked for ("haiku", "opus", or an
+	// Requested is the model the agent asked for ("haiku", "fable", or an
 	// id); empty means the subagent inherits SessionModel.
 	Requested    string
 	SessionModel string
@@ -64,8 +64,11 @@ type SubagentDecision struct {
 	Held string
 }
 
-// agentAliases are the model names the Agent tool accepts.
-var agentAliases = []string{"haiku", "sonnet", "opus"}
+// agentAliases are the model names the Agent tool accepts, each the model
+// family a move kind is keyed by (moveverdict.Key). A family missing here
+// has no alias, so a move off it carries an empty From and is never
+// judged.
+var agentAliases = []string{"haiku", "sonnet", "opus", "fable"}
 
 // EvaluateSubagent decides whether a subagent should run on a cheaper model
 // that fits its work. It only ever moves down, and abstains whenever the

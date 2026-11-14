@@ -222,7 +222,7 @@ machine could use this command too.`,
 
 // crossingsText renders what crossed a rule, as figures.
 func crossingsText(cs []teamwire.Crossing) string {
-	tiers := map[float64]string{1: "haiku", 2: "sonnet", 3: "opus"}
+	tiers := map[float64]string{1: "haiku", 2: "sonnet", 3: "opus", 4: "fable"}
 	parts := make([]string, 0, len(cs))
 	for _, c := range cs {
 		switch c.Field {

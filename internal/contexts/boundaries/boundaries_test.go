@@ -153,7 +153,7 @@ func TestModelTierCompares(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for model, want := range map[string]bool{"opus": true, "sonnet": false, "haiku": false, "": false} {
+	for model, want := range map[string]bool{"fable": true, "opus": true, "sonnet": false, "haiku": false, "": false} {
 		_, got := rules[0].Match(ActionSubagentModel, Facts{ModelTier: model})
 		if got != want {
 			t.Errorf("%q: match = %v; want %v", model, got, want)
@@ -247,10 +247,36 @@ func TestDecisionIDIsStablePerRuleAndSession(t *testing.T) {
 	}
 }
 
+// Fable is priced above Opus on the rate card, so it ranks above it: a
+// rule written against Opus also covers Fable, and one can name Fable
+// alone.
+func TestModelTierRanksFableAboveOpus(t *testing.T) {
+	tests := []struct {
+		when, tier string
+		want       bool
+	}{
+		{">= opus", "fable", true},
+		{"> opus", "fable", true},
+		{"> opus", "opus", false},
+		{"== fable", "fable", true},
+		{"< fable", "opus", true},
+	}
+	for _, tt := range tests {
+		rules, err := Parse([]RuleSpec{{Name: "r", Action: "subagent_model", Require: "ask", When: map[string]string{"model_tier": tt.when}}})
+		if err != nil {
+			t.Fatalf("%s: %v", tt.when, err)
+		}
+		if _, got := rules[0].Match(ActionSubagentModel, Facts{ModelTier: tt.tier}); got != tt.want {
+			t.Errorf("model_tier %s on %s: match = %v; want %v", tt.when, tt.tier, got, tt.want)
+		}
+	}
+}
+
 func TestTierOf(t *testing.T) {
 	for in, want := range map[string]string{
 		"claude-opus-4-7": "opus", "opus": "opus", "sonnet": "sonnet", "claude-haiku-4-5": "haiku", "deep": "opus",
 		"lookup": "haiku", "balanced": "sonnet", "default": "sonnet", "gpt-5": "",
+		"claude-fable-5-2": "fable", "fable": "fable",
 	} {
 		if got := TierOf(in); got != want {
 			t.Errorf("TierOf(%q) = %q; want %q", in, got, want)

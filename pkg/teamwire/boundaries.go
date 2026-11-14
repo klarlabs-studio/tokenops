@@ -152,7 +152,7 @@ type Crossing struct {
 	// Op is the comparator: <, <=, >, >= or ==.
 	Op string `json:"op"`
 	// Value is the figure and Threshold the rule's; a model tier is its
-	// rank (haiku 1, sonnet 2, opus 3).
+	// rank (haiku 1, sonnet 2, opus 3, fable 4).
 	Value     float64 `json:"value"`
 	Threshold float64 `json:"threshold"`
 	// Window is 5h or week for plan_left_pct and plan_runs_out_early_min;
