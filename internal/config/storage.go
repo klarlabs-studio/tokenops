@@ -19,6 +19,11 @@ type StorageConfig struct {
 	// since. Default on; false reads the store in full every time, as
 	// before. The daemon reads it at start.
 	IncrementalReads *bool `yaml:"incremental_reads,omitempty"`
+	// DerivedMaxAge is the longest a figure derived from the event log
+	// (the glance, the boundary figures) is answered without computing
+	// it again while no event changed and no boundary it shows passed
+	// (ADR 0019). Zero is DefaultDerivedMaxAge.
+	DerivedMaxAge time.Duration `yaml:"derived_max_age,omitempty"`
 }
 
 // ReadsIncrementally reports whether the daemon's periodic reads keep

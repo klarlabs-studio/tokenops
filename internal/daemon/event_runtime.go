@@ -167,6 +167,7 @@ func initializeEventRuntime(
 		proxy.WithSourceFreshness(sources),
 		proxy.WithPlans(deps),
 		proxy.WithGlanceSnapshot(filepath.Join(findings.DefaultDir(), "glance.json"), configKey(cfg)),
+		proxy.WithGlanceFollows(derivedInputs(rt.Store, configKey(cfg), planFiles()...), cfg.Storage.EffectiveDerivedMaxAge()),
 		proxy.WithGlanceCosts(glanceCostReader(components.Aggregator)),
 		proxy.WithActions(actionDeps(cfg, rt.Store, logger)),
 		proxy.WithSessions(func() proxy.SessionRoots { return proxy.SessionRoots{} }),

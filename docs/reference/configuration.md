@@ -425,6 +425,7 @@ storage:
   enabled: true               # open the local sqlite store
   path: ~/.tokenops/events.db
   incremental_reads: true     # periodic jobs read only what changed; restart to apply
+  derived_max_age: 5m         # longest a glance is kept while nothing changed (see below)
 
 retention:                    # opt-in; empty keep deletes nothing
   interval: 1h
@@ -540,6 +541,28 @@ allocation:                   # file work under a project, client, cost centre
 watch:
   interval: 15m               # watcher cadence (default 15m, min 1m)
 ```
+
+### Figures that follow the event log (`storage.derived_max_age`)
+
+The glance's figures (plan headroom, session budgets, plan use and advice,
+the prompt cache, each provider's costs) are computed from weeks of
+events, so the daemon keeps the last ones and computes them again only
+when something they read changed: an event was added, corrected or
+deleted, the observed limits or the plan history were written, or a new
+rate card was applied. It also computes them again at the first boundary
+they show (a window's reset, a reading's freshness limit, an expiry, the
+prompt cache turning to expiring, midnight), and at the latest once they
+are `derived_max_age` old (default `5m`, at most `1h`). The coach, the
+findings, the spend budgets and the signed-in accounts are read for every
+glance, as before.
+
+A kept glance is what a fresh computation gives at the same moment except
+for what moves with the clock alone, which lags by at most
+`derived_max_age`: a window's "resets in", its pace and days of headroom,
+a rolling window easing as old work leaves it, a reading turning stale,
+and the end of the periods plan use and the plan advice replay. The
+glance's `computed_at` is when its figures were computed for, so the menu
+bar's "Updated" line says how old they are.
 
 ## Allocation rules (`allocation`)
 
@@ -1181,6 +1204,7 @@ waste report no longer reads through it.
 | `TOKENOPS_STORAGE_ENABLED`           | `storage.enabled`           |
 | `TOKENOPS_STORAGE_PATH`              | `storage.path`              |
 | `TOKENOPS_STORAGE_INCREMENTAL_READS` | `storage.incremental_reads` |
+| `TOKENOPS_STORAGE_DERIVED_MAX_AGE`   | `storage.derived_max_age`   |
 | `TOKENOPS_OTEL_ENABLED`              | `otel.enabled`              |
 | `TOKENOPS_OTEL_ENDPOINT`             | `otel.endpoint`             |
 | `TOKENOPS_OTEL_SERVICE_NAME`         | `otel.service_name`         |
