@@ -400,12 +400,12 @@ type fmtIn struct {
 }
 
 type outcomeIn struct {
-	Action           string   `json:"action,omitempty" jsonschema:"enum=record,enum=detect,description=record (default): the operator's assessment of a piece of work. detect: read the local verifier result after the session's last edit."`
+	Action           string   `json:"action,omitempty" jsonschema:"enum=record,enum=detect,description=record (default): report how a piece of work turned out; the operator is asked to confirm it. detect: read the local verifier result after the session's last edit."`
 	ExecutionID      string   `json:"execution_id" jsonschema:"required,description=The execution being assessed"`
 	DecisionID       string   `json:"decision_id,omitempty" jsonschema:"description=The decision being evaluated, when known"`
 	Result           string   `json:"result,omitempty" jsonschema:"enum=achieved,enum=partial,enum=not_achieved,description=record: how the work turned out"`
 	Caveat           string   `json:"caveat,omitempty" jsonschema:"description=record: why it was partial or unsuccessful, or context for the assessment"`
-	AttentionMinutes *float64 `json:"attention_minutes,omitempty" jsonschema:"description=record: active human effort in minutes, only when the operator reports it"`
+	AttentionMinutes *float64 `json:"attention_minutes,omitempty" jsonschema:"description=record: active human effort in minutes, kept only when the operator confirms it"`
 	SessionID        string   `json:"session_id,omitempty" jsonschema:"description=detect: the Claude Code session whose transcript to check"`
 }
 
@@ -699,7 +699,7 @@ func publicTools() []publicTool {
 		},
 		{
 			name: "tokenops_outcome", title: "Record an outcome", kind: records,
-			description: "Record how a piece of work turned out — the operator's assessment, or the local verifier result after the session's last edit — so TokenOps learns which decisions paid off.",
+			description: "Record how a piece of work turned out, so TokenOps learns which decisions paid off. record: your report, which TokenOps asks the operator to confirm or correct at the client; only a confirmed one is stored as their judgement and learned from, otherwise it is kept as your own report (self_report), and a decline records nothing. detect: the local verifier result after the session's last edit.",
 			selector:    "action", def: "record", input: outcomeIn{}, output: outcomeOut{},
 			routes: map[string]route{
 				"record": {inner: "tokenops_outcome_record", params: params("execution_id", "decision_id", "result", "caveat", "attention_minutes")},

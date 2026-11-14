@@ -15,6 +15,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/outcomes"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -293,7 +294,7 @@ func (s *Server) registerActionRoutes(mux RouteMux) {
 		}
 		return actions.RecordOutcome(r.Context(), s.actions().Store, actions.OutcomeRequest{
 			ExecutionID: in.ExecutionID, DecisionID: in.DecisionID, Result: in.Result,
-			Caveat: in.Caveat, AttentionMinutes: in.AttentionMinutes,
+			Caveat: in.Caveat, AttentionMinutes: in.AttentionMinutes, Via: outcomes.ViaAPI,
 		})
 	}))
 	mux.HandleFunc("POST /api/coach", s.action("coach", noRestart, func(r *http.Request, path string) (any, error) {

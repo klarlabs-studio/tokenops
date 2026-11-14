@@ -15,7 +15,9 @@ The first closed loop covers coding-agent model allocation:
 3. MCP surfaces advice on every supported harness. Only proxy traffic is
    executable; other adapters remain advisory.
 4. Outcomes come from explicit human assessment or a recognized verifier run
-   after the final edit. Completion or self-report alone is not proof.
+   after the final edit. Completion or self-report alone is not proof: an
+   agent's report over MCP is stored as `self_report` unless the operator
+   confirms it at the client.
 5. Learning projects matched outcomes into retractable evidence tiers.
 
 ## Evidence Tiers

@@ -11,7 +11,11 @@ import (
 	"sync"
 	"testing"
 
+	"go.klarlabs.de/tokenops/internal/capability/actions"
+	"go.klarlabs.de/tokenops/internal/capability/outcomes"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // allowAll stands in for the API authenticator in tests that are past it.
@@ -200,5 +204,34 @@ func TestBudgetActionScopesToAProviderAndTag(t *testing.T) {
 	rec = post(s, "/api/budgets", "application/json", `{"name":"typo","limit_usd":5,"provider":"fireworx"}`)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "fireworks") {
 		t.Errorf("unknown provider = %d %s", rec.Code, rec.Body)
+	}
+}
+
+// POST /api/outcomes serves the operator's own surfaces behind the API
+// token, so what it records is their judgement, stamped as from the API.
+func TestOutcomeActionRecordsTheOperatorsJudgement(t *testing.T) {
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "events.db"), sqlite.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	s := New("127.0.0.1:0", WithActions(func() ActionDeps {
+		return ActionDeps{Store: store, Audit: func(context.Context, string, map[string]any) {}}
+	}), WithDashAuth(allowAll{}))
+	rec := post(s, "/api/outcomes", "application/json", `{"execution_id":"e1","result":"achieved"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("outcome = %d %s", rec.Code, rec.Body)
+	}
+	var got actions.Outcome
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode %s: %v", rec.Body, err)
+	}
+	if got.Assessment != string(eventschema.OutcomeHuman) || got.RecordedVia != string(outcomes.ViaAPI) {
+		t.Fatalf("outcome = %+v", got)
+	}
+	events, err := store.Query(ctx, sqlite.Filter{Type: eventschema.EventTypeOutcome})
+	if err != nil || len(events) != 1 || events[0].Payload.(*eventschema.OutcomeEvent).Assessment != eventschema.OutcomeHuman {
+		t.Fatalf("stored = %d, %v", len(events), err)
 	}
 }
