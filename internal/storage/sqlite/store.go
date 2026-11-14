@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/sqliteuri"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 
 	msqlite "modernc.org/sqlite" // pure-Go driver registered as "sqlite"
@@ -289,7 +290,7 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	v.Add("mode", "ro")
 	v.Add("_pragma", "busy_timeout(2000)")
 	v.Add("_pragma", "query_only(1)")
-	db, err := sql.Open("sqlite", "file:"+abs+"?"+v.Encode())
+	db, err := sql.Open("sqlite", sqliteuri.File(abs, v.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: open read-only: %w", err)
 	}
@@ -959,7 +960,7 @@ func buildDSN(path string, busy time.Duration) (string, error) {
 	v.Add("_pragma", "foreign_keys(ON)")
 	v.Add("_pragma", fmt.Sprintf("busy_timeout(%d)", busy.Milliseconds()))
 	v.Add("_pragma", "auto_vacuum(INCREMENTAL)")
-	return "file:" + raw + "?" + v.Encode(), nil
+	return sqliteuri.File(raw, v.Encode()), nil
 }
 
 // EachEventID streams the ID of every stored envelope to fn, in no

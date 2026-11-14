@@ -21,6 +21,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
+	"go.klarlabs.de/tokenops/internal/sqliteuri"
 )
 
 // Credential is one key and where it is sent: a base URL, or an opencode
@@ -191,7 +192,7 @@ func opencodeDBCredentials(path string) map[string]string {
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	db, err := sql.Open("sqlite", sqliteuri.File(path, "mode=ro"))
 	if err != nil {
 		return nil
 	}

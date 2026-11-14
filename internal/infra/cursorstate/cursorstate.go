@@ -13,6 +13,7 @@ import (
 	_ "modernc.org/sqlite" // read-only driver for Cursor's state.vscdb
 
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
+	"go.klarlabs.de/tokenops/internal/sqliteuri"
 )
 
 // Store reads state.vscdb files. The zero value is ready to use.
@@ -26,7 +27,7 @@ var _ agentdx.CursorStore = Store{}
 // without the cursorDiskKV table, or one whose rows cannot be read, is
 // reported as agentdx.ErrCursorSchema.
 func (Store) Bubbles(path string, yield func(key, value string)) error {
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	db, err := sql.Open("sqlite", sqliteuri.File(path, "mode=ro"))
 	if err != nil {
 		return fmt.Errorf("agentdx: open Cursor store: %w", err)
 	}
