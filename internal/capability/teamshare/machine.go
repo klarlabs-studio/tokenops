@@ -22,15 +22,19 @@ import (
 // started resolved a month of session directories three times: about 30s
 // each for the repositories, the waste report and the units of work, in a
 // daemon macOS runs at background priority.
-func MachineDeps(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, eng *spend.Engine, keys func(context.Context) map[string]string) Deps {
-	d, _, _ := machineDeps(cfg, agg, store, eng, keys)
+//
+// Each of waste, applied in order, adjusts what the waste report reads
+// through (the daemon's incremental readers).
+func MachineDeps(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, eng *spend.Engine, keys func(context.Context) map[string]string,
+	waste ...func(*avoidable.Deps)) Deps {
+	d, _, _ := machineDeps(cfg, agg, store, eng, keys, waste...)
 	return d
 }
 
 // machineDeps is MachineDeps with the readers of the waste report and of
 // the units of work, so a test can see what they share.
 func machineDeps(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, eng *spend.Engine,
-	keys func(context.Context) map[string]string) (Deps, avoidable.Deps, uniteconomics.Deps) {
+	keys func(context.Context) map[string]string, adjust ...func(*avoidable.Deps)) (Deps, avoidable.Deps, uniteconomics.Deps) {
 	repos := gitlog.NewRepos()
 	d := DepsFor(agg)
 	d.Repos = repos
@@ -41,6 +45,9 @@ func machineDeps(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Sto
 	}
 	waste := avoidable.DepsFor(cfg, agg, store, eng)
 	waste.Dirs, waste.Repos = d.Dirs, repos
+	for _, a := range adjust {
+		a(&waste)
+	}
 	d.FinOps = finOpsFor(cfg, store, eng, waste)
 	return d, waste, placed
 }
