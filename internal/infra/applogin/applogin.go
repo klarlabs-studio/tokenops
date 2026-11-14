@@ -34,6 +34,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	"go.klarlabs.de/tokenops/internal/infra/keychain"
+	"go.klarlabs.de/tokenops/internal/sqliteuri"
 
 	// Registers the sqlite driver the database sign-ins are read with.
 	_ "modernc.org/sqlite"
@@ -492,7 +493,7 @@ func readSQLite(ctx context.Context, path string, s providers.AppLoginItem) (map
 		return nil, err
 	}
 	defer cleanup()
-	db, err := sql.Open("sqlite", "file:"+copyPath+"?mode=ro")
+	db, err := sql.Open("sqlite", sqliteuri.File(copyPath, "mode=ro"))
 	if err != nil {
 		return nil, fmt.Errorf("applogin: open %s", path)
 	}

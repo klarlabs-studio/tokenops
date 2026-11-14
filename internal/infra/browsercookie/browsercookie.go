@@ -36,6 +36,7 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 
 	"go.klarlabs.de/tokenops/internal/infra/keychain"
+	"go.klarlabs.de/tokenops/internal/sqliteuri"
 
 	// Registers the sqlite driver used to read the cookie stores.
 	_ "modernc.org/sqlite"
@@ -369,7 +370,7 @@ func queryCookie(ctx context.Context, path, q, name, host string, value *string,
 		return err
 	}
 	defer cleanup()
-	db, err := sql.Open("sqlite", "file:"+tmp+"?mode=ro")
+	db, err := sql.Open("sqlite", sqliteuri.File(tmp, "mode=ro"))
 	if err != nil {
 		return fmt.Errorf("browsercookie: open store: %w", err)
 	}

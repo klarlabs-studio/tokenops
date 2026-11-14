@@ -11,6 +11,7 @@ import (
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
+	"go.klarlabs.de/tokenops/internal/sqliteuri"
 )
 
 // OpencodeShare is where an opencode model compacts, as a share of its
@@ -106,7 +107,7 @@ func opencodeModelsUsed(since time.Time) []string {
 	if err != nil {
 		return nil
 	}
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	db, err := sql.Open("sqlite", sqliteuri.File(path, "mode=ro"))
 	if err != nil {
 		return nil
 	}

@@ -21,6 +21,7 @@ import (
 	_ "modernc.org/sqlite" // read-only driver for opencode.db
 
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
+	"go.klarlabs.de/tokenops/internal/sqliteuri"
 )
 
 // Store reads opencode's database. The zero value is ready to use; it holds
@@ -45,7 +46,7 @@ func Read(path string, opts opencodedb.Options, visit func(opencodedb.Message) e
 	}
 	// mode=ro reads committed WAL data without blocking a running
 	// opencode.
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	db, err := sql.Open("sqlite", sqliteuri.File(path, "mode=ro"))
 	if err != nil {
 		return fmt.Errorf("opencodedb: open: %w", err)
 	}
@@ -78,7 +79,7 @@ func Newest(path string) (time.Time, bool) {
 	if _, err := os.Stat(path); err != nil {
 		return time.Time{}, false
 	}
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
+	db, err := sql.Open("sqlite", sqliteuri.File(path, "mode=ro&immutable=1"))
 	if err != nil {
 		return time.Time{}, false
 	}
@@ -423,7 +424,7 @@ func SessionDirs(path string, since time.Time) (map[string]string, error) {
 		}
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	db, err := sql.Open("sqlite", sqliteuri.File(path, "mode=ro"))
 	if err != nil {
 		return nil, fmt.Errorf("opencodedb: open: %w", err)
 	}

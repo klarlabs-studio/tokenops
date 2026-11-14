@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/infra/keychain"
+	"go.klarlabs.de/tokenops/internal/sqliteuri"
 )
 
 // Session describes the cookies one web session is made of: the cookies a
@@ -157,7 +158,7 @@ func (b Browser) readSession(ctx context.Context, store string, s Session, secre
 		return Found{}, err
 	}
 	defer cleanup()
-	db, err := sql.Open("sqlite", "file:"+tmp+"?mode=ro")
+	db, err := sql.Open("sqlite", sqliteuri.File(tmp, "mode=ro"))
 	if err != nil {
 		return Found{}, fmt.Errorf("browsercookie: open store: %w", err)
 	}
