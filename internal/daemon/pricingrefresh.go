@@ -119,6 +119,7 @@ func refreshOnce(
 	// Apply it to the running engine. Without this the daemon would price
 	// from the card it started with until someone restarted it.
 	eng.Replace(ratecards.Tables(dir, cfg.Pricing.Path))
+	pricingGeneration.Add(1)
 	logger.Info("pricing refreshed",
 		"changes", len(changes), "rates", len(snap.Rates),
 		"snapshot", filepath.Base(path), "first_change", ratecards.FormatChange(changes[0]))

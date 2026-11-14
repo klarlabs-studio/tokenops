@@ -66,6 +66,9 @@ type Server struct {
 	glances     *snapshots[glanceView]
 	glancePath  string
 	glanceKey   string
+	// glanceFollow keeps the glance's figures until their inputs move
+	// (WithGlanceFollows); nil computes them on every glance.
+	glanceFollow *glanceFollow
 	// glanceCosts reads the providers' usage each glance carries; nil
 	// leaves it out.
 	glanceCosts spending.Summarizer

@@ -225,23 +225,27 @@ func (s *Server) view(ctx context.Context, now time.Time) (glanceView, time.Time
 	return s.glances.get(ctx, now)
 }
 
-// computeView computes the glance and the findings ranked around it.
+// computeView computes the glance and the findings ranked around it. The
+// figures read from events follow their inputs (WithGlanceFollows); the
+// rest is read for now.
 func (s *Server) computeView(ctx context.Context, now time.Time) (glanceView, error) {
 	d := s.plans()
-	g, err := headroom.ComputeGlance(ctx, d, now)
+	fig, err := s.glanceFollow.figures(ctx, now, func(ctx context.Context, now time.Time) (glanceFigures, error) {
+		return s.computeFigures(ctx, d, now)
+	})
 	if err != nil {
 		return glanceView{}, err
+	}
+	g := fig.Glance
+	// Signing in as someone else shows at once, whatever the figures.
+	if d.Accounts != nil {
+		g.Accounts = d.Accounts()
 	}
 	p := g.Payload()
 	p.Boundaries = boundaries.GlanceAdvice(d.Config, g.Headroom.Reports)
 	p.SpendBudgets = budgets.Current("", now)
-	p.ComputedAt = now
-	if s.glanceCosts != nil {
-		costCtx, cancel := context.WithTimeout(ctx, glanceCostsBudget)
-		p.ProviderCosts = spending.CostsOf(costCtx, s.glanceCosts, g.Headroom.Providers(), now)
-		p.ProviderCostsLate = costCtx.Err() != nil
-		cancel()
-	}
+	p.ComputedAt = fig.At
+	p.ProviderCosts, p.ProviderCostsLate = fig.Costs, fig.CostsLate
 	var c *coachcap.Report
 	if s.state != nil {
 		if st := s.state(); st.Coach != nil {
@@ -250,4 +254,21 @@ func (s *Server) computeView(ctx context.Context, now time.Time) (glanceView, er
 		}
 	}
 	return glanceView{Glance: p, Findings: findings.Compute(findings.Gather(&g, c, d.Config, findings.DefaultDir()))}, nil
+}
+
+// computeFigures computes the glance's figures from events for now.
+func (s *Server) computeFigures(ctx context.Context, d headroom.Deps, now time.Time) (glanceFigures, error) {
+	d.Accounts = nil // read on every glance, by computeView
+	g, err := headroom.ComputeGlance(ctx, d, now)
+	if err != nil {
+		return glanceFigures{}, err
+	}
+	fig := glanceFigures{Glance: g, At: now}
+	if s.glanceCosts != nil {
+		costCtx, cancel := context.WithTimeout(ctx, glanceCostsBudget)
+		fig.Costs = spending.CostsOf(costCtx, s.glanceCosts, g.Headroom.Providers(), now)
+		fig.CostsLate = costCtx.Err() != nil
+		cancel()
+	}
+	return fig, nil
 }
