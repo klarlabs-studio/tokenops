@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 0.120.0 - 2026-11-14
+
+### Changed
+
+- **daemon:** an idle daemon does close to no work (ADR 0019). Figures derived from events used to be recomputed on a timer, whether or not anything had changed: the hourly team upload rebuilt the same days overnight for minutes at a time, and the glance and boundary figures were recomputed every 30 seconds and every minute. Each job now notes where the event store stood when it last ran and runs again only when an event was added, updated or deleted, a time its figures show passes (a window reset, an expiry, midnight), or a maximum age runs out. A plan-window reading that only repeats the previous one no longer counts as a change.
+  - **team:** an hourly upload is skipped while no event changed since the last one the server accepted, for at most six hours, so what it reads outside the store (transcripts, git, a provider's cost API) still arrives. A failed or unsent upload is never skipped.
+  - **storage:** the turns, prices, plan-window readings and workflow traces that the upload, the waste report and the anomaly check read are kept between reads and refreshed with only what changed. Turn these caches off with `storage.incremental_reads: false` (env `TOKENOPS_STORAGE_INCREMENTAL_READS`; the daemon reads it at start).
+  - **glance and boundaries:** the glance's and the boundary figures' event-derived parts are kept until the store moves, a time they show passes, or `storage.derived_max_age` (default 5m, at most 1h; env `TOKENOPS_STORAGE_DERIVED_MAX_AGE`) runs out. Countdowns and pace in a kept glance can lag by up to that age. The glance's `computed_at` is now when its figures were computed, so the menu bar's "Updated" line shows their real age. The boundary figures file is still written every minute and gains `computed_at`; `observed_at` keeps advancing.
+  - **status:** the source-freshness check re-reads only the transcript directories that changed, with a full walk every ten minutes.
+  - The per-minute plan headroom no longer copies and sorts a month of events, the latest event per source is an index seek, and `verify` filters its read in SQL.
+- **outcomes:** an outcome an agent records is the agent's report, not your judgement. `tokenops_outcome` over MCP asks you to confirm or correct the report; only a confirmed one is recorded as yours (`human`). Without a confirmation it is stored as `self_report`, which learning does not count as strong evidence, and it keeps no attention minutes. `tokenops outcome record` and `POST /api/outcomes` still record `human`. Each outcome names the channel it came through (`recorded_via`). Outcomes recorded over MCP before this release cannot be told apart and still count as yours.
+- **coach:** a model move "holds" only when its sample could have seen a drop. A verdict used to read "holds" once eight runs a side showed no 15-point drop, though so few runs could only detect a drop of about 55 points. A move kind now holds only when the drop its sample could detect is 15 points or less; otherwise it reads "not enough evidence yet", with the runs moved and held out and the smallest drop it could detect. A retracted move needs a verdict that holds to come back. Expect most move kinds to read "not enough evidence yet" for a long time on one developer's volume (ADR 0020, proposed, describes how evidence could conclude).
+- **coach:** a subagent moved off Fable is judged like the others; its move kind was empty, so it was reported as standing and never judged. Fable ranks above Opus in boundary rules, so a rule such as `model_tier > sonnet` now also covers Fable, which it let through.
+- **coach:** `tokenops coach` says when autopilot has nowhere to act, why, and the command that wires the missing hooks, as the menu bar does.
+- **boundaries:** a pace reason names the rate its run-out was forecast at ("at the last hour's rate" or "at this pace"), and so does the menu bar's run-out alert.
+
+### Fixed
+
+- **storage:** a store path holding `#`, `?` or `%` opens the file it names. The path went into SQLite's `file:` URI unescaped, so `x?y.db` and `c%41.db` failed to open and a store at `x#1.db` could share a file with another. Every reader that opens a SQLite file (the event store, opencode, Cursor, Windsurf, browser cookies, app login, harness keys) now escapes it.
+- **verify:** a comparison reads every event in its period; it read at most 200,000 and kept the newest, so on a busy store the earliest attempts were compared against none of their events.
+- **files:** the saved transcript cache and the readers' checkpoints clear the temp files a killed writer left behind, as every other atomic writer does.
+
 ## 0.119.1 - 2026-11-13
 
 ### Fixed
