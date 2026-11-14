@@ -87,6 +87,10 @@ func Pinned() map[string]bool { return pricing.PinnedSnapshotKeys() }
 // Dir is the snapshot directory dir names, ~/.tokenops/pricing when empty.
 func Dir(dir string) string { return pricing.ResolveDir(dir) }
 
+// SnapshotsDir is the directory under Dir(dir) the snapshots are kept in:
+// a snapshot added or removed changes its modification time.
+func SnapshotsDir(dir string) string { return pricing.SnapshotsDir(dir) }
+
 // Tables is the effective-dated rate card in dir with the operator's
 // negotiated rates at overridesPath layered over every period, so a
 // refresh cannot drop them: they outrank every fetched card. An
