@@ -432,7 +432,7 @@ storage:
   enabled: true               # open the local sqlite store
   path: ~/.tokenops/events.db
   incremental_reads: true     # periodic jobs read only what changed; restart to apply
-  derived_max_age: 5m         # longest a glance is kept while nothing changed (see below)
+  derived_max_age: 5m         # longest the glance and boundary figures are kept unchanged
 
 retention:                    # opt-in; empty keep deletes nothing
   interval: 1h
@@ -570,6 +570,15 @@ a rolling window easing as old work leaves it, a reading turning stale,
 and the end of the periods plan use and the plan advice replay. The
 glance's `computed_at` is when its figures were computed for, so the menu
 bar's "Updated" line says how old they are.
+
+The figures boundary rules compare (each plan window's share left, each
+budget's share used) follow the same rule. The daemon still writes them
+every minute while a rule compares one, so the pause point never finds
+them stale, but it reads plan headroom and the budget windows from events
+again only when something they read changed, a window they hold reset, or
+they are `derived_max_age` old. The file says both times: `observed_at`,
+when the daemon last stood by them, and `computed_at`, when they were
+computed for.
 
 ## Allocation rules (`allocation`)
 

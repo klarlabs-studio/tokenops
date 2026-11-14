@@ -150,7 +150,8 @@ func initializeEventRuntime(
 		budgetSource = taggedBudgetSource(cfg, components.Aggregator)
 	}
 	rt.Bills = newVendorBills(deps).Bill
-	startBoundaryFiguresRuntime(cfg, deps, rt.Bills, budgetSource, sup, logger)
+	figureInputs := derivedInputs(rt.Store, configKey(cfg), planFiles()...)
+	startBoundaryFiguresRuntime(cfg, deps, rt.Bills, budgetSource, figureInputs, sup, logger)
 
 	// Plan stamping ensures all sources inherit the plan_included contract.
 	rt.Bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{
@@ -167,7 +168,7 @@ func initializeEventRuntime(
 		proxy.WithSourceFreshness(sources),
 		proxy.WithPlans(deps),
 		proxy.WithGlanceSnapshot(filepath.Join(findings.DefaultDir(), "glance.json"), configKey(cfg)),
-		proxy.WithGlanceFollows(derivedInputs(rt.Store, configKey(cfg), planFiles()...), cfg.Storage.EffectiveDerivedMaxAge()),
+		proxy.WithGlanceFollows(figureInputs, cfg.Storage.EffectiveDerivedMaxAge()),
 		proxy.WithGlanceCosts(glanceCostReader(components.Aggregator)),
 		proxy.WithActions(actionDeps(cfg, rt.Store, logger)),
 		proxy.WithSessions(func() proxy.SessionRoots { return proxy.SessionRoots{} }),

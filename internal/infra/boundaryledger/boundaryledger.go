@@ -550,7 +550,14 @@ func sessionKey(id string) string {
 // share used. The daemon writes them every minute; the pause point reads
 // the one file.
 type Figures struct {
+	// ObservedAt is when the daemon last stood by them: it computed them
+	// then, or found nothing they read changed since it did and no reset
+	// they hold passed (ADR 0019). Readers judge freshness by it.
 	ObservedAt time.Time `json:"observed_at"`
+	// ComputedAt is when they were computed for; only what moves with
+	// the clock alone (a window's pace) may have drifted since, by at most
+	// storage.derived_max_age. Zero in a file written before it was kept.
+	ComputedAt time.Time `json:"computed_at,omitzero"`
 	// PlanLeftPct is each provider's share left, by window ("5h", "week").
 	PlanLeftPct map[string]map[string]float64 `json:"plan_left_pct,omitempty"`
 	// PlanEarlyMin is how many minutes before its reset each provider's
