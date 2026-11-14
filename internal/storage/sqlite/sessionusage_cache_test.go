@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -102,9 +103,11 @@ func sessionFilters() []namedFilter {
 }
 
 // sameSessionUsage fails unless the cache answers each of sessionFilters
-// exactly as the store does, order included.
+// exactly as the store does, order included, for SessionUsage and
+// WindowUsage alike.
 func sameSessionUsage(t *testing.T, s *Store, c *SessionUsageCache, step string) {
 	t.Helper()
+	sameWindowUsage(t, s, c, step)
 	ctx := context.Background()
 	for _, nf := range sessionFilters() {
 		name, f := nf.name, nf.f
@@ -123,6 +126,26 @@ func sameSessionUsage(t *testing.T, s *Store, c *SessionUsageCache, step string)
 			if !reflect.DeepEqual(got[i], want[i]) {
 				t.Fatalf("%s, %s: turn %d differs:\ncache %+v\nstore %+v", step, name, i, got[i], want[i])
 			}
+		}
+	}
+}
+
+// sameWindowUsage fails unless the cache answers each of sessionFilters'
+// windows exactly as the store does: the cost to the last bit.
+func sameWindowUsage(t *testing.T, s *Store, c *SessionUsageCache, step string) {
+	t.Helper()
+	ctx := context.Background()
+	for _, nf := range sessionFilters() {
+		want, err := s.WindowUsage(ctx, nf.f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := c.WindowUsage(ctx, nf.f)
+		if err != nil {
+			t.Fatalf("%s, %s: cache window: %v", step, nf.name, err)
+		}
+		if !reflect.DeepEqual(got, want) || math.Float64bits(got.Totals.CostUSD) != math.Float64bits(want.Totals.CostUSD) {
+			t.Fatalf("%s, %s: window differs:\ncache %+v\nstore %+v", step, nf.name, got, want)
 		}
 	}
 }
@@ -200,6 +223,25 @@ func TestSessionUsageCacheMatchesTheStore(t *testing.T) {
 				fmt.Sprintf(`UPDATE events SET timestamp_ns = %d WHERE id = 'e00007'`, cacheNow.Add(-36*24*time.Hour).UnixNano()),
 				fmt.Sprintf(`UPDATE events SET timestamp_ns = %d WHERE id = 'old-2'`, cacheNow.Add(-2*time.Hour).UnixNano()))
 		}},
+		{name: "columns left NULL", do: func() {
+			execAll(t, s, `UPDATE events SET provider = NULL WHERE id IN ('e00020', 'e00021', 'e00022')`,
+				`UPDATE events SET model = NULL WHERE id IN ('e00023', 'e00024')`,
+				`UPDATE events SET source = NULL WHERE id IN ('e00025', 'e00026')`,
+				`UPDATE events SET input_tokens = NULL, cost_usd = NULL WHERE id IN ('e00027', 'e00028')`,
+				`UPDATE events SET output_tokens = NULL, total_tokens = NULL WHERE id = 'e00029'`)
+		}},
+		{name: "a NULL provider beside an empty one", do: func() {
+			at := cacheNow.Add(-6 * time.Hour)
+			a, b := sessionTurn("null-provider", at, "s1", rng), sessionTurn("empty-provider", at.Add(time.Second), "s1", rng)
+			for _, e := range []*eventschema.Envelope{a, b} {
+				p := e.Payload.(*eventschema.PromptEvent)
+				p.CostSource, p.CostUSD, p.RequestModel = eventschema.CostSourceMetered, 0, "claude-opus-5"
+			}
+			if err := s.AppendBatch(ctx, []*eventschema.Envelope{a, b}); err != nil {
+				t.Fatal(err)
+			}
+			execAll(t, s, `UPDATE events SET provider = NULL WHERE id = 'null-provider'`, `UPDATE events SET provider = '' WHERE id = 'empty-provider'`)
+		}},
 		{name: "deletes", do: func() {
 			execAll(t, s, `DELETE FROM events WHERE id IN ('e00005', 'e00200', 'old-1')`)
 		}},
@@ -237,6 +279,50 @@ func TestSessionUsageCacheMatchesTheStore(t *testing.T) {
 		if n := sessionFullReads(c); n != 1 && (!st.reread || n != 2) {
 			t.Fatalf("%s: the window was read in full %d times", st.name, n)
 		}
+	}
+}
+
+// The store sums a window's costs in events_usage_idx's order, which for
+// events of one instant is not the order the cache holds them in; the
+// cache sums them in the store's order, to the last bit.
+func TestWindowUsageCacheSumsOneInstantInTheIndexOrder(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	// Summed in rowid order these costs give another last bit than in
+	// model order, the index's order here.
+	costs := []float64{5.1e-14, 0.007243800000000001, 3.4722e+29, 7.891900000000001e+30, 0.00031263, 0.00093931, 0.056314}
+	inserted := []int{0, 1, 6, 2, 5, 3, 4}
+	var byRowid sqlSum
+	for _, i := range inserted {
+		byRowid.add(costs[i])
+	}
+	rng := rand.New(rand.NewSource(3))
+	at := cacheNow.Add(-5 * time.Hour)
+	envs := make([]*eventschema.Envelope, 0, len(costs))
+	for _, i := range inserted {
+		e := sessionTurn(fmt.Sprintf("costly-%d", i), at, "s1", rng)
+		p := e.Payload.(*eventschema.PromptEvent)
+		p.CostSource, p.CostUSD, p.RequestModel = eventschema.CostSourceMetered, costs[i], fmt.Sprintf("m%d", i)
+		p.Provider = eventschema.ProviderAnthropic
+		envs = append(envs, e)
+	}
+	if err := s.AppendBatch(ctx, envs); err != nil {
+		t.Fatal(err)
+	}
+	f := analytics.Filter{Since: cacheNow.Add(-24 * time.Hour)}
+	want, err := s.WindowUsage(ctx, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Float64bits(want.Totals.CostUSD) == math.Float64bits(byRowid.value()) {
+		t.Fatal("the costs sum the same in either order: the test checks nothing")
+	}
+	got, err := newTestSessionCache(t, s).WindowUsage(ctx, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Float64bits(got.Totals.CostUSD) != math.Float64bits(want.Totals.CostUSD) || !reflect.DeepEqual(got, want) {
+		t.Fatalf("cache %+v, store %+v", got, want)
 	}
 }
 
@@ -308,6 +394,9 @@ func TestSessionUsageCacheLeavesOtherReadsToTheStore(t *testing.T) {
 	} {
 		if _, err := c.SessionUsage(ctx, f); err != nil {
 			t.Fatalf("%s: %v", name, err)
+		}
+		if _, err := c.WindowUsage(ctx, f); err != nil {
+			t.Fatalf("%s: window: %v", name, err)
 		}
 		c.mu.Lock()
 		held := len(c.windows)
@@ -397,6 +486,40 @@ func BenchmarkSessionUsage(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			if _, err := c.SessionUsage(ctx, f); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+// A week's window usage, as a budget measures it every minute, from the
+// warm cache against reading it from the store as before.
+func BenchmarkWindowUsage(b *testing.B) {
+	ctx := context.Background()
+	s, err := Open(ctx, b.TempDir()+"/events.db", Options{})
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = s.Close() })
+	seedSessions(b, s, "e", 30_000, 30*24*time.Hour)
+	f := analytics.Filter{Since: cacheNow.Add(-7 * 24 * time.Hour), Until: cacheNow}
+	b.Run("store", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			if _, err := s.WindowUsage(ctx, f); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("cache-warm", func(b *testing.B) {
+		c := NewSessionUsageCache(s, 0, time.Hour)
+		c.now = func() time.Time { return cacheNow }
+		if _, err := c.WindowUsage(ctx, f); err != nil {
+			b.Fatal(err)
+		}
+		b.ReportAllocs()
+		for b.Loop() {
+			if _, err := c.WindowUsage(ctx, f); err != nil {
 				b.Fatal(err)
 			}
 		}
