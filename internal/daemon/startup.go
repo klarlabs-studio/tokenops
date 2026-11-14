@@ -306,7 +306,7 @@ func (s *startup) startEventRuntime(ctx context.Context) error {
 	s.events = rt
 	s.deferCleanup(rt.Detach)
 	s.opts = append(s.opts, rt.ProxyOptions...)
-	startTeamUploadRuntime(s.cfg, s.components, rt.Plans, s.transcripts, s.sup, s.logger)
+	startTeamUploadRuntime(s.cfg, s.components, rt.Plans, s.transcripts, rt.wasteReaders, s.sup, s.logger)
 	return nil
 }
 
@@ -449,7 +449,7 @@ func (s *startup) startBackgroundRefreshers(context.Context) error {
 	startAnomalyRuntime(s.cfg, s.components, s.sup, s.logger)
 
 	// And the week's waste report, whose headline the glance shows.
-	startAvoidableRuntime(s.cfg, s.components, s.sup, s.logger)
+	startAvoidableRuntime(s.cfg, s.components, s.events.wasteReaders, s.sup, s.logger)
 	startObservedRuntime(s.cfg, s.components, s.sup, s.logger)
 	return nil
 }

@@ -40,6 +40,18 @@ type Engine struct {
 	tables atomic.Pointer[[]DatedTable]
 	// rates remembers LookupAt's answers for the card set in tables.
 	rates atomic.Pointer[rateMemo]
+	// revision counts the card sets Replace installed.
+	revision atomic.Uint64
+}
+
+// Revision identifies the card set the engine prices from: it changes
+// whenever Replace installs a new one. What was priced at one revision
+// can be kept while the revision holds. A nil engine is at 0.
+func (e *Engine) Revision() uint64 {
+	if e == nil {
+		return 0
+	}
+	return e.revision.Load()
 }
 
 // rateMemo is LookupAt's answers for one card set, by the card in effect
@@ -106,6 +118,7 @@ func (e *Engine) Replace(tables []DatedTable) {
 		return
 	}
 	e.tables.Store(&normalized)
+	e.revision.Add(1)
 }
 
 // NewEngine builds an Engine over a single Table effective from the zero

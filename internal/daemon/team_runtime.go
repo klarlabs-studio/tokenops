@@ -10,6 +10,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/teamshare"
 	"go.klarlabs.de/tokenops/internal/config"
@@ -36,7 +37,8 @@ const teamUploadTimeout = 15 * time.Minute
 // on every tick, so `tokenops team join` and `leave` take effect without a
 // restart; until a machine joins, a tick reads one missing file and does
 // nothing.
-func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components, plans func() headroom.Deps, transcripts *sessions.TranscriptCache, sup *lifecycle.Supervisor, logger *slog.Logger) {
+func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components, plans func() headroom.Deps, transcripts *sessions.TranscriptCache,
+	waste func(*avoidable.Deps), sup *lifecycle.Supervisor, logger *slog.Logger) {
 	if !cfg.Team.UploadsEnabled() || components == nil {
 		return
 	}
@@ -53,8 +55,12 @@ func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components,
 	// The schema 2 and 3 sections are read only when the server accepts
 	// them (teamshare.ServerSchema); vendor cost only on an owner's or
 	// admin's machine, with the admin keys configured here.
+	var adjust []func(*avoidable.Deps)
+	if waste != nil {
+		adjust = append(adjust, waste)
+	}
 	deps := teamshare.MachineDeps(cfg, components.Aggregator, components.Store, components.Spend,
-		func(ctx context.Context) map[string]string { return bootstrap.AdminKeys(ctx, cfg) })
+		func(ctx context.Context) map[string]string { return bootstrap.AdminKeys(ctx, cfg) }, adjust...)
 	if plans != nil && deps.FinOps.Plans != nil {
 		deps.FinOps.Plans = plans
 	}

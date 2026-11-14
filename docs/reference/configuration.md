@@ -1154,15 +1154,19 @@ The daemon's periodic jobs (the hourly team upload, the waste report it
 carries, the anomaly read) each read weeks of session turns from the event
 store. With `incremental_reads` on, the default, the daemon keeps what it
 read in memory and on each run reads only the events stored, changed or
-deleted since. Every figure is the same as a full read gives. Reads reaching
-back further than 40 days, and reads narrowed by provider, model, workflow or
-agent, still go to the store. The daemon drops what it holds after two hours
-without a read.
+deleted since. The waste report also reads its plan window readings from
+the glance's event cache, and keeps each workflow it reconstructs until one
+of that workflow's events changes or the rate card is refreshed. Every
+figure is the same as a full read gives. Reads reaching back further than
+40 days, and reads narrowed by provider, model, workflow or agent, still go
+to the store. The daemon drops what it holds after two hours without a
+read.
 
 Set `incremental_reads: false` (or `TOKENOPS_STORAGE_INCREMENTAL_READS=false`)
 to read the store in full on every run, as before. The daemon reads the
 setting at start: restart it (`tokenops daemon restart`) after changing it.
-The glance's own event cache is not affected by this setting.
+The glance's own event cache is not affected by this setting; off, the
+waste report no longer reads through it.
 
 ## Environment variables
 
