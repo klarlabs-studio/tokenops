@@ -378,26 +378,37 @@ func (s *Store) WindowUsage(ctx context.Context, f analytics.Filter) (analytics.
 	if s == nil {
 		return analytics.WindowUsage{}, analytics.ErrNotInitialised
 	}
-	var (
-		totals analytics.Summary
-		cost   sqlSum
-	)
-	pricing := newPricingGroups()
-	err := s.scanUsage(ctx, f, analytics.GroupNone, func(r *usageRow) {
-		totals.Requests++
-		totals.InputTokens += r.in
-		totals.OutputTokens += r.out
-		totals.TotalTokens += r.total
-		if r.cost.Valid {
-			cost.add(r.cost.Float64)
-		}
-		pricing.add(pricingKey{at: r.ts / nsPerDay}, r)
-	})
-	if err != nil {
+	w := newWindowSums()
+	if err := s.scanUsage(ctx, f, analytics.GroupNone, w.add); err != nil {
 		return analytics.WindowUsage{}, err
 	}
-	totals.CostUSD = cost.value()
+	return w.usage(), nil
+}
 
+// windowSums accumulates a WindowUsage from its events, in the order the
+// store reads them: the cost sum depends on it.
+type windowSums struct {
+	totals  analytics.Summary
+	cost    sqlSum
+	pricing pricingGroups
+}
+
+func newWindowSums() *windowSums { return &windowSums{pricing: newPricingGroups()} }
+
+func (w *windowSums) add(r *usageRow) {
+	w.totals.Requests++
+	w.totals.InputTokens += r.in
+	w.totals.OutputTokens += r.out
+	w.totals.TotalTokens += r.total
+	if r.cost.Valid {
+		w.cost.add(r.cost.Float64)
+	}
+	w.pricing.add(pricingKey{at: r.ts / nsPerDay}, r)
+}
+
+func (w *windowSums) usage() analytics.WindowUsage {
+	totals := w.totals
+	totals.CostUSD = w.cost.value()
 	done := func(k pricingKey, p *pricingSums) analytics.PricingGroup {
 		g := p.g
 		g.At = time.Unix(0, p.latest).UTC()
@@ -408,13 +419,13 @@ func (s *Store) WindowUsage(ctx context.Context, f analytics.Filter) (analytics.
 		Totals: totals,
 		// The uncosted groups were ordered by provider and model, each
 		// one's days in grouping order.
-		Uncosted: sortedGroups(pricing.uncosted, func(a, b pricingKey) int {
+		Uncosted: sortedGroups(w.pricing.uncosted, func(a, b pricingKey) int {
 			return cmp.Or(compareNullText(a.provider, b.provider), compareNullText(a.model, b.model), cmp.Compare(a.at, b.at))
 		}, done),
-		PlanCovered: sortedGroups(pricing.planCovered, func(a, b pricingKey) int {
+		PlanCovered: sortedGroups(w.pricing.planCovered, func(a, b pricingKey) int {
 			return cmp.Or(cmp.Compare(a.at, b.at), compareNullText(a.provider, b.provider), compareNullText(a.model, b.model))
 		}, done),
-	}, nil
+	}
 }
 
 // CacheTotals implements analytics.Store. JSONL events carry the cache
@@ -473,7 +484,10 @@ const hasSession = `COALESCE(session_id, '') <> ''`
 
 // sessionUsageColumns are what SessionUsage reads of an event, in the
 // order scanSessionUsage scans them.
-const sessionUsageColumns = `session_id, timestamp_ns, COALESCE(provider, ''), COALESCE(model, ''),
+const sessionUsageColumns = `session_id, ` + sessionUsageTail
+
+// sessionUsageTail is sessionUsageColumns after the session.
+const sessionUsageTail = `timestamp_ns, COALESCE(provider, ''), COALESCE(model, ''),
 			COALESCE(input_tokens, 0), COALESCE(output_tokens, 0), COALESCE(total_tokens, 0),
 			COALESCE(` + cacheReadExpr + `, 0),
 			COALESCE(` + cacheWriteExpr + `, 0),
