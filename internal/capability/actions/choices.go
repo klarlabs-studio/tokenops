@@ -309,7 +309,7 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// OutcomeRequest is the operator's judgement of one execution.
+// OutcomeRequest is a report of how one execution went.
 type OutcomeRequest struct {
 	ExecutionID string
 	DecisionID  string
@@ -317,8 +317,12 @@ type OutcomeRequest struct {
 	Result string
 	Caveat string
 	// AttentionMinutes is active human effort, only when the operator
-	// reported or confirmed it.
+	// reported or confirmed it. It is kept only with a human assessment.
 	AttentionMinutes *float64
+	// Via is the channel the report came through, which decides what it
+	// vouches for: an operator's surface records a human judgement, an
+	// agent's own report a self-report. Empty is an agent's.
+	Via outcomes.Channel
 }
 
 // Outcome is a recorded judgement.
@@ -327,35 +331,53 @@ type Outcome struct {
 	ExecutionID string `json:"execution_id"`
 	Result      string `json:"result"`
 	Assessment  string `json:"assessment"`
+	// RecordedVia is the channel the outcome came through: cli, api,
+	// mcp_operator_confirmed or mcp_agent.
+	RecordedVia string `json:"recorded_via,omitempty"`
 	Recorded    bool   `json:"recorded"`
 	Error       string `json:"error,omitempty"`
 	Hint        string `json:"hint,omitempty"`
 }
 
-// RecordOutcome stores the operator's judgement of an execution, linked to
-// its decision when one is named. A task ending or an agent saying done is
-// not an outcome; only the operator's judgement is.
-func RecordOutcome(ctx context.Context, store *sqlite.Store, req OutcomeRequest) (Outcome, error) {
+// ValidateOutcome checks a report before anyone is asked about it.
+func ValidateOutcome(req OutcomeRequest) (eventschema.OutcomeResult, error) {
 	if strings.TrimSpace(req.ExecutionID) == "" {
-		return Outcome{}, inputErr(errors.New("execution_id is required"))
+		return "", inputErr(errors.New("execution_id is required"))
 	}
 	result, err := ParseOutcomeResult(req.Result)
 	if err != nil {
-		return Outcome{}, inputErr(err)
+		return "", inputErr(err)
 	}
 	if m := req.AttentionMinutes; m != nil && (math.IsNaN(*m) || math.IsInf(*m, 0) || *m < 0) {
-		return Outcome{}, inputErr(errors.New("attention_minutes must be a finite non-negative number"))
+		return "", inputErr(errors.New("attention_minutes must be a finite non-negative number"))
 	}
-	out := Outcome{ExecutionID: req.ExecutionID, Result: string(result), Assessment: string(eventschema.OutcomeHuman)}
+	return result, nil
+}
+
+// RecordOutcome stores a report of how an execution went, linked to its
+// decision when one is named, with the assessment its channel vouches for.
+// A task ending or an agent saying done is not the operator's judgement:
+// an agent's own report is stored as a self-report, which learning does not
+// count as strong evidence.
+func RecordOutcome(ctx context.Context, store *sqlite.Store, req OutcomeRequest) (Outcome, error) {
+	result, err := ValidateOutcome(req)
+	if err != nil {
+		return Outcome{}, err
+	}
+	env := outcomes.Event(outcomes.Record{
+		ExecutionID: req.ExecutionID, DecisionID: req.DecisionID,
+		Result: result, Via: viaOrAgent(req.Via), Caveat: strings.TrimSpace(req.Caveat),
+		AttentionMinutes: req.AttentionMinutes,
+	})
+	payload := env.Payload.(*eventschema.OutcomeEvent)
+	out := Outcome{
+		ExecutionID: req.ExecutionID, Result: string(result),
+		Assessment: string(payload.Assessment), RecordedVia: payload.Evidence[len(payload.Evidence)-1].Source,
+	}
 	if store == nil {
 		out.Error, out.Hint = "storage_disabled", "run `tokenops init` then restart the daemon"
 		return out, nil
 	}
-	env := outcomes.Event(outcomes.Record{
-		ExecutionID: req.ExecutionID, DecisionID: req.DecisionID,
-		Result: result, Assessment: eventschema.OutcomeHuman, Caveat: strings.TrimSpace(req.Caveat),
-		AttentionMinutes: req.AttentionMinutes,
-	})
 	if err := CorrelateOutcome(ctx, store, env); err != nil {
 		return Outcome{}, err
 	}
@@ -364,6 +386,14 @@ func RecordOutcome(ctx context.Context, store *sqlite.Store, req OutcomeRequest)
 	}
 	out.EventID, out.Recorded = env.ID, true
 	return out, nil
+}
+
+// viaOrAgent is via, or an agent's report when no channel is named.
+func viaOrAgent(via outcomes.Channel) outcomes.Channel {
+	if via == "" {
+		return outcomes.ViaAgent
+	}
+	return via
 }
 
 // CorrelateOutcome links an outcome to its decision's lifecycle.
