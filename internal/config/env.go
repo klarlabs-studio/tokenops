@@ -55,6 +55,16 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("TOKENOPS_STORAGE_PATH"); v != "" {
 		cfg.Storage.Path = v
 	}
+	if v := os.Getenv("TOKENOPS_STORAGE_INCREMENTAL_READS"); v != "" {
+		switch strings.ToLower(v) {
+		case "1", "true", "yes", "on":
+			on := true
+			cfg.Storage.IncrementalReads = &on
+		case "0", "false", "no", "off":
+			off := false
+			cfg.Storage.IncrementalReads = &off
+		}
+	}
 	if v := os.Getenv("TOKENOPS_OTEL_ENABLED"); v != "" {
 		switch strings.ToLower(v) {
 		case "1", "true", "yes", "on":

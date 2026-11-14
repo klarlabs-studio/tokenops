@@ -29,9 +29,12 @@ import (
 // Components holds every long-lived collaborator the daemon needs. The
 // zero value is not useful — always construct via New.
 type Components struct {
-	Store        *sqlite.Store
-	Spend        *spend.Engine
-	Aggregator   *analytics.Aggregator
+	Store      *sqlite.Store
+	Spend      *spend.Engine
+	Aggregator *analytics.Aggregator
+	// SessionUsage is the cache the aggregator reads session usage
+	// through once ReadSessionsIncrementally has run; nil until then.
+	SessionUsage *sqlite.SessionUsageCache
 	Tokenizers   *tokenizer.Registry
 	Redactor     *redaction.Redactor
 	EventCounter *observ.EventCounter
@@ -90,6 +93,18 @@ func (c *Components) OpenStoreAt(ctx context.Context, path string) error {
 	c.Store = store
 	c.Aggregator = analytics.New(store, c.Spend)
 	return nil
+}
+
+// ReadSessionsIncrementally makes the aggregator read session usage
+// through a SessionUsageCache, which reads only what changed since its
+// last answer: the daemon's periodic jobs each list a month of session
+// turns. A no-op without a store.
+func (c *Components) ReadSessionsIncrementally() {
+	if c == nil || c.Store == nil {
+		return
+	}
+	c.SessionUsage = sqlite.NewSessionUsageCache(c.Store, 0, 0)
+	c.Aggregator = analytics.New(c.SessionUsage, c.Spend)
 }
 
 // daemonCheckpointEvery is how often the daemon copies the WAL into the

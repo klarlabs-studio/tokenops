@@ -82,6 +82,12 @@ func initializeEventRuntime(
 		return nil, err
 	}
 	rt.Store = components.Store
+	// The periodic jobs read session turns through the aggregator: with
+	// storage.incremental_reads on (the default), through a cache that
+	// reads only what changed since its last answer; off, from the store.
+	if cfg.Storage.ReadsIncrementally() {
+		components.ReadSessionsIncrementally()
+	}
 	if legacyPath != "" {
 		migrated, err := domainmigration.Import(ctx, rt.Store, legacyPath, 3)
 		if err != nil {

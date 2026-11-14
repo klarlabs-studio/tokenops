@@ -30,6 +30,8 @@ type interner struct {
 	strs map[string]string
 	// sets holds the attribute sets handed out, by setHash.
 	sets map[uint64][]map[string]string
+	// keys holds the session keys handed out (SessionUsageCache).
+	keys map[sessionKey]*sessionKey
 	// held counts the strings and sets held.
 	held int
 }
@@ -47,6 +49,7 @@ func newInterner() *interner {
 func (in *interner) reset() {
 	in.strs = map[string]string{}
 	in.sets = map[uint64][]map[string]string{}
+	in.keys = map[sessionKey]*sessionKey{}
 	in.held = 0
 }
 

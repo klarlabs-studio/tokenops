@@ -13,6 +13,18 @@ import (
 type StorageConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Path    string `yaml:"path"`
+	// IncrementalReads lets the daemon keep what it reads of the store
+	// for its periodic jobs (the team upload, the waste report, the
+	// anomaly read) and, on each run, read only the events that changed
+	// since. Default on; false reads the store in full every time, as
+	// before. The daemon reads it at start.
+	IncrementalReads *bool `yaml:"incremental_reads,omitempty"`
+}
+
+// ReadsIncrementally reports whether the daemon's periodic reads keep
+// what they read and read only what changed (IncrementalReads).
+func (s StorageConfig) ReadsIncrementally() bool {
+	return s.IncrementalReads == nil || *s.IncrementalReads
 }
 
 // RetentionConfig is an opt-in event-store prune. Empty Keep disables
