@@ -292,26 +292,57 @@ func (c *windowCache[K, T]) apply(ctx context.Context, q querier, key K, w *wind
 		// On a copy: a failed read below leaves the window as it was.
 		rows = slices.DeleteFunc(slices.Clone(rows), stale)
 	}
+	fresh, err := c.reads.past(ctx, q, w.strs, key, known, w.floor)
+	if err != nil {
+		return false, err
+	}
 	if len(changed) > 0 {
 		reread, err := c.reads.changed(ctx, q, w.strs, key, w.seq, known, w.floor)
 		if err != nil {
 			return false, err
 		}
-		rows = append(rows, reread...)
+		fresh = append(fresh, reread...)
 	}
-	added, err := c.reads.past(ctx, q, w.strs, key, known, w.floor)
-	if err != nil {
-		return false, err
-	}
-	rows = append(rows, added...)
-	if !slices.IsSortedFunc(rows, c.reads.compare) {
-		// Most new rows are the newest events and append in order; a
-		// backfill or a re-read row sorts in.
-		slices.SortFunc(rows, c.reads.compare)
-	}
-	w.rows = rows
+	w.rows = mergeRows(rows, fresh, c.reads.compare)
 	w.seq, w.tail = snap.seq, snap.tail
 	return true, nil
+}
+
+// mergeRows is held, which is in compare order, with fresh sorted in,
+// in held's array where it has room. Most fresh rows are the newest
+// events and append in order. A backfill, a re-read row or a source that
+// writes late sorts in: only fresh is sorted, then merged in from the
+// end, the held rows after each fresh row moving up in one block. Sorting
+// the whole window again on every such update was most of what bringing
+// a busy month of events up to date cost. fresh must not share held's
+// array.
+func mergeRows[T any](held, fresh []T, compare func(a, b T) int) []T {
+	if len(fresh) == 0 {
+		return held
+	}
+	if !slices.IsSortedFunc(fresh, compare) {
+		slices.SortFunc(fresh, compare)
+	}
+	n := len(held)
+	if n == 0 || compare(held[n-1], fresh[0]) <= 0 {
+		return append(held, fresh...)
+	}
+	out := slices.Grow(held, len(fresh))[:n+len(fresh)]
+	// From the end: each fresh row, largest first, goes after the held
+	// rows not yet moved that sort before it, found by a search, and the
+	// held rows after it move up as one block. Each slot written is past
+	// every held row not yet moved, so none is overwritten before it is
+	// read.
+	unmoved, end := n, len(out)
+	for j := len(fresh) - 1; j >= 0; j-- {
+		p := sort.Search(unmoved, func(x int) bool { return compare(out[x], fresh[j]) > 0 })
+		end -= unmoved - p
+		copy(out[end:], out[p:unmoved])
+		end--
+		out[end] = fresh[j]
+		unmoved = p
+	}
+	return out
 }
 
 // trim drops rows older than oldest, which no cached read asks for.
