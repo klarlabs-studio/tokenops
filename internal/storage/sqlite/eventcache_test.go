@@ -171,7 +171,7 @@ func TestEventCacheBoundsWhatItHolds(t *testing.T) {
 	}
 	sameAsStore(t, s, c, eventschema.EventTypePrompt, cacheNow.Add(-9*24*time.Hour), "beyond the span")
 	c.mu.Lock()
-	held := len(c.types)
+	held := len(c.windows)
 	c.mu.Unlock()
 	if held != 0 {
 		t.Fatalf("a window beyond the span was cached")
@@ -180,7 +180,7 @@ func TestEventCacheBoundsWhatItHolds(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		c.mu.Lock()
-		held = len(c.types)
+		held = len(c.windows)
 		c.mu.Unlock()
 		if held == 0 {
 			break
@@ -280,7 +280,7 @@ func TestEventCacheEmptiesAfterASlowFullRead(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		c.mu.Lock()
-		held := len(c.types)
+		held := len(c.windows)
 		c.mu.Unlock()
 		if held == 0 {
 			return

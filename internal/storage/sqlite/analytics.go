@@ -443,23 +443,15 @@ func (s *Store) CacheTotals(ctx context.Context, f analytics.Filter) (analytics.
 	return t, nil
 }
 
-// SessionUsage implements analytics.Store.
+// SessionUsage implements analytics.Store. Events at the same time come
+// in the order they were stored (by rowid), which SessionUsageCache keeps.
 func (s *Store) SessionUsage(ctx context.Context, f analytics.Filter) ([]analytics.SessionUsage, error) {
 	if s == nil {
 		return nil, analytics.ErrNotInitialised
 	}
 	conds, args := analyticsConditions(f)
-	conds = append(conds, `COALESCE(session_id, '') <> ''`)
-	q := `SELECT session_id, timestamp_ns, COALESCE(provider, ''), COALESCE(model, ''),
-			COALESCE(input_tokens, 0), COALESCE(output_tokens, 0), COALESCE(total_tokens, 0),
-			COALESCE(` + cacheReadExpr + `, 0),
-			COALESCE(` + cacheWriteExpr + `, 0),
-			COALESCE(` + cacheWrite1hExpr + `, 0),
-			COALESCE(cost_usd, 0), COALESCE(workflow_id, ''), COALESCE(execution_id, ''),
-			COALESCE(source, ''), COALESCE(json_extract(attributes, '$.endpoint'), ''),
-			` + costSourcePlanCovered + `,
-			COALESCE(CAST(json_extract(payload, '$.latency_ns') AS INTEGER), 0)
-		FROM events WHERE ` + strings.Join(conds, " AND ") + ` ORDER BY timestamp_ns`
+	conds = append(conds, hasSession)
+	q := `SELECT ` + sessionUsageColumns + ` FROM events WHERE ` + strings.Join(conds, " AND ") + ` ORDER BY timestamp_ns, rowid`
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("analytics: session turns: %w", err)
@@ -467,22 +459,50 @@ func (s *Store) SessionUsage(ctx context.Context, f analytics.Filter) ([]analyti
 	defer func() { _ = rows.Close() }()
 	var out []analytics.SessionUsage
 	for rows.Next() {
-		var (
-			u         analytics.SessionUsage
-			ns, latNs int64
-			cost      sql.NullFloat64
-		)
-		if err := rows.Scan(&u.SessionID, &ns, &u.Provider, &u.Model, &u.InputTokens, &u.OutputTokens, &u.TotalTokens,
-			&u.CacheReadTokens, &u.CacheWriteTokens, &u.CacheWrite1hTokens, &cost, &u.WorkflowID, &u.ExecutionID,
-			&u.Source, &u.Endpoint, &u.PlanCovered, &latNs); err != nil {
-			return nil, fmt.Errorf("analytics: session turns scan: %w", err)
+		u, err := scanSessionUsage(rows)
+		if err != nil {
+			return nil, err
 		}
-		u.At = time.Unix(0, ns).UTC()
-		u.CostUSD = cost.Float64
-		u.Latency = time.Duration(latNs)
 		out = append(out, u)
 	}
 	return out, rows.Err()
+}
+
+// hasSession keeps the events that belong to a session.
+const hasSession = `COALESCE(session_id, '') <> ''`
+
+// sessionUsageColumns are what SessionUsage reads of an event, in the
+// order scanSessionUsage scans them.
+const sessionUsageColumns = `session_id, timestamp_ns, COALESCE(provider, ''), COALESCE(model, ''),
+			COALESCE(input_tokens, 0), COALESCE(output_tokens, 0), COALESCE(total_tokens, 0),
+			COALESCE(` + cacheReadExpr + `, 0),
+			COALESCE(` + cacheWriteExpr + `, 0),
+			COALESCE(` + cacheWrite1hExpr + `, 0),
+			COALESCE(cost_usd, 0), COALESCE(workflow_id, ''), COALESCE(execution_id, ''),
+			COALESCE(source, ''), COALESCE(json_extract(attributes, '$.endpoint'), ''),
+			` + costSourcePlanCovered + `,
+			COALESCE(CAST(json_extract(payload, '$.latency_ns') AS INTEGER), 0)`
+
+// scanSessionUsage scans one row of sessionUsageColumns, after the
+// columns lead names.
+func scanSessionUsage(rows *sql.Rows, lead ...any) (analytics.SessionUsage, error) {
+	var (
+		u         analytics.SessionUsage
+		ns, latNs int64
+		cost      sql.NullFloat64
+	)
+	dest := make([]any, 0, len(lead)+17)
+	dest = append(dest, lead...)
+	dest = append(dest, &u.SessionID, &ns, &u.Provider, &u.Model, &u.InputTokens, &u.OutputTokens, &u.TotalTokens,
+		&u.CacheReadTokens, &u.CacheWriteTokens, &u.CacheWrite1hTokens, &cost, &u.WorkflowID, &u.ExecutionID,
+		&u.Source, &u.Endpoint, &u.PlanCovered, &latNs)
+	if err := rows.Scan(dest...); err != nil {
+		return u, fmt.Errorf("analytics: session turns scan: %w", err)
+	}
+	u.At = time.Unix(0, ns).UTC()
+	u.CostUSD = cost.Float64
+	u.Latency = time.Duration(latNs)
+	return u, nil
 }
 
 // analyticsConditions translates an analytics.Filter into WHERE conditions
