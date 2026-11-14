@@ -40,6 +40,9 @@ func TestPollerKeepsUnchangedLimitsCurrent(t *testing.T) {
 		if d, ok := heartbeat.FreshFor(env.Attributes); !ok || d != 25*time.Minute {
 			t.Errorf("reading %d stands for %s (%v), want 25m", i, d, ok)
 		}
+		if got := heartbeat.IsRepeat(env.Attributes); got != (i >= 2) {
+			t.Errorf("reading %d: repeat = %v, want %v: only the heartbeats repeat", i, got, i >= 2)
+		}
 		ids[env.ID] = true
 	}
 	if len(ids) != len(bus.got) {

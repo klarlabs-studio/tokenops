@@ -117,7 +117,7 @@ func (p *Poller) Scan(ctx context.Context) {
 	if !p.kept.Due(key, now) {
 		return
 	}
-	heartbeat.Stamp(env.Attributes, p.opts.Interval)
+	p.kept.Stamp(env.Attributes, key, p.opts.Interval)
 	if p.bus != nil {
 		if err := p.bus.PublishWait(ctx, env); err != nil {
 			// Not remembered: the next poll offers it again.
