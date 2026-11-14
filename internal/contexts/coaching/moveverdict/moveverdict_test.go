@@ -63,25 +63,40 @@ func TestJudgeUpdatesTheBeliefFromOutcomes(t *testing.T) {
 			verdict: VerdictDropped,
 		},
 		{
-			name:    "the same rates hold",
-			obs:     join(calls("mv", "edit", "sonnet", "p", true, 10, 2, t0), calls("base", "edit", "opus", "p", false, 10, 2, t0)),
+			name: "the same rates on a large sample hold",
+			// 200 a side at 20%: the sample could detect a drop of about
+			// 11 points, so finding none is evidence the move holds.
+			obs:     join(calls("mv", "edit", "sonnet", "p", true, 200, 40, t0), calls("base", "edit", "opus", "p", false, 200, 40, t0)),
 			verdict: VerdictHolds,
+		},
+		{
+			name: "the same rates on a small sample are not enough evidence",
+			// 10 a side could only detect a drop of about 50 points.
+			obs:     join(calls("mv", "edit", "sonnet", "p", true, 10, 2, t0), calls("base", "edit", "opus", "p", false, 10, 2, t0)),
+			verdict: VerdictNotEnoughEvidence,
 		},
 		{
 			name: "a small gap is not a drop",
-			// 30% vs 20%: ten points, under the fifteen the rule needs.
-			obs:     join(calls("mv", "edit", "sonnet", "p", true, 10, 3, t0), calls("base", "edit", "opus", "p", false, 10, 2, t0)),
+			// 25% vs 20% on 200 a side: five points, under the fifteen
+			// the rule needs.
+			obs:     join(calls("mv", "edit", "sonnet", "p", true, 200, 50, t0), calls("base", "edit", "opus", "p", false, 200, 40, t0)),
 			verdict: VerdictHolds,
 		},
 		{
-			name: "a large gap on noise is not a drop",
+			name: "a large gap on noise is not a drop, nor evidence it holds",
 			// 3/8 vs 1/8: 25 points, but z is about 1.15, short of 1.645.
 			obs:     join(calls("mv", "edit", "sonnet", "p", true, 8, 3, t0), calls("base", "edit", "opus", "p", false, 8, 1, t0)),
-			verdict: VerdictHolds,
+			verdict: VerdictNotEnoughEvidence,
 		},
 		{
-			name:    "moved better than baseline holds",
-			obs:     join(calls("mv", "edit", "sonnet", "p", true, 10, 0, t0), calls("base", "edit", "opus", "p", false, 10, 5, t0)),
+			name: "no failures on either side is no evidence on a small sample",
+			// 0/8 vs 0/8: a perfect record on eight runs rules out little.
+			obs:     join(calls("mv", "edit", "sonnet", "p", true, 8, 0, t0), calls("base", "edit", "opus", "p", false, 8, 0, t0)),
+			verdict: VerdictNotEnoughEvidence,
+		},
+		{
+			name:    "moved better than baseline holds on a large sample",
+			obs:     join(calls("mv", "edit", "sonnet", "p", true, 200, 0, t0), calls("base", "edit", "opus", "p", false, 200, 50, t0)),
 			verdict: VerdictHolds,
 		},
 	}
@@ -95,6 +110,66 @@ func TestJudgeUpdatesTheBeliefFromOutcomes(t *testing.T) {
 				t.Errorf("belief carries no reason or scope: %+v", b)
 			}
 		})
+	}
+}
+
+// A verdict states the smallest drop its sample could detect, and says
+// "not enough evidence yet" with the counts on each side and that size
+// whenever the size is larger than the drop the rule retracts at.
+func TestJudgeStatesWhatTheSampleCouldDetect(t *testing.T) {
+	now := t0.Add(48 * time.Hour)
+	cases := []struct {
+		name     string
+		n, bad   int
+		min, max float64
+		verdict  Verdict
+	}{
+		{"eight a side", 8, 1, 0.40, 0.70, VerdictNotEnoughEvidence},
+		{"forty a side", 40, 8, 0.20, 0.35, VerdictNotEnoughEvidence},
+		{"two hundred a side", 200, 40, 0.08, 0.15, VerdictHolds},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			obs := join(calls("mv", "edit", "sonnet", "p", true, tc.n, tc.bad, t0),
+				calls("base", "edit", "opus", "p", false, tc.n, tc.bad, t0))
+			b := beliefFor(t, Judge(obs, nil, now), editOpusSonnet)
+			if b.Verdict != tc.verdict {
+				t.Fatalf("verdict = %s, want %s (%s)", b.Verdict, tc.verdict, b.Why)
+			}
+			if b.Detectable < tc.min || b.Detectable > tc.max {
+				t.Fatalf("detectable drop = %.3f, want within [%.2f, %.2f]", b.Detectable, tc.min, tc.max)
+			}
+			want := fmt.Sprintf("could detect drops of %d points or more", points(b.Detectable))
+			if !strings.Contains(b.Why, want) {
+				t.Errorf("why = %q, want it to contain %q", b.Why, want)
+			}
+			if tc.verdict == VerdictNotEnoughEvidence {
+				counts := fmt.Sprintf("%d moved, %d comparable", tc.n, tc.n)
+				if !strings.Contains(b.Why, "not enough evidence yet") || !strings.Contains(b.Why, counts) {
+					t.Errorf("why = %q, want the counts %q and the verdict named", b.Why, counts)
+				}
+			}
+		})
+	}
+}
+
+// Instructions within a session are not independent, so the default
+// model's power is counted in sessions: many instructions in a few
+// sessions are not a large sample.
+func TestSessionPowerCountsSessions(t *testing.T) {
+	now := t0.Add(48 * time.Hour)
+	k := Key{Kind: KindDefaultModel, From: "opus", To: "sonnet"}
+	var obs []Observation
+	for i := 0; i < 4; i++ {
+		obs = append(obs,
+			Observation{Ref: fmt.Sprintf("m%d", i), Session: fmt.Sprintf("m%d", i), Scope: "p", At: t0, Kind: KindDefaultModel,
+				Model: "sonnet", Moved: true, From: "opus", Trials: 500, Bad: 50},
+			Observation{Ref: fmt.Sprintf("b%d", i), Session: fmt.Sprintf("b%d", i), Scope: "p", At: t0, Kind: KindDefaultModel,
+				Model: "opus", Trials: 500, Bad: 50})
+	}
+	b := beliefFor(t, Judge(obs, nil, now), k)
+	if b.Verdict != VerdictNotEnoughEvidence {
+		t.Fatalf("2000 instructions in 4 sessions a side read as %s (%s)", b.Verdict, b.Why)
 	}
 }
 
@@ -217,12 +292,19 @@ func TestDecideRetractsOnceAndReinstatesOnNewEvidence(t *testing.T) {
 	// New evidence: runs of the kind on the cheaper model since the
 	// retraction (the agent asked for it itself), as good as baseline.
 	fresh := join(obs,
-		calls("new", "edit", "sonnet", "p", false, 10, 1, now.Add(time.Hour)),
-		calls("base2", "edit", "opus", "p", false, 10, 1, now.Add(time.Hour)))
+		calls("new", "edit", "sonnet", "p", false, 200, 20, now.Add(time.Hour)),
+		calls("base2", "edit", "opus", "p", false, 200, 20, now.Add(time.Hour)))
 	at := now.Add(2 * time.Hour)
 	back := Decide(Judge(fresh, active, at), active, at, func() string { return "d4" })
 	if len(back) != 1 || back[0].Reinstate == nil || back[0].Reinstate.EndedBy != EndedByEvidence {
 		t.Fatalf("new evidence did not reinstate: %+v", back)
+	}
+	// A few good runs since are not evidence enough to bring it back.
+	few := join(obs,
+		calls("new", "edit", "sonnet", "p", false, 10, 1, now.Add(time.Hour)),
+		calls("base2", "edit", "opus", "p", false, 10, 1, now.Add(time.Hour)))
+	if early := Decide(Judge(few, active, at), active, at, func() string { return "d5" }); len(early) != 0 {
+		t.Fatalf("an underpowered sample reinstated the move: %+v", early)
 	}
 }
 

@@ -118,7 +118,13 @@ type Verdict string
 const (
 	// VerdictUnjudged: not enough comparable evidence yet.
 	VerdictUnjudged Verdict = "unjudged"
-	// VerdictHolds: enough evidence, and no drop beyond the threshold.
+	// VerdictNotEnoughEvidence: the minimum sample is there and no drop
+	// was found, but the sample is too small to have found one of the
+	// size the rule retracts at. Absence of a detected drop is not
+	// evidence that quality held.
+	VerdictNotEnoughEvidence Verdict = "not_enough_evidence"
+	// VerdictHolds: no drop beyond the threshold, on a sample that could
+	// have detected one (Belief.Detectable at most Policy.MinDrop).
 	VerdictHolds Verdict = "holds"
 	// VerdictDropped: quality dropped beyond the threshold, confidently.
 	VerdictDropped Verdict = "dropped"
@@ -141,9 +147,11 @@ type Policy struct {
 
 // SubagentPolicy judges subagent moves. Eight runs a side is the
 // smallest sample on which a fifteen-point gap can clear z 1.645 at all
-// (6/8 against 1/8 is z 2.5; 3/8 against 1/8 is 1.15 and holds), so a
-// handful of unlucky calls cannot retract a move, and a real drop is
-// caught within a few days of normal use.
+// (6/8 against 1/8 is z 2.5; 3/8 against 1/8 is 1.15), so a handful of
+// unlucky calls cannot retract a move. It is far from enough to say a
+// move holds: at a 20% failure rate eight runs a side could only detect
+// a drop of about 55 points, and holding needs a sample that could
+// detect fifteen (about 100 runs a side; see Detectable).
 var SubagentPolicy = Policy{
 	MinTreated: 8, MinBaseline: 8, MinTreatedRuns: 8, MinBaselineRuns: 8,
 	MinDrop: 0.15, MinZ: 1.645, Near: 7 * 24 * time.Hour,
@@ -185,6 +193,11 @@ type Belief struct {
 	// Confidence is the matching normal probability.
 	Z          float64 `json:"z"`
 	Confidence float64 `json:"confidence"`
+	// Detectable is the smallest drop, in share of trials, this sample
+	// would detect with DetectPower at the policy's z (a minimum
+	// detectable effect). A move holds only when it is at most the
+	// policy's MinDrop.
+	Detectable float64 `json:"detectable_drop"`
 	// Signals counts what went wrong in the judged moved runs.
 	Signals Signals `json:"signals"`
 	Verdict Verdict `json:"verdict"`
@@ -281,8 +294,8 @@ func judgeKey(k Key, obs []Observation, retractedAt time.Time, retracted bool) B
 }
 
 // verdictFor completes b from its counts: the rates, how sure a drop is,
-// and the verdict the policy gives, judgedRuns and baselineRuns being
-// the distinct runs on each side.
+// the smallest drop the sample could detect, and the verdict the policy
+// gives, judgedRuns and baselineRuns being the distinct runs on each side.
 func verdictFor(b Belief, k Key, p Policy, judgedRuns, baselineRuns int) Belief {
 	if b.Judged > 0 {
 		b.Rate = float64(b.Bad) / float64(b.Judged)
@@ -292,6 +305,7 @@ func verdictFor(b Belief, k Key, p Policy, judgedRuns, baselineRuns int) Belief 
 	}
 	b.Z = twoProportionZ(b.Bad, b.Judged, b.BaselineBad, b.Baseline)
 	b.Confidence = 0.5 * math.Erfc(-b.Z/math.Sqrt2)
+	b.Detectable = detectableDrop(b.Bad+b.BaselineBad, b.Judged+b.Baseline, judgedRuns, baselineRuns, p.MinZ)
 	switch {
 	case b.Judged < p.MinTreated || judgedRuns < p.MinTreatedRuns || b.Baseline < p.MinBaseline || baselineRuns < p.MinBaselineRuns:
 		b.Verdict = VerdictUnjudged
@@ -306,12 +320,66 @@ func verdictFor(b Belief, k Key, p Policy, judgedRuns, baselineRuns int) Belief 
 		b.Why = fmt.Sprintf("%s went wrong %s of the time on %s against %s on %s (%d points worse, z %.2f, %.0f%% confident); the rule retracts at %d points and z %.3f",
 			trialNoun(k), pct(b.Rate), k.To, pct(b.BaselineRate), k.From, points(b.Rate-b.BaselineRate), b.Z, b.Confidence*100,
 			points(p.MinDrop), p.MinZ)
+	case b.Detectable > p.MinDrop:
+		b.Verdict = VerdictNotEnoughEvidence
+		b.Why = fmt.Sprintf("not enough evidence yet (%d moved, %d %s; could detect drops of %d points or more): no drop was found, but it holds only once the sample could detect %d",
+			judgedRuns, baselineRuns, baselineLabel(b), points(b.Detectable), points(p.MinDrop))
 	default:
 		b.Verdict = VerdictHolds
-		b.Why = fmt.Sprintf("%s went wrong %s of the time on %s against %s on %s; no drop of %d points or more at z %.3f",
-			trialNoun(k), pct(b.Rate), k.To, pct(b.BaselineRate), k.From, points(p.MinDrop), p.MinZ)
+		b.Why = fmt.Sprintf("%s went wrong %s of the time on %s against %s on %s; no drop of %d points or more at z %.3f, on a sample that could detect drops of %d points or more",
+			trialNoun(k), pct(b.Rate), k.To, pct(b.BaselineRate), k.From, points(p.MinDrop), p.MinZ, points(b.Detectable))
 	}
 	return b
+}
+
+// DetectPower is the chance the rule's test would catch a drop of the
+// size Belief.Detectable names.
+const DetectPower = 0.80
+
+// zPower is the standard normal quantile of DetectPower.
+const zPower = 0.8416
+
+// detectableDrop is the minimum detectable effect of a one-sided
+// two-proportion test at z with DetectPower, for n1 runs against n2:
+//
+//	(z + z_power) * sqrt(r(1-r) * (1/n1 + 1/n2))
+//
+// It counts runs, not trials: a session's instructions are not
+// independent, and a run's failure share has a variance of at most
+// r(1-r), so counting sessions keeps the figure conservative. The
+// planning rate r is the upper Wilson bound of the pooled failure rate
+// (bad of trials) on n1+n2 runs, at most one half where r(1-r) peaks,
+// so a spotless small sample cannot claim to see small drops.
+func detectableDrop(bad, trials, n1, n2 int, z float64) float64 {
+	if n1 <= 0 || n2 <= 0 || trials <= 0 {
+		return 1
+	}
+	r := min(0.5, wilsonUpper(float64(bad)/float64(trials), n1+n2, z))
+	return min(1, (z+zPower)*math.Sqrt(r*(1-r)*(1/float64(n1)+1/float64(n2))))
+}
+
+// wilsonUpper is the upper Wilson score bound of a share p seen on n.
+func wilsonUpper(p float64, n int, z float64) float64 {
+	nf := float64(n)
+	z2 := z * z
+	centre := p + z2/(2*nf)
+	half := z * math.Sqrt(p*(1-p)/nf+z2/(4*nf*nf))
+	return (centre + half) / (1 + z2/nf)
+}
+
+// HoldsRule says in plain words when a move kind holds, for every
+// surface that shows the verdicts.
+func HoldsRule() string {
+	return fmt.Sprintf("A kind holds only when its sample could detect a drop of %d points (%.0f%% power); until then it reads \"not enough evidence yet\", and autonomous moves go on unless a drop is found.",
+		points(SubagentPolicy.MinDrop), DetectPower*100)
+}
+
+// baselineLabel names what the moved runs were compared with.
+func baselineLabel(b Belief) string {
+	if b.Randomized {
+		return "held out"
+	}
+	return "comparable"
 }
 
 // heldFor is the runs held back at random from the move k.
@@ -517,6 +585,8 @@ func beliefLines(b Belief, indent string) []string {
 	switch b.Verdict {
 	case VerdictUnjudged:
 		out = append(out, indent+head+"; not judged yet: "+b.Why)
+	case VerdictNotEnoughEvidence:
+		out = append(out, fmt.Sprintf("%s%s; %s had a bad outcome vs %s; %s", indent, head, pct(b.Rate), pct(b.BaselineRate), b.Why))
 	case VerdictHolds:
 		out = append(out, fmt.Sprintf("%s%s; %s had a bad outcome vs %s; holds: %s", indent, head, pct(b.Rate), pct(b.BaselineRate), b.Why))
 	case VerdictDropped:
