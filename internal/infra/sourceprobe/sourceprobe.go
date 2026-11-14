@@ -11,13 +11,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexrollout"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/geminicli"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pisessions"
@@ -124,7 +122,8 @@ func newestFoundAt(roots []string, find func(string) ([]string, error)) (time.Ti
 }
 
 // newestJSONLAt reports the modification time of the newest transcript
-// under root.
+// under root. It runs on every source assessment, so it reads through
+// transcripts, which re-reads only the directories that changed.
 //
 // A missing root is "unknown" rather than "empty": a client uninstalled, a
 // path typo and a genuinely fresh install are indistinguishable from here,
@@ -139,28 +138,7 @@ func newestJSONLAt(root string) (time.Time, bool) {
 	if err != nil || !info.IsDir() {
 		return time.Time{}, false
 	}
-	var newest time.Time
-	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // unreadable subtree: skip it rather than fail the probe
-		}
-		// A cold Codex rollout is only ever its compressed copy.
-		if d.IsDir() || (!strings.HasSuffix(path, ".jsonl") && !codexrollout.IsCompressed(path)) {
-			return nil
-		}
-		fi, ierr := d.Info()
-		if ierr != nil {
-			return nil
-		}
-		if fi.ModTime().After(newest) {
-			newest = fi.ModTime()
-		}
-		return nil
-	})
-	if walkErr != nil {
-		return time.Time{}, false
-	}
-	return newest.UTC(), true
+	return transcripts.newest(root, isTranscript)
 }
 
 // newestOpenCodeMessage reads the newest message timestamp from opencode's
