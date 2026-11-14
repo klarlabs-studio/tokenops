@@ -106,5 +106,12 @@ Rules the tokens encode:
 | `--tok-brand-bg` | `#0E1220` | `#0E1220` |  | Ground. |
 | `--tok-brand-text` | `#F2F3F5` | `#F2F3F5` | 16.79:1 on `brand-bg` (min 7) | Text. |
 | `--tok-brand-muted` | `#C7CAD1` | `#C7CAD1` | 11.36:1 on `brand-bg` (min 4.5) | Secondary text. |
-| `--tok-brand-accent` | `#C6F432` | `#C6F432` | 14.55:1 on `brand-bg` (min 4.5) | Accent. |
+| `--tok-brand-accent` | `#C6F432` | `#C6F432` | 14.55:1 on `brand-bg` (min 4.5) | Accent; the focus ring on ink. |
+| `--tok-brand-surface` | `#161A28` | `#161A28` |  | Raised fills on ink: inline code. |
+| `--tok-brand-border` | `#262C3C` | `#262C3C` |  | Hairlines on ink. |
+| `--tok-brand-border-strong` | `#353C4F` | `#353C4F` |  | Borders that must read on ink: buttons, window controls. |
+| `--tok-brand-track` | `rgba(255, 255, 255, 0.10)` | `rgba(255, 255, 255, 0.10)` |  | The empty part of a meter on ink. |
+| `--tok-brand-faint` | `#9DA2AC` | `#9DA2AC` | 7.27:1 on `brand-bg` (min 4.5) | Quiet text: code comments. |
+| `--tok-brand-success` | `#5BD08A` | `#5BD08A` | 9.62:1 on `brand-bg` (min 4.5) | Success text on ink. |
+| `--tok-brand-warn` | `#FBC65A` | `#FBC65A` | 11.83:1 on `brand-bg` (min 4.5) | Warning text on ink; string literals in code. |
 <!-- end generated: tokens -->

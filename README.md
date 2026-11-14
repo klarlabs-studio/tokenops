@@ -157,7 +157,9 @@ an identifier does not claim that execution started.
   set it in one choice and wire every installed agent. It records whether its
   advice was followed and quiets what you ignore. See
   [ADR 0006](docs/adr/0006-one-coach.md).
-- **Verification and learning:** record human or verifier outcomes, explain
+- **Verification and learning:** record your own or verifier outcomes (an
+  agent's report of its own work is kept apart as a self-report and is not
+  learned from unless you confirm it), explain
   past decisions, run bounded local routing experiments, and compare results
   against baselines. Learning is advisory and gated; it does not rewrite
   runtime behavior on its own.

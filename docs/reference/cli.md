@@ -827,7 +827,7 @@ Unit costs since 8 Oct 00:05, against the 4 weeks before
   merges. Only pull requests with agent work on them are units; the others
   are counted apart.
 - **Outcome**: an outcome recorded with `tokenops outcome record` or the
-  `tokenops_outcome` tool. A turn goes to it when it ran under the
+  `tokenops_outcome` tool, an agent's own report included. A turn goes to it when it ran under the
   execution, the workflow (`tokenops_prepare_work`'s `workflow_id`) or the
   session the outcome names. The cost per achieved outcome carries the
   work on every judged execution, including the ones that failed.
@@ -3307,8 +3307,17 @@ tokenops outcome detect exec-42 --session-id 9420028c
 tokenops outcome check-json exec-42 --file response.json --pointer /status --equals ok
 ```
 
-- `record` is the operator's assessment; `--attention-minutes` is the
-  active human effort the execution took.
+- `record` is the operator's assessment, stored as `human`;
+  `--attention-minutes` is the active human effort the execution took.
+- An agent reports an outcome with the `tokenops_outcome` MCP tool. TokenOps
+  asks the operator at the client (MCP elicitation) to confirm or correct
+  it, and stores it as `human` only on their confirmation. Otherwise it is
+  the agent's own report, stored as `self_report` without attention
+  minutes, and learning does not count it; a decline records nothing.
+  Each outcome names its channel (`cli`, `api`, `mcp_operator_confirmed`,
+  `mcp_agent`) as a `reported_outcome` evidence ref. Outcomes recorded over
+  MCP before this distinction carry no channel and cannot be told apart from
+  the operator's own.
 - `detect` reads a Claude Code session and records the result of the last
   recognised verifier (a test run, say) after the final edit. With no
   verifier after the last edit it fails and asks you to run tests or

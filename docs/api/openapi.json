@@ -4861,6 +4861,9 @@
                     "recorded": {
                       "type": "boolean"
                     },
+                    "recorded_via": {
+                      "type": "string"
+                    },
                     "result": {
                       "type": "string"
                     }
@@ -4878,7 +4881,7 @@
             "description": "Missing or wrong API token"
           }
         },
-        "summary": "Record the operator's judgement of an execution"
+        "summary": "Record the operator's judgement of an execution (assessment human, recorded_via api)"
       }
     },
     "/api/plans": {

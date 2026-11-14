@@ -17,6 +17,7 @@ import (
 	"unicode/utf16"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
+	"go.klarlabs.de/tokenops/internal/sqliteuri"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 
 	// Registers the sqlite driver used to read Windsurf's state store.
@@ -80,7 +81,7 @@ func (l WindsurfLocal) Read(ctx context.Context, _ string) (usage.Reading, error
 	if _, err := os.Stat(p); err != nil {
 		return usage.Reading{}, usage.ErrNotInstalled
 	}
-	db, err := sql.Open("sqlite", "file:"+p+"?mode=ro")
+	db, err := sql.Open("sqlite", sqliteuri.File(p, "mode=ro"))
 	if err != nil {
 		return usage.Reading{}, fmt.Errorf("accounts: open Windsurf state: %w", err)
 	}

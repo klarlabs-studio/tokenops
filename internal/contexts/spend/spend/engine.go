@@ -3,6 +3,7 @@ package spend
 import (
 	"errors"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -37,6 +38,68 @@ type Engine struct {
 	// pointer is swapped whole; a reader either sees the old card or the
 	// new one, never a half-applied mix.
 	tables atomic.Pointer[[]DatedTable]
+	// rates remembers LookupAt's answers for the card set in tables.
+	rates atomic.Pointer[rateMemo]
+	// revision counts the card sets Replace installed.
+	revision atomic.Uint64
+}
+
+// Revision identifies the card set the engine prices from: it changes
+// whenever Replace installs a new one. What was priced at one revision
+// can be kept while the revision holds. A nil engine is at 0.
+func (e *Engine) Revision() uint64 {
+	if e == nil {
+		return 0
+	}
+	return e.revision.Load()
+}
+
+// rateMemo is LookupAt's answers for one card set, by the card in effect
+// and the model. A month of turns names a few dozen models, so a report
+// pricing each turn looked the same few rates up hundreds of thousands
+// of times, and a model a card keys by a wildcard or a gateway name was
+// found by walking every rate on the card.
+//
+// It belongs to the card set it was filled from: Replace installs a new
+// set, and the first LookupAt after it starts a new memo, so no answer
+// outlives the cards it came from. The cards are immutable once built.
+type rateMemo struct {
+	tables *[]DatedTable
+	mu     sync.RWMutex
+	rates  map[rateKey]rateAnswer
+}
+
+// rateKey is one LookupAt: the index of the card in effect, and the model.
+type rateKey struct {
+	card     int
+	provider eventschema.Provider
+	model    string
+}
+
+type rateAnswer struct {
+	rate Rate
+	err  error
+}
+
+// rateMemoCap bounds a memo: past it, answers are looked up, not kept.
+const rateMemoCap = 4096
+
+// memoFor is the memo of the card set tables, started when the one held
+// is of another set.
+func (e *Engine) memoFor(tables *[]DatedTable) *rateMemo {
+	m := e.rates.Load()
+	if m != nil && m.tables == tables {
+		return m
+	}
+	fresh := &rateMemo{tables: tables, rates: map[rateKey]rateAnswer{}}
+	if e.rates.CompareAndSwap(m, fresh) {
+		return fresh
+	}
+	if m = e.rates.Load(); m != nil && m.tables == tables {
+		return m
+	}
+	// Another set was installed meanwhile; this lookup keeps its own.
+	return fresh
 }
 
 // dated returns the current card set. Never nil once the Engine is built.
@@ -55,6 +118,7 @@ func (e *Engine) Replace(tables []DatedTable) {
 		return
 	}
 	e.tables.Store(&normalized)
+	e.revision.Add(1)
 }
 
 // NewEngine builds an Engine over a single Table effective from the zero
@@ -132,8 +196,28 @@ func indexFor(tables []DatedTable, ts time.Time) int {
 // a model that existed, so the card nearest in time is better evidence of
 // its price than none (ADR 0002, amended 2026-10-29).
 func (e *Engine) LookupAt(provider eventschema.Provider, model string, ts time.Time) (Rate, error) {
-	tables := e.dated()
+	set := e.tables.Load()
+	tables := *set
 	at := indexFor(tables, ts)
+	m := e.memoFor(set)
+	k := rateKey{card: at, provider: provider, model: model}
+	m.mu.RLock()
+	a, ok := m.rates[k]
+	m.mu.RUnlock()
+	if ok {
+		return a.rate, a.err
+	}
+	rate, err := lookupIn(tables, at, provider, model)
+	m.mu.Lock()
+	if len(m.rates) < rateMemoCap {
+		m.rates[k] = rateAnswer{rate: rate, err: err}
+	}
+	m.mu.Unlock()
+	return rate, err
+}
+
+// lookupIn is LookupAt on tables, the card at index at in effect.
+func lookupIn(tables []DatedTable, at int, provider eventschema.Provider, model string) (Rate, error) {
 	rate, err := tables[at].Table.Lookup(provider, model)
 	if err == nil || !errors.Is(err, ErrUnknownModel) {
 		return rate, err

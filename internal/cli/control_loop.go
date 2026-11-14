@@ -110,7 +110,7 @@ func newOutcomeRecordCmd() *cobra.Command {
 				return err
 			}
 			defer closeStore()
-			env := outcomes.Event(outcomes.Record{ExecutionID: args[0], DecisionID: decisionID, Result: r, Assessment: eventschema.OutcomeHuman, Caveat: caveat, AttentionMinutes: attention})
+			env := outcomes.Event(outcomes.Record{ExecutionID: args[0], DecisionID: decisionID, Result: r, Via: outcomes.ViaCLI, Caveat: caveat, AttentionMinutes: attention})
 			if env.Correlation.Decision != "" {
 				history, err := store.Query(cmd.Context(), sqlite.Filter{Decision: env.Correlation.Decision, Limit: 10_000})
 				if err != nil {
@@ -121,7 +121,7 @@ func newOutcomeRecordCmd() *cobra.Command {
 			if err := store.Append(cmd.Context(), env); err != nil {
 				return err
 			}
-			return writeControlJSON(cmd, map[string]any{"event_id": env.ID, "execution_id": args[0], "result": r, "assessment": eventschema.OutcomeHuman})
+			return writeControlJSON(cmd, map[string]any{"event_id": env.ID, "execution_id": args[0], "result": r, "assessment": outcomes.ViaCLI.Assessment(), "recorded_via": outcomes.ViaCLI})
 		},
 	}
 	cmd.Flags().StringVar(&result, "result", "", "achieved | partial | not_achieved")
