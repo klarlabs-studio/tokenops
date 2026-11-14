@@ -21,11 +21,14 @@ const (
 	avoidableEvery = 24 * time.Hour
 )
 
-func startAvoidableRuntime(cfg config.Config, c *bootstrap.Components, sup *lifecycle.Supervisor, logger *slog.Logger) {
+func startAvoidableRuntime(cfg config.Config, c *bootstrap.Components, readers func(*avoidable.Deps), sup *lifecycle.Supervisor, logger *slog.Logger) {
 	if c == nil || c.Aggregator == nil {
 		return
 	}
 	d := avoidable.DepsFor(cfg, c.Aggregator, c.Store, c.Spend)
+	if readers != nil {
+		readers(&d)
+	}
 	sup.Go("avoidable-week", func(ctx context.Context) error {
 		runAvoidable(ctx, d, findings.DefaultDir(), avoidableDelay, avoidableEvery, logger)
 		return nil

@@ -12,6 +12,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/capability/auditlog"
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
@@ -20,6 +21,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/promptcache"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/state"
+	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/compactlever"
@@ -42,6 +44,12 @@ type eventRuntime struct {
 	// gauges, window-pressure probe and scorecard read; nil without a
 	// store.
 	GlanceEvents *sqlite.EventCache
+	// Recorded and Traces are what the waste report reads outcomes, plan
+	// window readings and workflows through, with
+	// storage.incremental_reads on: the glance events for the readings,
+	// and traces kept until their events change. Nil otherwise.
+	Recorded *sqlite.RecordedEvents
+	Traces   *workflowtrace.TraceCache
 	// Plans is what every reader of the plans reads through: the glance
 	// events and one plan-advice cache. Each reader built its own, so the
 	// month-long advice replay ran once an hour for each.
@@ -126,6 +134,10 @@ func initializeEventRuntime(
 	// start does not wait for a month of events to be read.
 	glance := newGlanceEvents(rt.Store)
 	rt.GlanceEvents = glance
+	if cfg.Storage.ReadsIncrementally() && glance != nil {
+		rt.Recorded = sqlite.NewRecordedEvents(glance)
+		rt.Traces = workflowtrace.NewTraceCache(rt.Store, components.Spend, 0)
+	}
 	warmGlanceEvents(sup, glance, logger)
 	deps := plansDeps(cfg, glance, components.Spend)
 	rt.Plans = deps
@@ -223,6 +235,21 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 // (its week and the four weeks before), and a day so that the window a
 // scorecard read yesterday still covers today's.
 const glanceEventsSpan = spending.ScorecardReach + 24*time.Hour
+
+// wasteReaders points the waste report's reads of recorded events and of
+// workflows at rt's incremental readers, where it reads them and rt has
+// them.
+func (rt *eventRuntime) wasteReaders(d *avoidable.Deps) {
+	if rt == nil || rt.Recorded == nil {
+		return
+	}
+	if d.Events != nil {
+		d.Events = rt.Recorded
+	}
+	if d.Trace != nil {
+		d.Trace = rt.Traces.Reconstruct
+	}
+}
 
 // glanceCostReader is what the glance reads its providers' usage through:
 // agg, or nil without one (no typed nil a caller would call).
