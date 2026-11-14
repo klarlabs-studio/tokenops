@@ -71,3 +71,49 @@ func TestSubagentAbstains(t *testing.T) {
 		}
 	}
 }
+
+// Every family the Agent tool can name forms a move kind: the retraction
+// check is asked about the move by family on both sides, so a move off
+// Fable is judged like a move off Opus. Found in a real ledger: research
+// moves fable → sonnet carried an empty From and nothing judged them.
+func TestSubagentMoveKindNamesBothFamilies(t *testing.T) {
+	tests := []struct {
+		name, prompt, session string
+		wantKind, wantFrom    string
+		wantTo                string
+	}{
+		{"opus research", "research how prefix keys work and summarise", "claude-opus-5", "research", "opus", "sonnet"},
+		{"fable research", "research how prefix keys work and summarise", "claude-fable-5-2", "research", "fable", "sonnet"},
+		{"fable lookup", "find where the retention config is defined", "claude-fable-5-2", "lookup", "fable", "haiku"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := subagent(tt.prompt, "", tt.session)
+			in.Candidates = []string{"claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5", tt.session}
+			var asked []string
+			in.Retracted = func(kind, from, to string) bool {
+				asked = append(asked, kind+": "+from+" → "+to)
+				return false
+			}
+			d := EvaluateSubagent(in)
+			if !d.Rewrite || d.ToAlias != tt.wantTo {
+				t.Fatalf("decision = %+v", d)
+			}
+			want := tt.wantKind + ": " + tt.wantFrom + " → " + tt.wantTo
+			if len(asked) == 0 || asked[0] != want {
+				t.Fatalf("retraction asked %q, want %q", asked, want)
+			}
+			if got := AliasFor(d.From); got != tt.wantFrom {
+				t.Fatalf("AliasFor(%q) = %q, want %q", d.From, got, tt.wantFrom)
+			}
+		})
+	}
+}
+
+// A requested "fable" resolves to the offered Fable model.
+func TestSubagentRequestedFableResolves(t *testing.T) {
+	d := EvaluateSubagent(subagent("research how prefix keys work and summarise", "fable", "claude-haiku-4-5"))
+	if !d.Rewrite || d.From != "claude-fable-5-1" || d.ToAlias != "sonnet" {
+		t.Fatalf("decision = %+v", d)
+	}
+}

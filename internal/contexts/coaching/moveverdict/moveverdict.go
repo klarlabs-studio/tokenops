@@ -82,8 +82,8 @@ type Observation struct {
 	At     time.Time `json:"at"`
 	// Kind is the task kind ("edit", "deep", …) or KindDefaultModel.
 	Kind string `json:"kind"`
-	// Model is the model family the run actually used ("opus", "sonnet",
-	// "haiku").
+	// Model is the model family the run actually used ("haiku",
+	// "sonnet", "opus", "fable").
 	Model string `json:"model"`
 	// Moved marks a run the coach moved (or the operator approved moving)
 	// from From; MoveID is the move's entry in the follow-through ledger.

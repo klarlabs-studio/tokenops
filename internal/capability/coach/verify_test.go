@@ -41,17 +41,24 @@ type subagentCall struct {
 
 func writeSubagentSession(t *testing.T, dir, session string, calls []subagentCall) string {
 	t.Helper()
+	return writeSubagentSessionOn(t, dir, session, "claude-opus-5", "Add a test for the parser", "Add a test to internal/parse/parser_test.go", calls)
+}
+
+// writeSubagentSessionOn is writeSubagentSession on sessionModel, each
+// Agent call carrying description and prompt.
+func writeSubagentSessionOn(t *testing.T, dir, session, sessionModel, description, prompt string, calls []subagentCall) string {
+	t.Helper()
 	lines := make([]string, 0, 1+2*len(calls))
 	lines = append(lines, line(t, map[string]any{"type": "user", "timestamp": ts(verifyT0), "sessionId": session,
 		"message": map[string]any{"role": "user", "content": "work through the parser backlog"}}))
 	for i, c := range calls {
 		at := verifyT0.Add(time.Duration(i+1) * time.Hour)
-		input := map[string]any{"description": "Add a test for the parser", "prompt": "Add a test to internal/parse/parser_test.go"}
+		input := map[string]any{"description": description, "prompt": prompt}
 		if c.model != "" {
 			input["model"] = c.model
 		}
 		lines = append(lines, line(t, map[string]any{"type": "assistant", "timestamp": ts(at), "sessionId": session,
-			"message": map[string]any{"role": "assistant", "model": "claude-opus-5", "content": []any{
+			"message": map[string]any{"role": "assistant", "model": sessionModel, "content": []any{
 				map[string]any{"type": "tool_use", "id": c.id, "name": "Agent", "input": input}}}}))
 		lines = append(lines, line(t, map[string]any{"type": "user", "timestamp": ts(at.Add(2 * time.Minute)), "sessionId": session,
 			"message": map[string]any{"role": "user", "content": []any{
@@ -140,6 +147,51 @@ func TestVerifyMovesRetractsASubagentMoveThatHurtQuality(t *testing.T) {
 	ended, err := Reinstate(store, "edit", e.Now)
 	if err != nil || len(ended) != 1 || store.Retracted()("edit", "opus", "sonnet") {
 		t.Fatalf("reinstate: %+v, %v", ended, err)
+	}
+}
+
+// Every Agent-tool family forms a move kind the verification judges.
+// Found in a real ledger: research moves off Fable carried an empty From,
+// formed no move kind, and were reported as standing while nothing
+// judged them.
+func TestVerifyMovesJudgesAMoveOffEveryFamily(t *testing.T) {
+	tests := []struct {
+		name, sessionModel, family string
+	}{
+		{"opus", "claude-opus-5", "opus"},
+		{"fable", "claude-fable-5-2", "fable"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			project := filepath.Join(t.TempDir(), "-repo-p")
+			l := &memLedger{}
+			var calls []subagentCall
+			for i := 0; i < 10; i++ {
+				id := fmt.Sprintf("mv%d", i)
+				calls = append(calls, subagentCall{id: id, model: "sonnet", failed: i < 6})
+				RecordSubagentMove(l, verifyT0, "move-"+id, "s1", id, "research", tt.sessionModel, "claude-sonnet-5", "")
+			}
+			for i := 0; i < 10; i++ {
+				calls = append(calls, subagentCall{id: fmt.Sprintf("base%d", i), failed: i < 1})
+			}
+			transcript := writeSubagentSessionOn(t, project, "s1", tt.sessionModel,
+				"Research how the parser handles prefixes", "Research how internal/parse handles prefix keys and summarise", calls)
+			store := moveverify.Store{Dir: t.TempDir()}
+			e := VerifyEnv{Store: store, Session: "s1", Transcript: transcript, Ledger: l, Now: verifyT0.Add(30 * time.Hour)}
+
+			msg := VerifyMoves(e)
+			if !strings.Contains(msg, "from "+tt.family+" to sonnet") {
+				t.Fatalf("message = %q", msg)
+			}
+			st := store.Load()
+			if len(st.Retractions) != 1 || st.Retractions[0].Key != (mv.Key{Kind: "research", From: tt.family, To: "sonnet"}) {
+				t.Fatalf("retractions = %+v", st.Retractions)
+			}
+			text := strings.Join(Verdicts(store, e.Now).Lines, "\n")
+			if !strings.Contains(text, "research work, "+tt.family+" → sonnet") {
+				t.Fatalf("verdict lines lack the %s move:\n%s", tt.family, text)
+			}
+		})
 	}
 }
 
