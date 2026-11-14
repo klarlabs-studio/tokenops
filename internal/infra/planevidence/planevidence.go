@@ -41,11 +41,24 @@ type Evidence struct {
 
 // All reads every client's evidence under home.
 func All(home string) []Evidence {
+	return (&Reader{}).All(home)
+}
+
+// Reader reads the clients' evidence again and again, as the daemon does
+// every quarter of an hour, reading of each Codex session only what it
+// gained since the last read (codexjsonl.PlanTypes). Its answers are All's.
+// The zero value is ready to use; it is not safe for concurrent use.
+type Reader struct {
+	codex codexjsonl.PlanTypes
+}
+
+// All reads every client's evidence under home.
+func (r *Reader) All(home string) []Evidence {
 	var out []Evidence
 	if e, ok := Claude(home); ok {
 		out = append(out, e)
 	}
-	if e, ok := Codex(filepath.Join(codexhome.In(home), "sessions")); ok {
+	if e, ok := r.Codex(filepath.Join(codexhome.In(home), "sessions")); ok {
 		out = append(out, e)
 	}
 	return out
@@ -137,16 +150,19 @@ const codexFilesRead = 5
 
 // Codex reads the plan_type the newest Codex sessions report.
 func Codex(root string) (Evidence, bool) {
+	return (&Reader{}).Codex(root)
+}
+
+// Codex reads the plan_type the newest Codex sessions report.
+func (r *Reader) Codex(root string) (Evidence, bool) {
 	files, err := codexjsonl.FindSessionFiles(root)
 	if err != nil || len(files) == 0 {
 		return Evidence{}, false
 	}
-	sort.Slice(files, func(i, j int) bool { return modTime(files[i]) > modTime(files[j]) })
-	if len(files) > codexFilesRead {
-		files = files[:codexFilesRead]
-	}
+	files = newest(files, codexFilesRead)
+	last := r.codex.Last(files)
 	for _, f := range files {
-		planType := lastPlanType(f)
+		planType := last[f]
 		if planType == "" {
 			continue
 		}
@@ -160,16 +176,25 @@ func Codex(root string) (Evidence, bool) {
 	return Evidence{}, false
 }
 
-// lastPlanType is the last plan_type a session file reports.
-func lastPlanType(path string) string {
-	last := ""
-	_ = codexjsonl.ReadFile(path, func(t codexjsonl.Turn) error {
-		if t.RateLimits.PlanType != "" {
-			last = t.RateLimits.PlanType
-		}
-		return nil
-	})
-	return last
+// newest is the n most recently modified of files, newest first. Each
+// file is looked at once: the sort used to stat both sides of every
+// comparison, tens of thousands of stats on a machine with years of
+// sessions.
+func newest(files []string, n int) []string {
+	type stamped struct {
+		path string
+		mod  int64
+	}
+	all := make([]stamped, len(files))
+	for i, f := range files {
+		all[i] = stamped{f, modTime(f)}
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].mod > all[j].mod })
+	out := make([]string, 0, min(n, len(all)))
+	for _, s := range all[:min(n, len(all))] {
+		out = append(out, s.path)
+	}
+	return out
 }
 
 func modTime(path string) int64 {

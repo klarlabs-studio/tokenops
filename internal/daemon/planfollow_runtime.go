@@ -18,8 +18,8 @@ import (
 // planFollowInterval is how often the daemon re-reads what the clients
 // report about their plans, and which clients' sessions are on this
 // machine. The reads are a few small local files and stats (Claude Code's
-// ~/.claude.json, the newest Codex sessions, whether each local reader's
-// store exists), and a change is rare, so a quarter of an hour bounds how
+// ~/.claude.json, what the newest Codex sessions gained since the last
+// pass, whether each local reader's store exists), and a change is rare, so a quarter of an hour bounds how
 // long limits stay wrong or a client stays unread at a cost nobody notices.
 const planFollowInterval = 15 * time.Minute
 
@@ -43,6 +43,9 @@ type planFollower struct {
 	// asked is the readers a restart was already asked for, so an
 	// unsupervised daemon says it once rather than every pass.
 	asked map[string]bool
+	// evidence reads what the clients report, keeping what it read of
+	// each Codex session between passes.
+	evidence planevidence.Reader
 }
 
 // check follows what the clients report now, turns on the readers whose
@@ -57,7 +60,7 @@ func (f *planFollower) check(ctx context.Context) {
 }
 
 func (f *planFollower) followPlans(ctx context.Context) bool {
-	res, err := actions.FollowClientPlans(ctx, f.configPath, planevidence.All(f.home), f.store, f.now())
+	res, err := actions.FollowClientPlans(ctx, f.configPath, f.evidence.All(f.home), f.store, f.now())
 	if err != nil {
 		f.logger.Warn("could not follow the plan a client reports; will retry", "err", err)
 		return false

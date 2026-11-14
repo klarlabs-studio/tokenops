@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 const codexTurn = `{"timestamp":"2026-04-17T08:45:14.725Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":10,"output_tokens":2,"total_tokens":12},"last_token_usage":{"input_tokens":10,"output_tokens":2,"total_tokens":12},"model_context_window":258400},"rate_limits":{"primary":{"used_percent":10.0,"window_minutes":300,"resets_at":1776431887},"plan_type":"%s"}}}`
@@ -110,5 +111,61 @@ func TestEvidenceNamesItsClientAndFacts(t *testing.T) {
 	c, ok := Codex(filepath.Join(Home(t, "", "pro"), ".codex", "sessions"))
 	if !ok || c.Client != "codex" || c.Facts["plan_type"] != "pro" {
 		t.Errorf("codex evidence %+v", c)
+	}
+}
+
+// TestReaderFollowsTheNewestSessions reads the same sessions again and
+// again as the daemon does, and requires each answer to be the one a
+// fresh read gives: an appended turn, a newer session, a session gone.
+func TestReaderFollowsTheNewestSessions(t *testing.T) {
+	home := Home(t, "", "plus")
+	root := filepath.Join(home, ".codex", "sessions")
+	dir := filepath.Join(root, "2026", "10", "03")
+	first := filepath.Join(dir, "rollout-1.jsonl")
+	at := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+	write := func(path, planType string, appendTo bool) {
+		t.Helper()
+		flag := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+		if appendTo {
+			flag = os.O_CREATE | os.O_WRONLY | os.O_APPEND
+		}
+		f, err := os.OpenFile(path, flag, 0o600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.WriteString(replace(codexTurn, planType) + "\n"); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+		at = at.Add(time.Minute)
+		if err := os.Chtimes(path, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	steps := []struct {
+		name string
+		do   func()
+		want string
+	}{
+		{"first read", func() {}, "gpt-plus"},
+		{"unchanged", func() {}, "gpt-plus"},
+		{"a turn appended", func() { write(first, "pro", true) }, "gpt-pro-20x"},
+		{"a newer session", func() { write(filepath.Join(dir, "rollout-2.jsonl"), "plus", false) }, "gpt-plus"},
+		{"the newer one gone", func() {
+			if err := os.Remove(filepath.Join(dir, "rollout-2.jsonl")); err != nil {
+				t.Fatal(err)
+			}
+		}, "gpt-pro-20x"},
+	}
+	r := &Reader{}
+	for _, s := range steps {
+		s.do()
+		got, ok := r.Codex(root)
+		fresh, freshOK := Codex(root)
+		if !ok || got.Plan != s.want || got.Detail != fresh.Detail || ok != freshOK {
+			t.Fatalf("%s: kept %+v (%v), fresh %+v (%v), want plan %s", s.name, got, ok, fresh, freshOK, s.want)
+		}
 	}
 }
