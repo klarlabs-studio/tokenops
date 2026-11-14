@@ -14,13 +14,60 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
+// Channel is how a reported outcome reached TokenOps. It decides what the
+// outcome can vouch for: only an operator's own surface records a human
+// judgement. An agent that says how its own work went is a self-report,
+// however sure it sounds, and learning does not count it as strong evidence.
+type Channel string
+
+const (
+	// ViaCLI is `tokenops outcome record`, run at the operator's terminal.
+	ViaCLI Channel = "cli"
+	// ViaAPI is the daemon's POST /api/outcomes, behind the API token, for
+	// the operator's own surfaces (ADR 0010 §6).
+	ViaAPI Channel = "api"
+	// ViaOperatorConfirmed is an agent's report over MCP that the operator
+	// confirmed, or corrected, at the client through elicitation.
+	ViaOperatorConfirmed Channel = "mcp_operator_confirmed"
+	// ViaAgent is an agent's own report over MCP that no operator confirmed.
+	ViaAgent Channel = "mcp_agent"
+)
+
+// ReportedOutcomeKind is the evidence kind naming the channel a reported
+// outcome came through; its Source is the Channel.
+const ReportedOutcomeKind = "reported_outcome"
+
+// normal is c when TokenOps knows it, and otherwise ViaAgent: a channel
+// nobody vouches for is the weakest.
+func (c Channel) normal() Channel {
+	switch c {
+	case ViaCLI, ViaAPI, ViaOperatorConfirmed, ViaAgent:
+		return c
+	default:
+		return ViaAgent
+	}
+}
+
+// Assessment is what an outcome through c can vouch for.
+func (c Channel) Assessment() eventschema.OutcomeAssessment {
+	if c.normal() == ViaAgent {
+		return eventschema.OutcomeSelfReport
+	}
+	return eventschema.OutcomeHuman
+}
+
 // Record describes an outcome observation without raw command output.
 type Record struct {
-	ExecutionID      string
-	DecisionID       string
-	InterventionID   string
-	Result           eventschema.OutcomeResult
-	Assessment       eventschema.OutcomeAssessment
+	ExecutionID    string
+	DecisionID     string
+	InterventionID string
+	Result         eventschema.OutcomeResult
+	// Assessment is the evidence's strength. A record with Via set takes
+	// its channel's instead.
+	Assessment eventschema.OutcomeAssessment
+	// Via is the channel a reported outcome came through; empty for an
+	// observed one (a verifier result).
+	Via              Channel
 	Caveat           string
 	At               time.Time
 	Evidence         []eventschema.EvidenceRef
@@ -33,8 +80,18 @@ func Event(r Record) *eventschema.Envelope {
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
+	evidence := r.Evidence
+	if r.Via != "" {
+		via := r.Via.normal()
+		r.Assessment = via.Assessment()
+		evidence = append(append([]eventschema.EvidenceRef(nil), evidence...), eventschema.EvidenceRef{
+			Kind: ReportedOutcomeKind, Source: string(via), ObservedAt: at,
+		})
+	}
 	var metrics []eventschema.OutcomeMetric
-	if r.AttentionMinutes != nil && !math.IsNaN(*r.AttentionMinutes) && !math.IsInf(*r.AttentionMinutes, 0) && *r.AttentionMinutes >= 0 {
+	// Human attention is the operator's own figure; an agent's estimate of
+	// it is not kept.
+	if r.AttentionMinutes != nil && r.Assessment == eventschema.OutcomeHuman && !math.IsNaN(*r.AttentionMinutes) && !math.IsInf(*r.AttentionMinutes, 0) && *r.AttentionMinutes >= 0 {
 		metrics = append(metrics, eventschema.OutcomeMetric{
 			Name: "human_attention_minutes", Unit: "minutes", Value: *r.AttentionMinutes,
 			Source: "human_self_report", ObservedAt: at, Confidence: 1,
@@ -48,7 +105,7 @@ func Event(r Record) *eventschema.Envelope {
 			Decision: r.DecisionID, Intervention: r.InterventionID,
 		},
 		Payload: &eventschema.OutcomeEvent{
-			Result: r.Result, Assessment: r.Assessment, Caveat: r.Caveat, Evidence: r.Evidence, Metrics: metrics,
+			Result: r.Result, Assessment: r.Assessment, Caveat: r.Caveat, Evidence: evidence, Metrics: metrics,
 		},
 	}
 }

@@ -51,3 +51,45 @@ func TestCorrelateDecisionLifecycleCopiesInterventionAndExperiment(t *testing.T)
 		t.Fatalf("outcome correlation = %+v", env.Correlation)
 	}
 }
+
+// Each channel records the assessment it can vouch for, and names itself
+// on the event: only an operator's own surface records a human judgement,
+// and human attention is kept only with one.
+func TestChannelDecidesTheAssessment(t *testing.T) {
+	minutes := 4.0
+	for _, tc := range []struct {
+		via       Channel
+		want      eventschema.OutcomeAssessment
+		attention bool
+	}{
+		{ViaCLI, eventschema.OutcomeHuman, true},
+		{ViaAPI, eventschema.OutcomeHuman, true},
+		{ViaOperatorConfirmed, eventschema.OutcomeHuman, true},
+		{ViaAgent, eventschema.OutcomeSelfReport, false},
+		{"something-else", eventschema.OutcomeSelfReport, false},
+	} {
+		t.Run(string(tc.via), func(t *testing.T) {
+			env := Event(Record{ExecutionID: "e", Result: eventschema.OutcomeAchieved, Via: tc.via, AttentionMinutes: &minutes})
+			out := env.Payload.(*eventschema.OutcomeEvent)
+			if out.Assessment != tc.want {
+				t.Fatalf("assessment = %s, want %s", out.Assessment, tc.want)
+			}
+			if got := len(out.Metrics) == 1; got != tc.attention {
+				t.Fatalf("attention kept = %v, want %v (%+v)", got, tc.attention, out.Metrics)
+			}
+			if len(out.Evidence) != 1 || out.Evidence[0].Kind != ReportedOutcomeKind || out.Evidence[0].Source != string(tc.via.normal()) {
+				t.Fatalf("evidence = %+v", out.Evidence)
+			}
+		})
+	}
+}
+
+// A record that names its assessment and no channel (a verifier result)
+// keeps it, and says nothing about a channel.
+func TestAnExplicitAssessmentWithoutAChannelIsKept(t *testing.T) {
+	env := Event(Record{ExecutionID: "e", Result: eventschema.OutcomeAchieved, Assessment: eventschema.OutcomeVerification})
+	out := env.Payload.(*eventschema.OutcomeEvent)
+	if out.Assessment != eventschema.OutcomeVerification || len(out.Evidence) != 0 {
+		t.Fatalf("payload = %+v", out)
+	}
+}
