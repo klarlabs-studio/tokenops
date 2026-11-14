@@ -83,6 +83,11 @@ func TestPollerKeepsAnUnchangedReadingCurrent(t *testing.T) {
 				if d, ok := heartbeat.FreshFor(env.Attributes); !ok || d != 16*time.Minute {
 					t.Errorf("reading at %s stands for %s (%v), want 16m", env.Timestamp, d, ok)
 				}
+				// The set first stored whole, at 2m, repeats nothing; the
+				// heartbeats after it repeat it.
+				if got, wantRepeat := heartbeat.IsRepeat(env.Attributes), env.Timestamp.After(start.Add(2*time.Minute)); got != wantRepeat {
+					t.Errorf("reading at %s: repeat = %v, want %v", env.Timestamp, got, wantRepeat)
+				}
 				if env.Attributes["reported_at"] == "" {
 					t.Errorf("reading at %s does not say when GitHub dated it", env.Timestamp)
 				}

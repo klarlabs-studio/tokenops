@@ -70,6 +70,9 @@ func TestPollerKeepsAnUnchangedReadingCurrent(t *testing.T) {
 				if pe := env.Payload.(*eventschema.PromptEvent); pe.RequestModel != "" || pe.TotalTokens != 0 {
 					t.Errorf("reading %d names model %q and %d tokens: it would be counted as a request", i, pe.RequestModel, pe.TotalTokens)
 				}
+				if got := heartbeat.IsRepeat(env.Attributes); got != (i > 0) {
+					t.Errorf("reading %d: repeat = %v, want %v", i, got, i > 0)
+				}
 				ids[env.ID] = true
 			}
 			if len(ids) != len(want) {

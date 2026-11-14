@@ -138,3 +138,41 @@ func TestStampAndFreshFor(t *testing.T) {
 		}
 	}
 }
+
+// A reading is marked a repeat only when it is the one last stored: the
+// first reading, a changed one and one after a reading that was never
+// stored are not.
+func TestKeeperStampMarksRepeats(t *testing.T) {
+	var k Keeper
+	stamp := func(key string) bool {
+		attrs := map[string]string{}
+		k.Stamp(attrs, key, 5*time.Minute)
+		if _, ok := FreshFor(attrs); !ok {
+			t.Fatalf("%s: not stamped with how long it stands", key)
+		}
+		return IsRepeat(attrs)
+	}
+	for _, tc := range []struct {
+		name   string
+		key    string
+		stored bool
+		want   bool
+	}{
+		{"the first reading", "a", true, false},
+		{"the same reading again", "a", true, true},
+		{"a changed reading", "b", false, false},
+		{"the changed reading again, never stored", "b", true, false},
+		{"the changed reading once stored", "b", true, true},
+		{"back to the first", "a", true, false},
+	} {
+		if got := stamp(tc.key); got != tc.want {
+			t.Errorf("%s: repeat = %v, want %v", tc.name, got, tc.want)
+		}
+		if tc.stored {
+			k.Stored(tc.key, t0)
+		}
+	}
+	if IsRepeat(nil) || IsRepeat(map[string]string{"repeat": "1"}) {
+		t.Error("IsRepeat holds for attributes not marked")
+	}
+}

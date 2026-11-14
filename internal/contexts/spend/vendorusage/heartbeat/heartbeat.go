@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Every is how often an unchanged reading is stored again.
@@ -88,4 +90,33 @@ func (k *Keeper) Stored(key string, now time.Time) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.key, k.at, k.any = key, now, true
+}
+
+// Stamp writes on attrs, the reading about to be stored under key, for how
+// long it stands (as the package's Stamp does) and, when key is the
+// reading this keeper last stored, that it repeats it
+// (eventschema.AttrRepeat): an unchanged reading stored again only to keep
+// its age honest.
+func (k *Keeper) Stamp(attrs map[string]string, key string, interval time.Duration) {
+	Stamp(attrs, interval)
+	if k.repeats(key) {
+		MarkRepeat(attrs)
+	}
+}
+
+func (k *Keeper) repeats(key string) bool {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.any && key == k.key
+}
+
+// MarkRepeat marks attrs as a reading that repeats the one its reader
+// stored before (eventschema.AttrRepeat).
+func MarkRepeat(attrs map[string]string) {
+	attrs[eventschema.AttrRepeat] = eventschema.AttrRepeatValue
+}
+
+// IsRepeat reports whether attrs are marked as a repeated reading.
+func IsRepeat(attrs map[string]string) bool {
+	return attrs[eventschema.AttrRepeat] == eventschema.AttrRepeatValue
 }

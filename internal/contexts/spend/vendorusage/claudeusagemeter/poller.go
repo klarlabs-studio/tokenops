@@ -291,7 +291,7 @@ func (p *Poller) scan(ctx context.Context) {
 	if !p.kept.Due(key, now) {
 		return
 	}
-	heartbeat.Stamp(env.Attributes, p.opts.Interval)
+	p.kept.Stamp(env.Attributes, key, p.opts.Interval)
 	// The reading is remembered once the store has taken it: remembered
 	// before, one the store refused was not stored until it changed.
 	if p.bus != nil && !p.publishWait(ctx, env) {

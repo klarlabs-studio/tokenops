@@ -113,7 +113,7 @@ func (p *Poller) Scan(ctx context.Context) {
 	}
 	stored := true
 	for _, env := range envs {
-		heartbeat.Stamp(env.Attributes, p.opts.Interval)
+		p.kept.Stamp(env.Attributes, key.String(), p.opts.Interval)
 		if p.bus == nil {
 			continue
 		}

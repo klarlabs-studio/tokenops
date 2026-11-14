@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	vendorheartbeat "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/heartbeat"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
@@ -92,8 +93,13 @@ func (p *Poller) once(ctx context.Context) {
 		return
 	}
 	key := attrsKey(env.Attributes)
-	if key == p.lastKey && r.ObservedAt.Sub(p.lastAt) < heartbeat {
-		return
+	if key == p.lastKey {
+		if r.ObservedAt.Sub(p.lastAt) < heartbeat {
+			return
+		}
+		// The same figures again, stored only so the newest reading is
+		// not old: they change no figure computed from them.
+		vendorheartbeat.MarkRepeat(env.Attributes)
 	}
 	if p.bus != nil {
 		if err := p.bus.PublishWait(ctx, env); err != nil {

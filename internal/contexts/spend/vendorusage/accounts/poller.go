@@ -314,7 +314,7 @@ func (p *Poller) publish(ctx context.Context, r Reader, env *eventschema.Envelop
 	if !kept.Due(key, now) {
 		return
 	}
-	heartbeat.Stamp(env.Attributes, p.readEvery(r))
+	kept.Stamp(env.Attributes, key, p.readEvery(r))
 	if err := p.bus.PublishWait(ctx, env); err != nil {
 		p.opts.Logger.Warn("usage event not stored", "err", err)
 		return

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	vendorheartbeat "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/heartbeat"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -118,5 +119,12 @@ func TestPollerStoresChangesAndAHeartbeat(t *testing.T) {
 
 	if len(bus.got) != 3 {
 		t.Fatalf("stored %d readings, want 3", len(bus.got))
+	}
+	// Only the heartbeat repeats a reading: the first and the changed one
+	// are new figures.
+	for i, env := range bus.got {
+		if got := vendorheartbeat.IsRepeat(env.Attributes); got != (i == 2) {
+			t.Errorf("reading %d: repeat = %v, want %v", i, got, i == 2)
+		}
 	}
 }

@@ -163,7 +163,7 @@ func (p *Poller) scan(ctx context.Context) {
 	if env == nil {
 		return
 	}
-	heartbeat.Stamp(env.Attributes, p.opts.Interval)
+	p.kept.Stamp(env.Attributes, key, p.opts.Interval)
 	// Remembered once the store has taken it: remembered before, a reading
 	// the store refused was not stored until the figures changed.
 	if p.publishWait(ctx, env) {

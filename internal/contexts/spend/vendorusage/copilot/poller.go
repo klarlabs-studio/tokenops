@@ -218,7 +218,7 @@ func (p *Poller) scan(ctx context.Context) {
 		if resp.TimestampUTC != "" {
 			env.Attributes["reported_at"] = resp.TimestampUTC
 		}
-		heartbeat.Stamp(env.Attributes, p.opts.Interval)
+		p.kept.Stamp(env.Attributes, key, p.opts.Interval)
 		if !p.publishWait(ctx, env) {
 			stored = false
 		}
