@@ -43,7 +43,7 @@ func NewServer(name, ver string, _ *slog.Logger) *Server {
 // what, and what TokenOps will and will not do on its own.
 const instructions = `TokenOps watches the operator's AI subscription plans, sessions and spend, and coaches how they are used. It reads local data; it never sees prompts or file contents beyond what the operator's own clients write locally. It never overrides a model the operator chose. With the coach's models power at autonomous (the autopilot preset), it starts new Claude Code sessions a tier down while a plan runs short and may run a subagent on a cheaper model when its work fits; it says so each time, and the operator's own model applies again once the plan recovers.
 
-Before a long task, call tokenops_glance: each plan's windows with their pace, and the coach's findings. To bracket a task, call tokenops_prepare_work before and tokenops_review_work after with the workflow_id it returns, and record how it went with tokenops_outcome.
+Before a long task, call tokenops_glance: each plan's windows with their pace, and the coach's findings. To bracket a task, call tokenops_prepare_work before and tokenops_review_work after with the workflow_id it returns, and report how it went with tokenops_outcome: TokenOps asks the operator to confirm the report, and an unconfirmed one is kept as your own, which it does not learn from.
 
 For questions: tokenops_spend (what was spent), tokenops_sessions (how sessions go), tokenops_records (what TokenOps recorded), tokenops_status (whether TokenOps is working), tokenops_explain (what a figure means, or why a decision was made). Most tools pick their slice with a view.
 
