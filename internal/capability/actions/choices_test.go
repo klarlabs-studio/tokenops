@@ -6,7 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/outcomes"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 func TestSetPreferredModel(t *testing.T) {
@@ -64,5 +67,40 @@ func TestRecordOutcomeValidates(t *testing.T) {
 	got, err := RecordOutcome(ctx, nil, OutcomeRequest{ExecutionID: "e", Result: "achieved"})
 	if err != nil || got.Error != "storage_disabled" || got.Recorded {
 		t.Errorf("no store = %+v, %v", got, err)
+	}
+}
+
+// RecordOutcome records the assessment the request's channel vouches for,
+// and says which channel it was.
+func TestRecordOutcomeStampsItsChannel(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name string
+		via  outcomes.Channel
+		want eventschema.OutcomeAssessment
+	}{
+		{"api", outcomes.ViaAPI, eventschema.OutcomeHuman},
+		{"confirmed", outcomes.ViaOperatorConfirmed, eventschema.OutcomeHuman},
+		{"agent", outcomes.ViaAgent, eventschema.OutcomeSelfReport},
+		{"unnamed", "", eventschema.OutcomeSelfReport},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "events.db"), sqlite.Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			got, err := RecordOutcome(ctx, store, OutcomeRequest{ExecutionID: "e", Result: "achieved", Via: tc.via})
+			if err != nil || !got.Recorded || got.Assessment != string(tc.want) {
+				t.Fatalf("got %+v, %v", got, err)
+			}
+			events, err := store.Query(ctx, sqlite.Filter{Type: eventschema.EventTypeOutcome})
+			if err != nil || len(events) != 1 {
+				t.Fatalf("events = %d, %v", len(events), err)
+			}
+			if a := events[0].Payload.(*eventschema.OutcomeEvent).Assessment; a != tc.want {
+				t.Fatalf("stored assessment = %s, want %s", a, tc.want)
+			}
+		})
 	}
 }
