@@ -78,6 +78,13 @@
   --tok-brand-text: #F2F3F5;
   --tok-brand-muted: #C7CAD1;
   --tok-brand-accent: #C6F432;
+  --tok-brand-surface: #161A28;
+  --tok-brand-border: #262C3C;
+  --tok-brand-border-strong: #353C4F;
+  --tok-brand-track: rgba(255, 255, 255, 0.10);
+  --tok-brand-faint: #9DA2AC;
+  --tok-brand-success: #5BD08A;
+  --tok-brand-warn: #FBC65A;
 
   /* Type */
   --tok-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
