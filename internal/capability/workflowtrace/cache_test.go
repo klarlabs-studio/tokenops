@@ -56,7 +56,7 @@ func TestTraceCacheMatchesReconstruct(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	db := rawDB(t, path)
-	var envs []*eventschema.Envelope
+	envs := make([]*eventschema.Envelope, 0, 120)
 	for i := range 120 {
 		envs = append(envs, turnOf(fmt.Sprintf("e%03d", i), fmt.Sprintf("wf%d", i%4), cacheNow.Add(-time.Duration(120-i)*time.Minute), int64(100+i)))
 	}

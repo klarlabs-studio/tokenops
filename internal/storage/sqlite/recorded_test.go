@@ -55,7 +55,7 @@ func TestRecordedEventsMatchesTheStore(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
 	rng := rand.New(rand.NewSource(3))
-	var envs []*eventschema.Envelope
+	envs := make([]*eventschema.Envelope, 0, 800)
 	types := []eventschema.EventType{eventschema.EventTypePrompt, eventschema.EventTypePrompt, eventschema.EventTypePrompt,
 		eventschema.EventTypeDomain, eventschema.EventTypeWorkflow}
 	for i := range 800 {
