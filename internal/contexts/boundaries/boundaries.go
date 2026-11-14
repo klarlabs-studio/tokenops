@@ -544,7 +544,7 @@ func parseCondition(f Field, raw string) (Condition, error) {
 	case FieldModelTier:
 		tier := TierOf(value)
 		if tier == "" {
-			return Condition{}, fmt.Errorf("tier %q is not haiku, sonnet or opus", value)
+			return Condition{}, fmt.Errorf("tier %q is not haiku, sonnet, opus or fable", value)
 		}
 		c.Text = tier
 	case FieldDestination:
@@ -572,14 +572,18 @@ func parseCondition(f Field, raw string) (Condition, error) {
 }
 
 // tierRank orders the tiers a model_tier condition compares.
-var tierRank = map[string]int{"haiku": 1, "sonnet": 2, "opus": 3}
+var tierRank = map[string]int{"haiku": 1, "sonnet": 2, "opus": 3, "fable": 4}
 
-// TierOf places a model or tier name on haiku < sonnet < opus. The
-// catalog's tier names map on too: lookup is haiku; balanced and default
-// are sonnet; deep is opus. Anything else is "".
+// TierOf places a model or tier name on haiku < sonnet < opus < fable,
+// the order the rate card prices them in. The catalog's tier names map on
+// too: lookup is haiku; balanced and default are sonnet; deep stays opus,
+// so a rule written against deep keeps its meaning and still covers
+// Fable, which ranks above it. Anything else is "".
 func TierOf(name string) string {
 	n := strings.ToLower(strings.TrimSpace(name))
 	switch {
+	case strings.Contains(n, "fable"):
+		return "fable"
 	case strings.Contains(n, "opus"), n == "deep":
 		return "opus"
 	case strings.Contains(n, "sonnet"), n == "balanced", n == "default":
@@ -630,7 +634,7 @@ type Facts struct {
 	// BudgetUsedPct is the share of each configured budget used in its
 	// current window, by budget name. A budget absent is unknown.
 	BudgetUsedPct map[string]float64
-	// ModelTier is haiku, sonnet or opus; empty is unknown. For
+	// ModelTier is haiku, sonnet, opus or fable; empty is unknown. For
 	// model_route it is the tier the router would move the request to.
 	ModelTier string
 	// Destination is where shared figures go: team or otel.
@@ -658,7 +662,7 @@ type Crossing struct {
 	Field Field
 	Op    Op
 	// Value is the figure; Threshold, what the condition compares it to.
-	// A model tier is its rank: haiku 1, sonnet 2, opus 3.
+	// A model tier is its rank: haiku 1, sonnet 2, opus 3, fable 4.
 	Value     float64
 	Threshold float64
 	// Window qualifies plan_left_pct; Destination is set for destination.

@@ -21,8 +21,8 @@ type SessionStart struct {
 	Model string
 }
 
-// AliasFor is the model family (Agent-tool alias: haiku, sonnet, opus)
-// a model id belongs to, or "" when it has none.
+// AliasFor is the model family (Agent-tool alias: haiku, sonnet, opus,
+// fable) a model id belongs to, or "" when it has none.
 func AliasFor(model string) string { return aliasFor(model) }
 
 // subagentTools launch a subagent (Claude Code has named it both).
