@@ -152,7 +152,8 @@ func Build(cfg config.Config) Report {
 		case name == config.PowerModels && eff == config.AutonomyAutonomous:
 			p.Note = "moves subagents to a cheaper model on Claude Code; the session's own model is advised, not changed"
 		case name == config.PowerContext && eff == config.AutonomyAutonomous:
-			p.Note = "sets where Claude Code, Codex, and opencode compact on their own; Cursor has no such setting and is advised"
+			p.Note = "sets where Claude Code, Codex, and opencode compact on their own, and Gemini CLI and Pi once your context line is measured; " +
+				"Cursor and Copilot CLI have no setting tokenops can write and are advised"
 		case name == config.PowerContext && eff == config.AutonomyAsk:
 			p.Note = "proposes the compaction line measured from your own instructions and writes it on your yes (`" + AcceptCommand + "`); " +
 				"until you accept, and while the compaction guardrail has not graduated, it records what it would set without writing it"

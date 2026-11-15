@@ -32,6 +32,11 @@ func TestReadFileMapsAssistantTurns(t *testing.T) {
 		!first.Timestamp.Equal(time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)) {
 		t.Errorf("first %+v", first)
 	}
+	// Pi's settings key a model by its own provider/modelId, so the raw id
+	// is kept beside the normalised one.
+	if first.ModelID == "" {
+		t.Errorf("first turn lost Pi's own model id: %+v", first)
+	}
 	if c := turns[1]; c.Provider != eventschema.ProviderOpenAI || c.Backend != "openai-codex" || c.Output != 5 || c.ID == "" {
 		t.Errorf("codex %+v", c)
 	}
@@ -116,5 +121,24 @@ func TestPollerPublishesEachTurnOnce(t *testing.T) {
 	p2.Scan(context.Background(), roots)
 	if len(bus.got) != 4 {
 		t.Errorf("published again: %d", len(bus.got))
+	}
+}
+
+// PiRoot follows Pi's own environment variables, in Pi's order.
+func TestPiRootFollowsPisEnvironment(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	tests := []struct{ session, dir, want string }{
+		{"", "", filepath.Join(home, ".pi", "agent", "sessions")},
+		{"", "/opt/pi", filepath.Join("/opt/pi", "sessions")},
+		{"/srv/sessions", "/opt/pi", "/srv/sessions"},
+	}
+	for _, tt := range tests {
+		t.Setenv("PI_CODING_AGENT_SESSION_DIR", tt.session)
+		t.Setenv("PI_CODING_AGENT_DIR", tt.dir)
+		if got, err := PiRoot(); err != nil || got != tt.want {
+			t.Errorf("PiRoot(session=%q, dir=%q) = %q, %v; want %q", tt.session, tt.dir, got, err, tt.want)
+		}
 	}
 }

@@ -40,6 +40,9 @@ type Turn struct {
 	Provider eventschema.Provider
 	Backend  string
 	Model    string
+	// ModelID is the model as Pi names it, before normalising: with
+	// Backend, the provider/modelId key Pi's settings take.
+	ModelID string
 	// Input is uncached input; CacheRead and CacheWrite are the cache's,
 	// CacheWrite1h the one-hour part of CacheWrite.
 	Input, CacheRead, CacheWrite, CacheWrite1h, Output int64
@@ -55,12 +58,9 @@ func DefaultRoots() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	pi := filepath.Join(home, ".pi", "agent", "sessions")
-	switch {
-	case strings.TrimSpace(os.Getenv("PI_CODING_AGENT_SESSION_DIR")) != "":
-		pi = os.Getenv("PI_CODING_AGENT_SESSION_DIR")
-	case strings.TrimSpace(os.Getenv("PI_CODING_AGENT_DIR")) != "":
-		pi = filepath.Join(os.Getenv("PI_CODING_AGENT_DIR"), "sessions")
+	pi, err := PiRoot()
+	if err != nil {
+		return nil, err
 	}
 	data := os.Getenv("XDG_DATA_HOME")
 	if data == "" {
@@ -73,6 +73,23 @@ func DefaultRoots() ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+// PiRoot is Pi's own session directory, whether or not it exists:
+// PI_CODING_AGENT_SESSION_DIR, else PI_CODING_AGENT_DIR/sessions, else
+// ~/.pi/agent/sessions.
+func PiRoot() (string, error) {
+	switch {
+	case strings.TrimSpace(os.Getenv("PI_CODING_AGENT_SESSION_DIR")) != "":
+		return os.Getenv("PI_CODING_AGENT_SESSION_DIR"), nil
+	case strings.TrimSpace(os.Getenv("PI_CODING_AGENT_DIR")) != "":
+		return filepath.Join(os.Getenv("PI_CODING_AGENT_DIR"), "sessions"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".pi", "agent", "sessions"), nil
 }
 
 // FindSessionFiles lists every transcript under root, skipping hidden
@@ -188,7 +205,7 @@ func ReadFile(path string, visit func(Turn) error) error {
 		if t.SessionID == "" {
 			t.SessionID = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 		}
-		t.Project, t.Provider, t.Backend, t.Model = project, provider, backend, normalizeModel(model)
+		t.Project, t.Provider, t.Backend, t.Model, t.ModelID = project, provider, backend, normalizeModel(model), model
 		t.Timestamp = timestamp(m.Timestamp)
 		if t.Timestamp.IsZero() {
 			t.Timestamp = timestamp(e.Timestamp)

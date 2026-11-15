@@ -7,6 +7,7 @@ import (
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 )
 
 // derivedFloorTokens is the smallest context line worth setting. A band
@@ -22,9 +23,11 @@ func planFor(cfg config.Config, snapshotDir string, now time.Time) Plan {
 	at := func(prefix string) int64 {
 		return coachcap.CompactAt(cfg, prefix)
 	}
-	p := Plan{ClaudeCompactAt: at("claude-code:"), CodexCompactAt: at("codex:"), OpencodeShare: OpencodeShare}
+	p := Plan{ClaudeCompactAt: at("claude-code:"), CodexCompactAt: at("codex:"), OpencodeShare: OpencodeShare, Window: spend.ContextWindow}
 	if line := derivedLine(snapshotDir, now); line > 0 {
-		p.ClaudeCompactAt, p.CodexCompactAt = line, line
+		// Gemini CLI and Pi have no configured plan value: they are set
+		// only from the measured line.
+		p.ClaudeCompactAt, p.CodexCompactAt, p.GeminiCompactAt, p.PiCompactAt = line, line, line, line
 	}
 	return p
 }

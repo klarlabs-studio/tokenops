@@ -44,6 +44,16 @@ func TestPlanUsesTheDerivedLineWhenMeasured(t *testing.T) {
 			if tt.derived {
 				wantClaude, wantCodex = tt.line64, tt.line64
 			}
+			wantOwn := int64(0)
+			if tt.derived {
+				wantOwn = tt.line64
+			}
+			if p.GeminiCompactAt != wantOwn || p.PiCompactAt != wantOwn {
+				t.Errorf("gemini %d, pi %d; want %d: they are set only from a measured line", p.GeminiCompactAt, p.PiCompactAt, wantOwn)
+			}
+			if p.Window == nil {
+				t.Error("no context-window source in the plan")
+			}
 			if p.ClaudeCompactAt != wantClaude || p.CodexCompactAt != wantCodex {
 				t.Errorf("plan = claude %d, codex %d; want claude %d, codex %d",
 					p.ClaudeCompactAt, p.CodexCompactAt, wantClaude, wantCodex)

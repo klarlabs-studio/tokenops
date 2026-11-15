@@ -3,6 +3,7 @@ package compactlever
 import (
 	"context"
 	"database/sql"
+	"os"
 	"slices"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pisessions"
 	"go.klarlabs.de/tokenops/internal/sqliteuri"
 )
 
@@ -35,6 +37,9 @@ type Levers struct {
 	// in New made each GET /api/coach and /api/findings wait up to two
 	// seconds for a list it threw away. nil keeps Plan.OpencodeModels.
 	opencodeModels func() []string
+	// piModels lists the Pi models run here, for Apply and Preview, for the
+	// same reason: it reads Pi's session files.
+	piModels func() []string
 }
 
 var _ coachcap.ContextLevers = Levers{}
@@ -55,6 +60,9 @@ func New(cfg config.Config) (Levers, error) {
 		opencodeModels: func() []string {
 			return opencodeModelsUsed(time.Now().Add(-opencodeLookback))
 		},
+		piModels: func() []string {
+			return piModelsUsed(time.Now().Add(-opencodeLookback))
+		},
 	}, nil
 }
 
@@ -69,6 +77,9 @@ func (l Levers) plan() Plan {
 	p := l.Plan
 	if l.opencodeModels != nil {
 		p.OpencodeModels = l.opencodeModels()
+	}
+	if l.piModels != nil && p.PiCompactAt > 0 {
+		p.PiModels = l.piModels()
 	}
 	return p
 }
@@ -130,6 +141,38 @@ func opencodeModelsUsed(since time.Time) []string {
 		if rows.Scan(&prov, &model) == nil && prov.String != "" && model.String != "" {
 			out = append(out, prov.String+"/"+model.String)
 		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// piModelsUsed lists the provider/modelId pairs Pi has run on since the
+// cutoff, from its own session files modified since then. None when Pi is
+// not here.
+func piModelsUsed(since time.Time) []string {
+	root, err := pisessions.PiRoot()
+	if err != nil {
+		return nil
+	}
+	files, err := pisessions.FindSessionFiles(root)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	for _, f := range files {
+		if fi, err := os.Stat(f); err != nil || fi.ModTime().Before(since) {
+			continue
+		}
+		_ = pisessions.ReadFile(f, func(t pisessions.Turn) error {
+			if t.Backend != "" && t.ModelID != "" && !t.Timestamp.Before(since) {
+				seen[t.Backend+"/"+t.ModelID] = true
+			}
+			return nil
+		})
+	}
+	out := make([]string, 0, len(seen))
+	for k := range seen {
+		out = append(out, k)
 	}
 	slices.Sort(out)
 	return out

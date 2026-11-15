@@ -1,6 +1,9 @@
 package compactlever
 
 import (
+	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -60,5 +63,34 @@ func TestNewDefersOpencodeModels(t *testing.T) {
 	}
 	if l.opencodeModels == nil {
 		t.Fatal("New left Apply no way to list opencode models")
+	}
+}
+
+// Pi's models are read from its own session files, as provider/modelId
+// in Pi's own naming: the key its settings take.
+func TestPiModelsUsedReadsPisSessions(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("PI_CODING_AGENT_SESSION_DIR", "")
+	dir := filepath.Join(home, "pi")
+	t.Setenv("PI_CODING_AGENT_DIR", dir)
+	src := filepath.Join("..", "..", "contexts", "spend", "vendorusage", "pisessions", "testdata", "pi", "--corpus--",
+		"2026-09-30T12-00-00-000Z_pi-proof-session.jsonl")
+	b, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := filepath.Join(dir, "sessions", "--corpus--")
+	if err := os.MkdirAll(sessions, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(sessions, "s.jsonl"), string(b))
+	got := piModelsUsed(time.Time{})
+	if !slices.Contains(got, "anthropic/claude-sonnet-4-6") {
+		t.Errorf("pi models = %v; want anthropic/claude-sonnet-4-6 among them", got)
+	}
+	if len(piModelsUsed(time.Now().Add(time.Hour))) != 0 {
+		t.Error("listed models from sessions older than the cutoff")
 	}
 }

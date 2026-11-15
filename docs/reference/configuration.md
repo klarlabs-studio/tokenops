@@ -129,7 +129,10 @@ compacts on its own, at the same line (600k on Claude Code, 150k on Codex,
 | Claude Code | `env.CLAUDE_CODE_AUTO_COMPACT_WINDOW` in `~/.claude/settings.json` (the line + 33k: Claude Code compacts ~33k below it) |
 | Codex | `model_auto_compact_token_limit` in `~/.codex/config.toml` |
 | opencode | `provider.<id>.models.<id>.limit.input` in `opencode.json`, keeping the model's own context and output limits, for the models you ran in the last 30 days |
+| Gemini CLI | `model.compressionThreshold` in `~/.gemini/settings.json` (`$GEMINI_CLI_HOME/.gemini` when set): the measured line as a fraction of the window of the model `model.name` names. Only from a measured context line, and only for a model whose window TokenOps knows. A value under this key or the older `model.chatCompression.contextPercentageThreshold` / `chatCompression.contextPercentageThreshold` is yours |
+| Pi | `compaction.modelOverrides["provider/modelId"].reserveTokens` in `~/.pi/agent/settings.json` (`$PI_CODING_AGENT_DIR` when set): the model's window less the measured line, for the models Pi ran in the last 30 days. Only from a measured context line, and only for models whose window TokenOps knows. Your own override, a global `compaction.reserveTokens`, or `compaction.enabled: false` is left alone |
 | Cursor | nothing: Cursor has no setting for when it summarises, so it stays advised |
+| Copilot CLI | nothing: its threshold is only an environment variable (`COPILOT_BACKGROUND_COMPACTION_THRESHOLD`), which tokenops cannot set for it and restore |
 
 A value you set yourself is never overwritten, and one you change after
 tokenops set it is left as you have it. Lowering `context` restores every
