@@ -1,10 +1,11 @@
 // Package focus renders spend and usage as a FOCUS dataset: the FinOps
 // Open Cost and Usage Specification that FinOps tools (Vantage, CloudZero,
-// Cloudability and others) ingest. It writes FOCUS 1.4, the default, and
-// FOCUS 1.2 for tools that do not read 1.4 yet. The conformance tests
+// Cloudability and others) ingest. It writes FOCUS 1.4, the default,
+// FOCUS 1.2 for tools that do not read 1.4 yet, and FOCUS 1.5 on request
+// while 1.5 is a candidate recommendation. The conformance tests
 // transcribe each version's column definitions and allowed values from
 // the specification (github.com/FinOps-Open-Cost-and-Usage-Spec/FOCUS_Spec,
-// tags v1.2 and v1.4).
+// tags v1.2, v1.4 and v1.5-cr).
 //
 // The FOCUS 1.2 mapping:
 //
@@ -46,6 +47,28 @@
 //   - ServiceProviderName and HostProviderName, which replace 1.2's
 //     ProviderName and PublisherName, both the vendor.
 //
+// FOCUS 1.5 keeps the 1.4 rows and changes three things:
+//
+//   - A contracted price reflects only privately negotiated terms and
+//     equals the list price when none apply. A plan is publicly priced, so
+//     usage a plan covered is contracted at its list rate; what the plan
+//     was worth is ListCost against x_EstimatedCost, which is 0 for it.
+//
+//   - Each kind of token is its own SKU (SkuId "<model>/<kind>"), with a
+//     SkuMeter, and SkuPriceDetails names the model (ModelId, and
+//     ModelDeveloper where it is known) and the tokens' TokenDirection and
+//     TokenCacheAction. A cache write's retention is x_CacheRetention.
+//
+//   - A plan's Purchase rows carry how its windows were used in the
+//     charge period, in custom columns: x_PlanWindowName and
+//     x_PlanWindowCount (the longest window kind that reset in it, and how
+//     many reset), x_PlanUtilization (the mean of those windows' peak
+//     share used, 0 to 1), x_PlanCoverage (the share of the provider's
+//     tokens a plan covered, 0 to 1) and x_PlanLapsedValue (the part of the
+//     row's prorated fee that paid for window capacity that reset unused).
+//     A subscription is still not a commitment discount: no standard
+//     column changes for it.
+//
 // Only derived fields leave: providers, models, plans, counts, money and
 // the operator's own allocation tags. No session title, path or prompt has
 // a column to go in.
@@ -78,13 +101,22 @@ type Spec struct {
 	usage    func(Usage) []Row
 	purchase func(Purchase) []Row
 	record   func(Row) []string
+	// planUse is true when the version carries plan-window use on its
+	// Purchase rows.
+	planUse bool
 }
 
-// V1_2 and V1_4 are the versions the export writes.
+// V1_2, V1_4 and V1_5 are the versions the export writes.
 var (
 	V1_2 = Spec{Version: "1.2", Columns: columns12, usage: usageRows12, purchase: purchaseRows, record: Row.record12}
 	V1_4 = Spec{Version: "1.4", Columns: columns14, usage: usageRows14, purchase: purchaseRows14, record: Row.record14}
+	V1_5 = Spec{Version: "1.5", Columns: columns15, usage: usageRows15, purchase: purchaseRows15, record: Row.record15,
+		planUse: true}
 )
+
+// CarriesPlanUse reports whether s writes plan-window use on a plan's
+// Purchase rows, so a caller measures it only for a version that does.
+func (s Spec) CarriesPlanUse() bool { return s.planUse }
 
 // Latest is the version written when none is asked for.
 var Latest = V1_4
@@ -98,8 +130,11 @@ func SpecFor(version string) (Spec, error) {
 		return V1_2, nil
 	case V1_4.Version:
 		return V1_4, nil
+	case V1_5.Version:
+		return V1_5, nil
 	}
-	return Spec{}, fmt.Errorf("%w: %q; use %s or %s", ErrUnsupportedVersion, version, V1_4.Version, V1_2.Version)
+	return Spec{}, fmt.Errorf("%w: %q; use %s, %s or %s", ErrUnsupportedVersion, version,
+		V1_4.Version, V1_5.Version, V1_2.Version)
 }
 
 // ErrUnsupportedVersion refuses a FOCUS version the export cannot write.
@@ -171,6 +206,74 @@ var columns14 = []string{
 	"Tags",
 	ColumnEstimatedCost,
 }
+
+// columns15 are FOCUS 1.5's columns the export carries, then its custom
+// columns. 1.5 requires SkuMeter and SkuPriceDetails wherever unit prices
+// are written. Its requester columns (PrincipalId, CredentialId,
+// RequesterDetails) are left out: TokenOps holds no identifier a provider
+// publishes for a user or a key, and they would carry personal data.
+var columns15 = []string{
+	"BilledCost",
+	"BillingAccountId",
+	"BillingAccountName",
+	"BillingCurrency",
+	"BillingPeriodEnd",
+	"BillingPeriodStart",
+	"ChargeCategory",
+	"ChargeClass",
+	"ChargeDescription",
+	"ChargeFrequency",
+	"ChargePeriodEnd",
+	"ChargePeriodStart",
+	"ConsumedQuantity",
+	"ConsumedUnit",
+	"ContractedCost",
+	"ContractedUnitPrice",
+	"EffectiveCost",
+	"HostProviderName",
+	"InvoiceIssuerName",
+	"ListCost",
+	"ListUnitPrice",
+	"PricingQuantity",
+	"PricingUnit",
+	"ServiceCategory",
+	"ServiceName",
+	"ServiceProviderName",
+	"ServiceSubcategory",
+	"SkuId",
+	"SkuMeter",
+	"SkuPriceDetails",
+	"SkuPriceId",
+	"Tags",
+	ColumnEstimatedCost,
+	ColumnPlanCoverage,
+	ColumnPlanLapsedValue,
+	ColumnPlanUtilization,
+	ColumnPlanWindowCount,
+	ColumnPlanWindowName,
+}
+
+// The custom columns FOCUS 1.5 rows carry on a plan's Purchase rows: how
+// the plan's windows were used in the charge period. Each is null on
+// usage rows and when nothing was measured.
+const (
+	// ColumnPlanWindowName is the plan window kind utilisation is
+	// measured on: the longest kind that reset in the charge period.
+	ColumnPlanWindowName = "x_PlanWindowName"
+	// ColumnPlanWindowCount is how many windows of that kind reset in it.
+	ColumnPlanWindowCount = "x_PlanWindowCount"
+	// ColumnPlanUtilization is the mean of those windows' peak share
+	// used, from 0 to 1.
+	ColumnPlanUtilization = "x_PlanUtilization"
+	// ColumnPlanCoverage is the share of the provider's tokens in the
+	// charge period that a plan covered rather than billed per token,
+	// from 0 to 1.
+	ColumnPlanCoverage = "x_PlanCoverage"
+	// ColumnPlanLapsedValue is the part of the row's prorated fee
+	// (x_EstimatedCost) that paid for window capacity that reset unused:
+	// x_EstimatedCost × (1 − x_PlanUtilization), in BillingCurrency.
+	ColumnPlanLapsedValue = "x_PlanLapsedValue"
+)
 
 // ColumnEstimatedCost is the custom column holding what TokenOps
 // estimates a charge cost, which FOCUS 1.4 keeps out of BilledCost.
@@ -244,6 +347,39 @@ type Usage struct {
 	Priced []TokenPrice
 }
 
+// PlanUse is how a plan's windows were used over one charge period. A
+// figure that was not measured is nil, never zero.
+type PlanUse struct {
+	// Start is the charge period's start, which names the period.
+	Start time.Time
+	// Window names the window kind Utilization is measured on; Windows
+	// is how many of them reset in the period.
+	Window  string
+	Windows int
+	// Utilization and Coverage are fractions from 0 to 1.
+	Utilization *float64
+	Coverage    *float64
+}
+
+// Period is a span of time, [From, To).
+type Period struct{ From, To time.Time }
+
+// ChargePeriods are the charge periods p is split into: its time in
+// force, cut at calendar months.
+func (p Purchase) ChargePeriods() []Period {
+	from, to := p.From.UTC(), p.To.UTC()
+	var out []Period
+	for start := from; start.Before(to); {
+		end := monthStart(start).AddDate(0, 1, 0)
+		if end.After(to) {
+			end = to
+		}
+		out = append(out, Period{From: start, To: end})
+		start = end
+	}
+	return out
+}
+
 // Purchase is a plan's fee for the time it was in force.
 type Purchase struct {
 	Provider string
@@ -257,6 +393,9 @@ type Purchase struct {
 	// ListPriced is true when Amount is the catalog's US list price, not
 	// a price the operator gave.
 	ListPriced bool
+	// Use is the plan's window use per charge period (ChargePeriods),
+	// which FOCUS 1.5 writes; a period without an entry wrote nothing.
+	Use []PlanUse
 }
 
 // Row is one FOCUS charge. String fields left empty are null.
@@ -300,6 +439,21 @@ type Row struct {
 	SkuPriceID          string
 	HostProviderName    string
 	EstimatedCost       float64
+
+	// The FOCUS 1.5 columns. SkuPriceDetails is a JSON object, or empty
+	// for null.
+	SkuMeter        string
+	SkuPriceDetails string
+	// How a plan's windows were used in the charge period, on its
+	// Purchase rows; nil (and empty) is null.
+	PlanWindowName  string
+	PlanWindowCount *int64
+	PlanUtilization *float64
+	PlanCoverage    *float64
+	PlanLapsedValue *float64
+
+	// model groups a charge's rows when its SKU is one kind of token.
+	model string
 }
 
 // Record is the row's cells in s's Columns order.
@@ -380,6 +534,62 @@ func (r Row) record14() []string {
 	}
 }
 
+func (r Row) record15() []string {
+	var count string
+	if r.PlanWindowCount != nil {
+		count = strconv.FormatInt(*r.PlanWindowCount, 10)
+	}
+	return []string{
+		decimal(r.BilledCost),
+		r.BillingAccountID,
+		r.BillingAccountName,
+		r.BillingCurrency,
+		dateTime(r.BillingPeriodEnd),
+		dateTime(r.BillingPeriodStart),
+		r.ChargeCategory,
+		r.ChargeClass,
+		r.ChargeDescription,
+		r.ChargeFrequency,
+		dateTime(r.ChargePeriodEnd),
+		dateTime(r.ChargePeriodStart),
+		r.consumed(),
+		r.ConsumedUnit,
+		decimal(r.ContractedCost),
+		optionalDecimal(r.ContractedUnitPrice),
+		decimal(r.EffectiveCost),
+		r.HostProviderName,
+		r.InvoiceIssuer,
+		decimal(r.ListCost),
+		optionalDecimal(r.ListUnitPrice),
+		r.pricingQuantity,
+		r.PricingUnit,
+		r.ServiceCategory,
+		r.ServiceName,
+		r.ProviderName,
+		r.ServiceSubcategory,
+		r.SkuID,
+		r.SkuMeter,
+		r.SkuPriceDetails,
+		r.SkuPriceID,
+		r.Tags,
+		decimal(r.EstimatedCost),
+		optionalDecimal(r.PlanCoverage),
+		optionalDecimal(r.PlanLapsedValue),
+		optionalDecimal(r.PlanUtilization),
+		count,
+		r.PlanWindowName,
+	}
+}
+
+// skuGroup is what orders a row among the charges: its model when its SKU
+// is one kind of token, else its SKU.
+func (r Row) skuGroup() string {
+	if r.model != "" {
+		return r.model
+	}
+	return r.SkuID
+}
+
 // Build maps usage and plan fees to FOCUS rows, ordered by charge period,
 // then category, provider, SKU and SKU price.
 func (s Spec) Build(usage []Usage, purchases []Purchase) []Row {
@@ -394,7 +604,7 @@ func (s Spec) Build(usage []Usage, purchases []Purchase) []Row {
 		return cmp.Or(a.ChargePeriodStart.Compare(b.ChargePeriodStart),
 			cmp.Compare(a.ChargeCategory, b.ChargeCategory),
 			cmp.Compare(a.ProviderName, b.ProviderName),
-			cmp.Compare(a.SkuID, b.SkuID),
+			cmp.Compare(a.skuGroup(), b.skuGroup()),
 			cmp.Compare(a.BillingAccountID, b.BillingAccountID),
 			cmp.Compare(a.Tags, b.Tags),
 			cmp.Compare(kindOrder(a.SkuPriceID), kindOrder(b.SkuPriceID)))
@@ -552,6 +762,140 @@ func purchaseRows14(p Purchase) []Row {
 			"prorated to the charge period in x_EstimatedCost; BilledCost is left to the vendor's invoice", 1)
 	}
 	return rows
+}
+
+// usageRows15 writes u as FOCUS 1.5 usage: the 1.4 rows, each kind of
+// token its own SKU described in SkuPriceDetails, contracted at the list
+// rate because no negotiated terms apply to it.
+func usageRows15(u Usage) []Row {
+	rows := usageRows14(u)
+	for i := range rows {
+		r := &rows[i]
+		kind := strings.TrimPrefix(r.SkuPriceID, r.SkuID+"/")
+		r.model = r.SkuID
+		r.SkuID = r.SkuPriceID
+		r.SkuMeter = skuMeter(kind)
+		r.SkuPriceDetails = priceDetails(u.Provider, u.Model, kind)
+		r.ContractedUnitPrice = ptr(*r.ListUnitPrice)
+		r.ContractedCost = r.ListCost
+		r.ChargeDescription = strings.Replace(r.ChargeDescription, "; ContractedCost is 0, ListCost is the API price",
+			"; ListCost is the API price and x_EstimatedCost is 0", 1)
+	}
+	return rows
+}
+
+// purchaseRows15 writes a plan's fee as FOCUS 1.5 purchases: the 1.4 rows
+// with a SkuMeter and, per charge period, how the plan's windows were
+// used in it.
+func purchaseRows15(p Purchase) []Row {
+	rows := purchaseRows14(p)
+	for i := range rows {
+		r := &rows[i]
+		r.SkuMeter = "Subscription"
+		for _, use := range p.Use {
+			if use.Start.Equal(r.ChargePeriodStart) {
+				r.setPlanUse(use)
+			}
+		}
+	}
+	return rows
+}
+
+// setPlanUse fills the plan-window columns from use. The lapsed value is
+// the share of the row's fee the unused part of its windows paid for.
+func (r *Row) setPlanUse(use PlanUse) {
+	if use.Coverage != nil {
+		r.PlanCoverage = ptr(*use.Coverage)
+	}
+	if use.Utilization == nil || use.Window == "" {
+		return
+	}
+	n := int64(use.Windows)
+	r.PlanWindowName, r.PlanWindowCount = use.Window, &n
+	util := min(max(*use.Utilization, 0), 1)
+	r.PlanUtilization = &util
+	r.PlanLapsedValue = ptr(r.EstimatedCost * (1 - util))
+}
+
+// skuMeter names what a token SKU meters, in the wording FOCUS's examples
+// use.
+func skuMeter(kind string) string {
+	switch kind {
+	case TokensInput:
+		return "Input Tokens"
+	case TokensCacheRead:
+		return "Cache Read Input Tokens"
+	case TokensCacheWrite, TokensCacheWrite1h:
+		return "Cache Write Input Tokens"
+	case TokensOutput:
+		return "Output Tokens"
+	}
+	return "Tokens"
+}
+
+// priceDetails is a token SKU's SkuPriceDetails: the model, who developed
+// it where that is known, and the direction and cache action of the
+// tokens it meters. A SKU that lumps every kind of token (no rate card
+// split it) has neither a direction nor a cache action.
+func priceDetails(provider, model, kind string) string {
+	d := map[string]string{}
+	if model != "" {
+		d["ModelId"] = model
+	}
+	if dev := modelDeveloper(provider, model); dev != "" {
+		d["ModelDeveloper"] = dev
+	}
+	switch kind {
+	case TokensInput:
+		d["TokenDirection"], d["TokenCacheAction"] = "Input", "Uncached"
+	case TokensCacheRead:
+		d["TokenDirection"], d["TokenCacheAction"] = "Input", "Read"
+	case TokensCacheWrite:
+		d["TokenDirection"], d["TokenCacheAction"], d["x_CacheRetention"] = "Input", "Write", "5 Minutes"
+	case TokensCacheWrite1h:
+		d["TokenDirection"], d["TokenCacheAction"], d["x_CacheRetention"] = "Input", "Write", "1 Hour"
+	case TokensOutput:
+		d["TokenDirection"] = "Output"
+	}
+	if len(d) == 0 {
+		return ""
+	}
+	return tagsJSON(d)
+}
+
+// firstPartyDevelopers are the providers that serve only models they
+// developed themselves.
+var firstPartyDevelopers = map[string]string{
+	"anthropic": "Anthropic",
+	"openai":    "OpenAI",
+	"gemini":    "Google",
+}
+
+// namespaceDevelopers map the developer namespace a router puts before a
+// model ("anthropic/claude-opus-5") to the developer.
+var namespaceDevelopers = map[string]string{
+	"anthropic":  "Anthropic",
+	"openai":     "OpenAI",
+	"google":     "Google",
+	"meta-llama": "Meta",
+	"mistralai":  "Mistral AI",
+	"deepseek":   "DeepSeek",
+	"x-ai":       "xAI",
+}
+
+// modelDeveloper is who developed model, or empty when that is not known:
+// the provider for a first-party API, or the namespace a router names.
+func modelDeveloper(provider, model string) string {
+	if model == "" {
+		return ""
+	}
+	if dev, ok := firstPartyDevelopers[provider]; ok {
+		return dev
+	}
+	if ns, _, ok := strings.Cut(model, "/"); ok {
+		return namespaceDevelopers[strings.ToLower(ns)]
+	}
+	return ""
 }
 
 // kinds orders a charge's rows by kind of token.

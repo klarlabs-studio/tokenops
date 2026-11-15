@@ -27,6 +27,11 @@ func (s *Server) spendExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := spending.FocusQuery{IncludeSources: includeSources(r), Now: time.Now(), Version: r.URL.Query().Get("version")}
+	if s.analytics.events != nil {
+		q.Events = s.analytics.events
+	} else if s.analytics.store != nil {
+		q.Events = s.analytics.store
+	}
 	if r.URL.Query().Get("since") != "" || r.URL.Query().Get("until") != "" {
 		since, until, err := sinceUntil(r)
 		if err != nil {

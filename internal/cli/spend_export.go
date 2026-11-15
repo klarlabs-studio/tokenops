@@ -30,7 +30,8 @@ func newSpendExportCmd(rf *rootFlags) *cobra.Command {
 		Long: `export writes the window's spend and usage as FOCUS CSV, the FinOps billing
 format that Vantage, CloudZero, Cloudability and other FinOps tools ingest.
 It writes FOCUS 1.4; --focus-version 1.2 writes the older format for tools
-that do not read 1.4 yet.
+that do not read 1.4 yet, and --focus-version 1.5 the FOCUS 1.5 candidate
+recommendation.
 
   - a plan's fee is a Purchase, prorated over the days it was in force
   - each day's usage of a model is a Usage row per kind of token (input,
@@ -45,6 +46,23 @@ that do not read 1.4 yet.
 
 FOCUS 1.2 writes one Usage row per model and day, with the estimate in
 BilledCost and EffectiveCost.
+
+FOCUS 1.5 keeps the 1.4 rows, with these changes:
+
+  - each kind of token is its own SKU ("<model>/<kind>") with a SkuMeter;
+    SkuPriceDetails names the model (ModelId, and ModelDeveloper where it
+    is known), the tokens' TokenDirection and TokenCacheAction, and a
+    cache write's x_CacheRetention
+  - usage a plan covered is contracted at its list rate, as 1.5 requires
+    when no negotiated price applies: what the plan saved is ListCost
+    against x_EstimatedCost, which is 0 for it
+  - a plan's Purchase rows carry how its windows were used in the charge
+    period: x_PlanWindowName and x_PlanWindowCount (the longest window
+    kind that reset in it, and how many did), x_PlanUtilization (their
+    mean peak share used, 0 to 1), x_PlanCoverage (the share of the
+    provider's tokens a plan covered, 0 to 1) and x_PlanLapsedValue (the
+    part of the row's fee, in its BillingCurrency, that paid for window
+    capacity that reset unused); each is empty when nothing was measured
 
 Only derived figures are written: providers, models, plans, counts, money
 and your own allocation tags. No session title, path or prompt is in it.
@@ -87,6 +105,7 @@ The window defaults to the current month so far, in UTC days.`,
 				return fmt.Errorf("open event store: %w", err)
 			}
 			defer func() { _ = store.Close() }()
+			q.Events = store
 			eng, err := buildSpendEngine(cfg)
 			if err != nil {
 				return err
@@ -110,7 +129,7 @@ The window defaults to the current month so far, in UTC days.`,
 		},
 	}
 	cmd.Flags().StringVar(&format, "format", formatFocus, "export format: focus (CSV)")
-	cmd.Flags().StringVar(&version, "focus-version", "", "FOCUS version to write: 1.4 (default) or 1.2")
+	cmd.Flags().StringVar(&version, "focus-version", "", "FOCUS version to write: 1.4 (default), 1.5 or 1.2")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "write to this file instead of stdout")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to config.storage.path)")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "lower bound (RFC3339 or duration), floored to its UTC day; default the start of this month")
