@@ -1,6 +1,9 @@
 package spend
 
-import "strings"
+import (
+	"strings"
+	"sync"
+)
 
 // Context window sizes in tokens.
 const (
@@ -31,13 +34,41 @@ var standardWindowPrefixes = []string{
 	"claude-3-7", "claude-3-opus", "claude-3-haiku",
 }
 
+// catalogWindows supplies the input windows the pricing catalog knows,
+// keyed by bare lower-case model name. The pricing package registers it;
+// nil until then, so a process that never loads the catalog knows only
+// the Claude table.
+var (
+	catalogMu      sync.RWMutex
+	catalogWindows func() map[string]int64
+)
+
+// SetCatalogWindows registers the source of the catalog's context windows
+// (nil clears it). The source is asked on every lookup a model the Claude
+// table does not answer, so it must be cheap: the pricing package caches
+// what it reads and reloads only when the catalog changes.
+func SetCatalogWindows(source func() map[string]int64) {
+	catalogMu.Lock()
+	defer catalogMu.Unlock()
+	catalogWindows = source
+}
+
 // ContextWindow returns the model's context window in tokens, and whether
 // one is known.
 //
-// An unrecognised model reports no window rather than a plausible
-// default. A percentage computed against a guessed denominator is worse
-// than no percentage at all: it looks authoritative and is not, which is
-// the failure mode this codebase has spent considerable effort undoing.
+// The answer comes from the first source that knows the model:
+//
+//  1. the Claude table, for Claude models (authoritative where it has an
+//     answer, so a catalog cannot move a Claude window);
+//  2. the LiteLLM catalog's max_input_tokens, looked up by the model's bare
+//     name, so "gemini-2.5-pro", "google/gemini-2.5-pro" and a provider-
+//     prefixed Pi id such as "openrouter/z-ai/glm-4.6" all resolve.
+//
+// A model in neither source reports no window. An unrecognised model
+// reports no window rather than a plausible default. A percentage
+// computed against a guessed denominator is worse than no percentage at
+// all: it looks authoritative and is not, which is the failure mode this
+// codebase has spent considerable effort undoing.
 func ContextWindow(model string) (int64, bool) {
 	m := strings.ToLower(strings.TrimSpace(model))
 	if m == "" {
@@ -53,7 +84,24 @@ func ContextWindow(model string) (int64, bool) {
 	if w, ok := matchLongest(m, standardWindowPrefixes, longWindowPrefixes); ok {
 		return w, true
 	}
-	return 0, false
+	return catalogWindow(m)
+}
+
+// catalogWindow is the catalog's input window for model m, lower-cased,
+// matched by the segment after its last slash.
+func catalogWindow(m string) (int64, bool) {
+	catalogMu.RLock()
+	source := catalogWindows
+	catalogMu.RUnlock()
+	if source == nil {
+		return 0, false
+	}
+	bare := m[strings.LastIndex(m, "/")+1:]
+	if bare == "" {
+		return 0, false
+	}
+	w, ok := source()[bare]
+	return w, ok && w > 0
 }
 
 // matchLongest picks whichever prefix in either set matches m and is

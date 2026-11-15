@@ -40,7 +40,7 @@ func (c Combined) Name() string {
 
 // Fetch implements Source.
 func (c Combined) Fetch(ctx context.Context) (Snapshot, error) {
-	out := Snapshot{Source: c.Name(), Rates: map[string]Rate{}}
+	out := Snapshot{Source: c.Name(), Rates: map[string]Rate{}, ContextWindows: map[string]int64{}}
 	for _, s := range c {
 		snap, err := s.Fetch(ctx)
 		if err != nil {
@@ -51,6 +51,9 @@ func (c Combined) Fetch(ctx context.Context) (Snapshot, error) {
 		}
 		for k, r := range snap.Rates {
 			out.Rates[k] = r
+		}
+		for k, w := range snap.ContextWindows {
+			out.ContextWindows[k] = w
 		}
 	}
 	return out, nil
