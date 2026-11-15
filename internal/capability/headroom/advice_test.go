@@ -44,7 +44,7 @@ func TestAdviseReplaysTheBoundPlan(t *testing.T) {
 	// week, which Pro would have carried.
 	history := plans.History{{Provider: "anthropic", Plan: "claude-max", From: now.Add(-90 * 24 * time.Hour), Price: 90, Currency: "USD"}}
 	deps := headroom.Deps{
-		Config:      cfgWith(map[string]string{"anthropic": "claude-max", "openai": "gpt-plus"}),
+		Config:      cfgWith(map[string]string{"anthropic": "claude-max", "openai": "gpt-pro"}),
 		Reader:      &eventsReader{envs: adviceEvents(now, "15")},
 		Price:       tenDollars,
 		PlanHistory: func() (plans.History, error) { return history, nil },
@@ -78,7 +78,7 @@ func TestAdviseReplaysTheBoundPlan(t *testing.T) {
 		t.Error("a $70 saving with no lockouts is worth a glance finding")
 	}
 	// A plan with no modelled multiple is named, not dropped.
-	if len(res.Notes) != 1 || !strings.Contains(res.Notes[0], "gpt-plus") {
+	if len(res.Notes) != 1 || !strings.Contains(res.Notes[0], "gpt-pro") {
 		t.Errorf("notes = %q", res.Notes)
 	}
 	// Advice never rebinds: the config is untouched.

@@ -179,7 +179,7 @@
     });
   }
 
-  // The plan without its vendor's name: "Ultra", "Pro Standard ($100)".
+  // The plan without its vendor's name: "Ultra", "Pro 100".
   function badge(r) {
     var d = r.display || r.plan_name || "";
     return d.replace(/^(Claude|ChatGPT|Gemini|GitHub Copilot|Cursor)\s+/, "");

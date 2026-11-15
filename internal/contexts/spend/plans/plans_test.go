@@ -180,3 +180,53 @@ func TestPayAsYouGo(t *testing.T) {
 		t.Errorf("headroom %+v, %v; want 25%%", r, err)
 	}
 }
+
+// OpenAI lifted the five-hour limit from every Pro tier in Work and Codex
+// (help.openai.com, 2026-11-15): each has only its weekly window, stated as
+// a multiple of Plus's week. Plus keeps both windows.
+func TestChatGPTProTiersHaveOnlyAWeeklyWindow(t *testing.T) {
+	const week = 7 * 24 * time.Hour
+	for _, tc := range []struct {
+		name    string
+		display string
+		weekly  float64 // multiple of Plus's week; 0 when the tier is unknown
+	}{
+		{"gpt-pro", "ChatGPT Pro (tier unspecified)", 0},
+		{"gpt-pro-5x", "ChatGPT Pro 100", 10},
+		{"gpt-pro-20x", "ChatGPT Pro 200", 20},
+		{"gpt-pro-500", "ChatGPT Pro 500", 50},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, ok := Lookup(tc.name)
+			if !ok {
+				t.Fatalf("%s missing from the catalog", tc.name)
+			}
+			if !p.NoSessionLimit || p.RateLimitWindow != week || p.MessagesPerWindow != 0 {
+				t.Errorf("%s: NoSessionLimit=%v window=%v messages=%d, want a weekly window only",
+					tc.name, p.NoSessionLimit, p.RateLimitWindow, p.MessagesPerWindow)
+			}
+			if p.Display != tc.display {
+				t.Errorf("%s: Display = %q, want %q", tc.name, p.Display, tc.display)
+			}
+			if _, _, limited := WindowFactor(tc.name, 5*time.Hour); limited {
+				t.Errorf("%s: a 5-hour window is limited", tc.name)
+			}
+			if tc.weekly == 0 {
+				return
+			}
+			base, f, ok := WindowFactor(tc.name, week)
+			if !ok || base != "gpt-plus" || f != tc.weekly {
+				t.Errorf("%s: weekly allowance = %v x %q (%v), want %v x gpt-plus", tc.name, f, base, ok, tc.weekly)
+			}
+		})
+	}
+	plus, ok := Lookup("gpt-plus")
+	if !ok || plus.NoSessionLimit || plus.RateLimitWindow != 5*time.Hour {
+		t.Fatalf("gpt-plus = %+v %v, want its 5-hour window kept", plus, ok)
+	}
+	for _, d := range []time.Duration{5 * time.Hour, week} {
+		if base, f, limited := WindowFactor("gpt-plus", d); !limited || base != "gpt-plus" || f != 1 {
+			t.Errorf("gpt-plus %v window: %v x %q (%v), want a limited base window", d, f, base, limited)
+		}
+	}
+}

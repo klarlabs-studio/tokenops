@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **plans:** ChatGPT Pro 100, 200 and 500 (`gpt-pro-5x`, `gpt-pro-20x`, `gpt-pro-500`, and `gpt-pro` for an unknown tier) have only a weekly window: OpenAI lifted their five-hour limit in Work and Codex. Their weekly allowances are 10x, 20x and 50x Plus, as OpenAI states them, so plan advice now replays Codex usage across Plus and the Pro tiers. The plans show under OpenAI's names (Pro 100, Pro 200, Pro 500); the catalog names are unchanged, so existing configs keep working. The replay leaves out Codex limits other than the default one, and with no readings it names Codex's readers instead of the Claude meter.
+
 ## 0.120.1 - 2026-11-15
 
 ### Changed

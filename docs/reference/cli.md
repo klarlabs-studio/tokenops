@@ -18,7 +18,7 @@ the terminal.
 TokenOps • AI Usage & Limits                                           Sun 4 Oct 09:30
 
 ╭────────────────────────────────────────╮  ╭────────────────────────────────────────╮
-│ Codex [local] PLAN Pro Standard ($100) │  │ Claude [meter]                PLAN Max │
+│ Codex [local]             PLAN Pro 100 │  │ Claude [meter]                PLAN Max │
 │ ────────────────────────────────────── │  │ ────────────────────────────────────── │
 │ Weekly                         9% left │  │ Session                       96% left │
 │ [ ━━━─────────────────────────────── ] │  │ [ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━─ ] │
@@ -171,10 +171,10 @@ tokenops glance --color always | less -R
 ```
 
 ```
-PLAN                       WINDOW            LEFT  RESETS    PACE
-Codex Pro Standard ($100)  Weekly              9%  30m       +37% · out in 23h 47m
-Claude Max                 Session            96%  4h 37m    -3% · lasts
-                           Weekly · Fable    100%  5d 17h
+PLAN           WINDOW            LEFT  RESETS    PACE
+Codex Pro 100  Weekly              9%  30m       +37% · out in 23h 47m
+Claude Max     Session            96%  4h 37m    -3% · lasts
+               Weekly · Fable    100%  5d 17h
 ```
 
 Colour follows the terminal and `NO_COLOR`; `--no-color` (or `--color
@@ -1677,7 +1677,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Nous Portal | `nous-account` | the monthly credit grant used this period and the top-up credit left | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 | Ollama | `ollama-api` | Monthly included allowance used, its reset, and purchased credit balance | API key | CodexBar's source, the vendor's docs and fixtures |
 |  | `ollama-web` | Ollama Cloud's monthly usage (or the older session and weekly windows) | browser session | CodexBar's source, the vendor's docs and fixtures |
-| Codex | `codex-app-server` | the 5-hour and weekly windows `codex app-server` reports, Codex signing its own request | the vendor's CLI | against a real account |
+| Codex | `codex-app-server` | the windows `codex app-server` reports (5-hour and weekly on Plus, weekly only on Pro), Codex signing its own request | the vendor's CLI | against a real account |
 |  | `codex-jsonl` | per-turn tokens and the rate_limits in Codex's rollouts | local files | against a real account |
 |  | `openai-admin` | the API organisation's spend this month (Administration API) | admin key | CodexBar's source, the vendor's docs and fixtures |
 | opencode | `opencode` | per-message tokens for every provider, from opencode's SQLite store | local files | against a real account |
