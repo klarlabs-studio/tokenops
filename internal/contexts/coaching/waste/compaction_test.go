@@ -99,3 +99,17 @@ func TestOperatorProfilesAndCompactAt(t *testing.T) {
 		t.Fatal("operator's 400k line ignored")
 	}
 }
+
+func TestCompactEarlierUsesTheOperatorsOwnLine(t *testing.T) {
+	// 30 steps at 450k sit under the 600k default, so nothing is reported;
+	// a line the operator's own bands set at 400k reports them.
+	tr := traceOf(repeat(30, 450_000), 0.40)
+	if ev := compactEarlier(New(Config{}).Detect(tr)); ev != nil {
+		t.Fatalf("450k under the default 600k line was reported")
+	}
+	if ev := compactEarlier(New(Config{CompactAtOverride: 400_000}).Detect(tr)); ev == nil {
+		t.Fatal("450k over the operator's 400k line was not reported")
+	} else if ev.ReplayMetadata["compact_at_tokens"] != "400000" {
+		t.Errorf("line = %s; want 400000", ev.ReplayMetadata["compact_at_tokens"])
+	}
+}

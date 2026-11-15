@@ -84,7 +84,51 @@ func TestClassesCoverTheTaxonomyOnce(t *testing.T) {
 			t.Errorf("%s has no name", c)
 		}
 	}
-	if len(seen) != 6 {
-		t.Errorf("%d classes, want 6", len(seen))
+	if len(seen) != 8 {
+		t.Errorf("%d classes, want 8", len(seen))
+	}
+}
+
+func TestRebuildClassSplitsIdleGapsOut(t *testing.T) {
+	cases := []struct {
+		name  string
+		cause RebuildCause
+		want  Class
+	}{
+		{"idle gap past the lifetime", CauseTTLExpired, ClassIdleRebuild},
+		{"model switch", CauseModelSwitch, ClassCacheRebuild},
+		{"prefix change", CausePrefixChanged, ClassCacheRebuild},
+		{"unexplained", CauseUnknown, ClassCacheRebuild},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := RebuildClass(tc.cause); got != tc.want {
+				t.Errorf("RebuildClass(%s) = %s, want %s", tc.cause, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEveryClassHasAFixAndAName(t *testing.T) {
+	for _, c := range Classes() {
+		if ClassName(c) == string(c) {
+			t.Errorf("class %s has no readable name", c)
+		}
+		if FixOf(c) == "" {
+			t.Errorf("class %s names no fix", c)
+		}
+	}
+}
+
+func TestStoppedTurnsAttributeBeforeTheInferredClass(t *testing.T) {
+	order := map[Class]int{}
+	for i, c := range Classes() {
+		order[c] = i
+	}
+	if order[ClassStopped] >= order[ClassAbandoned] {
+		t.Errorf("stopped_turns must be attributed before abandoned_session")
+	}
+	if order[ClassIdleRebuild] <= order[ClassCacheRebuild] {
+		t.Errorf("idle_cache_rebuild must follow cache_rebuild in attribution order")
 	}
 }
