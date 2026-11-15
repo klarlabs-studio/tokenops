@@ -21,37 +21,45 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
-	"go.klarlabs.de/tokenops/internal/tempfile"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// The overlay of observed plan limits reads 90 days of window readings
-// and requests, so it is kept in the background: a while after start and
-// once a day, like the week's waste report. Tier ratios move over weeks.
+// The overlay of observed plan limits reads the window readings and
+// requests of the last 90 days. It follows its inputs (ADR 0019), in
+// three tiers:
 //
-// It follows its inputs (ADR 0019). The last result is marked with the
-// inputs it reflects, on disk, so a restart does not compute it again: the
-// next computation is due a day after the last one, as if the daemon had
-// kept running, and is skipped when nothing it reads moved. A change to
-// the config, the plan history, the rate cards or the binary (its plan
-// catalog) is computed again after the start delay.
+//   - Every observedCheckEvery it reads the event store's position, which
+//     is two numbers. Unchanged, nothing else runs.
+//   - When the position moved, it reads again only the UTC hours the change
+//     names (observed_days.go), and keeps the overlay from the hours.
+//   - Once a day it checks a digest of the events the change log does not
+//     hold (older than its horizon), and every observedMaxAge it reads
+//     the whole window again.
 //
-// Reading the 90 days was most of the daemon's CPU in the twenty minutes
-// after every start, and most of its garbage collection.
+// The mark of the last result is kept on disk, so a restart resumes from
+// it: the first pass after a start is the delay's, whatever the mark says.
+// A change to the config, the plan history, the rate cards or the binary
+// (its plan catalog) is computed again from scratch.
 const (
-	observedDelay = 20 * time.Minute
+	observedDelay      = 20 * time.Minute
+	observedCheckEvery = time.Hour
+	// observedEvery is how often the digest is checked, and how often the
+	// window slides on the clock alone when nothing moved.
 	observedEvery = 24 * time.Hour
-	// observedMaxAge is the oldest result kept while nothing moved: the
-	// 90 days slide on with the clock alone.
+	// observedMaxAge is the oldest a result is kept without a rebuild.
 	observedMaxAge = 7 * 24 * time.Hour
 	// observedVersion is the computation's version: a change to how the
-	// overlay is computed bumps it, and the next pass computes it again.
-	observedVersion = 1
+	// overlay is computed or what it keeps bumps it, and the next pass
+	// computes it again. Version 2 keeps the inputs by hour.
+	observedVersion = 2
 )
 
 // observedMarkFile names the mark under the cache directory.
 const observedMarkFile = "observed-limits-inputs.json"
+
+// observedDaysDir names the hours' inputs under the cache directory.
+const observedDaysDir = "observed-days"
 
 // observedJob is the overlay's computation and where its inputs stand.
 type observedJob struct {
@@ -59,19 +67,28 @@ type observedJob struct {
 	// settings is a key of every input but the event log: the config, the
 	// plan history, the rate cards, the build.
 	settings func() string
-	// events is where the events a result computed at at reads stand;
-	// ok is false when that cannot be told.
-	events func(ctx context.Context, at time.Time) (string, bool)
-	// dir holds the mark of the last result.
+	// store is the event log the overlay reads; nil reads the whole window
+	// each time through the reference computation.
+	store *sqlite.Store
+	// hours is the window's inputs by hour, kept between passes.
+	hours *checkup.DriftHours
+	// dir holds the mark of the last result, and the hours' inputs.
 	dir string
 }
 
 // observedMark is the inputs the last kept overlay reflects.
 type observedMark struct {
 	Version  int       `json:"version"`
-	At       time.Time `json:"at"`
+	At       time.Time `json:"at"`      // when the overlay was last kept
+	Built    time.Time `json:"built"`   // when the window was last read from scratch
+	Checked  time.Time `json:"checked"` // when the digest last agreed
 	Settings string    `json:"settings"`
-	Events   string    `json:"events"`
+	// Events is the store's position, "rowid.seq", read before the result
+	// was computed: an event stored while it runs moves it past this mark.
+	Events string `json:"events"`
+	// Digest is the store's SpanDigest of the events older than the change
+	// log's horizon as they stood at Built.
+	Digest string `json:"digest"`
 }
 
 func startObservedRuntime(cfg config.Config, c *bootstrap.Components, sup *lifecycle.Supervisor, logger *slog.Logger) {
@@ -87,11 +104,12 @@ func startObservedRuntime(cfg config.Config, c *bootstrap.Components, sup *lifec
 			return o
 		},
 		settings: observedSettings(cfg),
-		events:   observedEvents(c.Store),
+		store:    c.Store,
+		hours:    &checkup.DriftHours{Dir: filepath.Join(findings.DefaultDir(), observedDaysDir), Version: observedVersion},
 		dir:      findings.DefaultDir(),
 	}
 	sup.Go("observed-limits", func(ctx context.Context) error {
-		runObserved(ctx, job, observedDelay, observedEvery, logger)
+		runObserved(ctx, job, observedDelay, observedCheckEvery, logger)
 		return nil
 	})
 }
@@ -115,32 +133,54 @@ func observedSettings(cfg config.Config) func() string {
 	}
 }
 
-// observedEvents is where the events a result computed at at reads stand:
-// the store's position, which an update or delete moves only for events
-// younger than the change log's horizon, and a digest of the older part
-// of the read, which every change moves. The digested span reaches to the
-// horizon as it stands observedMaxAge later, past which the result is
-// computed again anyway.
-func observedEvents(store *sqlite.Store) func(context.Context, time.Time) (string, bool) {
-	return func(ctx context.Context, at time.Time) (string, bool) {
-		pos, err := store.Position(ctx)
-		if err != nil {
-			return "", false
-		}
-		since := at.AddDate(0, 0, -checkup.DriftDays)
-		digest, err := store.SpanDigest(ctx, eventschema.EventTypePrompt, since, at.Add(observedMaxAge-sqlite.ChangeLogHorizon))
-		if err != nil {
-			return "", false
-		}
-		return fmt.Sprintf("%d|%d|%s", pos.Rowid, pos.Seq, digest), true
+// position is the store's position as a mark's key.
+func (j observedJob) position(ctx context.Context) (checkup.Position, error) {
+	if j.store == nil {
+		return checkup.Position{}, nil
 	}
+	p, err := j.store.Position(ctx)
+	return checkup.Position{Rowid: p.Rowid, Seq: p.Seq}, err
 }
 
-// runObserved keeps the overlay from the tier comparisons, computing it
-// when its inputs moved and at most once per every.
+// eventLog is the store as the overlay's inputs read it; nil without one.
+func (j observedJob) eventLog() checkup.EventLog {
+	if j.store == nil {
+		return nil
+	}
+	return observedLog{store: j.store}
+}
+
+// observedLog adapts the store to the inputs' event log.
+type observedLog struct{ store *sqlite.Store }
+
+func (l observedLog) Position(ctx context.Context) (checkup.Position, error) {
+	p, err := l.store.Position(ctx)
+	return checkup.Position{Rowid: p.Rowid, Seq: p.Seq}, err
+}
+
+func (l observedLog) ChangedTimes(ctx context.Context, t eventschema.EventType, from, to checkup.Position) ([]time.Time, bool, error) {
+	return l.store.ChangedTimes(ctx, t, sqlite.Position{Rowid: from.Rowid, Seq: from.Seq}, sqlite.Position{Rowid: to.Rowid, Seq: to.Seq})
+}
+
+func (l observedLog) EachEventBetween(ctx context.Context, t eventschema.EventType, from, until time.Time, fn func(*eventschema.Envelope) error) error {
+	return l.store.EachEventBetween(ctx, t, from, until, fn)
+}
+
+// digest is the store's digest of the events older than the change log's
+// horizon, as a result computed at built saw them.
+func (j observedJob) digest(ctx context.Context, built time.Time) (string, error) {
+	if j.store == nil {
+		return "", nil
+	}
+	return j.store.SpanDigest(ctx, eventschema.EventTypePrompt,
+		built.AddDate(0, 0, -checkup.DriftDays), built.Add(observedMaxAge-sqlite.ChangeLogHorizon))
+}
+
+// runObserved keeps the overlay from the tier comparisons, checking its
+// inputs every every, the first check after delay.
 func runObserved(ctx context.Context, job observedJob, delay, every time.Duration, logger *slog.Logger) {
 	mark := readObservedMark(job.dir)
-	wait := time.NewTimer(observedFirstWait(mark, job.settings(), delay, every, time.Now()))
+	wait := time.NewTimer(delay)
 	defer wait.Stop()
 	for {
 		select {
@@ -148,52 +188,77 @@ func runObserved(ctx context.Context, job observedJob, delay, every time.Duratio
 			return
 		case <-wait.C:
 		}
-		mark = keepObserved(ctx, job, mark, time.Now(), logger)
+		mark, _ = keepObserved(ctx, job, mark, time.Now(), logger)
 		wait.Reset(every)
 	}
 }
 
-// observedFirstWait is how long after a start at now the first pass
-// waits: delay, or until the last result is due when it was computed
-// under settings, a restart or not.
-func observedFirstWait(mark *observedMark, settings string, delay, every time.Duration, now time.Time) time.Duration {
-	if mark == nil || mark.Settings != settings {
-		return delay
-	}
-	return max(delay, mark.At.Add(every).Sub(now))
-}
-
-// keepObserved computes and keeps the overlay at now unless mark's inputs
-// still stand, and returns the mark of the result in force.
-func keepObserved(ctx context.Context, job observedJob, mark *observedMark, now time.Time, logger *slog.Logger) *observedMark {
+// keepObserved keeps the overlay at now unless mark's inputs still stand,
+// and returns the mark of the result in force. When it computes, it also
+// returns the drift comparisons it kept; nil when it kept the last one.
+func keepObserved(ctx context.Context, job observedJob, mark *observedMark, now time.Time, logger *slog.Logger) (*observedMark, checkup.TierDrifts) {
 	settings := job.settings()
-	if mark != nil && mark.Settings == settings && !now.Before(mark.At) && now.Sub(mark.At) < observedMaxAge {
-		if events, ok := job.events(ctx, mark.At); ok && events == mark.Events {
-			logger.Debug("observed limits unchanged", "computed", mark.At)
-			return mark
+	pos, err := job.position(ctx)
+	if err != nil {
+		logger.Warn("observed limits: store position unknown", "err", err)
+		return mark, nil
+	}
+	key := fmt.Sprintf("%d.%d", pos.Rowid, pos.Seq)
+	if mark != nil && mark.Settings == settings && mark.Events == key && fresh(mark, now) {
+		logger.Debug("observed limits unchanged", "computed", mark.At)
+		return mark, nil
+	}
+	full := mark == nil || mark.Settings != settings || now.Before(mark.Built) || now.Sub(mark.Built) >= observedMaxAge
+	next := &observedMark{Version: observedVersion, At: now, Built: now, Checked: now, Settings: settings, Events: key}
+	if !full && mark != nil {
+		next.Built, next.Digest, next.Checked = mark.Built, mark.Digest, mark.Checked
+		if now.Sub(mark.Checked) >= observedEvery {
+			d, err := job.digest(ctx, mark.Built)
+			if err != nil {
+				logger.Warn("observed limits: digest not read", "err", err)
+				return mark, nil
+			}
+			if d != mark.Digest {
+				full = true
+			} else {
+				next.Checked = now
+			}
 		}
 	}
-	// Read before the computation: an event stored while it runs moves
-	// the inputs past this mark, and the next pass computes again.
-	events, known := job.events(ctx, now)
-	drifts := checkup.ProviderDrifts(ctx, job.options(now))
+	if full {
+		d, err := job.digest(ctx, now)
+		if err != nil {
+			logger.Warn("observed limits: digest not read", "err", err)
+			return mark, nil
+		}
+		next.Built, next.Checked, next.Digest = now, now, d
+	}
+	drifts, err := job.hours.Drifts(ctx, job.eventLog(), job.options(now), settings, pos, full)
+	if err != nil {
+		logger.Warn("observed limits not kept", "err", err)
+		return mark, nil
+	}
 	if drifts == nil {
-		return mark
+		return mark, nil
 	}
 	v, err := planoverlay.Keep(drifts, now)
 	if err != nil {
 		logger.Warn("observed limits not kept", "err", err)
-		return mark
+		return mark, nil
 	}
-	logger.Info("observed limits kept", "limits", len(v.Limits), "off", v.Off)
-	if !known {
-		return nil
-	}
-	next := &observedMark{Version: observedVersion, At: now, Settings: settings, Events: events}
+	logger.Debug("observed limits kept", "limits", len(v.Limits), "off", v.Off, "full", full)
 	if err := writeObservedMark(job.dir, *next); err != nil {
 		logger.Warn("observed limits' inputs not marked; the next start computes them again", "err", err)
 	}
-	return next
+	return next, drifts
+}
+
+// fresh is whether a result computed at mark.At still stands at now with
+// nothing to check: the inputs unchanged, the digest checked within a
+// day, the window read within its max age.
+func fresh(mark *observedMark, now time.Time) bool {
+	return !now.Before(mark.At) && now.Sub(mark.At) < observedEvery &&
+		now.Sub(mark.Checked) < observedEvery && now.Sub(mark.Built) < observedMaxAge
 }
 
 // readObservedMark is the stored mark, nil when there is none, it cannot
@@ -212,27 +277,7 @@ func readObservedMark(dir string) *observedMark {
 
 // writeObservedMark stores m in one rename, so a reader never sees half.
 func writeObservedMark(dir string, m observedMark) error {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	b, err := json.Marshal(m)
-	if err != nil {
-		return err
-	}
-	tmp, err := tempfile.Create(dir, observedMarkFile+".*")
-	if err != nil {
-		return err
-	}
-	if _, err := tmp.Write(b); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmp.Name())
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmp.Name())
-		return err
-	}
-	return os.Rename(tmp.Name(), filepath.Join(dir, observedMarkFile))
+	return checkup.WriteFileAtomic(filepath.Join(dir, observedMarkFile), m)
 }
 
 // writeStamps appends the size and modification time of each of files to
