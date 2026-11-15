@@ -42,6 +42,10 @@ var constrainedStrings = map[string]string{
 	"UnitBucket.Repo":      "ValidRepo",
 	"VendorCost.Day":       "DayLayout date",
 	"VendorCost.Provider":  "ValidProvider: the provider registry",
+	// Schema 5 (ADR 0012, Upload schema 5).
+	"Upload.PreventedWeeks":   "DayLayout date, a Monday: the UTC week",
+	"PreventedWeek.Week":      "DayLayout date, a Monday: the UTC week",
+	"PreventedWeek.Mechanism": "ValidMechanism: enumeration",
 }
 
 // numericKinds are the field kinds that hold figures, not text.

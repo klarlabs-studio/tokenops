@@ -289,7 +289,8 @@ func TestSyncNegotiatesTheSchema(t *testing.T) {
 		"schema 2 server":           {2, 2, true},
 		"schema 3 server":           {3, 3, true},
 		"schema 4 server":           {4, 4, true},
-		"newer server":              {5, 4, true},
+		"schema 5 server":           {5, 5, true},
+		"newer server":              {6, 5, true},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -314,7 +315,7 @@ func TestSyncNegotiatesTheSchema(t *testing.T) {
 					t.Errorf("%s sent: %v, want %v", k, has, c.newKeys)
 				}
 			}
-			if string(m["schema"]) != map[int]string{1: "1", 2: "2", 3: "3", 4: "4"}[c.wantSchema] {
+			if string(m["schema"]) != map[int]string{1: "1", 2: "2", 3: "3", 4: "4", 5: "5"}[c.wantSchema] {
 				t.Errorf("schema on the wire = %s", m["schema"])
 			}
 		})

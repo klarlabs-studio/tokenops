@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass"
@@ -198,11 +199,20 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 		done()
 	}
 	u, kindOf := aggregate(units, turns, repoOf, days, opts.ClientVersion, now)
+	var ds []avoidable.Day
 	if opts.Schema >= teamwire.SchemaFinOps {
-		addFinOps(ctx, d.FinOps, shared, opts.Took, &u, repoOf, kindOf, now, &notes)
+		ds = addFinOps(ctx, d.FinOps, shared, opts.Took, &u, repoOf, kindOf, now, &notes)
 	}
 	if opts.Schema >= teamwire.SchemaSpend {
 		addSpend(ctx, d, opts, shared, &u, units, turns, repoOf, now, &notes)
+	}
+	if opts.Schema >= teamwire.SchemaPrevented && u.Schema == teamwire.SchemaReverts && ds != nil {
+		covered := make(map[string]bool, len(u.Days))
+		for _, day := range u.Days {
+			covered[day] = true
+		}
+		u.Schema = teamwire.SchemaPrevented
+		u.PreventedWeeks, u.Prevented = PreventedRows(ds, covered, now)
 	}
 	return u, notes
 }

@@ -300,3 +300,16 @@ func TestHoldKeepsTheDecisionsForecasts(t *testing.T) {
 		t.Errorf("hold = %+v, %v", h, ok)
 	}
 }
+
+// The lockout mechanism names the windows it counted, so periods added
+// together count each window once.
+func TestLockoutsNameTheirWindows(t *testing.T) {
+	at := t0.Add(day)
+	in := fixture()
+	in.Holds = []Hold{{At: at, Mechanism: MechBoundary, Forecasts: []eventschema.WindowForecast{{
+		Provider: "anthropic", Window: "week", UsedPct: 90, RunsOutAt: at.Add(time.Hour), ResetsAt: at.Add(3 * time.Hour)}}}}
+	m, _ := mechanism(Build(in), MechLockout)
+	if len(m.Windows) != 1 || m.Windows[0].Window != "week" || m.Windows[0].BlockedMinutes != 120 {
+		t.Errorf("windows = %+v", m.Windows)
+	}
+}

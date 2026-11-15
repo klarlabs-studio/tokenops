@@ -68,6 +68,16 @@ type Mechanism struct {
 	// Counterfactual marks a figure for what would have happened without
 	// the mechanism, not something observed.
 	Counterfactual bool `json:"counterfactual,omitempty"`
+	// Windows are the plan windows the lockouts were counted on, so
+	// periods added together count a window once.
+	Windows []AvoidedWindow `json:"-"`
+}
+
+// AvoidedWindow is one plan window a pause or route kept from running out.
+type AvoidedWindow struct {
+	Provider, Window string
+	ResetsAt         time.Time
+	BlockedMinutes   float64
 }
 
 // FmtSaving is one `tokenops fmt` compression recorded as an optimization
@@ -297,8 +307,10 @@ func lockoutsAvoided(in Inputs) Mechanism {
 			if f.RunsOutAt.IsZero() || !f.RunsOutAt.After(h.At) || !f.RunsOutAt.Before(f.ResetsAt) {
 				continue
 			}
+			minutes := f.ResetsAt.Sub(f.RunsOutAt).Minutes()
 			m.Count++
-			m.BlockedMinutes += f.ResetsAt.Sub(f.RunsOutAt).Minutes()
+			m.BlockedMinutes += minutes
+			m.Windows = append(m.Windows, AvoidedWindow{Provider: f.Provider, Window: f.Window, ResetsAt: k.reset, BlockedMinutes: minutes})
 		}
 	}
 	return m
