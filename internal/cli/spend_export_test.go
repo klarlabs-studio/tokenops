@@ -62,6 +62,7 @@ func TestSpendExportFocusGolden(t *testing.T) {
 	for _, tc := range []struct{ version, golden string }{
 		{"", "spend/focus-1.4.csv"},
 		{"1.2", "spend/focus.csv"},
+		{"1.5", "spend/focus-1.5.csv"},
 	} {
 		t.Run(tc.golden, func(t *testing.T) {
 			db, cfg := seedFocusExportFixture(t)

@@ -55,6 +55,17 @@ func TestSpendExportRouteServesFOCUSCSV(t *testing.T) {
 		t.Errorf("?version=1.2: status %d, X-Focus-Version %q", old.StatusCode, v)
 	}
 
+	next, err := http.Get(base + "/api/spend/export?version=1.5&since=72h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextBody, _ := io.ReadAll(next.Body)
+	_ = next.Body.Close()
+	if v := next.Header.Get("X-Focus-Version"); next.StatusCode != http.StatusOK || v != "1.5" ||
+		!strings.Contains(string(nextBody), "SkuPriceDetails") || !strings.Contains(string(nextBody), "x_PlanUtilization") {
+		t.Errorf("?version=1.5: status %d, X-Focus-Version %q:\n%s", next.StatusCode, v, nextBody)
+	}
+
 	for _, bad := range []string{"/api/spend/export?format=parquet", "/api/spend/export?since=yesterday", "/api/spend/export?version=1.3"} {
 		resp, err := http.Get(base + bad)
 		if err != nil {
