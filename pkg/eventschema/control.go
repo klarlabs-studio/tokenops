@@ -89,6 +89,29 @@ type DecisionEvent struct {
 	// Approval is who answered, set on the accepted or rejected stage of
 	// a decision that asked.
 	Approval DecisionApproval `json:"approval,omitzero"`
+	// Forecasts are the plan windows as a boundary pause or route saw
+	// them, so whether it kept a window from running out can be judged
+	// later at the pace recorded before it (schema 1.6.2).
+	Forecasts []WindowForecast `json:"forecasts,omitempty"`
+}
+
+// WindowForecast is one plan window as a decision saw it: the share used,
+// the pace, and when it would run out at that pace. Figures only.
+type WindowForecast struct {
+	Provider string `json:"provider,omitempty"`
+	// Window is 5h or week.
+	Window  string  `json:"window"`
+	UsedPct float64 `json:"used_pct"`
+	// PctPerHour is the pace the run-out was forecast at, in points of
+	// the window per hour; 0 when no pace could be read.
+	PctPerHour float64 `json:"pct_per_hour,omitempty"`
+	// RunsOutAt is when the window would be used up at that pace; zero
+	// when it lasts to its reset.
+	RunsOutAt time.Time `json:"runs_out_at,omitzero"`
+	ResetsAt  time.Time `json:"resets_at"`
+	// Basis is the rate the forecast read: empty for the window's average
+	// so far, recent for the last hour's.
+	Basis string `json:"basis,omitempty"`
 }
 
 // Type identifies this payload as a DecisionEvent.

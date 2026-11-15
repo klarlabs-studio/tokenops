@@ -163,6 +163,14 @@ are optional and omitted when empty: answers recorded before presence
 checks, and denials, carry none. While presence is in shadow nothing is
 refused for them.
 
+Since schema 1.6.2 a boundary decision that pauses the agent's next call
+or a route may carry `forecasts`: each plan window as the decision read it
+(`provider`, `window` — `5h` or `week` — `used_pct`, `pct_per_hour`, the
+pace its run-out was forecast at, `runs_out_at`, zero when it lasts to its
+reset, `resets_at` and `basis`, `recent` for the last hour's rate). Figures
+only, optional, and absent on decisions recorded before them. The waste
+report reads them for its avoided-lockout estimate.
+
 ---
 
 ## 1. Envelope Contract

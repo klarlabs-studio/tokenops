@@ -1002,6 +1002,7 @@ type DecisionEvent struct {
 	Fingerprint   string                 `protobuf:"bytes,12,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"`
 	Actor         *DecisionActor         `protobuf:"bytes,13,opt,name=actor,proto3" json:"actor,omitempty"`
 	Approval      *DecisionApproval      `protobuf:"bytes,14,opt,name=approval,proto3" json:"approval,omitempty"`
+	Forecasts     []*WindowForecast      `protobuf:"bytes,15,rep,name=forecasts,proto3" json:"forecasts,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1134,6 +1135,108 @@ func (x *DecisionEvent) GetApproval() *DecisionApproval {
 	return nil
 }
 
+func (x *DecisionEvent) GetForecasts() []*WindowForecast {
+	if x != nil {
+		return x.Forecasts
+	}
+	return nil
+}
+
+// WindowForecast is a plan window as a boundary pause or route saw it.
+type WindowForecast struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Provider string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	// window: 5h or week.
+	Window     string                 `protobuf:"bytes,2,opt,name=window,proto3" json:"window,omitempty"`
+	UsedPct    float64                `protobuf:"fixed64,3,opt,name=used_pct,json=usedPct,proto3" json:"used_pct,omitempty"`
+	PctPerHour float64                `protobuf:"fixed64,4,opt,name=pct_per_hour,json=pctPerHour,proto3" json:"pct_per_hour,omitempty"`
+	RunsOutAt  *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=runs_out_at,json=runsOutAt,proto3" json:"runs_out_at,omitempty"`
+	ResetsAt   *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=resets_at,json=resetsAt,proto3" json:"resets_at,omitempty"`
+	// basis: empty for the window's average so far, recent for the last hour's.
+	Basis         string `protobuf:"bytes,7,opt,name=basis,proto3" json:"basis,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WindowForecast) Reset() {
+	*x = WindowForecast{}
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WindowForecast) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WindowForecast) ProtoMessage() {}
+
+func (x *WindowForecast) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WindowForecast.ProtoReflect.Descriptor instead.
+func (*WindowForecast) Descriptor() ([]byte, []int) {
+	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *WindowForecast) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *WindowForecast) GetWindow() string {
+	if x != nil {
+		return x.Window
+	}
+	return ""
+}
+
+func (x *WindowForecast) GetUsedPct() float64 {
+	if x != nil {
+		return x.UsedPct
+	}
+	return 0
+}
+
+func (x *WindowForecast) GetPctPerHour() float64 {
+	if x != nil {
+		return x.PctPerHour
+	}
+	return 0
+}
+
+func (x *WindowForecast) GetRunsOutAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RunsOutAt
+	}
+	return nil
+}
+
+func (x *WindowForecast) GetResetsAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ResetsAt
+	}
+	return nil
+}
+
+func (x *WindowForecast) GetBasis() string {
+	if x != nil {
+		return x.Basis
+	}
+	return ""
+}
+
 // DecisionActor is who asked for the action a decision is about.
 type DecisionActor struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1147,7 +1250,7 @@ type DecisionActor struct {
 
 func (x *DecisionActor) Reset() {
 	*x = DecisionActor{}
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[6]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1159,7 +1262,7 @@ func (x *DecisionActor) String() string {
 func (*DecisionActor) ProtoMessage() {}
 
 func (x *DecisionActor) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[6]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1172,7 +1275,7 @@ func (x *DecisionActor) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecisionActor.ProtoReflect.Descriptor instead.
 func (*DecisionActor) Descriptor() ([]byte, []int) {
-	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{6}
+	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *DecisionActor) GetHarness() string {
@@ -1222,7 +1325,7 @@ type DecisionApproval struct {
 
 func (x *DecisionApproval) Reset() {
 	*x = DecisionApproval{}
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[7]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1234,7 +1337,7 @@ func (x *DecisionApproval) String() string {
 func (*DecisionApproval) ProtoMessage() {}
 
 func (x *DecisionApproval) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[7]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1247,7 +1350,7 @@ func (x *DecisionApproval) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecisionApproval.ProtoReflect.Descriptor instead.
 func (*DecisionApproval) Descriptor() ([]byte, []int) {
-	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{7}
+	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *DecisionApproval) GetApprover() string {
@@ -1321,7 +1424,7 @@ type OutcomeMetric struct {
 
 func (x *OutcomeMetric) Reset() {
 	*x = OutcomeMetric{}
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[8]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1333,7 +1436,7 @@ func (x *OutcomeMetric) String() string {
 func (*OutcomeMetric) ProtoMessage() {}
 
 func (x *OutcomeMetric) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[8]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1346,7 +1449,7 @@ func (x *OutcomeMetric) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OutcomeMetric.ProtoReflect.Descriptor instead.
 func (*OutcomeMetric) Descriptor() ([]byte, []int) {
-	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{8}
+	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *OutcomeMetric) GetName() string {
@@ -1411,7 +1514,7 @@ type OutcomeEvent struct {
 
 func (x *OutcomeEvent) Reset() {
 	*x = OutcomeEvent{}
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[9]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1423,7 +1526,7 @@ func (x *OutcomeEvent) String() string {
 func (*OutcomeEvent) ProtoMessage() {}
 
 func (x *OutcomeEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[9]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1436,7 +1539,7 @@ func (x *OutcomeEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OutcomeEvent.ProtoReflect.Descriptor instead.
 func (*OutcomeEvent) Descriptor() ([]byte, []int) {
-	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{9}
+	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *OutcomeEvent) GetResult() string {
@@ -1495,7 +1598,7 @@ type ExperimentEvent struct {
 
 func (x *ExperimentEvent) Reset() {
 	*x = ExperimentEvent{}
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[10]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1507,7 +1610,7 @@ func (x *ExperimentEvent) String() string {
 func (*ExperimentEvent) ProtoMessage() {}
 
 func (x *ExperimentEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[10]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1520,7 +1623,7 @@ func (x *ExperimentEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExperimentEvent.ProtoReflect.Descriptor instead.
 func (*ExperimentEvent) Descriptor() ([]byte, []int) {
-	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{10}
+	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ExperimentEvent) GetStage() string {
@@ -1624,7 +1727,7 @@ type ExperimentGuardrail struct {
 
 func (x *ExperimentGuardrail) Reset() {
 	*x = ExperimentGuardrail{}
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[11]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1636,7 +1739,7 @@ func (x *ExperimentGuardrail) String() string {
 func (*ExperimentGuardrail) ProtoMessage() {}
 
 func (x *ExperimentGuardrail) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[11]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1649,7 +1752,7 @@ func (x *ExperimentGuardrail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExperimentGuardrail.ProtoReflect.Descriptor instead.
 func (*ExperimentGuardrail) Descriptor() ([]byte, []int) {
-	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{11}
+	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ExperimentGuardrail) GetMetric() string {
@@ -1678,7 +1781,7 @@ type DomainEvent struct {
 
 func (x *DomainEvent) Reset() {
 	*x = DomainEvent{}
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[12]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1690,7 +1793,7 @@ func (x *DomainEvent) String() string {
 func (*DomainEvent) ProtoMessage() {}
 
 func (x *DomainEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[12]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1703,7 +1806,7 @@ func (x *DomainEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DomainEvent.ProtoReflect.Descriptor instead.
 func (*DomainEvent) Descriptor() ([]byte, []int) {
-	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{12}
+	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *DomainEvent) GetKind() string {
@@ -1755,7 +1858,7 @@ type PromptEvent struct {
 
 func (x *PromptEvent) Reset() {
 	*x = PromptEvent{}
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[13]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1767,7 +1870,7 @@ func (x *PromptEvent) String() string {
 func (*PromptEvent) ProtoMessage() {}
 
 func (x *PromptEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[13]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1780,7 +1883,7 @@ func (x *PromptEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptEvent.ProtoReflect.Descriptor instead.
 func (*PromptEvent) Descriptor() ([]byte, []int) {
-	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{13}
+	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PromptEvent) GetPromptHash() string {
@@ -1991,7 +2094,7 @@ type WorkflowEvent struct {
 
 func (x *WorkflowEvent) Reset() {
 	*x = WorkflowEvent{}
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[14]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2003,7 +2106,7 @@ func (x *WorkflowEvent) String() string {
 func (*WorkflowEvent) ProtoMessage() {}
 
 func (x *WorkflowEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[14]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2016,7 +2119,7 @@ func (x *WorkflowEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowEvent.ProtoReflect.Descriptor instead.
 func (*WorkflowEvent) Descriptor() ([]byte, []int) {
-	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{14}
+	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *WorkflowEvent) GetWorkflowId() string {
@@ -2115,7 +2218,7 @@ type OptimizationEvent struct {
 
 func (x *OptimizationEvent) Reset() {
 	*x = OptimizationEvent{}
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[15]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2127,7 +2230,7 @@ func (x *OptimizationEvent) String() string {
 func (*OptimizationEvent) ProtoMessage() {}
 
 func (x *OptimizationEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[15]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2140,7 +2243,7 @@ func (x *OptimizationEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OptimizationEvent.ProtoReflect.Descriptor instead.
 func (*OptimizationEvent) Descriptor() ([]byte, []int) {
-	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{15}
+	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *OptimizationEvent) GetPromptHash() string {
@@ -2240,7 +2343,7 @@ type CoachingEvent struct {
 
 func (x *CoachingEvent) Reset() {
 	*x = CoachingEvent{}
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[16]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2252,7 +2355,7 @@ func (x *CoachingEvent) String() string {
 func (*CoachingEvent) ProtoMessage() {}
 
 func (x *CoachingEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[16]
+	mi := &file_pkg_eventschema_proto_v1_events_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2265,7 +2368,7 @@ func (x *CoachingEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CoachingEvent.ProtoReflect.Descriptor instead.
 func (*CoachingEvent) Descriptor() ([]byte, []int) {
-	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{16}
+	return file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *CoachingEvent) GetSessionId() string {
@@ -2410,7 +2513,7 @@ const file_pkg_eventschema_proto_v1_events_proto_rawDesc = "" +
 	"confidence\x18\x06 \x01(\x01R\n" +
 	"confidence\x12\x14\n" +
 	"\x05scope\x18\a \x01(\tR\x05scope\x12\x16\n" +
-	"\x06caveat\x18\b \x01(\tR\x06caveat\"\xe2\x04\n" +
+	"\x06caveat\x18\b \x01(\tR\x06caveat\"\xa9\x05\n" +
 	"\rDecisionEvent\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
 	"\x05stage\x18\x02 \x01(\tR\x05stage\x12K\n" +
@@ -2430,7 +2533,17 @@ const file_pkg_eventschema_proto_v1_events_proto_rawDesc = "" +
 	"\aadapter\x18\v \x01(\tR\aadapter\x12 \n" +
 	"\vfingerprint\x18\f \x01(\tR\vfingerprint\x12<\n" +
 	"\x05actor\x18\r \x01(\v2&.tokenops.eventschema.v1.DecisionActorR\x05actor\x12E\n" +
-	"\bapproval\x18\x0e \x01(\v2).tokenops.eventschema.v1.DecisionApprovalR\bapproval\"w\n" +
+	"\bapproval\x18\x0e \x01(\v2).tokenops.eventschema.v1.DecisionApprovalR\bapproval\x12E\n" +
+	"\tforecasts\x18\x0f \x03(\v2'.tokenops.eventschema.v1.WindowForecastR\tforecasts\"\x8c\x02\n" +
+	"\x0eWindowForecast\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x16\n" +
+	"\x06window\x18\x02 \x01(\tR\x06window\x12\x19\n" +
+	"\bused_pct\x18\x03 \x01(\x01R\ausedPct\x12 \n" +
+	"\fpct_per_hour\x18\x04 \x01(\x01R\n" +
+	"pctPerHour\x12:\n" +
+	"\vruns_out_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\trunsOutAt\x127\n" +
+	"\tresets_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\bresetsAt\x12\x14\n" +
+	"\x05basis\x18\a \x01(\tR\x05basis\"w\n" +
 	"\rDecisionActor\x12\x18\n" +
 	"\aharness\x18\x01 \x01(\tR\aharness\x12\x1d\n" +
 	"\n" +
@@ -2640,7 +2753,7 @@ func file_pkg_eventschema_proto_v1_events_proto_rawDescGZIP() []byte {
 }
 
 var file_pkg_eventschema_proto_v1_events_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_pkg_eventschema_proto_v1_events_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_pkg_eventschema_proto_v1_events_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_pkg_eventschema_proto_v1_events_proto_goTypes = []any{
 	(EventType)(0),                  // 0: tokenops.eventschema.v1.EventType
 	(Provider)(0),                   // 1: tokenops.eventschema.v1.Provider
@@ -2655,67 +2768,71 @@ var file_pkg_eventschema_proto_v1_events_proto_goTypes = []any{
 	(*ResourceOption)(nil),          // 10: tokenops.eventschema.v1.ResourceOption
 	(*EvidenceRef)(nil),             // 11: tokenops.eventschema.v1.EvidenceRef
 	(*DecisionEvent)(nil),           // 12: tokenops.eventschema.v1.DecisionEvent
-	(*DecisionActor)(nil),           // 13: tokenops.eventschema.v1.DecisionActor
-	(*DecisionApproval)(nil),        // 14: tokenops.eventschema.v1.DecisionApproval
-	(*OutcomeMetric)(nil),           // 15: tokenops.eventschema.v1.OutcomeMetric
-	(*OutcomeEvent)(nil),            // 16: tokenops.eventschema.v1.OutcomeEvent
-	(*ExperimentEvent)(nil),         // 17: tokenops.eventschema.v1.ExperimentEvent
-	(*ExperimentGuardrail)(nil),     // 18: tokenops.eventschema.v1.ExperimentGuardrail
-	(*DomainEvent)(nil),             // 19: tokenops.eventschema.v1.DomainEvent
-	(*PromptEvent)(nil),             // 20: tokenops.eventschema.v1.PromptEvent
-	(*WorkflowEvent)(nil),           // 21: tokenops.eventschema.v1.WorkflowEvent
-	(*OptimizationEvent)(nil),       // 22: tokenops.eventschema.v1.OptimizationEvent
-	(*CoachingEvent)(nil),           // 23: tokenops.eventschema.v1.CoachingEvent
-	nil,                             // 24: tokenops.eventschema.v1.Envelope.AttributesEntry
-	nil,                             // 25: tokenops.eventschema.v1.CoachingEvent.ReplayMetadataEntry
-	(*timestamppb.Timestamp)(nil),   // 26: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),     // 27: google.protobuf.Duration
+	(*WindowForecast)(nil),          // 13: tokenops.eventschema.v1.WindowForecast
+	(*DecisionActor)(nil),           // 14: tokenops.eventschema.v1.DecisionActor
+	(*DecisionApproval)(nil),        // 15: tokenops.eventschema.v1.DecisionApproval
+	(*OutcomeMetric)(nil),           // 16: tokenops.eventschema.v1.OutcomeMetric
+	(*OutcomeEvent)(nil),            // 17: tokenops.eventschema.v1.OutcomeEvent
+	(*ExperimentEvent)(nil),         // 18: tokenops.eventschema.v1.ExperimentEvent
+	(*ExperimentGuardrail)(nil),     // 19: tokenops.eventschema.v1.ExperimentGuardrail
+	(*DomainEvent)(nil),             // 20: tokenops.eventschema.v1.DomainEvent
+	(*PromptEvent)(nil),             // 21: tokenops.eventschema.v1.PromptEvent
+	(*WorkflowEvent)(nil),           // 22: tokenops.eventschema.v1.WorkflowEvent
+	(*OptimizationEvent)(nil),       // 23: tokenops.eventschema.v1.OptimizationEvent
+	(*CoachingEvent)(nil),           // 24: tokenops.eventschema.v1.CoachingEvent
+	nil,                             // 25: tokenops.eventschema.v1.Envelope.AttributesEntry
+	nil,                             // 26: tokenops.eventschema.v1.CoachingEvent.ReplayMetadataEntry
+	(*timestamppb.Timestamp)(nil),   // 27: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),     // 28: google.protobuf.Duration
 }
 var file_pkg_eventschema_proto_v1_events_proto_depIdxs = []int32{
 	0,  // 0: tokenops.eventschema.v1.Envelope.type:type_name -> tokenops.eventschema.v1.EventType
-	26, // 1: tokenops.eventschema.v1.Envelope.timestamp:type_name -> google.protobuf.Timestamp
-	24, // 2: tokenops.eventschema.v1.Envelope.attributes:type_name -> tokenops.eventschema.v1.Envelope.AttributesEntry
+	27, // 1: tokenops.eventschema.v1.Envelope.timestamp:type_name -> google.protobuf.Timestamp
+	25, // 2: tokenops.eventschema.v1.Envelope.attributes:type_name -> tokenops.eventschema.v1.Envelope.AttributesEntry
 	9,  // 3: tokenops.eventschema.v1.Envelope.correlation:type_name -> tokenops.eventschema.v1.Correlation
 	8,  // 4: tokenops.eventschema.v1.Envelope.association:type_name -> tokenops.eventschema.v1.Association
-	20, // 5: tokenops.eventschema.v1.Envelope.prompt:type_name -> tokenops.eventschema.v1.PromptEvent
-	21, // 6: tokenops.eventschema.v1.Envelope.workflow:type_name -> tokenops.eventschema.v1.WorkflowEvent
-	22, // 7: tokenops.eventschema.v1.Envelope.optimization:type_name -> tokenops.eventschema.v1.OptimizationEvent
-	23, // 8: tokenops.eventschema.v1.Envelope.coaching:type_name -> tokenops.eventschema.v1.CoachingEvent
+	21, // 5: tokenops.eventschema.v1.Envelope.prompt:type_name -> tokenops.eventschema.v1.PromptEvent
+	22, // 6: tokenops.eventschema.v1.Envelope.workflow:type_name -> tokenops.eventschema.v1.WorkflowEvent
+	23, // 7: tokenops.eventschema.v1.Envelope.optimization:type_name -> tokenops.eventschema.v1.OptimizationEvent
+	24, // 8: tokenops.eventschema.v1.Envelope.coaching:type_name -> tokenops.eventschema.v1.CoachingEvent
 	12, // 9: tokenops.eventschema.v1.Envelope.decision:type_name -> tokenops.eventschema.v1.DecisionEvent
-	16, // 10: tokenops.eventschema.v1.Envelope.outcome:type_name -> tokenops.eventschema.v1.OutcomeEvent
-	17, // 11: tokenops.eventschema.v1.Envelope.experiment:type_name -> tokenops.eventschema.v1.ExperimentEvent
-	19, // 12: tokenops.eventschema.v1.Envelope.domain_event:type_name -> tokenops.eventschema.v1.DomainEvent
-	26, // 13: tokenops.eventschema.v1.EvidenceRef.observed_at:type_name -> google.protobuf.Timestamp
-	26, // 14: tokenops.eventschema.v1.EvidenceRef.fresh_until:type_name -> google.protobuf.Timestamp
+	17, // 10: tokenops.eventschema.v1.Envelope.outcome:type_name -> tokenops.eventschema.v1.OutcomeEvent
+	18, // 11: tokenops.eventschema.v1.Envelope.experiment:type_name -> tokenops.eventschema.v1.ExperimentEvent
+	20, // 12: tokenops.eventschema.v1.Envelope.domain_event:type_name -> tokenops.eventschema.v1.DomainEvent
+	27, // 13: tokenops.eventschema.v1.EvidenceRef.observed_at:type_name -> google.protobuf.Timestamp
+	27, // 14: tokenops.eventschema.v1.EvidenceRef.fresh_until:type_name -> google.protobuf.Timestamp
 	10, // 15: tokenops.eventschema.v1.DecisionEvent.alternatives:type_name -> tokenops.eventschema.v1.ResourceOption
 	10, // 16: tokenops.eventschema.v1.DecisionEvent.selected:type_name -> tokenops.eventschema.v1.ResourceOption
 	11, // 17: tokenops.eventschema.v1.DecisionEvent.evidence:type_name -> tokenops.eventschema.v1.EvidenceRef
-	13, // 18: tokenops.eventschema.v1.DecisionEvent.actor:type_name -> tokenops.eventschema.v1.DecisionActor
-	14, // 19: tokenops.eventschema.v1.DecisionEvent.approval:type_name -> tokenops.eventschema.v1.DecisionApproval
-	26, // 20: tokenops.eventschema.v1.DecisionApproval.at:type_name -> google.protobuf.Timestamp
-	26, // 21: tokenops.eventschema.v1.OutcomeMetric.observed_at:type_name -> google.protobuf.Timestamp
-	11, // 22: tokenops.eventschema.v1.OutcomeEvent.evidence:type_name -> tokenops.eventschema.v1.EvidenceRef
-	15, // 23: tokenops.eventschema.v1.OutcomeEvent.metrics:type_name -> tokenops.eventschema.v1.OutcomeMetric
-	10, // 24: tokenops.eventschema.v1.ExperimentEvent.baseline:type_name -> tokenops.eventschema.v1.ResourceOption
-	10, // 25: tokenops.eventschema.v1.ExperimentEvent.variant:type_name -> tokenops.eventschema.v1.ResourceOption
-	26, // 26: tokenops.eventschema.v1.ExperimentEvent.ends_at:type_name -> google.protobuf.Timestamp
-	18, // 27: tokenops.eventschema.v1.ExperimentEvent.guardrails:type_name -> tokenops.eventschema.v1.ExperimentGuardrail
-	1,  // 28: tokenops.eventschema.v1.PromptEvent.provider:type_name -> tokenops.eventschema.v1.Provider
-	27, // 29: tokenops.eventschema.v1.PromptEvent.latency:type_name -> google.protobuf.Duration
-	27, // 30: tokenops.eventschema.v1.PromptEvent.time_to_first_token:type_name -> google.protobuf.Duration
-	2,  // 31: tokenops.eventschema.v1.WorkflowEvent.state:type_name -> tokenops.eventschema.v1.WorkflowState
-	27, // 32: tokenops.eventschema.v1.WorkflowEvent.duration:type_name -> google.protobuf.Duration
-	3,  // 33: tokenops.eventschema.v1.OptimizationEvent.type:type_name -> tokenops.eventschema.v1.OptimizationType
-	4,  // 34: tokenops.eventschema.v1.OptimizationEvent.mode:type_name -> tokenops.eventschema.v1.OptimizationMode
-	5,  // 35: tokenops.eventschema.v1.OptimizationEvent.decision:type_name -> tokenops.eventschema.v1.OptimizationDecision
-	6,  // 36: tokenops.eventschema.v1.CoachingEvent.kind:type_name -> tokenops.eventschema.v1.CoachingRecommendationKind
-	25, // 37: tokenops.eventschema.v1.CoachingEvent.replay_metadata:type_name -> tokenops.eventschema.v1.CoachingEvent.ReplayMetadataEntry
-	5,  // 38: tokenops.eventschema.v1.CoachingEvent.decision:type_name -> tokenops.eventschema.v1.OptimizationDecision
-	39, // [39:39] is the sub-list for method output_type
-	39, // [39:39] is the sub-list for method input_type
-	39, // [39:39] is the sub-list for extension type_name
-	39, // [39:39] is the sub-list for extension extendee
-	0,  // [0:39] is the sub-list for field type_name
+	14, // 18: tokenops.eventschema.v1.DecisionEvent.actor:type_name -> tokenops.eventschema.v1.DecisionActor
+	15, // 19: tokenops.eventschema.v1.DecisionEvent.approval:type_name -> tokenops.eventschema.v1.DecisionApproval
+	13, // 20: tokenops.eventschema.v1.DecisionEvent.forecasts:type_name -> tokenops.eventschema.v1.WindowForecast
+	27, // 21: tokenops.eventschema.v1.WindowForecast.runs_out_at:type_name -> google.protobuf.Timestamp
+	27, // 22: tokenops.eventschema.v1.WindowForecast.resets_at:type_name -> google.protobuf.Timestamp
+	27, // 23: tokenops.eventschema.v1.DecisionApproval.at:type_name -> google.protobuf.Timestamp
+	27, // 24: tokenops.eventschema.v1.OutcomeMetric.observed_at:type_name -> google.protobuf.Timestamp
+	11, // 25: tokenops.eventschema.v1.OutcomeEvent.evidence:type_name -> tokenops.eventschema.v1.EvidenceRef
+	16, // 26: tokenops.eventschema.v1.OutcomeEvent.metrics:type_name -> tokenops.eventschema.v1.OutcomeMetric
+	10, // 27: tokenops.eventschema.v1.ExperimentEvent.baseline:type_name -> tokenops.eventschema.v1.ResourceOption
+	10, // 28: tokenops.eventschema.v1.ExperimentEvent.variant:type_name -> tokenops.eventschema.v1.ResourceOption
+	27, // 29: tokenops.eventschema.v1.ExperimentEvent.ends_at:type_name -> google.protobuf.Timestamp
+	19, // 30: tokenops.eventschema.v1.ExperimentEvent.guardrails:type_name -> tokenops.eventschema.v1.ExperimentGuardrail
+	1,  // 31: tokenops.eventschema.v1.PromptEvent.provider:type_name -> tokenops.eventschema.v1.Provider
+	28, // 32: tokenops.eventschema.v1.PromptEvent.latency:type_name -> google.protobuf.Duration
+	28, // 33: tokenops.eventschema.v1.PromptEvent.time_to_first_token:type_name -> google.protobuf.Duration
+	2,  // 34: tokenops.eventschema.v1.WorkflowEvent.state:type_name -> tokenops.eventschema.v1.WorkflowState
+	28, // 35: tokenops.eventschema.v1.WorkflowEvent.duration:type_name -> google.protobuf.Duration
+	3,  // 36: tokenops.eventschema.v1.OptimizationEvent.type:type_name -> tokenops.eventschema.v1.OptimizationType
+	4,  // 37: tokenops.eventschema.v1.OptimizationEvent.mode:type_name -> tokenops.eventschema.v1.OptimizationMode
+	5,  // 38: tokenops.eventschema.v1.OptimizationEvent.decision:type_name -> tokenops.eventschema.v1.OptimizationDecision
+	6,  // 39: tokenops.eventschema.v1.CoachingEvent.kind:type_name -> tokenops.eventschema.v1.CoachingRecommendationKind
+	26, // 40: tokenops.eventschema.v1.CoachingEvent.replay_metadata:type_name -> tokenops.eventschema.v1.CoachingEvent.ReplayMetadataEntry
+	5,  // 41: tokenops.eventschema.v1.CoachingEvent.decision:type_name -> tokenops.eventschema.v1.OptimizationDecision
+	42, // [42:42] is the sub-list for method output_type
+	42, // [42:42] is the sub-list for method input_type
+	42, // [42:42] is the sub-list for extension type_name
+	42, // [42:42] is the sub-list for extension extendee
+	0,  // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_pkg_eventschema_proto_v1_events_proto_init() }
@@ -2739,7 +2856,7 @@ func file_pkg_eventschema_proto_v1_events_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_eventschema_proto_v1_events_proto_rawDesc), len(file_pkg_eventschema_proto_v1_events_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   19,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

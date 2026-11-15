@@ -153,6 +153,20 @@ message DecisionEvent {
   string fingerprint = 12;
   DecisionActor actor = 13;
   DecisionApproval approval = 14;
+  repeated WindowForecast forecasts = 15;
+}
+
+// WindowForecast is a plan window as a boundary pause or route saw it.
+message WindowForecast {
+  string provider = 1;
+  // window: 5h or week.
+  string window = 2;
+  double used_pct = 3;
+  double pct_per_hour = 4;
+  google.protobuf.Timestamp runs_out_at = 5;
+  google.protobuf.Timestamp resets_at = 6;
+  // basis: empty for the window's average so far, recent for the last hour's.
+  string basis = 7;
 }
 
 // DecisionActor is who asked for the action a decision is about.
