@@ -1,8 +1,9 @@
 # Competitive landscape, gaps, and plan
 
 Checked 2026-11-02 against each product's own site, repository, changelog or
-release notes (previous full check 2026-10-22, partial 2026-11-01). What moved
-since 10-22 is logged under "Update 2026-11-01" and "Update 2026-11-02". Items
+release notes (previous full check 2026-10-22, partial 2026-11-01 and
+2026-11-15). What moved since 10-22 is logged under "Update 2026-11-01",
+"Update 2026-11-02" and "Update 2026-11-15". Items
 marked **[U]** came from a third-party page or search snippet and are
 unverified. Re-check before quoting any of it externally; this field moves
 weekly now, not monthly. The positioning direction of 2026-10-25 is recorded
@@ -110,7 +111,7 @@ rival's plan.
 | DarkControl (new) | Security | **Yes**: allow/ask/deny policy console with audit, now records tokens per decision (10-06) | SaaS | Policy plus spend on one decision record |
 | Braintrust Coding Agent Insights (new, preview 10-07) | Platform | Suggests fixes | SaaS | Team traces from CC, Codex, OpenCode |
 | PointFive TokenShift (new) | FinOps | No | Local analysis, derived metadata uploaded | Our "derived only" pitch, sold to FinOps |
-| Quesma (early access "soon") | Leadership, finance | No ("No proxy") | Open-source collector (quesma-shipper 0.0.3-90, 10-23); the `/architecture/` page lists five modes, and in the hosted Professional and Business tiers the customer's key is shared "with Quesma to decrypt"; BYOC and open-source modes keep it out | Seat cut/upgrade advice; now lists Copilot |
+| Quesma (launched; no public pricing, 11-15) | Leadership, finance | No: reports and ranks fixes ("No proxy") | Open-source shipper (Apache-2.0, 0.0.3, 50★ on 11-15) uploads whole sessions, scrubbed and age-encrypted, to the customer's bucket; Quesma can decrypt only when its ETL is turned on | Cost by project, team, person, task type and model; seat cut/upgrade advice; days each plan hit a limit; LLM clustering of sessions by work |
 | Jellyfish, Swarmia, DX, LinearB | Eng management | No | SaaS | Jellyfish "AI spend-to-work attribution" (10-07); Swarmia token use by investment (10-09), Claude Code backfill (10-14) |
 | LiteLLM, Portkey, Cloudflare AI Gateway, OpenRouter | Platform teams | **Yes**: dollar caps, allow-lists; LiteLLM `agent_access_default_deny` (rc, 10-18); Portkey MCP guardrails | Self-host or SaaS | Central enforcement, now extending to agent and MCP access |
 | Langfuse, CloudWatch Coding Agent Insights | Platform, cloud | No | Cloud or self-host / AWS | ClickHouse acquired Langfuse (2026-01-16) [U]; MIT self-hosting reported unchanged |
@@ -607,6 +608,65 @@ display is dropped as a contest, the plan's priorities now lead with standing
 down where the vendor speaks, acting, and verifying outcomes. One new vendor
 item: Claude's weekly pace banner, seen in the Claude desktop app on
 2026-10-24 and not yet checked in Claude Code or its changelog [U].
+
+## Update 2026-11-15
+
+Partial check: the vendors, Quesma and new small tools.
+
+- **OpenAI Pro has no five-hour window.** OpenAI's help center: "Pro 100,
+  Pro 200 and Pro 500 currently have no five-hour usage limit in Work and
+  Codex"; Plus keeps both windows. Pro 100 and 500 doubled their Work and
+  Codex allowance; OpenAI's Codex lead put the tiers at 10x, 20x and 50x Plus
+  (post on X, 11-08). Our catalog modelled a five-hour window on every Pro
+  tier and the older multipliers; fixed in the plan catalog.
+  Unverified [U]: Plus, Pro and Business move to one token quota for ChatGPT
+  and Codex in December.
+- **Codex 0.169 (11-13)** suggests a cheaper model (GPT-6 Luna) at a rate
+  limit: the vendor now acts on headroom inside its own harness.
+- **Claude Code** [U, from third-party roundups]: a cost-report admin API on
+  the apps gateway (2.1.317), `permissions.denyInsteadOfPrompting` (2.1.319),
+  Fable 5.2 as the default Fable model (2.1.321), and limit messages that name
+  the model's own weekly or session limit (2.1.323).
+- **Cursor** pricing matches our catalog (Plus $8 Grok-only, Premium $30,
+  Super $100, Ultra $200; third-party models at API list price).
+- **Devin** added budget hierarchies; **Google Jules** is read-only since
+  11-11 and shuts down 12-31 [U].
+- **New small tools:** Failproof AI enforces one tool-call policy at the
+  pre-tool gate across twelve harnesses, which contests "one set of rules
+  across every harness" for tool policy, though not for headroom or budget.
+  agent-baton warns near a Claude Code or Codex quota and writes a hand-off;
+  AgentHarbor is another multi-provider menu-bar app.
+
+### Quesma, compared (11-15)
+
+Quesma has launched. It is a Warsaw team with a $2.5M pre-seed, benchmarks
+that reach Hacker News, and a curated list (awesome-ai-tokenomics, 219★)
+that lists ccusage and CodexBar but not TokenOps. Its shipper has 50★;
+TokenOps has none.
+
+| | Quesma | TokenOps |
+|---|---|---|
+| Buyer | Leadership and finance | The developer first, a team on top |
+| What leaves the laptop | Whole sessions, scrubbed and encrypted, to the customer's bucket; Quesma decrypts when its ETL is on | Nothing for one developer; derived figures only to the team plane |
+| Acts | No: ranks fixes and suggests config (e.g. `autoCompactWindow`) | Yes: boundaries, read guard, routing, coach, during the session |
+| Plan limits | Days each plan hit a limit, after the fact | Live headroom and pace, before the limit |
+| Cost attribution | Project, team, person, task type, model and effort | Inferred task, workflow, account through routers |
+| Seat economics | Seat value, cancel and upgrade with the saving | Not offered |
+| Analysis | LLMs read the sessions and cluster the work | Structural, local, no model reads the sessions |
+| Harnesses | Sessions from Claude Code, Codex, Cursor, Copilot; Pi, OpenCode, Hermes experimental | Sessions from Claude Code, Codex, Cursor, opencode, Gemini CLI and Pi (no Copilot session reader); plans and spend for 90+ providers |
+| Rollout | MDM, SSO, Fleet Manager in the customer's AWS or GCP | Homebrew, a daemon per machine, hosted team tier |
+
+Where Quesma is ahead: the leadership story (where the bill went and which
+seats to change), the polish of the demo, enterprise rollout, and reach. Where
+TokenOps is ahead: it acts before the limit and during the session, and it
+needs no session to leave the machine. "Your company holds the keys" narrows
+the privacy gap for a company; it does not close it for a developer who wants
+nothing uploaded.
+
+Implications for the plan: seat value is cheap for us to add to the team tier
+from figures we already hold (plan price, observed limits, usage at API
+prices), and it is Quesma's sharpest hook for the buyer. Reach is the larger
+gap than product: no stars, absent from the lists where this field is found.
 
 ## Watch list
 
