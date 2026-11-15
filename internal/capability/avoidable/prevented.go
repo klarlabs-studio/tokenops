@@ -3,6 +3,7 @@ package avoidable
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/explain"
@@ -43,6 +44,9 @@ const (
 	// the developer's own weeks show the setting realized a saving (ADR
 	// 0021).
 	MechCompaction = "compaction"
+	// MechLockout is the plan-window lockouts a pause or route avoided: a
+	// counterfactual estimate, priced in blocked minutes.
+	MechLockout = "lockout"
 )
 
 // Mechanism is one way TokenOps prevented spend.
@@ -58,6 +62,12 @@ type Mechanism struct {
 	USD measurement.Value `json:"usd"`
 	// Basis says how the figures were made, in one line.
 	Basis string `json:"basis"`
+	// BlockedMinutes is the time a window would have been used up before
+	// its reset, for the lockouts avoided.
+	BlockedMinutes float64 `json:"blocked_minutes,omitempty"`
+	// Counterfactual marks a figure for what would have happened without
+	// the mechanism, not something observed.
+	Counterfactual bool `json:"counterfactual,omitempty"`
 }
 
 // FmtSaving is one `tokenops fmt` compression recorded as an optimization
@@ -75,6 +85,8 @@ type Hold struct {
 	// Denied is true when the operator refused the call rather than the
 	// boundary pausing it.
 	Denied bool
+	// Forecasts are the plan windows as the pause or route read them.
+	Forecasts []eventschema.WindowForecast
 }
 
 // Priced names the basis of the fmt and read-guard dollars.
@@ -84,7 +96,9 @@ const (
 	basisAut  = "the randomized holdout's difference in spend after the routed work, with its interval when the comparison concluded"
 	basisBnd  = "calls a boundary held until approved; not priced, since a held call never reached the model and its cost is not measured"
 	basisLoop = "calls the loop breaker stopped after the same call repeated; not priced, since the repeated call's cost is not measured"
-	basisCmp  = "the weekly drop in context carried above the compaction line, four weeks after the setting against four before, " +
+	basisLock = "a counterfactual estimate: a window counts once when, at the pace recorded before the first pause or route in it, " +
+		"it would have run out before its reset; the minutes are those it would have stayed used up; not priced in dollars"
+	basisCmp = "the weekly drop in context carried above the compaction line, four weeks after the setting against four before, " +
 		"counted only when it and the reject rate fell beyond their usual week-to-week movement; at the period's average API price per token"
 )
 
@@ -150,7 +164,7 @@ func buildPrevented(in Inputs, r Report) Prevented {
 	lm := Mechanism{Key: MechLoopBreaker, Name: "calls the loop breaker stopped", Count: loop, Basis: basisLoop,
 		USD: measurement.Unknown(basisLoop)}
 
-	out.Mechanisms = []Mechanism{ref, fm, aut, bm, lm, compactionPrevented(in, rate)}
+	out.Mechanisms = []Mechanism{ref, fm, aut, bm, lm, compactionPrevented(in, rate), lockoutsAvoided(in)}
 	for _, m := range out.Mechanisms {
 		if v, ok := m.USD.Amount(); ok {
 			out.USD += v
@@ -168,7 +182,7 @@ func holdOf(env *eventschema.Envelope) (Hold, bool) {
 	if !ok || d.Kind != "boundary" {
 		return Hold{}, false
 	}
-	h := Hold{At: env.Timestamp}
+	h := Hold{At: env.Timestamp, Forecasts: d.Forecasts}
 	switch {
 	case d.Stage == eventschema.DecisionStageRejected:
 		h.Denied = true
@@ -252,6 +266,40 @@ func compactionPrevented(in Inputs, rate float64) Mechanism {
 	m.USD = measurement.Unknown("no API price is known for the period's usage")
 	if rate > 0 {
 		m.USD = measurement.Estimated(float64(m.Tokens)*rate, "compaction weekly rollup", basisCmp)
+	}
+	return m
+}
+
+// lockoutsAvoided counts the plan windows a pause or route kept from
+// running out: at the pace recorded before the first one in the window, it
+// would have been used up before its reset. Each window is counted once,
+// at that first pace; one already used up was not avoided.
+func lockoutsAvoided(in Inputs) Mechanism {
+	m := Mechanism{Key: MechLockout, Name: "plan lockouts avoided", Basis: basisLock, Counterfactual: true,
+		USD: measurement.Unknown(basisLock)}
+	type window struct {
+		provider, name string
+		reset          time.Time
+	}
+	holds := slices.Clone(in.Holds)
+	slices.SortStableFunc(holds, func(a, b Hold) int { return a.At.Compare(b.At) })
+	seen := map[window]bool{}
+	for _, h := range holds {
+		if h.At.Before(in.Since) || !h.At.Before(in.Until) {
+			continue
+		}
+		for _, f := range h.Forecasts {
+			k := window{f.Provider, f.Window, f.ResetsAt.UTC()}
+			if seen[k] {
+				continue
+			}
+			seen[k] = true
+			if f.RunsOutAt.IsZero() || !f.RunsOutAt.After(h.At) || !f.RunsOutAt.Before(f.ResetsAt) {
+				continue
+			}
+			m.Count++
+			m.BlockedMinutes += f.ResetsAt.Sub(f.RunsOutAt).Minutes()
+		}
 	}
 	return m
 }

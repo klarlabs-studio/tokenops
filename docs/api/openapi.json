@@ -9648,8 +9648,14 @@
                               "basis": {
                                 "type": "string"
                               },
+                              "blocked_minutes": {
+                                "type": "number"
+                              },
                               "count": {
                                 "type": "integer"
+                              },
+                              "counterfactual": {
+                                "type": "boolean"
                               },
                               "key": {
                                 "type": "string"

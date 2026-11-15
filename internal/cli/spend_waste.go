@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -233,6 +234,9 @@ func writePrevented(out io.Writer, p avoidable.Prevented) {
 		price := "not priced"
 		if v, ok := m.USD.Amount(); ok {
 			price = usd(v)
+		}
+		if m.BlockedMinutes > 0 {
+			price = fmt.Sprintf("~%s blocked (estimate)", blockedWords(int(math.Round(m.BlockedMinutes))))
 		}
 		fmt.Fprintf(out, "    %-34s %6d %10s\n", m.Name, m.Count, price)
 	}

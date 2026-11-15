@@ -236,3 +236,67 @@ func TestPreventedCountsARealizedCompactionSaving(t *testing.T) {
 		})
 	}
 }
+
+// A lockout is avoided when, at the pace recorded before the pause or
+// route, the window would have run out before its reset. It is priced in
+// the minutes it would have been blocked, counted once per window, and is
+// a counterfactual estimate: in prevented only, never in found.
+func TestPreventedCountsAvoidedLockouts(t *testing.T) {
+	at := t0.Add(day)
+	reset := at.Add(2 * time.Hour)
+	runsOut := func(d time.Duration) eventschema.WindowForecast {
+		return eventschema.WindowForecast{Provider: "anthropic", Window: "5h", UsedPct: 80, PctPerHour: 40,
+			RunsOutAt: at.Add(d), ResetsAt: reset}
+	}
+	tests := []struct {
+		name    string
+		holds   []Hold
+		count   int
+		minutes float64
+	}{
+		{"runs out 30 minutes in, 90 before its reset", []Hold{{At: at, Mechanism: MechBoundary, Forecasts: []eventschema.WindowForecast{runsOut(30 * time.Minute)}}}, 1, 90},
+		{"a window that lasts is no lockout", []Hold{{At: at, Mechanism: MechBoundary, Forecasts: []eventschema.WindowForecast{{Window: "5h", UsedPct: 20, ResetsAt: reset}}}}, 0, 0},
+		{"already used up is not avoided", []Hold{{At: at, Mechanism: MechBoundary, Forecasts: []eventschema.WindowForecast{runsOut(0)}}}, 0, 0},
+		{"two pauses in one window count once, at the first pace", []Hold{
+			{At: at, Mechanism: MechBoundary, Forecasts: []eventschema.WindowForecast{runsOut(30 * time.Minute)}},
+			{At: at.Add(10 * time.Minute), Mechanism: MechBoundary, Forecasts: []eventschema.WindowForecast{runsOut(20 * time.Minute)}},
+		}, 1, 90},
+		{"outside the period", []Hold{{At: t0.Add(-day), Mechanism: MechBoundary, Forecasts: []eventschema.WindowForecast{runsOut(30 * time.Minute)}}}, 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := fixture()
+			in.Holds = tt.holds
+			r := Build(in)
+			m, ok := mechanism(r, MechLockout)
+			if !ok {
+				t.Fatal("no lockout mechanism")
+			}
+			if m.Count != tt.count || math.Abs(m.BlockedMinutes-tt.minutes) > 1e-9 {
+				t.Errorf("= %d lockouts, %v minutes; want %d, %v", m.Count, m.BlockedMinutes, tt.count, tt.minutes)
+			}
+			if !m.Counterfactual || !strings.Contains(m.Basis, "counterfactual estimate") {
+				t.Errorf("not labelled a counterfactual estimate: %+v", m)
+			}
+			if _, priced := m.USD.Amount(); priced {
+				t.Error("an avoided lockout is priced in minutes, not dollars")
+			}
+			for _, c := range r.Classes {
+				if strings.Contains(c.Name, "lockout") {
+					t.Errorf("an avoided lockout reached found: %+v", c)
+				}
+			}
+		})
+	}
+}
+
+// A boundary decision carries its forecasts into the hold it becomes.
+func TestHoldKeepsTheDecisionsForecasts(t *testing.T) {
+	f := eventschema.WindowForecast{Window: "5h", UsedPct: 80, ResetsAt: t0}
+	env := &eventschema.Envelope{Timestamp: t0, Payload: &eventschema.DecisionEvent{
+		Kind: "boundary", Stage: eventschema.DecisionStageApplied, Forecasts: []eventschema.WindowForecast{f}}}
+	h, ok := holdOf(env)
+	if !ok || len(h.Forecasts) != 1 || h.Forecasts[0] != f {
+		t.Errorf("hold = %+v, %v", h, ok)
+	}
+}

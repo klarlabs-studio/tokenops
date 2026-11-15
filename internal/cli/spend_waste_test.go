@@ -258,3 +258,16 @@ func TestWriteWasteReportLeadsWithPreventedThenFound(t *testing.T) {
 		t.Errorf("the old realized line is still printed:\n%s", out)
 	}
 }
+
+// An avoided lockout reads as the minutes it would have blocked, marked an
+// estimate, not as dollars.
+func TestWritePreventedShowsBlockedMinutes(t *testing.T) {
+	var b strings.Builder
+	writePrevented(&b, avoidable.Prevented{Mechanisms: []avoidable.Mechanism{{
+		Key: avoidable.MechLockout, Name: "plan lockouts avoided", Count: 1, BlockedMinutes: 90, Counterfactual: true,
+		USD: measurement.Unknown("counterfactual"),
+	}}})
+	if !strings.Contains(b.String(), "~1.5h blocked (estimate)") {
+		t.Errorf("prevented row:\n%s", b.String())
+	}
+}
