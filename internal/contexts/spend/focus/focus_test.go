@@ -263,12 +263,41 @@ func TestUnpriced14UsageSaysItsPriceIsUnknown(t *testing.T) {
 	}
 }
 
+// TestExport15Golden pins the FOCUS 1.5 CSV byte for byte.
+func TestExport15Golden(t *testing.T) {
+	usage, purchases := sampleDataset15()
+	var buf bytes.Buffer
+	if err := focus.V1_5.WriteCSV(&buf, focus.V1_5.Build(usage, purchases)); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join("testdata", "export-1.5.golden.csv")
+	if *update {
+		if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read golden: %v (run with -update)", err)
+	}
+	if !bytes.Equal(want, buf.Bytes()) {
+		t.Errorf("the export changed:\n--- want\n%s\n--- got\n%s", want, buf.Bytes())
+	}
+}
+
 func TestSpecForNamesTheSupportedVersions(t *testing.T) {
 	if s, err := focus.SpecFor(""); err != nil || s.Version != "1.4" {
 		t.Errorf("the default is 1.4: %v, %v", s.Version, err)
 	}
 	if s, err := focus.SpecFor("1.2"); err != nil || s.Version != "1.2" {
 		t.Errorf("1.2: %v, %v", s.Version, err)
+	}
+	if s, err := focus.SpecFor("1.5"); err != nil || s.Version != "1.5" || !s.CarriesPlanUse() {
+		t.Errorf("1.5: %v, %v", s.Version, err)
+	}
+	if focus.V1_4.CarriesPlanUse() || focus.V1_2.CarriesPlanUse() {
+		t.Error("only 1.5 carries plan-window use")
 	}
 	if _, err := focus.SpecFor("1.3"); err == nil {
 		t.Error("an unsupported version must be refused")
