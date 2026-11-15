@@ -40,8 +40,9 @@ type Levers struct {
 var _ coachcap.ContextLevers = Levers{}
 
 // New plans the levers from cfg: the compaction lines the compact tip and
-// the compact_earlier finding use, and the opencode models run here, which
-// Apply lists when it runs.
+// the compact_earlier finding use, the developer's own derived context line
+// when one is measured, and the opencode models run here, which Apply lists
+// when it runs.
 func New(cfg config.Config) (Levers, error) {
 	p, err := DefaultPaths()
 	if err != nil {
@@ -49,12 +50,8 @@ func New(cfg config.Config) (Levers, error) {
 	}
 	return Levers{
 		Paths: p,
-		Plan: Plan{
-			ClaudeCompactAt: coachcap.CompactAt(cfg, "claude-code:"),
-			CodexCompactAt:  coachcap.CompactAt(cfg, "codex:"),
-			OpencodeShare:   OpencodeShare,
-		},
-		Now: time.Now,
+		Plan:  planFor(cfg, snapshotDir(), time.Now()),
+		Now:   time.Now,
 		opencodeModels: func() []string {
 			return opencodeModelsUsed(time.Now().Add(-opencodeLookback))
 		},
