@@ -325,7 +325,9 @@ func QuotaReadingsFrom(envs []*eventschema.Envelope, provider string, since, unt
 			continue
 		}
 		p, ok := windowSourceProvider[e.Source]
-		if !ok || string(p) != provider {
+		if !ok || string(p) != provider || codexLimit(e) != "" {
+			// A Codex limit other than the default is its own bucket, not
+			// the plan's window the tiers are multiples of.
 			continue
 		}
 		if ws := QuotaWindowsFromAttributes(p, e.Attributes); len(ws) > 0 {
@@ -536,6 +538,15 @@ func unionLength(spans [][2]time.Time) time.Duration {
 	return total
 }
 
+// windowMeterHint says how to connect the reader that reports provider's
+// plan windows.
+func windowMeterHint(provider string) string {
+	if provider == string(eventschema.ProviderOpenAI) {
+		return "Codex reports them: install `codex` so its app server is asked, or set `vendor_usage.codex_jsonl.enabled: true`"
+	}
+	return "connect a meter that reports the windows (`tokenops vendor-usage setup claude-subscription`)"
+}
+
 // Replay replays the period against every candidate tier, the tiers with
 // metered overflow, and the API at list price, and recommends one.
 func Replay(in ReplayInput) Advice {
@@ -549,7 +560,7 @@ func Replay(in ReplayInput) Advice {
 	a.WindowsMeasured = len(ws)
 	if len(ws) == 0 {
 		a.Caveats = append(a.Caveats, "No plan window readings in the period, so there is nothing to replay; "+
-			"connect a meter that reports the windows (`tokenops vendor-usage setup claude-subscription`)")
+			windowMeterHint(in.Provider))
 		return a
 	}
 	first := in.Until
@@ -681,6 +692,14 @@ func sessionsUnseen(in ReplayInput) bool {
 	return false
 }
 
+// baseAllowanceNote says what is known of a tier family's base allowance.
+func baseAllowanceNote(provider, base string) string {
+	if provider == string(eventschema.ProviderOpenAI) {
+		return base + "'s own allowance is model-dependent (the vendor publishes no fixed number)"
+	}
+	return base + "'s own allowance is unverified (the vendor no longer publishes it)"
+}
+
 func caveats(in ReplayInput, cur *Option, candidates []Tier) []string {
 	var out []string
 	var derived []string
@@ -697,9 +716,9 @@ func caveats(in ReplayInput, cur *Option, candidates []Tier) []string {
 			base = "the base plan"
 		}
 		out = append(out, fmt.Sprintf("Tier allowances are derived: %s are the vendor's stated multiples of %s's allowance, "+
-			"and %s's own allowance is unverified (the vendor no longer publishes it). The replay scales your measured "+
+			"and %s. The replay scales your measured "+
 			"window shares by those multiples; where a tier states one multiple, its weekly windows are assumed to scale by it too.",
-			joinAnd(derived), base, base))
+			joinAnd(derived), base, baseAllowanceNote(in.Provider, base)))
 	}
 	if sessionsUnseen(in) {
 		out = append(out, fmt.Sprintf("%s has no 5-hour limit, so its readings say nothing of 5-hour demand: "+

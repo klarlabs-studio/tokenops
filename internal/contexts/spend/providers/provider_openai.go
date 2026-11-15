@@ -17,7 +17,7 @@ func providerOpenAI() Descriptor {
 				Switch: SwitchConfig, Reader: BespokeReader, Verified: VerifiedLive,
 				Package: "internal/contexts/spend/vendorusage/codexappserver",
 				Fixture: "internal/contexts/spend/vendorusage/codexappserver/codexappserver_test.go",
-				Shows:   "the 5-hour and weekly windows `codex app-server` reports, Codex signing its own request"},
+				Shows:   "the windows `codex app-server` reports (5-hour and weekly on Plus, weekly only on Pro), Codex signing its own request"},
 			{Name: "codex_jsonl", Tag: "codex-jsonl", Kind: LocalLog, Credential: LocalFile,
 				Switch: SwitchConfig, Reader: BespokeReader, Verified: VerifiedLive,
 				Package: "internal/contexts/spend/vendorusage/codexjsonl",
@@ -49,50 +49,67 @@ func providerOpenAI() Descriptor {
 				PriceSource:     "https://help.openai.com/en/articles/6950777 (2026-09-30): $20/month billed monthly",
 				VendorPlanTypes: []string{"plus"},
 			},
+			// OpenAI lifted the five-hour limit from every Pro tier in Work and
+			// Codex: each has only an included weekly allowance, so its shortest
+			// window is the week, as on Claude Ultra. Codex reports it as a
+			// single 10,080-minute primary window.
 			{
 				Name:            "gpt-pro",
 				Display:         "ChatGPT Pro (tier unspecified)",
-				RateLimitWindow: 5 * time.Hour,
+				NoSessionLimit:  true,
+				RateLimitWindow: 7 * 24 * time.Hour,
 				WindowUnit:      "messages",
-				SourceURL:       "https://chatgpt.com/pricing (2026-10-01, in-app pricing screen): Pro is offered at $100, $200 and $500, labelled Standard, More usage and Max usage",
+				SourceURL: "https://help.openai.com/en/articles/20001516-managing-usage-with-gpt-6-astra-in-work-and-codex (2026-11-15): " +
+					"\"Pro 100, Pro 200 and Pro 500 currently have no five-hour usage limit in Work and Codex. Your plan still has an included usage allowance.\"",
 			},
-			// The three Pro tiers carry OpenAI's labels from the pricing screen
-			// and their US price, which is what stays fixed: OpenAI moved the $200
-			// tier from 20x to 10x Plus usage at DevDay 2026 without changing its
-			// price. The catalog names keep their original multipliers so existing
-			// configs resolve. Codex reports the Standard tier as plan_type
-			// "prolite".
+			// OpenAI names the tiers Pro 100, Pro 200 and Pro 500. The catalog
+			// names keep the multipliers they had when they were added, so
+			// existing configs resolve; the weekly multiples are what OpenAI
+			// states now. Codex reports Pro 100 as plan_type "prolite".
 			{
-				Name:            "gpt-pro-5x",
-				Display:         "ChatGPT Pro Standard ($100)",
-				RateLimitWindow: 5 * time.Hour,
-				WindowUnit:      "messages",
-				SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): five times Plus Codex usage",
+				Name:             "gpt-pro-5x",
+				Display:          "ChatGPT Pro 100",
+				RelativeTo:       "gpt-plus",
+				WeeklyMultiplier: 10,
+				NoSessionLimit:   true,
+				RateLimitWindow:  7 * 24 * time.Hour,
+				WindowUnit:       "messages",
+				SourceURL: "https://help.openai.com/en/articles/20001516-managing-usage-with-gpt-6-astra-in-work-and-codex (2026-11-15): no five-hour usage limit in Work and Codex; " +
+					"10x Plus usage as stated by OpenAI's Codex lead (post on X, 2026-11-08); " +
+					"https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers (2026-11-15): twice its previous Work and Codex allowance",
 				MonthlyUSD:      100,
-				PriceSource:     "https://help.openai.com/en/articles/9793128 (2026-09-30): Pro $100 unlocks 5x higher usage than Plus",
+				PriceSource:     "https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers (2026-11-15): Pro 100, $100 per month",
 				VendorPlanTypes: []string{"prolite"},
 			},
 			{
-				Name:            "gpt-pro-20x",
-				Display:         "ChatGPT Pro More usage ($200)",
-				RateLimitWindow: 5 * time.Hour,
-				WindowUnit:      "messages",
-				SourceURL:       "https://developers.openai.com/codex/pricing (2026-10-01): 20x Plus usage, falling to 10x for new subscriptions and from 2026-10-30 for existing ones (announced at DevDay, 2026-09-29)",
+				Name:             "gpt-pro-20x",
+				Display:          "ChatGPT Pro 200",
+				RelativeTo:       "gpt-plus",
+				WeeklyMultiplier: 20,
+				NoSessionLimit:   true,
+				RateLimitWindow:  7 * 24 * time.Hour,
+				WindowUnit:       "messages",
+				SourceURL: "https://help.openai.com/en/articles/20001516-managing-usage-with-gpt-6-astra-in-work-and-codex (2026-11-15): no five-hour usage limit in Work and Codex; " +
+					"20x Plus usage as stated by OpenAI's Codex lead (post on X, 2026-11-08); " +
+					"https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers (2026-11-15): only the lower allowance doubled, all Pro 200 subscriptions share the same allowance",
 				MonthlyUSD:      200,
-				PriceSource:     "https://help.openai.com/en/articles/9793128 (2026-09-30): Pro $200 unlocks 20x usage than Plus",
+				PriceSource:     "https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers (2026-11-15): Pro 200, $200 per month",
 				VendorPlanTypes: []string{"pro"},
 			},
-			// Pro 500 ("Max usage" on the pricing screen) launched at DevDay
-			// 2026. OpenAI describes its allowance as 25x Plus; no Codex plan_type
-			// has been observed for it yet.
+			// No Codex plan_type has been observed for Pro 500 yet.
 			{
-				Name:            "gpt-pro-500",
-				Display:         "ChatGPT Pro Max usage ($500)",
-				RateLimitWindow: 5 * time.Hour,
-				WindowUnit:      "messages",
-				SourceURL:       "https://developers.openai.com/codex/pricing (2026-10-01): Pro 500, 25x Plus usage per OpenAI's DevDay recap, the only Pro tier with Astra Ultrafast",
-				MonthlyUSD:      500,
-				PriceSource:     "https://developers.openai.com/codex/pricing (2026-10-01): Pro plans at $100, $200, or $500 USD per month",
+				Name:             "gpt-pro-500",
+				Display:          "ChatGPT Pro 500",
+				RelativeTo:       "gpt-plus",
+				WeeklyMultiplier: 50,
+				NoSessionLimit:   true,
+				RateLimitWindow:  7 * 24 * time.Hour,
+				WindowUnit:       "messages",
+				SourceURL: "https://help.openai.com/en/articles/20001516-managing-usage-with-gpt-6-astra-in-work-and-codex (2026-11-15): no five-hour usage limit in Work and Codex; " +
+					"50x Plus usage as stated by OpenAI's Codex lead (post on X, 2026-11-08); " +
+					"https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers (2026-11-15): twice its previous Work and Codex allowance, the only Pro tier with Ultrafast",
+				MonthlyUSD:  500,
+				PriceSource: "https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers (2026-11-15): Pro 500, $500 per month",
 			},
 			{
 				Name:            "gpt-business",

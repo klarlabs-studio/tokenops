@@ -38,18 +38,22 @@ the full catalog listed as the suggestion set.
 `tokenops plan catalog` enumerates every plan TokenOps knows about.
 Snapshot as of 2026-10-31. Anthropic renamed Max 5x to Max and Max 20x to
 Ultra on 2026-10-30; `claude-max-5x` and `claude-max-20x` still work and
-mean `claude-max` and `claude-ultra`.
+mean `claude-max` and `claude-ultra`. OpenAI lifted the five-hour limit from
+every ChatGPT Pro tier in Work and Codex (help center, 2026-11-15) and names
+them Pro 100, Pro 200 and Pro 500; their weekly multiples of Plus are the ones
+OpenAI's Codex lead stated on 2026-11-08. The catalog names `gpt-pro-5x` and
+`gpt-pro-20x` predate that and are kept so existing configs resolve.
 
 | Catalog name | Display | Provider | Window cap |
 |---|---|---|---|
 | `claude-max` | Claude Max | anthropic | 5x Pro / 5h and weekly |
 | `claude-ultra` | Claude Ultra | anthropic | 10x Pro weekly, no 5-hour limit |
 | `claude-pro` | Claude Pro | anthropic | ~45 msgs / 5h |
-| `gpt-plus` | ChatGPT Plus | openai | model-dependent / 5h |
-| `gpt-pro` | ChatGPT Pro (tier unspecified) | openai | model-dependent / 5h |
-| `gpt-pro-5x` | ChatGPT Pro Standard ($100) | openai | 5x Plus / 5h |
-| `gpt-pro-20x` | ChatGPT Pro More usage ($200) | openai | 20x Plus, 10x from 2026-10-30 / 5h |
-| `gpt-pro-500` | ChatGPT Pro Max usage ($500) | openai | 25x Plus / 5h |
+| `gpt-plus` | ChatGPT Plus | openai | model-dependent / 5h and weekly |
+| `gpt-pro` | ChatGPT Pro (tier unspecified) | openai | weekly, no 5-hour limit |
+| `gpt-pro-5x` | ChatGPT Pro 100 | openai | 10x Plus weekly, no 5-hour limit |
+| `gpt-pro-20x` | ChatGPT Pro 200 | openai | 20x Plus weekly, no 5-hour limit |
+| `gpt-pro-500` | ChatGPT Pro 500 | openai | 50x Plus weekly, no 5-hour limit |
 | `gpt-business` | ChatGPT Business | openai | model-dependent / 5h |
 | `copilot-individual` | GitHub Copilot Pro | github | 1,500 AI credits / month |
 | `copilot-pro-plus` | GitHub Copilot Pro+ | github | 7,000 AI credits / month |
@@ -109,7 +113,7 @@ Returns a `HeadroomReport` per configured plan with:
   identifiers observed for it (`plus` → `gpt-plus`, `prolite` →
   `gpt-pro-5x`, `pro` → `gpt-pro-20x`). OpenAI does not document these
   values; `prolite` was confirmed on 2026-10-01 against an account whose
-  ChatGPT pricing screen showed Pro Standard as its current plan. The
+  ChatGPT pricing screen showed Pro Standard (now Pro 100) as its current plan. The
   mismatch is reported with the `plan set` command that fixes it, never
   applied: the binding stays the operator's.
 - `overage_risk` — `low`, `medium`, `high`, or `unknown`. The headline

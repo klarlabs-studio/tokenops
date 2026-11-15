@@ -2,6 +2,7 @@ package plans
 
 import (
 	"math"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,9 @@ func TestTierOf(t *testing.T) {
 		{"claude-max-20x", "claude-pro", 10, true}, // Ultra's former name
 		{"claude-max-5x", "claude-pro", 5, true},   // Max's former name
 		{"claude-enterprise", "", 0, false},        // billed at API rates: no window to scale
-		{"gpt-plus", "", 0, false},                 // no multiple modelled
+		{"gpt-plus", "gpt-plus", 1, true},
+		{"gpt-pro-5x", "gpt-plus", 10, true}, // Pro 100: weekly only
+		{"gpt-pro", "", 0, false},            // tier unknown: no multiple
 		{"nope", "", 0, false},
 	}
 	for _, c := range cases {
@@ -66,8 +69,21 @@ func TestTierFamily(t *testing.T) {
 	if len(team) != 4 || team[2].Name != "claude-team-premium" {
 		t.Errorf("team family = %+v", team)
 	}
-	if TierFamily("gpt-plus") != nil {
+	if TierFamily("gpt-pro") != nil {
 		t.Error("a plan with no modelled multiple has no family")
+	}
+	// ChatGPT's Pro tiers are multiples of Plus's week, with no 5-hour
+	// limit; Business is per seat and Pro of an unknown tier has no multiple.
+	gpt := TierFamily("gpt-plus")
+	got := make([]string, 0, len(gpt))
+	for _, tier := range gpt {
+		got = append(got, tier.Name)
+	}
+	if strings.Join(got, ",") != "gpt-plus,gpt-pro-5x,gpt-pro-20x,gpt-pro-500" {
+		t.Fatalf("ChatGPT family = %v", got)
+	}
+	if gpt[0].SessionFactor != 1 || gpt[3].Factor != 50 || !gpt[3].NoSessionLimit || gpt[3].SessionFactor != 0 {
+		t.Errorf("ChatGPT tiers = %+v", gpt)
 	}
 }
 
@@ -465,6 +481,67 @@ func TestReplaySaysWhenTheVendorResetTheTopTierEarly(t *testing.T) {
 	for _, want := range []string{"top tier", "OpenAI reset the weekly window early both times", "about 6.0h"} {
 		if !strings.Contains(r.Summary, want) {
 			t.Errorf("summary = %q, want it to contain %q", r.Summary, want)
+		}
+	}
+}
+
+// A Codex limit other than the default is its own bucket, not the plan's
+// window, so replaying it against the Pro multiples would misread it.
+func TestQuotaReadingsFromKeepsOnlyCodexDefaultLimit(t *testing.T) {
+	now := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	reset := strconv.FormatInt(now.Add(48*time.Hour).Unix(), 10)
+	reading := func(limit string) *eventschema.Envelope {
+		attrs := map[string]string{"plan_type": "prolite",
+			"primary_used_pct": "40", "primary_window_min": "10080", "primary_resets_at": reset}
+		if limit != "" {
+			attrs["limit_id"] = limit
+		}
+		return &eventschema.Envelope{Source: "codex-app-server", Timestamp: now.Add(-time.Hour), Attributes: attrs,
+			Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderOpenAI}}
+	}
+	for _, tc := range []struct {
+		limit string
+		want  int
+	}{
+		{"", 1},
+		{DefaultCodexLimit, 1},
+		{"premium", 0},
+	} {
+		got := QuotaReadingsFrom([]*eventschema.Envelope{reading(tc.limit)}, "openai", now.Add(-24*time.Hour), now)
+		if len(got) != tc.want {
+			t.Errorf("limit %q: %d readings, want %d", tc.limit, len(got), tc.want)
+		}
+	}
+}
+
+// With no readings the replay names the reader that reports the provider's
+// windows, not another vendor's.
+func TestReplayWithoutReadingsNamesTheProvidersMeter(t *testing.T) {
+	for _, tc := range []struct{ provider, plan, want, not string }{
+		{"anthropic", "claude-max", "vendor-usage setup claude-subscription", "codex"},
+		{"openai", "gpt-plus", "codex_jsonl", "claude-subscription"},
+	} {
+		tier, _, _ := tierOf(tc.plan)
+		a := Replay(ReplayInput{Provider: tc.provider, Current: tier, Candidates: TierFamily(tc.plan)})
+		got := strings.Join(a.Caveats, " ")
+		if !strings.Contains(got, tc.want) || strings.Contains(got, tc.not) {
+			t.Errorf("%s: caveats = %q, want %q and not %q", tc.provider, got, tc.want, tc.not)
+		}
+	}
+}
+
+// The derived-tier caveat describes the provider's own base: Anthropic
+// stopped publishing Pro's allowance, OpenAI states Plus's as
+// model-dependent, and its Pro multiples are its own statement.
+func TestDerivedCaveatDescribesTheProvidersBase(t *testing.T) {
+	for _, tc := range []struct{ provider, plan, want, not string }{
+		{"anthropic", "claude-max", "no longer publishes", "model-dependent"},
+		{"openai", "gpt-pro-5x", "model-dependent", "no longer publishes"},
+	} {
+		tier, _, _ := tierOf(tc.plan)
+		got := strings.Join(caveats(ReplayInput{Provider: tc.provider, Current: tier}, nil, TierFamily(tc.plan)), " ")
+		if !strings.Contains(got, tc.want) || strings.Contains(got, tc.not) {
+			t.Errorf("%s: caveats = %q, want %q and not %q", tc.provider, got, tc.want, tc.not)
 		}
 	}
 }
