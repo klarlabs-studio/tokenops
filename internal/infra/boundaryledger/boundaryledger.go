@@ -568,6 +568,9 @@ type Figures struct {
 	// at, by provider and window: "recent" for the last hour's rate. A
 	// window absent was forecast at its average so far.
 	PlanEarlyBasis map[string]map[string]string `json:"plan_early_basis,omitempty"`
+	// PlanForecast is each provider's window as a pause or route records
+	// it: the share used, the pace, and when it runs out at that pace.
+	PlanForecast map[string]map[string]eventschema.WindowForecast `json:"plan_forecast,omitempty"`
 	// BudgetUsedPct is each configured budget's share used in its current
 	// window, by budget name. A budget with several windows has one entry
 	// per window ("name:daily") and one by its name, its fullest window.
