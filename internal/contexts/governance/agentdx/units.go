@@ -69,7 +69,10 @@ type Unit struct {
 
 	Reworked    bool
 	Interrupted bool
-	Escalated   bool
+	// InterruptedAt is when the operator stopped the unit; zero unless
+	// Interrupted. Everything the unit ran before it was stopped work.
+	InterruptedAt time.Time
+	Escalated     bool
 	// Rejected is set when the *next* instruction rejected this one's
 	// output. It is the only quality verdict a transcript carries: the
 	// operator read the reply and said it was wrong.
@@ -357,6 +360,9 @@ func sessionUnits(records []Record) []Unit {
 		case KindInterrupt:
 			if inUnit {
 				cur.Interrupted = true
+				if cur.InterruptedAt.IsZero() {
+					cur.InterruptedAt = r.At
+				}
 			}
 		}
 	}

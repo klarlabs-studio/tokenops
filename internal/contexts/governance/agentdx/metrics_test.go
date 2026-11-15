@@ -171,3 +171,20 @@ func TestUnrecordableKindsAreNotRated(t *testing.T) {
 		t.Errorf("cursor alone graded interrupt %q, compaction %q on records it cannot write", g.Interrupt, g.Compaction)
 	}
 }
+
+func TestUnitRecordsWhenTheOperatorStoppedIt(t *testing.T) {
+	units := Units([]Record{
+		prompt(0, "s"), turn(1, "s", 0),
+		{At: at(2), SessionID: "s", Kind: KindInterrupt},
+		prompt(10, "s"), turn(11, "s", 0),
+	})
+	if len(units) != 2 {
+		t.Fatalf("got %d units, want 2", len(units))
+	}
+	if !units[0].Interrupted || !units[0].InterruptedAt.Equal(at(2)) {
+		t.Errorf("first unit: interrupted=%v at %v; want true at %v", units[0].Interrupted, units[0].InterruptedAt, at(2))
+	}
+	if units[1].Interrupted || !units[1].InterruptedAt.IsZero() {
+		t.Errorf("second unit carries a stop it did not have: %+v", units[1].InterruptedAt)
+	}
+}

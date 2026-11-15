@@ -140,7 +140,7 @@ func (b *book) claimCacheRebuilds() {
 				continue
 			}
 			b.rebuilds[p] = rebuildNote{cause: rb.Cause, ttl: ttl}
-			b.claim(waste.ClassCacheRebuild, tokensOf(cur, share), turns[k])
+			b.claim(waste.RebuildClass(rb.Cause), tokensOf(cur, share), turns[k])
 		}
 	}
 }
@@ -301,6 +301,25 @@ func (b *book) claimFindings(tr *workflow.Trace, findings []*eventschema.Coachin
 			}
 			b.claim(waste.ClassOversized, f.EstimatedSavingsTokens, peak)
 		}
+	}
+}
+
+// claimStopped claims, for each instruction the developer stopped, the
+// tokens of the session's turns that ran from when it was typed to the
+// stop: work the stop discarded.
+func (b *book) claimStopped(stops []Stop) {
+	for _, s := range stops {
+		var turns []int
+		var tokens int64
+		for _, i := range b.sessions[s.Session] {
+			t := b.in.Turns[i]
+			if _, ok := b.pos[i]; !ok || t.At.Before(s.From) || t.At.After(s.At) {
+				continue
+			}
+			turns = append(turns, i)
+			tokens += t.Tokens
+		}
+		b.claim(waste.ClassStopped, tokens, turns...)
 	}
 }
 

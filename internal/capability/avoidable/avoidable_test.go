@@ -104,7 +104,7 @@ func TestBuildPricesEachClassInBothCurrencies(t *testing.T) {
 	// Turn 3 of "lost" rebuilt 650 of a 700-token prefix; at a write
 	// costing 12.5× a read that is most of what the turn cost. Turn 2's
 	// prefix was mostly read, so it is no rebuild.
-	rebuild := class(r, waste.ClassCacheRebuild)
+	rebuild := class(r, waste.ClassIdleRebuild)
 	if rebuild.Tokens <= 0 || rebuild.Turns != 1 {
 		t.Errorf("cache rebuild = %+v", rebuild)
 	}
