@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
@@ -306,7 +307,7 @@ func (s *startup) startEventRuntime(ctx context.Context) error {
 	s.events = rt
 	s.deferCleanup(rt.Detach)
 	s.opts = append(s.opts, rt.ProxyOptions...)
-	startTeamUploadRuntime(s.cfg, s.components, rt.Plans, s.transcripts, rt.wasteReaders, s.sup, s.logger)
+	startTeamUploadRuntime(s.cfg, s.components, rt.Plans, s.transcripts, s.wasteReaders(rt), s.sup, s.logger)
 	return nil
 }
 
@@ -364,7 +365,7 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("analytics handlers: %w", err)
 	}
-	s.opts = append(s.opts, proxy.WithAnalytics(analyticsH.WithConfig(s.cfg).WithEvents(s.glanceEvents())))
+	s.opts = append(s.opts, proxy.WithAnalytics(analyticsH.WithConfig(s.cfg).WithEvents(s.glanceEvents()).WithTranscripts(s.transcripts)))
 	s.opts = append(s.opts, proxy.WithAudit(proxy.NewAuditHandlers(store)))
 	return nil
 }
@@ -449,7 +450,7 @@ func (s *startup) startBackgroundRefreshers(context.Context) error {
 	startAnomalyRuntime(s.cfg, s.components, s.sup, s.logger)
 
 	// And the week's waste report, whose headline the glance shows.
-	startAvoidableRuntime(s.cfg, s.components, s.events.wasteReaders, s.sup, s.logger)
+	startAvoidableRuntime(s.cfg, s.components, s.wasteReaders(s.events), s.sup, s.logger)
 	startObservedRuntime(s.cfg, s.components, s.sup, s.logger)
 	return nil
 }
@@ -622,4 +623,14 @@ func (s *startup) pressureEvents() headroom.EventReader {
 		return s.components.Store
 	}
 	return nil
+}
+
+// wasteReaders is the waste report's readers in the daemon: the event
+// runtime's incremental readers, and the transcripts through the one
+// transcript cache every reader shares.
+func (s *startup) wasteReaders(rt *eventRuntime) func(*avoidable.Deps) {
+	return func(d *avoidable.Deps) {
+		rt.wasteReaders(d)
+		d.ReadTranscriptsThrough(s.transcripts)
+	}
 }
