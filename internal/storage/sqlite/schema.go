@@ -174,6 +174,11 @@ END;
 CREATE INDEX events_source_ts_idx ON events (source, timestamp_ns);
 `,
 	},
+	{
+		Version: 9,
+		Name:    "events_older_changes",
+		SQL:     olderChangesMigration,
+	},
 }
 
 // eventsChangesMigration replaces events_generation (migration 6) with a
@@ -221,6 +226,35 @@ BEGIN
     DELETE FROM events_changes WHERE seq <= last_insert_rowid() - %[2]d;
 END;
 `, changeLogHorizonSQL, changeLogKeep)
+
+// olderChangesMigration counts the changes the log above does not keep: an
+// update or delete of an event past changeLogHorizon. Position reads the
+// count, so a figure that reads further back than the horizon still sees
+// those changes without a log row per event. A retention pass deletes
+// many such rows, and each costs one increment of this single row, not a
+// log entry; the benchmark BenchmarkRetentionPrune records what that costs.
+//
+// The conditions are the complement of the log's: each change is counted
+// by exactly one of the two, judged on the same timestamps.
+var olderChangesMigration = fmt.Sprintf(`
+CREATE TABLE events_older_changes (
+    id  INTEGER PRIMARY KEY CHECK (id = 1),
+    gen INTEGER NOT NULL
+) STRICT;
+INSERT INTO events_older_changes (id, gen) VALUES (1, 0);
+
+CREATE TRIGGER events_older_changes_on_update AFTER UPDATE ON events
+WHEN max(old.timestamp_ns, new.timestamp_ns) < %[1]s
+BEGIN
+    UPDATE events_older_changes SET gen = gen + 1 WHERE id = 1;
+END;
+
+CREATE TRIGGER events_older_changes_on_delete AFTER DELETE ON events
+WHEN old.timestamp_ns < %[1]s
+BEGIN
+    UPDATE events_older_changes SET gen = gen + 1 WHERE id = 1;
+END;
+`, changeLogHorizonSQL)
 
 // changeLogHorizon is how far back a change to an event is logged; see
 // eventsChangesMigration. The cache's span stays well inside it.

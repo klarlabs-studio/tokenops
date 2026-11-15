@@ -23,7 +23,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/tempfile"
 	"go.klarlabs.de/tokenops/internal/version"
-	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // The overlay of observed plan limits reads 90 days of window readings
@@ -115,24 +114,16 @@ func observedSettings(cfg config.Config) func() string {
 	}
 }
 
-// observedEvents is where the events a result computed at at reads stand:
-// the store's position, which an update or delete moves only for events
-// younger than the change log's horizon, and a digest of the older part
-// of the read, which every change moves. The digested span reaches to the
-// horizon as it stands observedMaxAge later, past which the result is
-// computed again anyway.
+// observedEvents is where the events a result reads stand: the store's
+// position, which moves with every insert, update and delete whatever the
+// event's age (ADR 0019).
 func observedEvents(store *sqlite.Store) func(context.Context, time.Time) (string, bool) {
-	return func(ctx context.Context, at time.Time) (string, bool) {
+	return func(ctx context.Context, _ time.Time) (string, bool) {
 		pos, err := store.Position(ctx)
 		if err != nil {
 			return "", false
 		}
-		since := at.AddDate(0, 0, -checkup.DriftDays)
-		digest, err := store.SpanDigest(ctx, eventschema.EventTypePrompt, since, at.Add(observedMaxAge-sqlite.ChangeLogHorizon))
-		if err != nil {
-			return "", false
-		}
-		return fmt.Sprintf("%d|%d|%s", pos.Rowid, pos.Seq, digest), true
+		return fmt.Sprintf("%d|%d|%d", pos.Rowid, pos.Seq, pos.Older), true
 	}
 }
 
