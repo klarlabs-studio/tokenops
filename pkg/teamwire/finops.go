@@ -40,14 +40,16 @@ const (
 const (
 	WasteReread       = "redundant_reread"
 	WasteCacheRebuild = "cache_rebuild"
+	WasteIdleRebuild  = "idle_cache_rebuild"
 	WasteOverTiered   = "over_tiered_model"
 	WasteRetryLoop    = "retry_loop"
 	WasteOversized    = "oversized_context"
+	WasteStopped      = "stopped_turns"
 	WasteAbandoned    = "abandoned_session"
 )
 
 // WasteClasses lists every waste class.
-var WasteClasses = []string{WasteReread, WasteCacheRebuild, WasteOverTiered, WasteRetryLoop, WasteOversized, WasteAbandoned}
+var WasteClasses = []string{WasteReread, WasteCacheRebuild, WasteIdleRebuild, WasteOverTiered, WasteRetryLoop, WasteOversized, WasteStopped, WasteAbandoned}
 
 // Plan advice vocabulary, mirroring internal/contexts/spend/plans (held
 // to it by the same test).

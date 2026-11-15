@@ -299,6 +299,13 @@ func (c *TranscriptCache) readCodexFrom(path string, e *codexEntry) error {
 	return nil
 }
 
+// BytesRead is how many transcript bytes the cache has read, Claude Code
+// and Codex together. A report that changed nothing reads none.
+func (c *TranscriptCache) BytesRead() int64 {
+	claude, codex := c.bytesRead()
+	return claude + codex
+}
+
 // bytesRead reports how many Claude Code and Codex bytes the cache has
 // read.
 func (c *TranscriptCache) bytesRead() (claude, codex int64) {

@@ -21,14 +21,14 @@ const (
 	sessionFindingsEvery = 3 * time.Hour
 )
 
-func startSessionFindingsRuntime(cache *sessions.TranscriptCache, sup *lifecycle.Supervisor, logger *slog.Logger) {
+func startSessionFindingsRuntime(cache *sessions.TranscriptCache, costs findings.CostSource, sup *lifecycle.Supervisor, logger *slog.Logger) {
 	sup.Go("session-findings", func(ctx context.Context) error {
-		runSessionFindings(ctx, findings.DefaultDir(), cache, sessionFindingsDelay, sessionFindingsEvery, logger)
+		runSessionFindings(ctx, findings.DefaultDir(), cache, costs, sessionFindingsDelay, sessionFindingsEvery, logger)
 		return nil
 	})
 }
 
-func runSessionFindings(ctx context.Context, dir string, cache *sessions.TranscriptCache, delay, every time.Duration, logger *slog.Logger) {
+func runSessionFindings(ctx context.Context, dir string, cache *sessions.TranscriptCache, costs findings.CostSource, delay, every time.Duration, logger *slog.Logger) {
 	wait := time.NewTimer(delay)
 	defer wait.Stop()
 	select {
@@ -41,7 +41,7 @@ func runSessionFindings(ctx context.Context, dir string, cache *sessions.Transcr
 	}
 	analyze := func() {
 		start := time.Now()
-		s, dropped, err := findings.AnalyzeSessions(ctx, dir, start, cache)
+		s, dropped, err := findings.AnalyzeSessions(ctx, dir, start, cache, costs.At(ctx, start))
 		if len(dropped) > 0 {
 			logger.Warn("session analysis figures not a number, stored as 0", "fields", dropped)
 		}

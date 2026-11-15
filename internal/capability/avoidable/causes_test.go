@@ -60,6 +60,7 @@ func causeOf(cc ClassCost, c waste.RebuildCause) (CauseCost, bool) {
 func TestCacheRebuildsSplitByCause(t *testing.T) {
 	r := Build(causesFixture())
 	rb := class(r, waste.ClassCacheRebuild)
+	idle := class(r, waste.ClassIdleRebuild)
 	want := map[waste.RebuildCause]int{
 		waste.CauseTTLExpired:    3, // "idle" and both of "long"'s
 		waste.CausePrefixChanged: 1, // "hour": inside the hour, yet rebuilt
@@ -67,7 +68,11 @@ func TestCacheRebuildsSplitByCause(t *testing.T) {
 	// The haiku turn has a list price, so the switch is priced too.
 	want[waste.CauseModelSwitch] = 1
 	for c, n := range want {
-		got, ok := causeOf(rb, c)
+		owner := rb
+		if waste.RebuildClass(c) == waste.ClassIdleRebuild {
+			owner = idle
+		}
+		got, ok := causeOf(owner, c)
 		if !ok || got.Turns != n || got.Tokens <= 0 || got.APIEquivalentUSD <= 0 {
 			t.Errorf("%s = %+v, want %d turns", c, got, n)
 		}
@@ -80,40 +85,42 @@ func TestCacheRebuildsSplitByCause(t *testing.T) {
 		t.Errorf("compaction counted as avoidable: %+v", got)
 	}
 	// The ttl cause says which lifetime most of it outlived.
-	if ttl, _ := causeOf(rb, waste.CauseTTLExpired); ttl.TTL != "1h" {
+	if ttl, _ := causeOf(idle, waste.CauseTTLExpired); ttl.TTL != "1h" {
 		t.Errorf("ttl_expired lifetime = %q, want 1h (two of its three rebuilds)", ttl.TTL)
 	}
 
 	// The causes add up to the class, in tokens, dollars, turns and
 	// window share; and they come largest first.
-	var tokens int64
-	var usd, pct float64
-	turns := 0
-	for i, c := range rb.Causes {
-		tokens += c.Tokens
-		usd += c.APIEquivalentUSD
-		turns += c.Turns
-		for _, s := range c.WindowShare {
-			pct += s.Pct
+	for _, cls := range []ClassCost{rb, idle} {
+		var tokens int64
+		var usd, pct float64
+		turns := 0
+		for i, c := range cls.Causes {
+			tokens += c.Tokens
+			usd += c.APIEquivalentUSD
+			turns += c.Turns
+			for _, s := range c.WindowShare {
+				pct += s.Pct
+			}
+			if i > 0 && c.APIEquivalentUSD > cls.Causes[i-1].APIEquivalentUSD {
+				t.Errorf("%s causes out of order: %+v", cls.Class, cls.Causes)
+			}
 		}
-		if i > 0 && c.APIEquivalentUSD > rb.Causes[i-1].APIEquivalentUSD {
-			t.Errorf("causes out of order: %+v", rb.Causes)
+		var classPct float64
+		for _, s := range cls.WindowShare {
+			classPct += s.Pct
+		}
+		if tokens != cls.Tokens || math.Abs(usd-cls.APIEquivalentUSD) > 1e-9 || turns != cls.Turns || math.Abs(pct-classPct) > 1e-9 {
+			t.Errorf("%s causes sum to %d tokens $%.4f %d turns %.4f%%; class %d $%.4f %d %.4f%%",
+				cls.Class, tokens, usd, turns, pct, cls.Tokens, cls.APIEquivalentUSD, cls.Turns, classPct)
 		}
 	}
-	var classPct float64
-	for _, s := range rb.WindowShare {
-		classPct += s.Pct
-	}
-	if tokens != rb.Tokens || math.Abs(usd-rb.APIEquivalentUSD) > 1e-9 || turns != rb.Turns || math.Abs(pct-classPct) > 1e-9 {
-		t.Errorf("causes sum to %d tokens $%.4f %d turns %.4f%%; class %d $%.4f %d %.4f%%",
-			tokens, usd, turns, pct, rb.Tokens, rb.APIEquivalentUSD, rb.Turns, classPct)
-	}
-	if rb.Turns != 5 {
-		t.Errorf("rebuild turns = %d, want 5", rb.Turns)
+	if rb.Turns+idle.Turns != 5 {
+		t.Errorf("rebuild turns = %d, want 5", rb.Turns+idle.Turns)
 	}
 	// Other classes carry no causes.
 	for _, c := range r.Classes {
-		if c.Class != waste.ClassCacheRebuild && len(c.Causes) > 0 {
+		if c.Class != waste.ClassCacheRebuild && c.Class != waste.ClassIdleRebuild && len(c.Causes) > 0 {
 			t.Errorf("%s has causes", c.Class)
 		}
 	}
@@ -122,9 +129,12 @@ func TestCacheRebuildsSplitByCause(t *testing.T) {
 // The top cause, as the coach names it.
 func TestTopRebuildCause(t *testing.T) {
 	r := Build(causesFixture())
-	top, ok := class(r, waste.ClassCacheRebuild).TopCause()
+	top, ok := class(r, waste.ClassIdleRebuild).TopCause()
 	if !ok || top.Cause != waste.CauseTTLExpired {
-		t.Fatalf("top cause = %+v, %v", top, ok)
+		t.Fatalf("idle top cause = %+v, %v", top, ok)
+	}
+	if top, ok := class(r, waste.ClassCacheRebuild).TopCause(); !ok || top.Cause != waste.CauseModelSwitch {
+		t.Fatalf("cache rebuild top cause = %+v, %v; want model switch", top, ok)
 	}
 	if _, ok := (ClassCost{}).TopCause(); ok {
 		t.Error("a top cause with no rebuilds")

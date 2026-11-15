@@ -1,6 +1,10 @@
 package mcp
 
-import "testing"
+import (
+	"testing"
+
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
+)
 
 // tokenops_spend (view=waste) answers from the waste taxonomy, as the
 // daemon's GET /api/spend/waste does (ADR 0010).
@@ -19,7 +23,7 @@ func TestSpendWasteView(t *testing.T) {
 			t.Errorf("waste has no %q: %v", k, w)
 		}
 	}
-	if classes, _ := w["classes"].([]any); len(classes) != 6 {
+	if classes, _ := w["classes"].([]any); len(classes) != len(waste.Classes()) {
 		t.Errorf("classes = %v", w["classes"])
 	}
 	if _, err := callPublic(t, srv, "tokenops_spend", map[string]any{"view": "waste", "since": "yesterday"}); err == nil {

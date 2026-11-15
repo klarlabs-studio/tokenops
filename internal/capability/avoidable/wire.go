@@ -2,14 +2,17 @@ package avoidable
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/config"
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/contexts/learning"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
@@ -40,6 +43,7 @@ func DepsFor(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, 
 		Lint:    contextLint,
 		Rereads: readGuardLedger,
 		Routes:  modelAdvice,
+		Records: transcriptRecords("", nil),
 		Savings: periodSavings,
 		Steps: func(ctx context.Context, now time.Time) []savings.Step {
 			var history []ft.Summary
@@ -66,6 +70,26 @@ func DepsFor(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, 
 		}
 	}
 	return d
+}
+
+// transcriptRecords reads the transcript entries the clients wrote over
+// [since, until): the stops and the context curve. The window is the
+// period's days, read through the same reader the dx surfaces use, from
+// root (the clients' defaults when empty), through cache when one is given.
+func transcriptRecords(root string, cache *sessions.TranscriptCache) func(context.Context, time.Time, time.Time) ([]agentdx.Record, error) {
+	return func(_ context.Context, since, until time.Time) ([]agentdx.Record, error) {
+		days := max(1, int(math.Ceil(until.Sub(since).Hours()/24)))
+		return sessions.Records(sessions.Window{Root: root, Days: days, Cache: cache}, until)
+	}
+}
+
+// ReadTranscriptsThrough makes the report read the transcripts through
+// cache, which keeps what each transcript yielded between reports: a report
+// with nothing changed since the last opens none of them. The daemon shares
+// its one cache with the dx and team readers; without it each report reads
+// the period's transcripts afresh.
+func (d *Deps) ReadTranscriptsThrough(cache *sessions.TranscriptCache) {
+	d.Records = transcriptRecords("", cache)
 }
 
 // contextLint lints the context every session loads in the repository

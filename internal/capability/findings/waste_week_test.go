@@ -163,18 +163,30 @@ func TestComputeShowsTheWasteWeek(t *testing.T) {
 }
 
 // withRebuilds gives the week cache rebuilds split by cause.
+// withRebuilds files each cause under the rebuild class it belongs to.
 func withRebuilds(r avoidable.Report, causes ...avoidable.CauseCost) avoidable.Report {
-	for i, c := range r.Classes {
-		if c.Class == wastetax.ClassCacheRebuild {
-			var usd float64
-			var tokens int64
-			for _, x := range causes {
-				usd += x.APIEquivalentUSD
-				tokens += x.Tokens
-			}
-			r.Classes[i].Causes = causes
-			r.Classes[i].APIEquivalentUSD, r.Classes[i].Tokens = usd, tokens
+	for _, class := range []wastetax.Class{wastetax.ClassCacheRebuild, wastetax.ClassIdleRebuild} {
+		if !hasClass(r, class) {
+			r.Classes = append(r.Classes, avoidable.ClassCost{Class: class, Name: wastetax.ClassName(class)})
 		}
+	}
+	for i, c := range r.Classes {
+		if c.Class != wastetax.ClassCacheRebuild && c.Class != wastetax.ClassIdleRebuild {
+			continue
+		}
+		var mine []avoidable.CauseCost
+		var usd float64
+		var tokens int64
+		for _, x := range causes {
+			if wastetax.RebuildClass(x.Cause) != c.Class {
+				continue
+			}
+			mine = append(mine, x)
+			usd += x.APIEquivalentUSD
+			tokens += x.Tokens
+		}
+		r.Classes[i].Causes = mine
+		r.Classes[i].APIEquivalentUSD, r.Classes[i].Tokens = usd, tokens
 	}
 	return r
 }
@@ -214,5 +226,37 @@ func TestWasteWeekNamesTheTopRebuildCause(t *testing.T) {
 		if f := weekFinding(t, r); strings.Contains(f.Evidence, "cache rebuilds") || strings.Contains(f.Evidence, "Cache rebuilds") {
 			t.Errorf("a cause named without one: %q", f.Evidence)
 		}
+	}
+}
+
+func hasClass(r avoidable.Report, class wastetax.Class) bool {
+	for _, c := range r.Classes {
+		if c.Class == class {
+			return true
+		}
+	}
+	return false
+}
+
+// With no guardrail to switch on, the action names the fix of the class
+// that carries the most dollars among those that act; inferred classes
+// are not what a developer is told to change.
+func TestWasteWeekActionNamesTheLargestClassFix(t *testing.T) {
+	r := weekReport(false)
+	r.Next = nil
+	for i := range r.Classes {
+		switch r.Classes[i].Class {
+		case wastetax.ClassReread:
+			r.Classes[i].Fix = "let the read guard refuse unchanged re-reads"
+		case wastetax.ClassRetryLoop:
+			r.Classes[i].Fix = "stop a repeated prompt after a few tries"
+		case wastetax.ClassAbandoned:
+			r.Classes[i].Fix = "end a session that has no task left"
+			r.Classes[i].Inferred = true
+		}
+	}
+	f := weekFinding(t, r)
+	if !strings.Contains(f.Action, "stop a repeated prompt after a few tries") {
+		t.Errorf("action %q does not name the largest acting class's fix", f.Action)
 	}
 }

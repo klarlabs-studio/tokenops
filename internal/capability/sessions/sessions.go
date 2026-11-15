@@ -29,6 +29,9 @@ type Window struct {
 	// IncludeScratch keeps sessions run in throwaway directories, which
 	// are left out by default because they have no operator.
 	IncludeScratch bool
+	// Cost prices each instruction at list prices, for the effort rows;
+	// nil leaves their cost figures out.
+	Cost agentdx.CostOf
 	// Cache keeps what each transcript yielded between reads of the
 	// window, so a caller reading it repeatedly (the daemon) reads only
 	// what changed. Nil reads every transcript.
@@ -179,6 +182,14 @@ const MinEffortInstructions = agentdx.MinEffortInstructions
 // empty when it does not.
 func DegradationNote(bands []ContextBand) string { return agentdx.DegradationNote(bands) }
 
+// Records reads the transcript entries in w, the raw material the units,
+// the context curve and the interrupt record are built from, without the
+// operator's words.
+func Records(w Window, now time.Time) ([]agentdx.Record, error) {
+	records, _, _, err := w.read(now, false)
+	return records, err
+}
+
 // Units reads the instructions in w, with the operator's own words, for
 // the surfaces that group or reconstruct work from them. The text is read
 // at scan time and never persisted. A client whose transcripts could not
@@ -228,6 +239,9 @@ func ComputeDXWithCurve(w Window, now time.Time) (DX, []agentdx.ContextBand) {
 	records, window, info, err := w.read(now, false)
 	dx := dxOf(records, err, window)
 	dx.Cohort = &info
+	if w.Cost != nil {
+		dx.Metrics.ByEffort = agentdx.ByEffortCosted(records, w.Cost)
+	}
 	return dx, agentdx.ComputeContextCurve(records)
 }
 

@@ -19,6 +19,11 @@ const (
 	// was cached a turn earlier: the cache expired or was invalidated, so
 	// context billed as a cache read was billed as a write instead.
 	ClassCacheRebuild Class = "cache_rebuild"
+	// ClassIdleRebuild is a cache rebuilt after an idle break: the request
+	// went out longer after the one before than the cache's lifetime, so
+	// the prefix the session had cached went cold while the developer was
+	// away. It is the cache-rebuild cause a setting or habit can prevent.
+	ClassIdleRebuild Class = "idle_cache_rebuild"
 	// ClassOverTiered is work run on a dearer model than its kind needs,
 	// after the coach advised a cheaper one.
 	ClassOverTiered Class = "over_tiered_model"
@@ -29,6 +34,9 @@ const (
 	// ClassOversized is context carried above the line a session should
 	// have compacted at, or above the workflow's context ceiling.
 	ClassOversized Class = "oversized_context"
+	// ClassStopped is work the developer stopped: the turn in flight when
+	// the developer interrupted an instruction, which the stop discarded.
+	ClassStopped Class = "stopped_turns"
 	// ClassAbandoned is a session that ended with no commit and no
 	// recorded outcome: work with nothing to show for it.
 	ClassAbandoned Class = "abandoned_session"
@@ -36,17 +44,46 @@ const (
 
 // Classes lists the taxonomy in attribution order.
 func Classes() []Class {
-	return []Class{ClassReread, ClassCacheRebuild, ClassOverTiered, ClassRetryLoop, ClassOversized, ClassAbandoned}
+	return []Class{ClassReread, ClassCacheRebuild, ClassIdleRebuild, ClassOverTiered, ClassRetryLoop, ClassOversized, ClassStopped, ClassAbandoned}
+}
+
+// RebuildClass is the class a cache rebuild with this cause is counted
+// under: an idle gap past the cache lifetime has its own class, the rest
+// are cache rebuilds. A compaction is not avoidable and has none.
+func RebuildClass(c RebuildCause) Class {
+	if c == CauseTTLExpired {
+		return ClassIdleRebuild
+	}
+	return ClassCacheRebuild
 }
 
 var classNames = map[Class]string{
 	ClassReread:       "redundant re-reads",
 	ClassCacheRebuild: "cache-miss rebuilds",
+	ClassIdleRebuild:  "idle cache rebuilds",
 	ClassOverTiered:   "over-tiered model",
 	ClassRetryLoop:    "retry loops and runaway growth",
 	ClassOversized:    "oversized context",
+	ClassStopped:      "stopped turns",
 	ClassAbandoned:    "abandoned sessions",
 }
+
+// fixes are the setting or habit that prevents each class, in the words
+// a developer acts on.
+var fixes = map[Class]string{
+	ClassReread:       "let the read guard refuse unchanged re-reads (tokenops coach set read-guard)",
+	ClassCacheRebuild: "keep the prompt prefix stable: no timestamps or reordered tools near the top of the prompt",
+	ClassIdleRebuild:  "keep a long session warm before the cache lapses, or use the one-hour cache lifetime when the client offers it",
+	ClassOverTiered:   "run the work the coach named on the cheaper model it advised",
+	ClassRetryLoop:    "stop a repeated prompt or agent loop after a few tries, and break the loop rather than retry it",
+	ClassOversized:    "compact the context before it passes the line (auto-compact at the derived line, or /compact by hand)",
+	ClassStopped:      "state the scope and the done condition in the first instruction, so the agent does not start work to be stopped",
+	ClassAbandoned:    "end a session that has no task left, or open a fresh one for the next task",
+}
+
+// FixOf is the setting or habit that prevents a class; empty for an
+// unknown class.
+func FixOf(c Class) string { return fixes[c] }
 
 // ClassName is how a class reads in a sentence.
 func ClassName(c Class) string {

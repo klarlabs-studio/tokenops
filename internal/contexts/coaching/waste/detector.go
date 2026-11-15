@@ -52,6 +52,10 @@ type Config struct {
 	// cache-read carried above the session's post-compaction size. Zero
 	// disables the check; the code-agent profiles set it.
 	CompactAtTokens int64
+	// CompactAtOverride, when set, replaces the compaction line of every
+	// workflow that has one (built in or configured): the line the
+	// operator's own context bands measured. Zero keeps each workflow's.
+	CompactAtOverride int64
 	// Profiles are operator-supplied per-workflow-prefix overrides
 	// (config: coaching.context_limits). The first matching profile wins
 	// and replaces the built-in ProfileFor selection for that workflow.
@@ -149,6 +153,9 @@ func (d *Detector) Detect(trace *workflow.Trace) []*eventschema.CoachingEvent {
 		}
 	} else if profile := ProfileFor(trace.WorkflowID); profile != nil {
 		cfg = mergeConfig(cfg, *profile)
+	}
+	if d.cfg.CompactAtOverride > 0 && cfg.CompactAtTokens > 0 {
+		cfg.CompactAtTokens = d.cfg.CompactAtOverride
 	}
 	scoped := &Detector{cfg: cfg}
 	var out []*eventschema.CoachingEvent

@@ -9,6 +9,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/claudecodeorg"
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/config"
@@ -81,6 +82,16 @@ func (a *AnalyticsHandlers) WithConfig(cfg config.Config) *AnalyticsHandlers {
 	a.allocation = cfg.AllocationRules()
 	an := cfg.VendorUsage.Anthropic
 	a.claudeCode = claudecodeorg.Sources(an.AdminKey, an.AnalyticsKey)
+	return a
+}
+
+// WithTranscripts has the waste report read the transcripts through the
+// daemon's transcript cache, so a report with nothing changed opens none.
+// A nil cache leaves it reading them afresh.
+func (a *AnalyticsHandlers) WithTranscripts(cache *sessions.TranscriptCache) *AnalyticsHandlers {
+	if cache != nil {
+		a.avoidable.ReadTranscriptsThrough(cache)
+	}
 	return a
 }
 

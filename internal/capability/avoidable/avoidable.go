@@ -91,6 +91,12 @@ type Inputs struct {
 	Rereads, Refused []Reread
 	// Routes are the coach's model advice.
 	Routes []RouteAdvice
+	// Stops are the instructions the developer stopped, with the turns
+	// each ran before the stop: the stopped-work class prices them.
+	Stops []Stop
+	// line is the context line the operator's bands measured, set by
+	// gather with the override it applies to the waste detector.
+	line *ContextLine
 	// Traces are the period's workflows by ID, for the waste detector,
 	// configured by Waste.
 	Traces map[string]*workflow.Trace
@@ -108,6 +114,24 @@ type Inputs struct {
 	// guardrail's graduation.
 	Savings savings.Report
 	Steps   []savings.Step
+}
+
+// Stop is an instruction the developer stopped: its session, when the
+// instruction was typed (From) and when it was stopped (At).
+type Stop struct {
+	Session  string
+	From, At time.Time
+}
+
+// Concentration says how few sessions a class's dollars came from: the
+// fewest that make up half of them, and their share.
+type Concentration struct {
+	// Sessions is how many sessions the class was found in.
+	Sessions int `json:"sessions"`
+	// Top is the fewest sessions whose dollars reach half of the class's.
+	Top int `json:"top"`
+	// TopPct is their share of the class's dollars, in percent.
+	TopPct float64 `json:"top_pct"`
 }
 
 // WindowShare is an amount as a percentage of one provider's plan window.
@@ -146,6 +170,11 @@ type ClassCost struct {
 	// Causes split the cache rebuilds by why each happened, largest
 	// first; absent on every other class.
 	Causes []CauseCost `json:"causes,omitempty"`
+	// Fix is the setting or habit that prevents the class.
+	Fix string `json:"fix,omitempty"`
+	// Concentration says how many sessions carry the class's dollars;
+	// absent when the class has no dollars.
+	Concentration *Concentration `json:"concentration,omitempty"`
 	// Inferred marks a class that reads waste into what did not happen
 	// rather than observing it: a session with no commit and no outcome
 	// may have been research, a review or a question. It is shown, and
@@ -199,6 +228,16 @@ type Realized struct {
 	Share *float64 `json:"share,omitempty"`
 }
 
+// ContextLine is the size the developer's own context bands measured.
+type ContextLine struct {
+	Tokens int64 `json:"tokens"`
+	// Basis says how the line was read.
+	Basis string `json:"basis"`
+}
+
+// lineBasis is how a derived context line is described.
+const lineBasis = "the lower edge of your first context band (at least 50 instructions) whose rejections rise 2 points above your lowest band"
+
 // Guardrail is one capability's case for being switched on next: the
 // avoidable usage it addresses and where its graduation stands.
 type Guardrail struct {
@@ -221,6 +260,10 @@ type Guardrail struct {
 type Report struct {
 	Since time.Time `json:"since"`
 	Until time.Time `json:"until"`
+	// ContextLine is the context size past which the developer's own
+	// bands show instructions going worse, when they show one; the
+	// oversized-context class is read at it.
+	ContextLine *ContextLine `json:"context_line,omitempty"`
 	// Usage is everything the period used; Avoidable the part the
 	// classes account for.
 	Usage     Amount      `json:"usage"`
@@ -248,8 +291,11 @@ var methods = map[waste.Class]string{
 		"which the guard watched go ahead, sized from the file, on the turn that carried it",
 	waste.ClassCacheRebuild: "a turn that wrote to the prompt cache more than half of the prefix the turn before had cached, " +
 		"without a compaction, priced as writing rather than reading that part at the rate card; " +
-		"split by cause: a model switch, an idle gap past the cache lifetime (an hour when the session wrote with the hour-long lifetime, " +
-		"else five minutes), a prompt prefix change after cache hits, or unexplained",
+		"split by cause: a model switch, a prompt prefix change after cache hits, or unexplained",
+	waste.ClassIdleRebuild: "the same rebuild after an idle gap longer than the cache lifetime (an hour when the session wrote with " +
+		"the hour-long lifetime, else five minutes), priced as writing rather than reading that part at the rate card",
+	waste.ClassStopped: "for each instruction the developer stopped, the turn in flight at the stop (sent before it, recorded after, " +
+		"its send time known from the recorded latency), priced at the rate card: work the stop discarded",
 	waste.ClassOverTiered: "turns left on a model after the coach advised a cheaper one for that kind of work, " +
 		"priced as the difference to the advised model at the rate card",
 	waste.ClassRetryLoop: "the waste detector on each workflow: an identical prompt sent again, an agent's steps past the loop limit, " +
@@ -288,12 +334,13 @@ func Build(in Inputs) Report {
 // and kind of work).
 func BuildTurns(in Inputs) (Report, []TurnWaste) {
 	var turns []TurnWaste
-	r := Report{Since: in.Since, Until: in.Until, Attribution: Attribution, Classes: []ClassCost{}, Guardrails: []Guardrail{}}
+	r := Report{Since: in.Since, Until: in.Until, Attribution: Attribution, Classes: []ClassCost{}, Guardrails: []Guardrail{}, ContextLine: in.line}
 	b := newBook(in)
 	b.claimRereads(in.Rereads)
 	b.claimCacheRebuilds()
 	b.claimOverTiered(in.Routes)
 	b.claimDetector(in.Traces, in.Waste)
+	b.claimStopped(in.Stops)
 	b.claimAbandoned(in)
 
 	attributed := waste.Attribute(b.budget(), b.claims)
@@ -301,7 +348,7 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 	tokensOf := map[waste.Class]map[string]int64{}
 	sessionsOf := map[waste.Class]map[string]bool{}
 	for _, c := range waste.Classes() {
-		cc := &ClassCost{Class: c, Name: waste.ClassName(c), Method: methods[c], Guardrail: guardrailOf[c], Inferred: inferred[c]}
+		cc := &ClassCost{Class: c, Name: waste.ClassName(c), Method: methods[c], Fix: waste.FixOf(c), Guardrail: guardrailOf[c], Inferred: inferred[c]}
 		byClass[c], tokensOf[c], sessionsOf[c] = cc, map[string]int64{}, map[string]bool{}
 	}
 	causes := newCauseBook()
@@ -335,7 +382,7 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 			if !inferred[c] {
 				avoidTokens[t.Provider] += n
 			}
-			if note, ok := b.rebuilds[p]; ok && c == waste.ClassCacheRebuild {
+			if note, ok := b.rebuilds[p]; ok && waste.RebuildClass(note.cause) == c {
 				causes.add(note, t, n, v)
 				if note.cause == waste.CausePrefixChanged {
 					likely.add(t)
@@ -350,8 +397,9 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 		cc := byClass[c]
 		cc.Sessions = len(sessionsOf[c])
 		cc.WindowShare = shares(r.Calibrations, tokensOf[c])
-		if c == waste.ClassCacheRebuild {
-			cc.Causes = causes.costs(r.Calibrations)
+		cc.Concentration = concentrationOf(turns, c)
+		if c == waste.ClassCacheRebuild || c == waste.ClassIdleRebuild {
+			cc.Causes = causes.costs(r.Calibrations, c)
 			likely.attach(cc.Causes)
 		}
 		if !cc.Inferred {
@@ -397,12 +445,13 @@ func (cb *causeBook) add(note rebuildNote, t analytics.SessionTurn, tokens int64
 	cb.ttlOf[note.cause][note.ttl] += tokens
 }
 
-// costs are the causes, largest first, each with its window share.
-func (cb *causeBook) costs(cs []plans.WindowCalibration) []CauseCost {
+// costs are the causes of one class, largest first, each with its window
+// share.
+func (cb *causeBook) costs(cs []plans.WindowCalibration, class waste.Class) []CauseCost {
 	var out []CauseCost
 	for _, cause := range waste.RebuildCauses() {
 		c, ok := cb.cost[cause]
-		if !ok {
+		if !ok || waste.RebuildClass(cause) != class {
 			continue
 		}
 		c.WindowShare = shares(cs, cb.tokensOf[cause])
@@ -652,4 +701,36 @@ func dollars(v float64) string {
 		return "<$0.01"
 	}
 	return fmt.Sprintf("$%.2f", v)
+}
+
+// concentrationOf is how many sessions carry a class's dollars: the fewest
+// whose dollars reach half, and their share. Nil when the class has none.
+func concentrationOf(turns []TurnWaste, c waste.Class) *Concentration {
+	usd := map[string]float64{}
+	var total float64
+	for _, t := range turns {
+		if t.Class != c || t.APIEquivalentUSD <= 0 {
+			continue
+		}
+		usd[t.Turn.SessionID] += t.APIEquivalentUSD
+		total += t.APIEquivalentUSD
+	}
+	if total <= 0 {
+		return nil
+	}
+	per := make([]float64, 0, len(usd))
+	for _, v := range usd {
+		per = append(per, v)
+	}
+	sort.Sort(sort.Reverse(sort.Float64Slice(per)))
+	var acc float64
+	top := 0
+	for _, v := range per {
+		acc += v
+		top++
+		if acc*2 >= total {
+			break
+		}
+	}
+	return &Concentration{Sessions: len(per), Top: top, TopPct: math.Round(acc/total*1000) / 10}
 }

@@ -27,14 +27,20 @@ func newSpendWasteCmd(rf *rootFlags) *cobra.Command {
   - redundant re-reads: files read again, unchanged, that the read guard
     watched go ahead
   - cache-miss rebuilds: prompt cache written again for a prefix that was
-    cached a turn earlier, split by cause: a model switch, an idle gap past
-    the cache lifetime, a prompt prefix change after cache hits, or
-    unexplained
+    cached a turn earlier, split by cause: a model switch, a prompt prefix
+    change after cache hits, or unexplained
+  - idle cache rebuilds: the same rebuild after a break longer than the
+    cache lifetime
   - over-tiered model: turns left on a model after the coach advised a
     cheaper one for that kind of work
   - retry loops and runaway growth, and oversized context: what the waste
-    detector finds in each workflow
+    detector finds in each workflow; the size it reads oversized at is the
+    one your own context bands measured, when they show quality falling
+  - stopped turns: the turns an instruction ran before you stopped it
   - abandoned sessions: over for a day with no commit and no outcome
+
+Each class names the setting or habit that prevents it, and how few
+sessions carry most of its dollars.
 
 Each token is counted in at most one class. Every figure is in
 API-equivalent dollars and, with a flat-rate plan's window readings, as a
@@ -122,6 +128,14 @@ func writeWasteReport(out io.Writer, r avoidable.Report) {
 		}
 		fmt.Fprintf(out, "  %-32s %8s %9s %7s %6d  %s\n", name, humanCount(c.Tokens), usd(c.APIEquivalentUSD),
 			windowPct(c.WindowShare), c.Turns, guard)
+		if c.Tokens > 0 {
+			if cc := c.Concentration; cc != nil && cc.Sessions > 0 {
+				fmt.Fprintf(out, "    %s make %.0f%% of it\n", sessionCount(cc.Top), cc.TopPct)
+			}
+			if c.Fix != "" {
+				fmt.Fprintf(out, "    fix: %s\n", c.Fix)
+			}
+		}
 		for _, k := range c.Causes {
 			name := k.Name
 			if k.TTL != "" {
@@ -137,6 +151,9 @@ func writeWasteReport(out io.Writer, r avoidable.Report) {
 		fmt.Fprintln(out, "    leave: shown, not counted as avoidable")
 	}
 
+	if cl := r.ContextLine; cl != nil {
+		fmt.Fprintf(out, "\n  Context line %s, from your own bands: %s\n", humanCount(cl.Tokens), cl.Basis)
+	}
 	rz := r.Realized
 	fmt.Fprintf(out, "\n  Realized %s", usd(rz.USD))
 	var parts []string
@@ -253,4 +270,12 @@ func humanCount(n int64) string {
 		return fmt.Sprintf("%.1fk", float64(n)/1e3)
 	}
 	return fmt.Sprint(n)
+}
+
+// sessionCount is n sessions, singular for one.
+func sessionCount(n int) string {
+	if n == 1 {
+		return "1 session"
+	}
+	return fmt.Sprintf("%d sessions", n)
 }

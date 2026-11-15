@@ -266,14 +266,23 @@ func writeDXText(w io.Writer, dx sessions.DX, bands []sessions.ContextBand, days
 }
 
 // writeDXEffort prints the model × effort rows, where clients record
-// effort.
+// effort. Rows with a cost add what each level cost beside its first-try
+// success.
 func writeDXEffort(w io.Writer, rows []sessions.EffortRow) {
 	if len(rows) == 0 {
 		return
 	}
+	costed := false
+	for _, r := range rows {
+		costed = costed || r.APIEquivalentUSD > 0
+	}
 	fmt.Fprintln(w, "\nBY MODEL AND EFFORT")
-	fmt.Fprintf(w, "  %-26s %-7s %6s %6s %8s %9s %10s %9s\n",
+	fmt.Fprintf(w, "  %-26s %-7s %6s %6s %8s %9s %10s %9s",
 		"MODEL", "EFFORT", "INSTR", "TURNS", "TIME", "PEAK CTX", "FIRST-TRY", "REJECTED")
+	if costed {
+		fmt.Fprintf(w, " %10s %7s %9s", "COST", "SHARE", "$/INSTR")
+	}
+	fmt.Fprintln(w)
 	thin := false
 	for _, r := range rows {
 		mark := ""
@@ -284,15 +293,22 @@ func writeDXEffort(w io.Writer, rows []sessions.EffortRow) {
 		if model == "" {
 			model = "(unrecorded)"
 		}
-		fmt.Fprintf(w, "  %-26s %-7s %6d %6.1f %8s %8dk %9.1f%% %8.1f%%%s\n",
+		fmt.Fprintf(w, "  %-26s %-7s %6d %6.1f %8s %8dk %9.1f%% %8.1f%%",
 			model, r.Effort, r.Instructions, r.MedianTurns, humanSeconds(r.MedianSeconds),
-			r.MedianPeakContext/1000, r.FirstTryPct, r.RejectedPct, mark)
+			r.MedianPeakContext/1000, r.FirstTryPct, r.RejectedPct)
+		if costed {
+			fmt.Fprintf(w, " %10s %6.1f%% %9s", usd(r.APIEquivalentUSD), r.SharePct, usd(r.USDPerInstruction))
+		}
+		fmt.Fprintln(w, mark)
 	}
 	if thin {
 		fmt.Fprintf(w, "  * fewer than %d instructions; too few to compare.\n", sessions.MinEffortInstructions)
 	}
 	fmt.Fprintln(w, "  Compare levels within one model. You raise effort for harder work, so a")
 	fmt.Fprintln(w, "  higher level doing worse may mean harder instructions, not a worse setting.")
+	if costed {
+		fmt.Fprintln(w, "  COST is what the instructions cost at list prices, not what was billed.")
+	}
 }
 
 // pctOrNA renders a percentage, or n/a when nothing was observed behind

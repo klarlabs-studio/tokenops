@@ -140,7 +140,7 @@ func (b *book) claimCacheRebuilds() {
 				continue
 			}
 			b.rebuilds[p] = rebuildNote{cause: rb.Cause, ttl: ttl}
-			b.claim(waste.ClassCacheRebuild, tokensOf(cur, share), turns[k])
+			b.claim(waste.RebuildClass(rb.Cause), tokensOf(cur, share), turns[k])
 		}
 	}
 }
@@ -300,6 +300,27 @@ func (b *book) claimFindings(tr *workflow.Trace, findings []*eventschema.Coachin
 				}
 			}
 			b.claim(waste.ClassOversized, f.EstimatedSavingsTokens, peak)
+		}
+	}
+}
+
+// claimStopped claims, for each instruction the developer stopped, the
+// turn that was in flight at the stop: sent after the instruction was typed
+// and before the stop, recorded after the stop. A turn whose send time is
+// unknown is not claimed, so the class never counts a turn that finished
+// before the stop.
+func (b *book) claimStopped(stops []Stop) {
+	for _, s := range stops {
+		for _, i := range b.sessions[s.Session] {
+			t := b.in.Turns[i]
+			if _, ok := b.pos[i]; !ok || t.Latency <= 0 {
+				continue
+			}
+			sent := t.At.Add(-t.Latency)
+			if sent.Before(s.From) || sent.After(s.At) || t.At.Before(s.At) {
+				continue
+			}
+			b.claim(waste.ClassStopped, t.Tokens, i)
 		}
 	}
 }

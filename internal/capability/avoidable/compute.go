@@ -8,6 +8,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/contexts/measurement"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
@@ -41,6 +42,10 @@ type Deps struct {
 	Rereads func() (wentAhead, refused []Reread)
 	// Routes are the coach's model advice.
 	Routes func() []RouteAdvice
+	// Records reads the transcript entries over [since, until): the stops
+	// the developer made and the context curve the context line is read
+	// from. Nil, or a read that fails, leaves both out.
+	Records func(ctx context.Context, since, until time.Time) ([]agentdx.Record, error)
 	// Savings reads the realized-savings ledger over [since, now) and
 	// Steps each guardrail's graduation.
 	Savings func(ctx context.Context, since, now time.Time) savings.Report
@@ -138,7 +143,27 @@ func gather(ctx context.Context, d Deps, since, until time.Time) (Inputs, error)
 	if d.Routes != nil {
 		in.Routes = d.Routes()
 	}
+	if d.Records != nil {
+		if records, err := d.Records(ctx, since, until); err == nil {
+			in.Stops = stopsIn(records)
+			if line, ok := agentdx.ContextLine(agentdx.ComputeContextCurve(records), 0); ok {
+				in.Waste.CompactAtOverride = line
+				in.line = &ContextLine{Tokens: line, Basis: lineBasis}
+			}
+		}
+	}
 	return in, nil
+}
+
+// stopsIn are the instructions the developer stopped in records.
+func stopsIn(records []agentdx.Record) []Stop {
+	var out []Stop
+	for _, u := range agentdx.Units(records) {
+		if u.Interrupted && !u.InterruptedAt.IsZero() {
+			out = append(out, Stop{Session: u.SessionID, From: u.Start, At: u.InterruptedAt})
+		}
+	}
+	return out
 }
 
 // workflowsIn are the workflows with at least two turns in the period:
