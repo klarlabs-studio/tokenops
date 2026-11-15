@@ -209,25 +209,27 @@ func TestEventCacheAfterRowidsAreRenumbered(t *testing.T) {
 
 	// Renumber densely as a VACUUM may, with the triggers out of the way
 	// as a VACUUM fires none, and log one ordinary change after.
-	var triggers []string
-	rows, err := s.db.QueryContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'events'`)
+	var names, triggers []string
+	rows, err := s.db.QueryContext(ctx, `SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'events'`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for rows.Next() {
-		var q string
-		if err := rows.Scan(&q); err != nil {
+		var name, q string
+		if err := rows.Scan(&name, &q); err != nil {
 			t.Fatal(err)
 		}
+		names = append(names, name)
 		triggers = append(triggers, q)
 	}
 	_ = rows.Close()
-	if len(triggers) != 2 {
-		t.Fatalf("found %d triggers on events, want 2", len(triggers))
+	if len(triggers) != 4 {
+		t.Fatalf("found %d triggers on events, want the 4 the change log and older-changes counter hold", len(triggers))
+	}
+	for _, name := range names {
+		execAll(t, s, `DROP TRIGGER `+name)
 	}
 	execAll(t, s,
-		`DROP TRIGGER events_changes_on_update`,
-		`DROP TRIGGER events_changes_on_delete`,
 		`CREATE TEMP TABLE renumber AS SELECT * FROM events ORDER BY rowid`,
 		`DELETE FROM events`,
 		`INSERT INTO events SELECT * FROM renumber`,

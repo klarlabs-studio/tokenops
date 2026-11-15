@@ -77,7 +77,7 @@ func TestRunObservedKeepsTheOverlay(t *testing.T) {
 // digest checked within a day, the window read within its max age.
 func TestFresh(t *testing.T) {
 	at := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
-	mark := observedMark{At: at, Built: at, Checked: at}
+	mark := observedMark{At: at}
 	cases := []struct {
 		name string
 		now  time.Time
@@ -86,7 +86,6 @@ func TestFresh(t *testing.T) {
 		{"just kept", at, true},
 		{"an hour later", at.Add(time.Hour), true},
 		{"a day later: the window slides", at.Add(observedEvery), false},
-		{"a week later: rebuilt", at.Add(observedMaxAge), false},
 		{"clock went back", at.Add(-time.Minute), false},
 	}
 	for _, c := range cases {
@@ -182,35 +181,38 @@ func TestKeepObservedMatchesTheFullComputation(t *testing.T) {
 	steps := []struct {
 		name string
 		do   func()
-		// advance is how far the clock moves: a change past the horizon
-		// is seen by the digest, which is checked once a day.
+		// advance is how far the clock moves.
 		advance time.Duration
-		// computes is whether the pass must compute again.
-		computes bool
+		// computes is whether the pass must compute again; rebuilds whether
+		// it reads every hour (a change past the horizon moves Older and
+		// names no hour).
+		computes, rebuilds bool
 	}{
-		{"nothing changed", func() {}, time.Minute, false},
+		{"nothing changed", func() {}, time.Minute, false, false},
 		{"a reading repeated", func() {
 			r := observedReading("repeat", start.Add(9*7*24*time.Hour), "40")
 			r.Timestamp = r.Timestamp.Add(time.Hour)
 			r.Attributes[eventschema.AttrRepeat] = eventschema.AttrRepeatValue
 			appendEvents(r)
-		}, time.Minute, false},
+		}, time.Minute, false, false},
 		{"a recent turn", func() { appendEvents(observedTurn("t-new", start.Add(9*7*24*time.Hour+2*time.Hour), 30000)) },
-			time.Minute, true},
+			time.Minute, true, false},
 		{"a recent turn updated", func() {
 			exec(`UPDATE events SET input_tokens = 500, payload = json_set(payload, '$.input_tokens', 500) WHERE id = 't-new'`)
-		}, time.Minute, true},
+		}, time.Minute, true, false},
 		{"old turns updated, past the change log's horizon", func() {
 			exec(fmt.Sprintf(`UPDATE events SET input_tokens = input_tokens * 2,
 				payload = json_set(payload, '$.input_tokens', json_extract(payload, '$.input_tokens') * 2)
 				WHERE source = 'claude-code-jsonl' AND timestamp_ns < %d`, old))
-		}, observedEvery, true},
+		}, time.Minute, true, true},
 		{"an old reading deleted, past the horizon", func() { exec(`DELETE FROM events WHERE id = 'r1'`) },
-			observedEvery, true},
+			time.Minute, true, true},
+		{"an old turn deleted, past the horizon", func() { exec(`DELETE FROM events WHERE id = 't3'`) },
+			time.Minute, true, true},
 		{"an old reading stored late", func() { appendEvents(observedReading("r1-late", start.Add(7*24*time.Hour), "40")) },
-			time.Minute, true},
-		{"a recent turn deleted", func() { exec(`DELETE FROM events WHERE id = 't-new'`) }, time.Minute, true},
-		{"nothing changed again", func() {}, time.Minute, false},
+			time.Minute, true, false},
+		{"a recent turn deleted", func() { exec(`DELETE FROM events WHERE id = 't-new'`) }, time.Minute, true, true},
+		{"nothing changed again", func() {}, time.Minute, false, false},
 	}
 	at := now
 	mark, _ := keepObserved(ctx, job, nil, at, quietLogger())
@@ -234,6 +236,9 @@ func TestKeepObservedMatchesTheFullComputation(t *testing.T) {
 		if computed {
 			if !reflect.DeepEqual(drifts, full) {
 				t.Fatalf("%s: computed %+v, the full computation gives %+v", st.name, drifts, full)
+			}
+			if read := len(job.hours.Read()); (read == windowHours(at)) != st.rebuilds {
+				t.Fatalf("%s: %d hours read, rebuild = %v", st.name, read, st.rebuilds)
 			}
 			kept = full
 		} else if !reflect.DeepEqual(kept, full) {
@@ -263,9 +268,9 @@ func TestKeepObservedMatchesTheFullComputation(t *testing.T) {
 		t.Fatal("a restart's pass after a change does not match the full computation")
 	}
 	mark = next
-	// Past its max age the window is read again, nothing moved or not.
-	if next, _ := keepObserved(ctx, job, mark, mark.Built.Add(observedMaxAge), quietLogger()); next.At.Equal(mark.At) {
-		t.Fatal("a result past its max age was kept")
+	// A day on, with nothing moved, the window is kept again: it slides.
+	if next, _ := keepObserved(ctx, job, mark, mark.At.Add(observedEvery), quietLogger()); next.At.Equal(mark.At) {
+		t.Fatal("a result a day old was not kept again")
 	}
 	// So it is when the settings change.
 	job.settings = func() string { return "other" }
@@ -443,3 +448,8 @@ func newHours(home string) *checkup.DriftHours {
 
 // hourAt is the UTC hour an instant falls in.
 func hourAt(t time.Time) time.Time { return t.UTC().Truncate(time.Hour) }
+
+// windowHours is the number of UTC hours the 90-day window holds at now.
+func windowHours(now time.Time) int {
+	return int(hourAt(now).Sub(hourAt(now.AddDate(0, 0, -checkup.DriftDays)))/time.Hour) + 1
+}

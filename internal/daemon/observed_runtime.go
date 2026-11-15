@@ -26,16 +26,17 @@ import (
 )
 
 // The overlay of observed plan limits reads the window readings and
-// requests of the last 90 days. It follows its inputs (ADR 0019), in
-// three tiers:
+// requests of the last 90 days. It follows its inputs (ADR 0019):
 //
 //   - Every observedCheckEvery it reads the event store's position, which
-//     is two numbers. Unchanged, nothing else runs.
-//   - When the position moved, it reads again only the UTC hours the change
-//     names (observed_days.go), and keeps the overlay from the hours.
-//   - Once a day it checks a digest of the events the change log does not
-//     hold (older than its horizon), and every observedMaxAge it reads
-//     the whole window again.
+//     is three numbers. Unchanged, nothing else runs.
+//   - When the position moved, it reads again only the UTC hours the
+//     change names (checkup.DriftHours), and keeps the overlay from the
+//     hours. An update or delete of an event past the change log's horizon
+//     moves the position's Older count, which names no hour: the window is
+//     then read again whole.
+//   - Once a day the window slides on the clock alone, so the overlay is
+//     kept again even when nothing moved.
 //
 // The mark of the last result is kept on disk, so a restart resumes from
 // it: the first pass after a start is the delay's, whatever the mark says.
@@ -44,14 +45,13 @@ import (
 const (
 	observedDelay      = 20 * time.Minute
 	observedCheckEvery = time.Hour
-	// observedEvery is how often the digest is checked, and how often the
-	// window slides on the clock alone when nothing moved.
+	// observedEvery is how often the overlay is kept when nothing moved:
+	// the window slides on the clock alone.
 	observedEvery = 24 * time.Hour
-	// observedMaxAge is the oldest a result is kept without a rebuild.
-	observedMaxAge = 7 * 24 * time.Hour
 	// observedVersion is the computation's version: a change to how the
 	// overlay is computed or what it keeps bumps it, and the next pass
-	// computes it again. Version 2 keeps the inputs by hour.
+	// computes it again. Version 2 keeps the inputs by hour and the
+	// position with its Older count.
 	observedVersion = 2
 )
 
@@ -79,16 +79,12 @@ type observedJob struct {
 // observedMark is the inputs the last kept overlay reflects.
 type observedMark struct {
 	Version  int       `json:"version"`
-	At       time.Time `json:"at"`      // when the overlay was last kept
-	Built    time.Time `json:"built"`   // when the window was last read from scratch
-	Checked  time.Time `json:"checked"` // when the digest last agreed
+	At       time.Time `json:"at"` // when the overlay was last kept
 	Settings string    `json:"settings"`
-	// Events is the store's position, "rowid.seq", read before the result
-	// was computed: an event stored while it runs moves it past this mark.
+	// Events is the store's position, "rowid.seq.older", read before the
+	// result was computed: a change stored while it runs moves it past this
+	// mark.
 	Events string `json:"events"`
-	// Digest is the store's SpanDigest of the events older than the change
-	// log's horizon as they stood at Built.
-	Digest string `json:"digest"`
 }
 
 func startObservedRuntime(cfg config.Config, c *bootstrap.Components, sup *lifecycle.Supervisor, logger *slog.Logger) {
@@ -139,7 +135,7 @@ func (j observedJob) position(ctx context.Context) (checkup.Position, error) {
 		return checkup.Position{}, nil
 	}
 	p, err := j.store.Position(ctx)
-	return checkup.Position{Rowid: p.Rowid, Seq: p.Seq}, err
+	return toCheckupPosition(p), err
 }
 
 // eventLog is the store as the overlay's inputs read it; nil without one.
@@ -155,25 +151,23 @@ type observedLog struct{ store *sqlite.Store }
 
 func (l observedLog) Position(ctx context.Context) (checkup.Position, error) {
 	p, err := l.store.Position(ctx)
-	return checkup.Position{Rowid: p.Rowid, Seq: p.Seq}, err
+	return toCheckupPosition(p), err
 }
 
 func (l observedLog) ChangedTimes(ctx context.Context, t eventschema.EventType, from, to checkup.Position) ([]time.Time, bool, error) {
-	return l.store.ChangedTimes(ctx, t, sqlite.Position{Rowid: from.Rowid, Seq: from.Seq}, sqlite.Position{Rowid: to.Rowid, Seq: to.Seq})
+	return l.store.ChangedTimes(ctx, t, toStorePosition(from), toStorePosition(to))
 }
 
 func (l observedLog) EachEventBetween(ctx context.Context, t eventschema.EventType, from, until time.Time, fn func(*eventschema.Envelope) error) error {
 	return l.store.EachEventBetween(ctx, t, from, until, fn)
 }
 
-// digest is the store's digest of the events older than the change log's
-// horizon, as a result computed at built saw them.
-func (j observedJob) digest(ctx context.Context, built time.Time) (string, error) {
-	if j.store == nil {
-		return "", nil
-	}
-	return j.store.SpanDigest(ctx, eventschema.EventTypePrompt,
-		built.AddDate(0, 0, -checkup.DriftDays), built.Add(observedMaxAge-sqlite.ChangeLogHorizon))
+func toCheckupPosition(p sqlite.Position) checkup.Position {
+	return checkup.Position{Rowid: p.Rowid, Seq: p.Seq, Older: p.Older}
+}
+
+func toStorePosition(p checkup.Position) sqlite.Position {
+	return sqlite.Position{Rowid: p.Rowid, Seq: p.Seq, Older: p.Older}
 }
 
 // runObserved keeps the overlay from the tier comparisons, checking its
@@ -203,36 +197,14 @@ func keepObserved(ctx context.Context, job observedJob, mark *observedMark, now 
 		logger.Warn("observed limits: store position unknown", "err", err)
 		return mark, nil
 	}
-	key := fmt.Sprintf("%d.%d", pos.Rowid, pos.Seq)
+	key := fmt.Sprintf("%d.%d.%d", pos.Rowid, pos.Seq, pos.Older)
 	if mark != nil && mark.Settings == settings && mark.Events == key && fresh(mark, now) {
 		logger.Debug("observed limits unchanged", "computed", mark.At)
 		return mark, nil
 	}
-	full := mark == nil || mark.Settings != settings || now.Before(mark.Built) || now.Sub(mark.Built) >= observedMaxAge
-	next := &observedMark{Version: observedVersion, At: now, Built: now, Checked: now, Settings: settings, Events: key}
-	if !full && mark != nil {
-		next.Built, next.Digest, next.Checked = mark.Built, mark.Digest, mark.Checked
-		if now.Sub(mark.Checked) >= observedEvery {
-			d, err := job.digest(ctx, mark.Built)
-			if err != nil {
-				logger.Warn("observed limits: digest not read", "err", err)
-				return mark, nil
-			}
-			if d != mark.Digest {
-				full = true
-			} else {
-				next.Checked = now
-			}
-		}
-	}
-	if full {
-		d, err := job.digest(ctx, now)
-		if err != nil {
-			logger.Warn("observed limits: digest not read", "err", err)
-			return mark, nil
-		}
-		next.Built, next.Checked, next.Digest = now, now, d
-	}
+	// Under other settings, or with no mark, the hours are read again from
+	// scratch; otherwise the hours the change named are.
+	full := mark == nil || mark.Settings != settings
 	drifts, err := job.hours.Drifts(ctx, job.eventLog(), job.options(now), settings, pos, full)
 	if err != nil {
 		logger.Warn("observed limits not kept", "err", err)
@@ -247,6 +219,7 @@ func keepObserved(ctx context.Context, job observedJob, mark *observedMark, now 
 		return mark, nil
 	}
 	logger.Debug("observed limits kept", "limits", len(v.Limits), "off", v.Off, "full", full)
+	next := &observedMark{Version: observedVersion, At: now, Settings: settings, Events: key}
 	if err := writeObservedMark(job.dir, *next); err != nil {
 		logger.Warn("observed limits' inputs not marked; the next start computes them again", "err", err)
 	}
@@ -254,11 +227,10 @@ func keepObserved(ctx context.Context, job observedJob, mark *observedMark, now 
 }
 
 // fresh is whether a result computed at mark.At still stands at now with
-// nothing to check: the inputs unchanged, the digest checked within a
-// day, the window read within its max age.
+// nothing moved: it is kept again once a day, so the window follows the
+// clock.
 func fresh(mark *observedMark, now time.Time) bool {
-	return !now.Before(mark.At) && now.Sub(mark.At) < observedEvery &&
-		now.Sub(mark.Checked) < observedEvery && now.Sub(mark.Built) < observedMaxAge
+	return !now.Before(mark.At) && now.Sub(mark.At) < observedEvery
 }
 
 // readObservedMark is the stored mark, nil when there is none, it cannot

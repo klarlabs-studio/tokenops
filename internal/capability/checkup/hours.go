@@ -23,6 +23,9 @@ type TierDrifts = map[string][]plans.TierDrift
 type Position struct {
 	Rowid int64 `json:"rowid"`
 	Seq   int64 `json:"seq"`
+	// Older counts the updates and deletes of events past the log's horizon,
+	// which name no hour: a move of it reads every hour again.
+	Older int64 `json:"older"`
 }
 
 // EventLog is the event store the hourly inputs are read from: the hour
@@ -200,7 +203,7 @@ func (h *DriftHours) loadDays(hours []time.Time) {
 // placed; otherwise the hours the change names and those of any day the
 // window does not hold.
 func (h *DriftHours) dirtyHours(ctx context.Context, log EventLog, idx hoursIndex, hours []time.Time, pos Position, full bool) (map[time.Time]bool, error) {
-	if full || !h.loaded {
+	if full || !h.loaded || pos.Older != idx.Position.Older {
 		return allHours(hours), nil
 	}
 	times, attributable, err := log.ChangedTimes(ctx, eventschema.EventTypePrompt, idx.Position, pos)
