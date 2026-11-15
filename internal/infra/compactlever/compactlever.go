@@ -18,7 +18,12 @@
 //     Setting `context` alone changes nothing when the model defines an
 //     input limit.
 //
-// Cursor summarises on its own terms and has no such setting.
+// Gemini CLI and Pi take one too, in their own units (agents.go); both
+// are written only from the developer's measured context line.
+//
+// Cursor summarises on its own terms and has no such setting. Copilot CLI
+// reads its threshold only from an environment variable, which tokenops
+// cannot set for it and restore.
 //
 // Every change is recorded with what it replaced, so reverting restores
 // exactly that, and a value the operator set or changed is never touched.
@@ -47,6 +52,8 @@ const (
 	ClientCodex      = "codex"
 	ClientOpencode   = "opencode"
 	ClientCursor     = "cursor"
+	ClientGemini     = "gemini-cli"
+	ClientPi         = "pi"
 )
 
 // Status is what became of one setting.
@@ -92,6 +99,9 @@ type Setting struct {
 	Path   string `json:"path"`
 	Key    string `json:"key"`
 	Value  int64  `json:"value"`
+	// Window is the model window a Gemini CLI or Pi value was sized
+	// against, so the value written can be told again.
+	Window int64 `json:"window,omitempty"`
 	// Previous is the raw JSON of what the key held before, or empty when
 	// it was absent. For opencode it is the whole limit object.
 	Previous json.RawMessage `json:"previous,omitempty"`
@@ -107,6 +117,9 @@ type Paths struct {
 	// OpencodeModels is opencode's cache of models.dev, where each model's
 	// true context and output limits come from.
 	OpencodeModels string
+	// GeminiSettings is Gemini CLI's user settings; PiSettings Pi's.
+	GeminiSettings string
+	PiSettings     string
 	// State records what tokenops wrote.
 	State string
 }
@@ -125,7 +138,11 @@ func DefaultPaths() (Paths, error) {
 	if err != nil {
 		return Paths{}, err
 	}
+	piDir := envOr("PI_CODING_AGENT_DIR", filepath.Join(home, ".pi", "agent"))
+	geminiHome := envOr("GEMINI_CLI_HOME", home)
 	return Paths{
+		GeminiSettings: filepath.Join(geminiHome, ".gemini", "settings.json"),
+		PiSettings:     filepath.Join(piDir, "settings.json"),
 		ClaudeSettings: claudehome.Join("settings.json"),
 		CodexConfig:    filepath.Join(codexDir, "config.toml"),
 		OpencodeConfig: filepath.Join(configHome, "opencode", "opencode.json"),
@@ -145,6 +162,15 @@ type Plan struct {
 	// OpencodeShare of its context window.
 	OpencodeModels []string
 	OpencodeShare  float64
+	// GeminiCompactAt and PiCompactAt are where Gemini CLI and Pi should
+	// compact: the measured context line, 0 when none is measured.
+	GeminiCompactAt int64
+	PiCompactAt     int64
+	// PiModels are the provider/modelId pairs Pi runs on here.
+	PiModels []string
+	// Window is a model's context window as TokenOps knows it; nil knows
+	// none, and Gemini CLI and Pi are then not set.
+	Window func(model string) (int64, bool)
 }
 
 // ClaudeBuffer is how far below autoCompactWindow Claude Code compacts:
@@ -290,7 +316,7 @@ func apply(p Paths, plan Plan, now time.Time, dry bool) ([]Result, error) {
 	st.dry = dry
 	var out []Result
 	var errs []error
-	for _, apply := range []func(Paths, Plan, *state, time.Time) ([]Result, error){applyClaude, applyCodex, applyOpencode} {
+	for _, apply := range []func(Paths, Plan, *state, time.Time) ([]Result, error){applyClaude, applyCodex, applyOpencode, applyGemini, applyPi} {
 		rs, err := apply(p, plan, &st, now)
 		out = append(out, rs...)
 		errs = append(errs, err)
@@ -321,6 +347,10 @@ func Revert(p Paths) ([]Result, error) {
 			r, err = revertCodex(s)
 		case ClientOpencode:
 			r, err = revertOpencode(s)
+		case ClientGemini:
+			r, err = revertGemini(s)
+		case ClientPi:
+			r, err = revertPi(s)
 		}
 		if err != nil {
 			errs = append(errs, err)
@@ -383,6 +413,22 @@ func currentValue(s Setting) (int64, bool) {
 			return 0, false
 		}
 		return intOf(limit["input"])
+	case ClientGemini:
+		m, err := readJSON(s.Path)
+		if err != nil {
+			return 0, false
+		}
+		v, ok := geminiValue(m)
+		if !ok || v != geminiThreshold(s.Value, s.Window) {
+			return 0, false
+		}
+		return s.Value, true
+	case ClientPi:
+		m, err := readJSON(s.Path)
+		if err != nil {
+			return 0, false
+		}
+		return piValue(m, s.Key)
 	}
 	return 0, false
 }
