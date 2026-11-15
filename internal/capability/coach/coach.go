@@ -44,6 +44,9 @@ type Report struct {
 	// Compaction is where each agent compacts on its own, as the context
 	// power has set it. Filled by Status and by changes to the coach.
 	Compaction []LeverResult `json:"compaction,omitempty"`
+	// Proposal is the compaction line the context power proposes at the
+	// ask rung and the developer has not answered. Only Status fills it.
+	Proposal *CompactProposal `json:"proposal,omitempty"`
 	// Preset names the preset the coach matches, "" when it has been tuned
 	// away from all of them.
 	Preset string `json:"preset,omitempty"`
@@ -150,6 +153,9 @@ func Build(cfg config.Config) Report {
 			p.Note = "moves subagents to a cheaper model on Claude Code; the session's own model is advised, not changed"
 		case name == config.PowerContext && eff == config.AutonomyAutonomous:
 			p.Note = "sets where Claude Code, Codex, and opencode compact on their own; Cursor has no such setting and is advised"
+		case name == config.PowerContext && eff == config.AutonomyAsk:
+			p.Note = "proposes the compaction line measured from your own instructions and writes it on your yes (`" + AcceptCommand + "`); " +
+				"until you accept, and while the compaction guardrail has not graduated, it records what it would set without writing it"
 		case name == config.PowerModels && eff == config.AutonomyAsk:
 			p.Note = "asks before moving a subagent to a cheaper model in interactive Claude Code sessions, and advises when nobody is attending; " +
 				"declining pauses the agent, and telling it to continue runs the subagent as planned"
@@ -181,9 +187,6 @@ func effective(power, rung string) (string, string) {
 	case config.PowerModels:
 		return rung, ""
 	case config.PowerContext:
-		if rung == config.AutonomyAsk {
-			return config.AutonomyAdvise, "no agent offers an approval point for compacting, so the coach advises instead"
-		}
 		return rung, ""
 	}
 	return config.AutonomyOff, "unknown power"

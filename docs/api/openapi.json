@@ -1332,6 +1332,25 @@
                       },
                       "type": "object"
                     },
+                    "proposal": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "at": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "command": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "settings": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "reach": {
                       "additionalProperties": false,
                       "properties": {
@@ -2123,6 +2142,25 @@
                         },
                         "ttl_seconds": {
                           "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "proposal": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "at": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "command": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "settings": {
+                          "type": "string"
                         }
                       },
                       "type": "object"

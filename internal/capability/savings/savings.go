@@ -105,6 +105,26 @@ func RecordReadGuard(l Ledger, now time.Time, id, session string, shadow bool, t
 	})
 }
 
+// KindCompactLine is the compaction line the context power would set
+// from the developer's own context line.
+const KindCompactLine = "compact_line"
+
+// RecordCompactionShadow writes a compaction line the context power would
+// have set and did not (shadow): at the ask rung before the developer
+// accepted it, or while the compaction guardrail has not graduated.
+// settings names each agent's setting and value.
+func RecordCompactionShadow(l Ledger, now time.Time, id, settings string) {
+	if l == nil || id == "" || settings == "" {
+		return
+	}
+	_ = l.Append(learning.SavingsEntry{
+		Type: learning.SavingsIntervention, ID: id, At: now.UTC(),
+		Capability: learning.CapabilityCompaction, Kind: KindCompactLine, Cohort: learning.CohortShadow,
+		ExpectedBasis: "once, the setting not written",
+		Evidence:      "would set " + settings,
+	})
+}
+
 // RecordRoute writes a suggestion to move work to another model.
 func RecordRoute(l Ledger, now time.Time, id, session, kind, from, to string) {
 	if l == nil || id == "" {
@@ -200,7 +220,7 @@ func (r Report) Holdouts() []learning.KindSavings {
 var kindNames = map[string]string{
 	"compact_now": "compact tips", "budget_50": "50% session-budget tips", "budget_75": "75% session-budget tips",
 	"budget_over": "spent-budget tips", "quota_100": "used-up window tips", "quota_burn": "run-out warnings",
-	"reread": "re-reads refused",
+	"reread": "re-reads refused", KindCompactLine: "compaction lines not yet written",
 }
 
 // Name is how a kind reads in a sentence.
