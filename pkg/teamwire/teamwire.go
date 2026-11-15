@@ -7,7 +7,8 @@
 // label and a kind of work; schema 2 adds plan use, waste, savings and plan
 // advice keyed by the same and by catalog names (finops.go); schema 3 adds
 // spend by provider, units of work and vendor cost (spend.go); schema 4
-// adds the reverted commits to the units. It has no
+// adds the reverted commits to the units; schema 5 adds what was prevented
+// per finished week and mechanism (prevented.go). It has no
 // field that can hold a prompt, a file
 // path, a transcript, a commit message or a model output: every string in
 // it is either an enumeration or a label matched against a pattern that
@@ -28,18 +29,20 @@ import (
 // Upload formats. Schema 1 is the work buckets alone; schema 2 adds the
 // FinOps sections (plan days, waste, savings, plan advice); schema 3 adds
 // spend by provider, units of work and vendor cost; schema 4 adds the
-// commits a revert undid to each unit row. A client sends a
+// commits a revert undid to each unit row; schema 5 adds the prevented
+// figures per finished week and mechanism. A client sends a
 // schema only to a server whose Me advertises a MaxSchema at least as
 // high, and otherwise the newest it reads, byte for byte as before: the
 // newer sections are omitted when empty, so an upload has no key an older
 // server, decoding with unknown fields refused, does not know.
 const (
-	SchemaBuckets = 1
-	SchemaFinOps  = 2
-	SchemaSpend   = 3
-	SchemaReverts = 4
+	SchemaBuckets   = 1
+	SchemaFinOps    = 2
+	SchemaSpend     = 3
+	SchemaReverts   = 4
+	SchemaPrevented = 5
 	// SchemaVersion is the newest upload format this package describes.
-	SchemaVersion = SchemaReverts
+	SchemaVersion = SchemaPrevented
 )
 
 // Limits a server enforces on an upload.
@@ -157,15 +160,27 @@ type Upload struct {
 	// VendorCosts are what the vendors billed the organisation per day,
 	// sent only by an owner's or admin's machine.
 	VendorCosts []VendorCost `json:"vendor_cost,omitempty"`
+
+	// Schema 5 only (prevented.go). PreventedWeeks are the finished UTC
+	// weeks (their Mondays) the upload is complete for: a listed week with
+	// no row for a mechanism had none. Weeks are listed only once final,
+	// so a week sent never changes.
+	PreventedWeeks []string        `json:"prevented_weeks,omitempty"`
+	Prevented      []PreventedWeek `json:"prevented,omitempty"`
 }
 
 // ForServer is u as a server that reads formats up to maxSchema accepts
-// it: without the units' reverted commits when maxSchema is below 4,
+// it: without the prevented figures when maxSchema is below 5, without the
+// units' reverted commits when maxSchema is below 4,
 // without the schema 3 sections when it is below 3, and schema 1, without
 // the FinOps sections either, when it is below 2 (an older server, or one
 // that does not say). The rows are shared, not copied, except the units
 // when their reverted commits are dropped.
 func (u Upload) ForServer(maxSchema int) Upload {
+	if maxSchema < SchemaPrevented && u.Schema > SchemaReverts {
+		u.Schema = SchemaReverts
+		u.PreventedWeeks, u.Prevented = nil, nil
+	}
 	if maxSchema < SchemaReverts && u.Schema > SchemaSpend {
 		u.Schema = SchemaSpend
 		units := make([]UnitBucket, len(u.Units))
@@ -271,7 +286,10 @@ func (u Upload) Validate() error {
 	if err := u.validateFinOps(covered); err != nil {
 		return err
 	}
-	return u.validateSpend(covered)
+	if err := u.validateSpend(covered); err != nil {
+		return err
+	}
+	return u.validatePrevented()
 }
 
 // Validate reports the first reason the bucket is malformed, or nil.

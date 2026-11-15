@@ -1,6 +1,6 @@
 # ADR 0012 — The team plane: hosted, derived figures only, aggregate by default
 
-- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*; amended 2026-11-10: an upload with a part unread is not sent, see *An upload is sent whole* under *Upload schema 2*.
+- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*; amended 2026-11-10: an upload with a part unread is not sent, see *An upload is sent whole* under *Upload schema 2*; amended 2026-11-15: upload schema 5 (what was prevented, per finished week and mechanism), see *Upload schema 5*.
 - **Date:** 2026-10-08
 - **Deciders:** TokenOps maintainers
 - **Related:** issue #250, ADR 0004 (local-first; no BI product), ADR 0010 §5 (the API's privacy line)
@@ -269,6 +269,32 @@ counts once the day is uploaded again, within the upload's window.
 No new string crosses. A server whose `max_schema` is below 4 gets
 schema 3 with the two fields left out (they are omitted when zero), so
 it sees no key it does not know.
+
+## Upload schema 5 (amended 2026-11-15)
+
+The waste report shows, beside what is still found avoidable, what the
+mechanisms already prevented. Schema 5 carries the prevented side to the
+team, as weekly totals and nothing finer:
+
+- **`prevented`** — per finished UTC week × mechanism: `count` (how many
+  times it acted), `tokens` (what it kept out, when known) and `usd` (the
+  dollars prevented, absent when the mechanism is not priced). The
+  mechanism is an enumeration: `read_guard`, `fmt`, `autopilot`,
+  `boundary`, `loop_breaker`, `compaction`, `lockout`. A lockout avoided
+  is a counterfactual estimate; it is counted, never priced in dollars.
+- **`prevented_weeks`** — the weeks (their Mondays) the upload is complete
+  for: a listed week with no row for a mechanism had none.
+
+Never per session, repository or person. A week is sent only once every
+day of it is in the upload and it ended at least three days before the
+upload was computed, the same three days the team view waits, so a week
+sent never changes; the server rejects a week that is not a Monday or not
+yet final. The suppression floor applies as to every other figure.
+
+Two new strings cross, each constrained: the week (a date, a Monday) and
+the mechanism (the enumeration above); `TestUploadHasNoFreeText` lists
+both. A server whose `max_schema` is below 5 gets schema 4 with both keys
+left out.
 
 
 
