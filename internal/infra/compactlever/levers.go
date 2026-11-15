@@ -73,6 +73,13 @@ func (l Levers) plan() Plan {
 	return p
 }
 
+// Preview implements coachcap.ContextLevers: what Apply would write, with
+// nothing written.
+func (l Levers) Preview() ([]coachcap.LeverResult, error) {
+	rs, err := Preview(l.Paths, l.plan(), l.now())
+	return results(rs), err
+}
+
 // Revert implements coachcap.ContextLevers.
 func (l Levers) Revert() ([]coachcap.LeverResult, error) {
 	rs, err := Revert(l.Paths)
