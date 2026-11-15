@@ -101,6 +101,10 @@ type Snapshot struct {
 	SourceURL string          `json:"source_url,omitempty"`
 	FetchedAt time.Time       `json:"fetched_at"`
 	Rates     map[string]Rate `json:"rates"`
+	// ContextWindows are the input windows the source states, keyed by bare
+	// lower-case model name (see spend.ContextWindow). Omitted when the
+	// source states none, so snapshots written before it read back unchanged.
+	ContextWindows map[string]int64 `json:"context_windows,omitempty"`
 }
 
 // SourceEmbeddedBaseline is the Source value of BaselineSnapshot.

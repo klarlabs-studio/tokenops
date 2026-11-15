@@ -134,6 +134,11 @@ compacts on its own, at the same line (600k on Claude Code, 150k on Codex,
 | Cursor | nothing: Cursor has no setting for when it summarises, so it stays advised |
 | Copilot CLI | nothing: its threshold is only an environment variable (`COPILOT_BACKGROUND_COMPACTION_THRESHOLD`), which tokenops cannot set for it and restore |
 
+The window TokenOps knows is the Claude table's for Claude models, and for any
+other model the LiteLLM catalog's `max_input_tokens`, matched by the model's bare
+name (a provider prefix such as `google/` or `openrouter/z-ai/` is ignored). A
+model in neither source gets no Gemini CLI or Pi setting.
+
 A value you set yourself is never overwritten, and one you change after
 tokenops set it is left as you have it. Lowering `context` restores every
 file exactly as it was, byte for byte when nothing else has touched it

@@ -32,6 +32,29 @@ type litellmEntry struct {
 	CacheCreation1hCost float64 `json:"cache_creation_input_token_cost_above_1hr"`
 	// Mode is what the entry serves: chat, embedding, image_generation, …
 	Mode string `json:"mode"`
+	// MaxInputTokens is the input limit, the context window. It is read
+	// raw so a malformed value skips only the window, not the price.
+	MaxInputTokens json.RawMessage `json:"max_input_tokens"`
+}
+
+// windowModes are the modes whose max_input_tokens is a chat context window.
+// LiteLLM documents max_tokens as the output limit, so it is never read as one.
+var windowModes = map[string]bool{"": true, "chat": true, "completion": true, "responses": true}
+
+// bareModelName is a LiteLLM id's model name: the segment after its last
+// slash, lower-cased, so "gemini/gemini-2.5-pro" and "openrouter/z-ai/glm-4.6"
+// name "gemini-2.5-pro" and "glm-4.6".
+func bareModelName(id string) string {
+	return strings.ToLower(id[strings.LastIndex(id, "/")+1:])
+}
+
+// inputWindow is the entry's max_input_tokens, 0 when it states none.
+func (e litellmEntry) inputWindow() int64 {
+	var n int64
+	if json.Unmarshal(e.MaxInputTokens, &n) != nil {
+		return 0
+	}
+	return n
 }
 
 // litellmGateways maps a LiteLLM gateway provider to the TokenOps provider
@@ -120,10 +143,11 @@ func ParseLiteLLM(body []byte, sourceURL string, fetchedAt time.Time) (Snapshot,
 	}
 
 	snap := Snapshot{
-		Source:    LiteLLMSourceName,
-		SourceURL: sourceURL,
-		FetchedAt: fetchedAt,
-		Rates:     map[string]Rate{},
+		Source:         LiteLLMSourceName,
+		SourceURL:      sourceURL,
+		FetchedAt:      fetchedAt,
+		Rates:          map[string]Rate{},
+		ContextWindows: map[string]int64{},
 	}
 	catalogKeys := catalogModelKeys()
 
@@ -139,6 +163,7 @@ func ParseLiteLLM(body []byte, sourceURL string, fetchedAt time.Time) (Snapshot,
 	}
 	groups := make(map[string][]candidate)
 	gatewayIDs := map[string]string{}
+	windowIDs := map[string]string{}
 	for id, msg := range raw {
 		if id == "sample_spec" { // LiteLLM's schema doc row, not a model
 			continue
@@ -146,6 +171,13 @@ func ParseLiteLLM(body []byte, sourceURL string, fetchedAt time.Time) (Snapshot,
 		var e litellmEntry
 		if json.Unmarshal(msg, &e) != nil {
 			continue // non-model or unexpected shape → skip, don't fail
+		}
+		if w := e.inputWindow(); w > 0 && windowModes[e.Mode] {
+			name := bareModelName(id)
+			if prev, taken := windowIDs[name]; !taken || preferWindowID(id, prev) {
+				windowIDs[name] = id
+				snap.ContextWindows[name] = w
+			}
 		}
 		if gateway, ok := litellmGateways[strings.ToLower(e.Provider)]; ok {
 			model, named := litellmGatewayModel(id, strings.ToLower(e.Provider))
@@ -186,6 +218,17 @@ func ParseLiteLLM(body []byte, sourceURL string, fetchedAt time.Time) (Snapshot,
 		snap.Rates[key] = best.rate
 	}
 	return snap, nil
+}
+
+// preferWindowID reports whether LiteLLM id a states a model's window more
+// directly than b: a vendor's own id ("gemini/gemini-2.5-pro") beats a
+// gateway's nested one ("openrouter/google/gemini-2.5-pro"), and ties break
+// to the lexically smaller id so a refresh is deterministic.
+func preferWindowID(a, b string) bool {
+	if sa, sb := strings.Count(a, "/"), strings.Count(b, "/"); sa != sb {
+		return sa < sb
+	}
+	return a < b
 }
 
 // versionDate matches a trailing numeric version/date suffix LiteLLM appends to
