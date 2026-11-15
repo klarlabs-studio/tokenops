@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.120.1 - 2026-11-15
+
+### Changed
+
+- **daemon:** more of the daemon's background work follows changes in the event store instead of the clock (ADR 0019).
+  - **observed limits:** the observed plan limits follow the event store within the hour, where they could lag it by up to a day. The daemon checks hourly whether anything moved and re-reads only the hours that changed, keeping each hour's inputs in its cache directory; a change it cannot place (an edit to an event older than 45 days) reads the 90 days again. A pass with an hour of new events costs a sixth of a full read. The first pass after an upgrade reads the 90 days once.
+  - **budgets:** the budget check answers every budget from the kept turns, including budgets scoped to a provider, workflow or agent, instead of summing the window from the store each minute. Budgets filtered by model still read the store.
+  - **plans:** following the plan a client reports reads only what each Codex session gained since the last pass, not the five newest sessions again.
+  - **storage:** an event that arrives late is merged into the kept turns instead of the month being reloaded and sorted.
+
+### Fixed
+
+- **storage:** an update or delete of an event older than 45 days, including a retention pass, now counts as a change to the event store. Figures reading further back than that could miss it. The store gains a migration (version 9); older releases keep working against it.
+
 ## 0.120.0 - 2026-11-14
 
 ### Changed
