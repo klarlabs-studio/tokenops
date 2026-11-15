@@ -108,11 +108,12 @@ report here.`,
 func writeWasteReport(out io.Writer, r avoidable.Report) {
 	fmt.Fprintf(out, "Avoidable usage since %s\n\n", r.Since.Local().Format("2 Jan 15:04"))
 	writeAmountRow(out, "used", r.Usage, "")
+	writePrevented(out, r.Prevented)
 	of := ""
 	if r.Usage.Tokens > 0 {
 		of = fmt.Sprintf("  (%.0f%% of usage)", 100*float64(r.Avoidable.Tokens)/float64(r.Usage.Tokens))
 	}
-	writeAmountRow(out, "avoidable", r.Avoidable, of)
+	writeAmountRow(out, "found", r.Avoidable, of+" still avoidable")
 
 	fmt.Fprintf(out, "\n  %-32s %8s %9s %7s %6s  %s\n", "CLASS", "TOKENS", "API $", "WINDOW", "TURNS", "GUARDRAIL")
 	inferred := false
@@ -154,30 +155,6 @@ func writeWasteReport(out io.Writer, r avoidable.Report) {
 	if cl := r.ContextLine; cl != nil {
 		fmt.Fprintf(out, "\n  Context line %s, from your own bands: %s\n", humanCount(cl.Tokens), cl.Basis)
 	}
-	rz := r.Realized
-	fmt.Fprintf(out, "\n  Realized %s", usd(rz.USD))
-	var parts []string
-	if rz.RefusedRereads > 0 {
-		parts = append(parts, fmt.Sprintf("%d re-reads refused, %s tokens", rz.RefusedRereads, humanCount(rz.RefusedTokens)))
-	}
-	if v, ok := rz.HoldoutUSD.Amount(); ok {
-		parts = append(parts, fmt.Sprintf("%s measured against the holdout", usd(v)))
-	} else {
-		parts = append(parts, "holdout: "+rz.HoldoutUSD.Caveat())
-	}
-	for i, p := range parts {
-		sep := "; "
-		if i == 0 {
-			sep = " ("
-		}
-		fmt.Fprint(out, sep+p)
-	}
-	fmt.Fprint(out, ")")
-	if rz.Share != nil {
-		fmt.Fprintf(out, ": %.0f%% of what could be saved", 100**rz.Share)
-	}
-	fmt.Fprintln(out)
-
 	if n := r.Next; n != nil {
 		state := "still gathering evidence"
 		if n.Ready {
@@ -211,6 +188,11 @@ func writeWasteReport(out io.Writer, r avoidable.Report) {
 			fmt.Fprintf(out, "  %s: %s\n", c.Name, c.Method)
 		}
 	}
+	for _, m := range r.Prevented.Mechanisms {
+		if m.Count > 0 && m.Basis != "" {
+			fmt.Fprintf(out, "  prevented, %s: %s\n", m.Name, m.Basis)
+		}
+	}
 	for _, c := range r.Classes {
 		for _, k := range c.Causes {
 			if k.LikelyMethod != "" {
@@ -236,6 +218,23 @@ func writeLikely(out io.Writer, k avoidable.CauseCost) {
 			return
 		}
 		fmt.Fprintf(out, "      likely: %s (%d of %d rebuilds)\n", l.Finding, l.Rebuilds, k.Turns)
+	}
+}
+
+// writePrevented is what the mechanisms stopped: the total, then each
+// mechanism that acted with its count and its dollars or why it is not
+// priced. It is never added into the found row.
+func writePrevented(out io.Writer, p avoidable.Prevented) {
+	fmt.Fprintf(out, "  %-10s %s\n", "prevented", p.Words())
+	for _, m := range p.Mechanisms {
+		if m.Count == 0 {
+			continue
+		}
+		price := "not priced"
+		if v, ok := m.USD.Amount(); ok {
+			price = usd(v)
+		}
+		fmt.Fprintf(out, "    %-34s %6d %10s\n", m.Name, m.Count, price)
 	}
 }
 

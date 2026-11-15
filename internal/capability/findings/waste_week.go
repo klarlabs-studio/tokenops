@@ -60,6 +60,9 @@ func wasteWeek(s *avoidable.Snapshot, now time.Time) []Finding {
 			return c.APIEquivalentUSD, money(c.APIEquivalentUSD)
 		})
 	}
+	if r.Prevented.Active() {
+		title = fmt.Sprintf("Last %d days: prevented %s, found %s", days, r.Prevented.Words(), strings.TrimPrefix(title, fmt.Sprintf("Last %d days: ", days)))
+	}
 	evidence := strings.Join(parts, " · ")
 	if why := rebuildCause(r.Classes); why != "" {
 		evidence = strings.TrimPrefix(evidence+". "+why, ". ")
