@@ -34,8 +34,8 @@ const (
 	// ClassOversized is context carried above the line a session should
 	// have compacted at, or above the workflow's context ceiling.
 	ClassOversized Class = "oversized_context"
-	// ClassStopped is work the developer stopped: the tokens an instruction
-	// spent before the developer interrupted it, which the stop discarded.
+	// ClassStopped is work the developer stopped: the turn in flight when
+	// the developer interrupted an instruction, which the stop discarded.
 	ClassStopped Class = "stopped_turns"
 	// ClassAbandoned is a session that ended with no commit and no
 	// recorded outcome: work with nothing to show for it.

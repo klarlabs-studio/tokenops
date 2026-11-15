@@ -8,9 +8,17 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 )
 
-// stopped is one instruction the developer stopped: its turns from `from`
-// up to the stop at `at` are stopped work.
-func TestStoppedWorkIsTheTurnsBeforeTheStop(t *testing.T) {
+// The stopped work is the turn in flight when the developer stopped the
+// instruction: sent before the stop, recorded after it. Only that turn is
+// claimed, and only when its send time is known, so waste is never
+// inflated by turns that finished before the stop.
+func TestStoppedWorkIsTheTurnInFlightAtTheStop(t *testing.T) {
+	inFlight := func(at time.Duration, latency time.Duration) analytics.SessionTurn {
+		tn := turn("s", at)
+		tn.Latency = latency
+		return tn
+	}
+	stop := Stop{Session: "s", From: t0, At: t0.Add(90 * time.Second)}
 	cases := []struct {
 		name       string
 		turns      []analytics.SessionTurn
@@ -19,22 +27,38 @@ func TestStoppedWorkIsTheTurnsBeforeTheStop(t *testing.T) {
 		wantTurns  int
 	}{
 		{
-			name:       "turns before the stop, not after",
-			turns:      []analytics.SessionTurn{turn("s", 0), turn("s", time.Minute), turn("s", 2*time.Minute), turn("s", 5*time.Minute)},
-			stop:       Stop{Session: "s", From: t0, At: t0.Add(90 * time.Second)},
-			wantTokens: 2_000, wantTurns: 2,
+			name:       "the turn sent before the stop and recorded after it",
+			turns:      []analytics.SessionTurn{inFlight(0, time.Minute), inFlight(100*time.Second, 10*time.Second)},
+			stop:       stop,
+			wantTokens: 1_000, wantTurns: 1,
 		},
 		{
-			name:       "a stop before any turn of the session stops nothing",
-			turns:      []analytics.SessionTurn{turn("s", time.Minute)},
-			stop:       Stop{Session: "s", From: t0, At: t0},
+			name:       "a turn recorded before the stop finished before it",
+			turns:      []analytics.SessionTurn{inFlight(time.Minute, 10*time.Second), inFlight(3*time.Minute, 10*time.Second)},
+			stop:       stop,
 			wantTokens: 0, wantTurns: 0,
 		},
 		{
-			name:       "turns of another session are not stopped",
-			turns:      []analytics.SessionTurn{turn("other", 0), turn("s", time.Minute)},
-			stop:       Stop{Session: "s", From: t0, At: t0.Add(2 * time.Minute)},
-			wantTokens: 1_000, wantTurns: 1,
+			name:       "a turn sent after the stop was not in flight",
+			turns:      []analytics.SessionTurn{inFlight(100*time.Second, 10*time.Second)},
+			stop:       Stop{Session: "s", From: t0, At: t0.Add(time.Minute)},
+			wantTokens: 0, wantTurns: 0,
+		},
+		{
+			name:       "without a recorded latency the send time is unknown, so nothing is claimed",
+			turns:      []analytics.SessionTurn{inFlight(100*time.Second, 0)},
+			stop:       stop,
+			wantTokens: 0, wantTurns: 0,
+		},
+		{
+			name: "turns of another session are not stopped",
+			turns: []analytics.SessionTurn{func() analytics.SessionTurn {
+				tn := turn("other", 100*time.Second)
+				tn.Latency = 10 * time.Second
+				return tn
+			}()},
+			stop:       stop,
+			wantTokens: 0, wantTurns: 0,
 		},
 	}
 	for _, tc := range cases {

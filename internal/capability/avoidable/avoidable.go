@@ -294,8 +294,8 @@ var methods = map[waste.Class]string{
 		"split by cause: a model switch, a prompt prefix change after cache hits, or unexplained",
 	waste.ClassIdleRebuild: "the same rebuild after an idle gap longer than the cache lifetime (an hour when the session wrote with " +
 		"the hour-long lifetime, else five minutes), priced as writing rather than reading that part at the rate card",
-	waste.ClassStopped: "for each instruction the developer stopped, the turns it ran from when it was typed to the stop, " +
-		"priced at the rate card: work the stop discarded",
+	waste.ClassStopped: "for each instruction the developer stopped, the turn in flight at the stop (sent before it, recorded after, " +
+		"its send time known from the recorded latency), priced at the rate card: work the stop discarded",
 	waste.ClassOverTiered: "turns left on a model after the coach advised a cheaper one for that kind of work, " +
 		"priced as the difference to the advised model at the rate card",
 	waste.ClassRetryLoop: "the waste detector on each workflow: an identical prompt sent again, an agent's steps past the loop limit, " +

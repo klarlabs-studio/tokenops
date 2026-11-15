@@ -14,7 +14,11 @@ import (
 // The stops are the instructions the transcripts record as interrupted,
 // each with the turns the store holds for its session.
 func TestComputeTakesStopsFromTheTranscripts(t *testing.T) {
-	turns := []analytics.SessionTurn{turn("s", time.Minute), turn("s", 3*time.Minute)}
+	// The turn sent at 1m40s and recorded at 2m10s was in flight when the
+	// developer stopped the instruction at 2m.
+	inFlight := turn("s", 130*time.Second)
+	inFlight.Latency = 30 * time.Second
+	turns := []analytics.SessionTurn{turn("s", time.Minute), inFlight}
 	records := []agentdx.Record{
 		{At: t0, SessionID: "s", Kind: agentdx.KindPrompt},
 		{At: t0.Add(2 * time.Minute), SessionID: "s", Kind: agentdx.KindInterrupt},
