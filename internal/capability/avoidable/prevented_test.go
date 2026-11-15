@@ -1,0 +1,184 @@
+package avoidable
+
+import (
+	"math"
+	"strings"
+	"testing"
+
+	"go.klarlabs.de/tokenops/internal/capability/explain"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
+	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/learning"
+	"go.klarlabs.de/tokenops/internal/contexts/measurement"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
+)
+
+// withPrevented is the fixture plus one of each mechanism the prevented
+// figures read: two fmt compressions, a paused and a denied boundary call,
+// a loop-breaker stop, and a routing move the holdout measured at $1.50.
+func withPrevented() Inputs {
+	in := fixture()
+	in.Fmt = []FmtSaving{{At: t0.Add(day), Tokens: 1_000}, {At: t0.Add(2 * day), Tokens: 2_000}}
+	in.Holds = []Hold{
+		{At: t0.Add(day), Mechanism: MechBoundary, Denied: false},
+		{At: t0.Add(day), Mechanism: MechBoundary, Denied: true},
+		{At: t0.Add(2 * day), Mechanism: MechLoopBreaker},
+	}
+	in.Savings.Kinds = []learning.KindSavings{{Capability: learning.CapabilityRouting, Kind: "lookup",
+		Treated: learning.CohortStats{Count: 6}, RealizedUSD: measurement.Estimated(1.5, "randomized holdout", "")}}
+	in.Savings.RealizedUSD = measurement.Estimated(1.5, "randomized holdout", "")
+	return in
+}
+
+func mechanism(r Report, key string) (Mechanism, bool) {
+	for _, m := range r.Prevented.Mechanisms {
+		if m.Key == key {
+			return m, true
+		}
+	}
+	return Mechanism{}, false
+}
+
+func TestPreventedCountsEachMechanism(t *testing.T) {
+	r := Build(withPrevented())
+	tests := []struct {
+		key    string
+		count  int
+		tokens int64
+		usd    float64
+		priced bool
+	}{
+		// 500 refused tokens at the kept session's $1 per 1,000.
+		{MechReadGuard, 1, 500, 0.5, true},
+		// Two fmt compressions, 3,000 tokens at the period's average rate.
+		{MechFmt, 2, 3_000, 3_000 * (r.Usage.APIEquivalentUSD / float64(r.Usage.Tokens)), true},
+		// One paused and one denied call: both are holds.
+		{MechBoundary, 2, 0, 0, false},
+		{MechLoopBreaker, 1, 0, 0, false},
+		{MechAutopilot, 6, 0, 1.5, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			m, ok := mechanism(r, tt.key)
+			if !ok {
+				t.Fatalf("no %s mechanism in %+v", tt.key, r.Prevented.Mechanisms)
+			}
+			if m.Count != tt.count || m.Tokens != tt.tokens {
+				t.Errorf("count, tokens = %d, %d; want %d, %d", m.Count, m.Tokens, tt.count, tt.tokens)
+			}
+			v, ok := m.USD.Amount()
+			if ok != tt.priced {
+				t.Fatalf("priced = %v, want %v (%s)", ok, tt.priced, m.USD.Caveat())
+			}
+			if ok && math.Abs(v-tt.usd) > 1e-9 {
+				t.Errorf("usd = %v, want %v", v, tt.usd)
+			}
+			if m.Basis == "" {
+				t.Errorf("%s carries no basis", tt.key)
+			}
+		})
+	}
+}
+
+// Prevented is never added into found: the avoidable dollars and classes
+// are the same with or without the prevented inputs.
+func TestPreventedIsNeverAddedIntoFound(t *testing.T) {
+	base := Build(fixture())
+	with := Build(withPrevented())
+	if math.Abs(base.Avoidable.APIEquivalentUSD-with.Avoidable.APIEquivalentUSD) > 1e-9 || base.Avoidable.Tokens != with.Avoidable.Tokens {
+		t.Errorf("avoidable moved with prevented inputs: %+v vs %+v", base.Avoidable, with.Avoidable)
+	}
+	if with.Prevented.USD <= 0 {
+		t.Errorf("prevented usd = %v, want the sum of the priced mechanisms", with.Prevented.USD)
+	}
+}
+
+func TestPreventedUnpricedUntilTheHoldoutConcludes(t *testing.T) {
+	in := withPrevented()
+	in.Savings.Kinds[0].RealizedUSD = measurement.Unknown("not established: no intervention of this kind was held back")
+	m, ok := mechanism(Build(in), MechAutopilot)
+	if !ok {
+		t.Fatal("the autopilot mechanism is missing while its holdout is open")
+	}
+	if _, priced := m.USD.Amount(); priced {
+		t.Errorf("autopilot priced before the holdout concluded: %v", m.USD)
+	}
+}
+
+func TestPreventedWithNothingRecorded(t *testing.T) {
+	r := Build(Inputs{Since: t0, Until: t0.Add(day), Savings: savings.Report{RealizedUSD: measurement.Unknown("none")}})
+	if r.Prevented.USD != 0 {
+		t.Errorf("prevented usd = %v with nothing recorded", r.Prevented.USD)
+	}
+	for _, m := range r.Prevented.Mechanisms {
+		if m.Count != 0 {
+			t.Errorf("%s counted %d with nothing recorded", m.Key, m.Count)
+		}
+	}
+}
+
+func TestHoldClassifiesBoundaryDecisions(t *testing.T) {
+	loop := boundaryPolicy(config.LoopBreakerName)
+	other := boundaryPolicy("no-models-after-noon")
+	tests := []struct {
+		name     string
+		policy   string
+		kind     string
+		stage    eventschema.DecisionStage
+		approver string
+		want     string
+	}{
+		{"paused by an unapproved boundary", other, "boundary", eventschema.DecisionStageApplied, "", MechBoundary},
+		{"denied by the operator", other, "boundary", eventschema.DecisionStageRejected, "", MechBoundary},
+		{"approved is not held", other, "boundary", eventschema.DecisionStageApplied, "alice", ""},
+		{"shadow only would have held", other, "boundary", eventschema.DecisionStageShadow, "", ""},
+		{"loop breaker stop", loop, "boundary", eventschema.DecisionStageApplied, "", MechLoopBreaker},
+		{"loop breaker denied", loop, "boundary", eventschema.DecisionStageRejected, "", MechLoopBreaker},
+		{"not a boundary decision", other, "route", eventschema.DecisionStageApplied, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := &eventschema.Envelope{Type: eventschema.EventTypeDecision, Timestamp: t0, Source: "boundary",
+				Payload: &eventschema.DecisionEvent{Kind: tt.kind, Stage: tt.stage, Policy: tt.policy,
+					Approval: eventschema.DecisionApproval{Approver: tt.approver}}}
+			h, ok := holdOf(env)
+			switch {
+			case tt.want == "" && ok:
+				t.Errorf("classified as %s, want no hold", h.Mechanism)
+			case tt.want != "" && (!ok || h.Mechanism != tt.want):
+				t.Errorf("hold = %+v, %v; want %s", h, ok, tt.want)
+			}
+		})
+	}
+}
+
+func TestFmtReadsOnlyCommandFmtEvents(t *testing.T) {
+	fmtEvent := &eventschema.Envelope{Type: eventschema.EventTypeOptimization, Timestamp: t0,
+		Payload: &eventschema.OptimizationEvent{Kind: eventschema.OptimizationTypeCommandFmt, EstimatedSavingsTokens: 700}}
+	cache := &eventschema.Envelope{Type: eventschema.EventTypeOptimization, Timestamp: t0,
+		Payload: &eventschema.OptimizationEvent{Kind: eventschema.OptimizationTypeCacheReuse, EstimatedSavingsTokens: 900}}
+	got := fmtSavingsOf([]*eventschema.Envelope{fmtEvent, cache})
+	if len(got) != 1 || got[0].Tokens != 700 {
+		t.Errorf("fmt savings = %+v, want the one command_fmt event of 700 tokens", got)
+	}
+}
+
+func boundaryPolicy(rule string) string { return explain.BoundaryPolicyPrefix + rule }
+
+// The headline names what was prevented before what is still found, and
+// says a mechanism that has not priced yet rather than stating zero.
+func TestHeadlineLeadsWithPreventedThenFound(t *testing.T) {
+	r := Build(withPrevented())
+	p, f := strings.Index(r.Headline, "prevented ~$"), strings.Index(r.Headline, "still found ~$")
+	if p < 0 || f < 0 || p > f {
+		t.Errorf("headline = %q, want prevented before still found", r.Headline)
+	}
+
+	in := fixture()
+	in.Fmt, in.Refused, in.Savings.Kinds = nil, nil, nil
+	in.Holds = []Hold{{At: t0.Add(day), Mechanism: MechBoundary}}
+	got := Build(in).Headline
+	if !strings.Contains(got, "prevented not priced yet") {
+		t.Errorf("headline = %q, want the unpriced boundary holds named as not priced", got)
+	}
+}

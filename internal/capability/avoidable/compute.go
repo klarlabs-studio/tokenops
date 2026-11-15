@@ -127,6 +127,11 @@ func gather(ctx context.Context, d Deps, since, until time.Time) (Inputs, error)
 			return Inputs{}, err
 		}
 	}
+	if d.Events != nil {
+		if in.Fmt, in.Holds, err = ReadPrevented(ctx, d.Events, since, until); err != nil {
+			return Inputs{}, err
+		}
+	}
 	if d.Trace != nil {
 		for _, id := range workflowsIn(in) {
 			if err := ctx.Err(); err != nil {
