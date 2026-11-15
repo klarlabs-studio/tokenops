@@ -2,6 +2,7 @@ package teamshare
 
 import (
 	"maps"
+	"math"
 	"slices"
 	"time"
 
@@ -14,7 +15,8 @@ import (
 // and that ended at least teamwire.FinishedWeekLag before now, so a week is
 // sent only once it is final. Counts and tokens add the days; dollars add
 // the days that priced them and are absent when none did. A lockout window
-// counted on two days counts once. Never per session or repository.
+// counted on two days counts once, its count and its blocked minutes both.
+// Never per session or repository.
 func PreventedRows(ds []avoidable.Day, covered map[string]bool, now time.Time) ([]string, []teamwire.PreventedWeek) {
 	byWeek := map[time.Time][]avoidable.Day{}
 	for _, d := range ds {
@@ -43,7 +45,11 @@ func weekRows(week string, days []avoidable.Day) []teamwire.PreventedWeek {
 		count, tokens int64
 		usd           float64
 		priced        bool
-		windows       map[avoidable.AvoidedWindow]bool
+		// windows is the largest blocked minutes each lockout window
+		// reported, so a window on several days counts once.
+		windows map[avoidable.AvoidedWindow]float64
+		// minutes are the blocked minutes of lockouts that named no window.
+		minutes float64
 	}
 	sums := map[string]*sum{}
 	for _, d := range days {
@@ -53,7 +59,7 @@ func weekRows(week string, days []avoidable.Day) []teamwire.PreventedWeek {
 			}
 			s := sums[m.Key]
 			if s == nil {
-				s = &sum{windows: map[avoidable.AvoidedWindow]bool{}}
+				s = &sum{windows: map[avoidable.AvoidedWindow]float64{}}
 				sums[m.Key] = s
 			}
 			s.tokens += m.Tokens
@@ -62,14 +68,16 @@ func weekRows(week string, days []avoidable.Day) []teamwire.PreventedWeek {
 			}
 			if len(m.Windows) == 0 {
 				s.count += int64(m.Count)
+				s.minutes += m.BlockedMinutes
 				continue
 			}
 			for _, w := range m.Windows {
 				k := avoidable.AvoidedWindow{Provider: w.Provider, Window: w.Window, ResetsAt: w.ResetsAt.UTC()}
-				if !s.windows[k] {
-					s.windows[k] = true
+				prev, seen := s.windows[k]
+				if !seen {
 					s.count++
 				}
+				s.windows[k] = math.Max(prev, w.BlockedMinutes)
 			}
 		}
 	}
@@ -84,9 +92,24 @@ func weekRows(week string, days []avoidable.Day) []teamwire.PreventedWeek {
 			usd := s.usd
 			r.USD = &usd
 		}
+		if key == teamwire.MechanismLockout {
+			r.BlockedMinutes = blockedMinutes(s.minutes, s.windows)
+		}
 		out = append(out, r)
 	}
 	return out
+}
+
+// blockedMinutes is a week's blocked minutes: the unnamed lockouts' plus
+// each distinct window's, rounded to whole minutes and capped at the bound
+// a row may carry. Windows across providers can add past a week, so the cap
+// keeps a busy week's upload valid rather than refused.
+func blockedMinutes(unnamed float64, windows map[avoidable.AvoidedWindow]float64) int64 {
+	total := unnamed
+	for _, m := range windows {
+		total += m
+	}
+	return int64(math.Min(math.Round(total), teamwire.MaxBlockedMinutes))
 }
 
 // mondayOf is the Monday 00:00 UTC that starts t's week.
