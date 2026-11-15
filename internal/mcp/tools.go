@@ -313,7 +313,7 @@ func RegisterTools(s *Server, d Deps) error {
 		})
 
 	s.Tool("tokenops_waste").
-		Description("Avoidable usage over a period by waste class — redundant re-reads, cache-miss rebuilds, over-tiered model, retry loops and runaway growth, oversized context, abandoned sessions — each token counted in at most one class, in API-equivalent dollars and as a share of each plan window. Beside it, what the coach's interventions realized, and the guardrails ranked by graduation readiness with the one to switch on next. Derived figures only.").
+		Description("Avoidable usage over a period by waste class — redundant re-reads, cache-miss rebuilds, idle cache rebuilds, over-tiered model, retry loops and runaway growth, oversized context, stopped turns, abandoned sessions — each token counted in at most one class, in API-equivalent dollars and as a share of each plan window. Beside it, what the coach's interventions realized, and the guardrails ranked by graduation readiness with the one to switch on next. Derived figures only.").
 		OutputSchema(avoidable.Report{}).
 		Handler(func(ctx context.Context, in wasteInput) (*avoidable.Report, error) {
 			since, err := sinceOrDefault(in.Since, avoidable.DefaultDays*24*time.Hour)

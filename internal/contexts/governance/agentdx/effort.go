@@ -3,6 +3,7 @@ package agentdx
 import (
 	"sort"
 	"strings"
+	"time"
 )
 
 // EffortRow is how instructions went at one model and reasoning effort.
@@ -38,6 +39,13 @@ type EffortRow struct {
 	FirstTryPct    float64 `json:"first_try_pct"`
 	RejectedPct    float64 `json:"rejected_pct"`
 	InterruptedPct float64 `json:"interrupted_pct"`
+
+	// APIEquivalentUSD is what the row's instructions cost at list prices,
+	// SharePct its share of all costed instructions, and USDPerInstruction
+	// what one costs. Zero when no cost source was read.
+	APIEquivalentUSD  float64 `json:"api_equivalent_usd,omitempty"`
+	SharePct          float64 `json:"share_pct,omitempty"`
+	USDPerInstruction float64 `json:"usd_per_instruction,omitempty"`
 }
 
 // MinEffortInstructions is the floor for comparing an effort row.
@@ -54,6 +62,36 @@ var effortOrder = map[string]int{
 // not lend each other turns. Instructions with no recorded effort are
 // left out: the client did not say, and guessing would put them in a row.
 func ByEffort(records []Record) []EffortRow {
+	return ByEffortCosted(records, nil)
+}
+
+// CostOf is what one unit cost at list prices. A nil CostOf leaves the
+// cost figures of EffortRow unset.
+type CostOf func(Unit) float64
+
+// TurnCost is one model turn's list-price cost and when it was recorded.
+type TurnCost struct {
+	At  time.Time
+	USD float64
+}
+
+// UnitCosts sums, for a unit, the turns of its session recorded between
+// its start and its last activity. bySession holds each session's turns.
+func UnitCosts(bySession map[string][]TurnCost) CostOf {
+	return func(u Unit) float64 {
+		var usd float64
+		for _, t := range bySession[u.SessionID] {
+			if !t.At.Before(u.Start) && !t.At.After(u.LastActivity) {
+				usd += t.USD
+			}
+		}
+		return usd
+	}
+}
+
+// ByEffortCosted is ByEffort with each row's cost: the cost of its units,
+// its share of all costed instructions, and the cost of one.
+func ByEffortCosted(records []Record, cost CostOf) []EffortRow {
 	bySession := map[string][]Record{}
 	for _, r := range records {
 		bySession[r.SessionID] = append(bySession[r.SessionID], r)
@@ -69,8 +107,22 @@ func ByEffort(records []Record) []EffortRow {
 		}
 	}
 	rows := make([]EffortRow, 0, len(groups))
+	var total float64
 	for k, units := range groups {
-		rows = append(rows, effortRow(k[0], k[1], units))
+		row := effortRow(k[0], k[1], units)
+		if cost != nil {
+			for _, u := range units {
+				row.APIEquivalentUSD += cost(u)
+			}
+			row.USDPerInstruction = row.APIEquivalentUSD / float64(len(units))
+			total += row.APIEquivalentUSD
+		}
+		rows = append(rows, row)
+	}
+	if total > 0 {
+		for i := range rows {
+			rows[i].SharePct = round1(rows[i].APIEquivalentUSD / total * 100)
+		}
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].Model != rows[j].Model {

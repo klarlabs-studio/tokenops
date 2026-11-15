@@ -29,6 +29,9 @@ type Window struct {
 	// IncludeScratch keeps sessions run in throwaway directories, which
 	// are left out by default because they have no operator.
 	IncludeScratch bool
+	// Cost prices each instruction at list prices, for the effort rows;
+	// nil leaves their cost figures out.
+	Cost agentdx.CostOf
 	// Cache keeps what each transcript yielded between reads of the
 	// window, so a caller reading it repeatedly (the daemon) reads only
 	// what changed. Nil reads every transcript.
@@ -236,6 +239,9 @@ func ComputeDXWithCurve(w Window, now time.Time) (DX, []agentdx.ContextBand) {
 	records, window, info, err := w.read(now, false)
 	dx := dxOf(records, err, window)
 	dx.Cohort = &info
+	if w.Cost != nil {
+		dx.Metrics.ByEffort = agentdx.ByEffortCosted(records, w.Cost)
+	}
 	return dx, agentdx.ComputeContextCurve(records)
 }
 

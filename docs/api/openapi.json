@@ -3172,6 +3172,9 @@
                           "items": {
                             "additionalProperties": false,
                             "properties": {
+                              "api_equivalent_usd": {
+                                "type": "number"
+                              },
                               "effort": {
                                 "type": "string"
                               },
@@ -3203,6 +3206,12 @@
                                 "type": "string"
                               },
                               "rejected_pct": {
+                                "type": "number"
+                              },
+                              "share_pct": {
+                                "type": "number"
+                              },
+                              "usd_per_instruction": {
                                 "type": "number"
                               }
                             },
@@ -9388,6 +9397,24 @@
                           "class": {
                             "type": "string"
                           },
+                          "concentration": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "sessions": {
+                                "type": "integer"
+                              },
+                              "top": {
+                                "type": "integer"
+                              },
+                              "top_pct": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "fix": {
+                            "type": "string"
+                          },
                           "guardrail": {
                             "type": "string"
                           },
@@ -9410,6 +9437,18 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "context_line": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "basis": {
+                          "type": "string"
+                        },
+                        "tokens": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
                     },
                     "guardrails": {
                       "items": {
@@ -9645,7 +9684,7 @@
             "description": "Missing or wrong API token"
           }
         },
-        "summary": "Avoidable usage by waste class (redundant re-reads, cache-miss rebuilds, over-tiered model, retry loops, oversized context, abandoned sessions), each token in one class, in API-equivalent dollars and plan-window share; what was realized beside it; the guardrail to switch on next"
+        "summary": "Avoidable usage by waste class (redundant re-reads, cache-miss rebuilds, idle cache rebuilds, over-tiered model, retry loops, oversized context, stopped turns, abandoned sessions), each token in one class, in API-equivalent dollars and plan-window share, with each class's fix and the sessions carrying most of it; what was realized beside it; the guardrail to switch on next"
       }
     },
     "/api/status": {

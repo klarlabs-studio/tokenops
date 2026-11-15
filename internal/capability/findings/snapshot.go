@@ -109,13 +109,14 @@ func WriteSnapshot(dir string, s SessionsSnapshot) (dropped []string, err error)
 // AnalyzeSessions runs the week's session analysis and stores it. The
 // analysis reads transcripts but stores only derived figures. A non-nil
 // cache, kept between runs, makes each run read only the transcripts
-// that changed since the last. dropped names each figure that was not a
+// that changed since the last. A non-nil cost prices each effort row from
+// the store's turns. dropped names each figure that was not a
 // number and was stored as 0 (see WriteSnapshot).
-func AnalyzeSessions(ctx context.Context, dir string, now time.Time, cache *sessions.TranscriptCache) (s SessionsSnapshot, dropped []string, err error) {
+func AnalyzeSessions(ctx context.Context, dir string, now time.Time, cache *sessions.TranscriptCache, cost agentdx.CostOf) (s SessionsSnapshot, dropped []string, err error) {
 	if err := ctx.Err(); err != nil {
 		return SessionsSnapshot{}, nil, err
 	}
-	dx, curve := sessions.ComputeDXWithCurve(sessions.Window{Days: SessionDays, Cache: cache}, now)
+	dx, curve := sessions.ComputeDXWithCurve(sessions.Window{Days: SessionDays, Cache: cache, Cost: cost}, now)
 	s = SessionsSnapshot{ComputedAt: now.UTC(), DX: dx, Curve: curve}
 	dropped, err = WriteSnapshot(dir, s)
 	return s, dropped, err

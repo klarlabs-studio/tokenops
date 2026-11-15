@@ -439,7 +439,7 @@ func (s *startup) startBackgroundRefreshers(context.Context) error {
 	startPricingRefreshRuntime(s.cfg, s.components.Spend, s.sup, s.logger)
 
 	// The findings' session analysis is too slow to run per answer.
-	startSessionFindingsRuntime(s.transcripts, s.sup, s.logger)
+	startSessionFindingsRuntime(s.transcripts, s.components.Aggregator, s.sup, s.logger)
 
 	// What those scans read is kept for a start that follows no clean
 	// stop.
