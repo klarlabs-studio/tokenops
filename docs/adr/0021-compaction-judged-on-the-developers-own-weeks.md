@@ -85,6 +85,6 @@ carries more context regardless of any setting.
 - The figures are the developer's own. They are not shared with a team
   unless the team upload already carries them; nothing about the verdict
   leaves the machine by itself.
-- The judgement is pure: `internal/capability/compactwatch` reads nothing
+- The judgement is pure: `internal/contexts/learning/compactwatch` reads nothing
   and writes nothing. The weekly series and the caller that feeds it are
   separate work.

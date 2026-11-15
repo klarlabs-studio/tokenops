@@ -11,7 +11,7 @@ var setting = time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 // weeks builds one week per value, starting a week before the setting for
 // each before value and at the setting for each after value.
 func weeks(oversized []int64, rejects []float64) []Week {
-	var out []Week
+	out := make([]Week, 0, len(oversized))
 	for i := range oversized {
 		out = append(out, Week{Start: setting.AddDate(0, 0, 7*(i-len(oversized)+1)),
 			OversizedTokens: oversized[i], RejectRatePct: rejects[i]})
@@ -22,7 +22,7 @@ func weeks(oversized []int64, rejects []float64) []Week {
 // series joins a baseline and the weeks after the setting into one run,
 // where the setting falls between the two.
 func series(before, after []Week) []Week {
-	var out []Week
+	out := make([]Week, 0, len(before)+len(after))
 	for i, w := range before {
 		w.Start = setting.AddDate(0, 0, -7*(len(before)-i))
 		out = append(out, w)
