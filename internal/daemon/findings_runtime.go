@@ -7,8 +7,6 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
-	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 )
 
@@ -23,42 +21,14 @@ const (
 	sessionFindingsEvery = 3 * time.Hour
 )
 
-func startSessionFindingsRuntime(cache *sessions.TranscriptCache, agg *analytics.Aggregator, sup *lifecycle.Supervisor, logger *slog.Logger) {
+func startSessionFindingsRuntime(cache *sessions.TranscriptCache, costs findings.CostSource, sup *lifecycle.Supervisor, logger *slog.Logger) {
 	sup.Go("session-findings", func(ctx context.Context) error {
-		runSessionFindings(ctx, findings.DefaultDir(), cache, sessionCosts(agg), sessionFindingsDelay, sessionFindingsEvery, logger)
+		runSessionFindings(ctx, findings.DefaultDir(), cache, costs, sessionFindingsDelay, sessionFindingsEvery, logger)
 		return nil
 	})
 }
 
-// costSource reads what each session's turns cost at list prices, as of a
-// run's start. A nil source leaves the effort rows' costs out.
-type costSource func(ctx context.Context, now time.Time) agentdx.CostOf
-
-// sessionCosts reads the store's turns for the analysed week. Nil without
-// an aggregator.
-func sessionCosts(agg *analytics.Aggregator) costSource {
-	if agg == nil {
-		return nil
-	}
-	return func(ctx context.Context, now time.Time) agentdx.CostOf {
-		turns, err := agg.SessionTurns(ctx, analytics.Filter{Since: now.AddDate(0, 0, -findings.SessionDays), Until: now})
-		if err != nil {
-			return nil
-		}
-		return costOfTurns(turns)
-	}
-}
-
-// costOfTurns prices a unit from the turns of its session, at list prices.
-func costOfTurns(turns []analytics.SessionTurn) agentdx.CostOf {
-	by := map[string][]agentdx.TurnCost{}
-	for _, t := range turns {
-		by[t.SessionID] = append(by[t.SessionID], agentdx.TurnCost{At: t.At, USD: t.APIEquivalentUSD})
-	}
-	return agentdx.UnitCosts(by)
-}
-
-func runSessionFindings(ctx context.Context, dir string, cache *sessions.TranscriptCache, costs costSource, delay, every time.Duration, logger *slog.Logger) {
+func runSessionFindings(ctx context.Context, dir string, cache *sessions.TranscriptCache, costs findings.CostSource, delay, every time.Duration, logger *slog.Logger) {
 	wait := time.NewTimer(delay)
 	defer wait.Stop()
 	select {
@@ -71,11 +41,7 @@ func runSessionFindings(ctx context.Context, dir string, cache *sessions.Transcr
 	}
 	analyze := func() {
 		start := time.Now()
-		var cost agentdx.CostOf
-		if costs != nil {
-			cost = costs(ctx, start)
-		}
-		s, dropped, err := findings.AnalyzeSessions(ctx, dir, start, cache, cost)
+		s, dropped, err := findings.AnalyzeSessions(ctx, dir, start, cache, costs.At(ctx, start))
 		if len(dropped) > 0 {
 			logger.Warn("session analysis figures not a number, stored as 0", "fields", dropped)
 		}
