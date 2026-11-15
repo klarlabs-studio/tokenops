@@ -69,12 +69,15 @@ const windowLookback = 7 * 24 * time.Hour
 // addFinOps fills u's schema 2 sections and marks it schema 2. A reader
 // that fails leaves its sections empty and is noted as unread; a row that
 // would fail validation is dropped and noted, so the rest is still sent.
-func addFinOps(ctx context.Context, f FinOps, turns TurnReader, took func(string, time.Duration), u *teamwire.Upload, repoOf map[string]string, kindOf kinds, now time.Time, notes *Notes) {
+//
+// It returns the day reports the waste was read from, nil when it was not
+// read, for the prevented figures.
+func addFinOps(ctx context.Context, f FinOps, turns TurnReader, took func(string, time.Duration), u *teamwire.Upload, repoOf map[string]string, kindOf kinds, now time.Time, notes *Notes) []avoidable.Day {
 	u.Schema = teamwire.SchemaFinOps
 	first, err := time.Parse(teamwire.DayLayout, u.Days[0])
 	if err != nil {
 		notes.unread("finops", err)
-		return
+		return nil
 	}
 	covered := map[string]bool{}
 	for _, d := range u.Days {
@@ -101,9 +104,10 @@ func addFinOps(ctx context.Context, f FinOps, turns TurnReader, took func(string
 			}
 		}
 	}
+	var ds []avoidable.Day
 	if f.Waste != nil {
 		done := lap(took, "waste")
-		ds, err := f.Waste(ctx, turns, first, now)
+		ds, err = f.Waste(ctx, turns, first, now)
 		done()
 		if err != nil {
 			notes.unread("waste", err)
@@ -113,6 +117,10 @@ func addFinOps(ctx context.Context, f FinOps, turns TurnReader, took func(string
 		}
 	}
 	notes.Dropped = append(notes.Dropped, dropInvalid(u)...)
+	if err != nil {
+		return nil
+	}
+	return ds
 }
 
 // planDays reads the covered days' plan use. The plan history says which
