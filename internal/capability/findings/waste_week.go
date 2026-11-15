@@ -69,6 +69,9 @@ func wasteWeek(s *avoidable.Snapshot, now time.Time) []Finding {
 	}
 
 	action := "`tokenops spend waste` shows each class and how it is found."
+	if fix := largestFix(r.Classes); fix != "" {
+		action = "Biggest acting class: " + fix + ". `tokenops spend waste` shows each class and how it is found."
+	}
 	if n := r.Next; n != nil {
 		switch {
 		case n.Ready && strings.HasPrefix(n.Promote, "tokenops "):
@@ -82,24 +85,45 @@ func wasteWeek(s *avoidable.Snapshot, now time.Time) []Finding {
 	return []Finding{{Key: key(KindWaste, "week"), Kind: KindWaste, Level: LevelInfo, Title: title, Evidence: evidence, Action: action}}
 }
 
-// rebuildCause says what most cache rebuilds came after, or "" when none
-// were found or their top cause is unexplained.
-func rebuildCause(classes []avoidable.ClassCost) string {
+// largestFix is the fix of the class with the most API-equivalent dollars
+// among those that act (not inferred), or "" when it names none.
+func largestFix(classes []avoidable.ClassCost) string {
+	var best avoidable.ClassCost
 	for _, c := range classes {
-		if c.Class != wastetax.ClassCacheRebuild {
+		if !c.Inferred && c.Fix != "" && c.APIEquivalentUSD > best.APIEquivalentUSD {
+			best = c
+		}
+	}
+	return best.Fix
+}
+
+// rebuildCause says what most cache rebuilds came after, across the
+// rebuild classes (the cache rebuilt cold, and rebuilt after an idle gap),
+// or "" when none were found or their top cause is unexplained.
+func rebuildCause(classes []avoidable.ClassCost) string {
+	var causes []avoidable.CauseCost
+	var total int64
+	for _, c := range classes {
+		if c.Class != wastetax.ClassCacheRebuild && c.Class != wastetax.ClassIdleRebuild {
 			continue
 		}
-		top, ok := c.TopCause()
-		phrase := causePhrase(top)
-		if !ok || phrase == "" {
-			return ""
-		}
-		if top.Tokens*2 > c.Tokens {
-			return "Most cache rebuilds came after " + phrase + "."
-		}
-		return "Cache rebuilds came most often after " + phrase + "."
+		causes = append(causes, c.Causes...)
+		total += c.Tokens
 	}
-	return ""
+	var top avoidable.CauseCost
+	for _, c := range causes {
+		if c.Tokens > top.Tokens {
+			top = c
+		}
+	}
+	phrase := causePhrase(top)
+	if top.Tokens <= 0 || phrase == "" {
+		return ""
+	}
+	if top.Tokens*2 > total {
+		return "Most cache rebuilds came after " + phrase + "."
+	}
+	return "Cache rebuilds came most often after " + phrase + "."
 }
 
 // causePhrase is a cause as what a rebuild came after.

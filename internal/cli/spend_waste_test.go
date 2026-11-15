@@ -52,6 +52,28 @@ func wasteFixture() avoidable.Report {
 	}
 }
 
+// The classes a developer acts on carry their fix and where the dollars
+// concentrate, beside the class's row.
+func TestWriteWasteReportNamesFixAndConcentration(t *testing.T) {
+	r := wasteFixture()
+	r.Classes = append(r.Classes, avoidable.ClassCost{Class: waste.ClassIdleRebuild, Name: waste.ClassName(waste.ClassIdleRebuild),
+		Amount: avoidable.Amount{Tokens: 500, APIEquivalentUSD: 0.5}, Turns: 1, Sessions: 9,
+		Fix:           "keep a long session warm before the cache lapses",
+		Concentration: &avoidable.Concentration{Sessions: 9, Top: 3, TopPct: 52}})
+	var b bytes.Buffer
+	writeWasteReport(&b, r)
+	out := b.String()
+	for _, want := range []string{
+		"idle cache rebuilds",
+		"3 sessions make 52% of it",
+		"fix: keep a long session warm before the cache lapses",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
 func TestWriteWasteReport(t *testing.T) {
 	r := wasteFixture()
 	var b bytes.Buffer
