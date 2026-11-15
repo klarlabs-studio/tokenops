@@ -114,6 +114,10 @@ type Inputs struct {
 	// guardrail's graduation.
 	Savings savings.Report
 	Steps   []savings.Step
+	// Fmt are the command_fmt compressions recorded in the period, and
+	// Holds the calls a boundary stopped: the prevented side of the report.
+	Fmt   []FmtSaving
+	Holds []Hold
 }
 
 // Stop is an instruction the developer stopped: its session, when the
@@ -269,7 +273,10 @@ type Report struct {
 	Usage     Amount      `json:"usage"`
 	Avoidable Amount      `json:"avoidable"`
 	Classes   []ClassCost `json:"classes"`
-	Realized  Realized    `json:"realized"`
+	// Prevented is what the mechanisms stopped; found is Avoidable. They
+	// sit side by side and are never added together.
+	Prevented Prevented `json:"prevented"`
+	Realized  Realized  `json:"realized"`
 	// Guardrails rank the capabilities: ready first, then by what each
 	// addresses; one that already acts comes last.
 	Guardrails []Guardrail `json:"guardrails"`
@@ -412,6 +419,7 @@ func BuildTurns(in Inputs) (Report, []TurnWaste) {
 	r.Usage.WindowShare = shares(r.Calibrations, usageTokens)
 	r.Avoidable.WindowShare = shares(r.Calibrations, avoidTokens)
 	r.Realized = realized(in, b, r.Avoidable.APIEquivalentUSD)
+	r.Prevented = buildPrevented(in, r)
 	r.Guardrails, r.Next = rank(in.Steps, r.Classes)
 	r.Notes = b.notes()
 	r.Headline = headline(r)
@@ -648,21 +656,24 @@ func rank(steps []savings.Step, classes []ClassCost) ([]Guardrail, *Guardrail) {
 	return out, nil
 }
 
-// headline is the period in one line.
+// headline is the period in one line: what was prevented, beside what is
+// still found.
 func headline(r Report) string {
-	if r.Avoidable.Tokens <= 0 {
+	if r.Avoidable.Tokens <= 0 && !r.Prevented.Active() {
 		return ""
 	}
 	days := int(math.Round(r.Until.Sub(r.Since).Hours() / 24))
 	var b strings.Builder
-	fmt.Fprintf(&b, "Last %d days: ~%s avoidable", days, dollars(r.Avoidable.APIEquivalentUSD))
-	if s, ok := largest(r.Avoidable.WindowShare); ok {
-		fmt.Fprintf(&b, " (%.1f%% of a %s window)", s.Pct, s.Window)
+	fmt.Fprintf(&b, "Last %d days: prevented %s", days, r.Prevented.Words())
+	if r.Avoidable.Tokens > 0 {
+		fmt.Fprintf(&b, "; still found ~%s avoidable", dollars(r.Avoidable.APIEquivalentUSD))
+		if s, ok := largest(r.Avoidable.WindowShare); ok {
+			fmt.Fprintf(&b, " (%.1f%% of a %s window)", s.Pct, s.Window)
+		}
+		if top := topClass(r.Classes); top != "" {
+			fmt.Fprintf(&b, ", most of it %s", top)
+		}
 	}
-	if top := topClass(r.Classes); top != "" {
-		fmt.Fprintf(&b, ", most of it %s", top)
-	}
-	fmt.Fprintf(&b, "; %s realized", dollars(r.Realized.USD))
 	if n := r.Next; n != nil {
 		if n.Ready {
 			fmt.Fprintf(&b, ". Next guardrail: %s, ready to %s", n.Name, n.Next)
@@ -671,6 +682,39 @@ func headline(r Report) string {
 		}
 	}
 	return b.String()
+}
+
+// Active reports whether any mechanism acted in the period, priced or not.
+func (p Prevented) Active() bool {
+	for _, m := range p.Mechanisms {
+		if m.Count > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// Priced reports whether an active mechanism has dollars the report can
+// state.
+func (p Prevented) Priced() bool {
+	for _, m := range p.Mechanisms {
+		if _, ok := m.USD.Amount(); ok && m.Count > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// Words is the prevented total in a sentence fragment: the dollars, or
+// that it is not priced yet, or that nothing was prevented.
+func (p Prevented) Words() string {
+	switch {
+	case !p.Active():
+		return "none in the period"
+	case !p.Priced():
+		return "not priced yet"
+	}
+	return "~" + dollars(p.USD)
 }
 
 func largest(ss []WindowShare) (WindowShare, bool) {

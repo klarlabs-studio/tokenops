@@ -9600,6 +9600,44 @@
                       },
                       "type": "array"
                     },
+                    "prevented": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "mechanisms": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "basis": {
+                                "type": "string"
+                              },
+                              "count": {
+                                "type": "integer"
+                              },
+                              "key": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "tokens": {
+                                "type": "integer"
+                              },
+                              "usd": {
+                                "additionalProperties": false,
+                                "properties": {},
+                                "type": "object"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "usd": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "realized": {
                       "additionalProperties": false,
                       "properties": {

@@ -8,6 +8,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	wastetax "go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/learning"
+	"go.klarlabs.de/tokenops/internal/contexts/measurement"
 )
 
 func weekReport(ready bool) avoidable.Report {
@@ -258,5 +259,18 @@ func TestWasteWeekActionNamesTheLargestClassFix(t *testing.T) {
 	f := weekFinding(t, r)
 	if !strings.Contains(f.Action, "stop a repeated prompt after a few tries") {
 		t.Errorf("action %q does not name the largest acting class's fix", f.Action)
+	}
+}
+
+// The glance's waste line names what was prevented beside what is still
+// found, both in the title; without a prevented mechanism it is as before.
+func TestWasteWeekTitleNamesPreventedBesideFound(t *testing.T) {
+	r := withClassShares(weekReport(true))
+	r.Prevented = avoidable.Prevented{USD: 2, Mechanisms: []avoidable.Mechanism{
+		{Key: avoidable.MechReadGuard, Name: "re-reads refused", Count: 3, USD: measurement.Estimated(2, "read guard ledger", "")}}}
+	got := weekFinding(t, r)
+	want := "Last 7 days: prevented ~$2.00, found ~6.2% of a weekly window avoidable"
+	if got.Title != want {
+		t.Errorf("title = %q, want %q", got.Title, want)
 	}
 }

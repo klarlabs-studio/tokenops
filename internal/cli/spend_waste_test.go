@@ -42,6 +42,9 @@ func wasteFixture() avoidable.Report {
 		},
 		Realized: avoidable.Realized{HoldoutUSD: measurement.Unknown("no holdout comparison has concluded yet"),
 			RefusedRereads: 2, RefusedTokens: 4_000, RefusedUSD: 4, USD: 4, Share: &share},
+		Prevented: avoidable.Prevented{USD: 4, Mechanisms: []avoidable.Mechanism{{Key: avoidable.MechReadGuard,
+			Name: "re-reads refused", Count: 2, Tokens: 4_000, Basis: "refused re-reads, at the session's price",
+			USD: measurement.Estimated(4, "read guard ledger", "")}}},
 		Guardrails: []avoidable.Guardrail{next, {Capability: learning.CapabilityRouting, Name: "model routing",
 			Stage: learning.StageAdvise, Next: learning.StageAct, Bar: "✗ advice with an outcome: 3 (needs 50)"}},
 		Next:         &next,
@@ -85,7 +88,7 @@ func TestWriteWasteReport(t *testing.T) {
 		"avoidable", "$12.00", "12.0%", "30% of usage",
 		"redundant re-reads", "$3.00", "read guard",
 		"abandoned sessions", "session budget",
-		"Realized $4.00", "2 re-reads refused", "25% of what could be saved",
+		"~$4.00", "re-reads refused", "still avoidable",
 		"Next guardrail: read guard", "`tokenops coach set waste advise`",
 		"model routing", "✗ advice with an outcome",
 		"at most one class", "how abandoned_session", "no rate card",
@@ -224,5 +227,34 @@ func TestWriteWasteReportMarksTheInferredClass(t *testing.T) {
 	writeWasteReport(&b, r)
 	if strings.Contains(b.String(), "inferred") {
 		t.Errorf("a note for no inferred class:\n%s", b.String())
+	}
+}
+
+// Prevented sits above found, both labelled, and each mechanism says what
+// it stopped and whether it is priced; the basis follows the classes.
+func TestWriteWasteReportLeadsWithPreventedThenFound(t *testing.T) {
+	r := wasteFixture()
+	r.Prevented = avoidable.Prevented{USD: 4.5, Mechanisms: []avoidable.Mechanism{
+		{Key: avoidable.MechReadGuard, Name: "re-reads refused", Count: 2, Tokens: 4_000, Basis: "basis of refusals",
+			USD: measurement.Estimated(4, "read guard ledger", "")},
+		{Key: avoidable.MechAutopilot, Name: "model moves verified by the holdout", Count: 6,
+			USD: measurement.Estimated(0.5, "randomized holdout", "")},
+		{Key: avoidable.MechBoundary, Name: "calls a boundary held", Count: 2,
+			USD: measurement.Unknown("a held call is not priced")},
+	}}
+	var b bytes.Buffer
+	writeWasteReport(&b, r)
+	out := b.String()
+	p, f := strings.Index(out, "prevented"), strings.Index(out, "found")
+	if p < 0 || f < 0 || p > f {
+		t.Fatalf("want prevented above found in:\n%s", out)
+	}
+	for _, want := range []string{"~$4.50", "re-reads refused", "not priced", "basis of refusals"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "realized") {
+		t.Errorf("the old realized line is still printed:\n%s", out)
 	}
 }
