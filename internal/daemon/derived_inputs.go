@@ -31,7 +31,7 @@ func derivedInputs(store *sqlite.Store, key string, files ...string) func(contex
 			return "", false
 		}
 		var b strings.Builder
-		fmt.Fprintf(&b, "%s|%d|%d|%d", key, pos.Rowid, pos.Seq, pricingGeneration.Load())
+		fmt.Fprintf(&b, "%s|%d|%d|%d|%d", key, pos.Rowid, pos.Seq, pos.Older, pricingGeneration.Load())
 		for _, f := range files {
 			if st, err := os.Stat(f); err == nil {
 				fmt.Fprintf(&b, "|%d.%d", st.Size(), st.ModTime().UnixNano())
