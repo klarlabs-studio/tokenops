@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -24,6 +25,9 @@ func sessionTurn(id string, at time.Time, session string, rng *rand.Rand) *event
 	p.CacheWrite1hInputTokens = rng.Int63n(p.CacheWriteInputTokens + 1)
 	p.Latency = time.Duration(rng.Int63n(int64(time.Minute)))
 	p.WorkflowID = fmt.Sprintf("wf-%d", rng.Intn(4))
+	if rng.Intn(4) != 0 {
+		p.AgentID = fmt.Sprintf("ag-%d", rng.Intn(3))
+	}
 	switch rng.Intn(4) {
 	case 0:
 		p.CostSource = eventschema.CostSourcePlanIncluded
@@ -94,12 +98,44 @@ func sessionFilters() []namedFilter {
 		{"a source readmitted", analytics.Filter{Since: month, IncludeSources: []string{"mcp-session"}}},
 		{"another source left out", analytics.Filter{Since: month, ExcludeSources: []string{"claude-code-jsonl"}}},
 		{"prompt type named", analytics.Filter{Since: month, EventType: eventschema.EventTypePrompt}},
-		// Handed to the store.
 		{"by provider", analytics.Filter{Since: month, Provider: "openai"}},
+		{"by provider, a day", analytics.Filter{Since: cacheNow.Add(-24 * time.Hour), Provider: string(eventschema.ProviderAnthropic)}},
+		{"by provider, a week, closed", analytics.Filter{Since: cacheNow.Add(-7 * 24 * time.Hour), Until: cacheNow, Provider: string(eventschema.ProviderOpenAI)}},
+		{"by workflow", analytics.Filter{Since: month, WorkflowID: "wf-1"}},
+		{"by workflow, a week, source left out", analytics.Filter{Since: cacheNow.Add(-7 * 24 * time.Hour), WorkflowID: "wf-2", ExcludeSources: []string{"claude-code-jsonl"}}},
+		{"by agent", analytics.Filter{Since: month, AgentID: "ag-1"}},
+		{"by agent, a day", analytics.Filter{Since: cacheNow.Add(-24 * time.Hour), AgentID: "ag-0"}},
+		{"by an agent nobody ran", analytics.Filter{Since: month, AgentID: "nobody"}},
+		{"by agent and provider", analytics.Filter{Since: month, AgentID: "ag-2", Provider: string(eventschema.ProviderAnthropic)}},
+		{"by workflow, agent and provider", analytics.Filter{Since: cacheNow.Add(-7 * 24 * time.Hour), WorkflowID: "wf-3", AgentID: "ag-1", Provider: string(eventschema.ProviderOpenAI)}},
+		// Each budget's window, as Measure reads it, scoped as budgets are.
+		{"budget, all spend, a day", budgetWindow(budget.WindowDaily, analytics.Filter{})},
+		{"budget, all spend, a week", budgetWindow(budget.WindowWeekly, analytics.Filter{})},
+		{"budget, all spend, a month", budgetWindow(budget.WindowMonthly, analytics.Filter{})},
+		{"budget by provider, a day", budgetWindow(budget.WindowDaily, analytics.Filter{Provider: string(eventschema.ProviderOpenAI)})},
+		{"budget by provider, a week", budgetWindow(budget.WindowWeekly, analytics.Filter{Provider: string(eventschema.ProviderAnthropic)})},
+		{"budget by provider, a month", budgetWindow(budget.WindowMonthly, analytics.Filter{Provider: string(eventschema.ProviderOpenAI)})},
+		{"budget by workflow, a day", budgetWindow(budget.WindowDaily, analytics.Filter{WorkflowID: "wf-0"})},
+		{"budget by workflow, a week", budgetWindow(budget.WindowWeekly, analytics.Filter{WorkflowID: "wf-2"})},
+		{"budget by workflow, a month", budgetWindow(budget.WindowMonthly, analytics.Filter{WorkflowID: "wf-1"})},
+		{"budget by agent, a day", budgetWindow(budget.WindowDaily, analytics.Filter{AgentID: "ag-2"})},
+		{"budget by agent, a week", budgetWindow(budget.WindowWeekly, analytics.Filter{AgentID: "ag-0"})},
+		{"budget by agent, a month", budgetWindow(budget.WindowMonthly, analytics.Filter{AgentID: "ag-1"})},
+		{"budget by all three, a month", budgetWindow(budget.WindowMonthly, analytics.Filter{Provider: string(eventschema.ProviderAnthropic), WorkflowID: "wf-1", AgentID: "ag-1"})},
+		// Handed to the store.
+		{"by model", analytics.Filter{Since: month, Model: "gpt-5"}},
 		{"all time", analytics.Filter{}},
 		{"beyond the span", analytics.Filter{Since: cacheNow.Add(-60 * 24 * time.Hour)}},
 		{"empty source left", analytics.Filter{Since: month, ExcludeSources: []string{""}}},
 	}
+}
+
+// budgetWindow is f over the window a budget measures now: from the
+// window's start up to now, as budgets.Measure reads it.
+func budgetWindow(w budget.Window, f analytics.Filter) analytics.Filter {
+	f.Since = budget.WindowStart(w, cacheNow)
+	f.Until = cacheNow
+	return f
 }
 
 // sameSessionUsage fails unless the cache answers each of sessionFilters
@@ -384,9 +420,6 @@ func TestSessionUsageCacheLeavesOtherReadsToTheStore(t *testing.T) {
 	seedSessions(t, s, "e", 100, 10*24*time.Hour)
 	c := newTestSessionCache(t, s)
 	for name, f := range map[string]analytics.Filter{
-		"by provider":     {Since: cacheNow.Add(-time.Hour), Provider: "openai"},
-		"by workflow":     {Since: cacheNow.Add(-time.Hour), WorkflowID: "wf-1"},
-		"by agent":        {Since: cacheNow.Add(-time.Hour), AgentID: "a"},
 		"by model":        {Since: cacheNow.Add(-time.Hour), Model: "gpt-5"},
 		"another type":    {Since: cacheNow.Add(-time.Hour), EventType: eventschema.EventTypeWorkflow},
 		"all time":        {},
@@ -403,6 +436,29 @@ func TestSessionUsageCacheLeavesOtherReadsToTheStore(t *testing.T) {
 		c.mu.Unlock()
 		if held != 0 {
 			t.Fatalf("%s: the cache held a window for a read it does not answer", name)
+		}
+	}
+}
+
+// A budget scoped to a provider, a workflow or an agent is answered from
+// the cache, for the windows a budget measures (daily, weekly, monthly).
+func TestSessionUsageCacheAnswersScopedReads(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	seedSessions(t, s, "e", 300, 40*24*time.Hour)
+	for _, nf := range sessionFilters() {
+		if nf.f.Provider == "" && nf.f.WorkflowID == "" && nf.f.AgentID == "" {
+			continue
+		}
+		c := newTestSessionCache(t, s)
+		if _, err := c.WindowUsage(ctx, nf.f); err != nil {
+			t.Fatalf("%s: %v", nf.name, err)
+		}
+		c.mu.Lock()
+		held := len(c.windows)
+		c.mu.Unlock()
+		if held == 0 {
+			t.Fatalf("%s: the cache handed a scoped window to the store", nf.name)
 		}
 	}
 }
@@ -490,6 +546,50 @@ func BenchmarkSessionUsage(b *testing.B) {
 			}
 		}
 	})
+}
+
+// A budget scoped to one provider, workflow or agent, measured over a
+// week as the boundary figures measure it every minute: from the warm
+// cache against the store.
+func BenchmarkScopedWindowUsage(b *testing.B) {
+	ctx := context.Background()
+	s, err := Open(ctx, b.TempDir()+"/events.db", Options{})
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = s.Close() })
+	seedSessions(b, s, "e", 30_000, 30*24*time.Hour)
+	since := cacheNow.Add(-7 * 24 * time.Hour)
+	for _, scope := range []struct {
+		name string
+		f    analytics.Filter
+	}{
+		{"provider", analytics.Filter{Since: since, Until: cacheNow, Provider: string(eventschema.ProviderAnthropic)}},
+		{"workflow", analytics.Filter{Since: since, Until: cacheNow, WorkflowID: "wf-1"}},
+		{"agent", analytics.Filter{Since: since, Until: cacheNow, AgentID: "ag-1"}},
+	} {
+		b.Run(scope.name+"/store", func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				if _, err := s.WindowUsage(ctx, scope.f); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+		b.Run(scope.name+"/cache-warm", func(b *testing.B) {
+			c := NewSessionUsageCache(s, 0, time.Hour)
+			c.now = func() time.Time { return cacheNow }
+			if _, err := c.WindowUsage(ctx, scope.f); err != nil {
+				b.Fatal(err)
+			}
+			b.ReportAllocs()
+			for b.Loop() {
+				if _, err := c.WindowUsage(ctx, scope.f); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }
 
 // A week's window usage, as a budget measures it every minute, from the

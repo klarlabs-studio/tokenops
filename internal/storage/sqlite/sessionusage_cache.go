@@ -28,10 +28,11 @@ import (
 // events arrive, through WindowUsage: a week or a month of usage summed
 // from the store each time, the same rows the session reads hold.
 //
-// It answers a Filter narrowed by Since, Until and the excluded sources
-// only, from no further back than its span; any other read, and any read
-// on a store without a change log, it hands to the store. Its answer is
-// the store's, in the store's order.
+// It answers a Filter narrowed by Since, Until, the provider, workflow and
+// agent a budget scopes to, and the excluded sources, from no further back
+// than its span; any other read (a model, another event type), and any
+// read on a store without a change log, it hands to the store. Its answer
+// is the store's, in the store's order.
 //
 // A row it holds is a few numbers and a pointer to the strings it shares
 // with the other turns of its session (sessionKey): no payload, no
@@ -69,7 +70,7 @@ func NewSessionUsageCache(store *Store, maxSpan, idle time.Duration) *SessionUsa
 
 // SessionUsage returns what Store.SessionUsage returns.
 func (c *SessionUsageCache) SessionUsage(ctx context.Context, f analytics.Filter) ([]analytics.SessionUsage, error) {
-	excluded, ok := cachedSessionFilter(f)
+	scope, ok := cachedSessionFilter(f)
 	if !ok {
 		return c.store.SessionUsage(ctx, f)
 	}
@@ -88,7 +89,7 @@ func (c *SessionUsageCache) SessionUsage(ctx context.Context, f analytics.Filter
 			if until != 0 && r.at >= until {
 				break
 			}
-			if r.flags&rowInSession == 0 || excludedRow(r, excluded) {
+			if r.flags&rowInSession == 0 || !scope.holds(r) {
 				continue
 			}
 			out = append(out, r.usage())
@@ -114,7 +115,7 @@ func (c *SessionUsageCache) BucketUsage(ctx context.Context, f analytics.Filter,
 
 // WindowUsage returns what Store.WindowUsage returns.
 func (c *SessionUsageCache) WindowUsage(ctx context.Context, f analytics.Filter) (analytics.WindowUsage, error) {
-	excluded, ok := cachedSessionFilter(f)
+	scope, ok := cachedSessionFilter(f)
 	if !ok {
 		return c.store.WindowUsage(ctx, f)
 	}
@@ -142,7 +143,7 @@ func (c *SessionUsageCache) WindowUsage(ctx context.Context, f analytics.Filter)
 			}
 			tie = tie[:0]
 			for k := i; k < j; k++ {
-				if r := &rows[k]; !excludedRow(r, excluded) {
+				if r := &rows[k]; scope.holds(r) {
 					tie = append(tie, r)
 				}
 			}
@@ -170,28 +171,43 @@ func (c *SessionUsageCache) CacheTotals(ctx context.Context, f analytics.Filter)
 	return c.store.CacheTotals(ctx, f)
 }
 
-// cachedSessionFilter reports whether the cache answers f, and the
-// sources it excludes. A source excluded as "" is left to the store, which
-// tells a NULL source (kept) from an empty one (excluded); the cache holds
-// both as "".
-func cachedSessionFilter(f analytics.Filter) ([]string, bool) {
-	if f.Since.IsZero() || (f.EventType != "" && f.EventType != eventschema.EventTypePrompt) ||
-		f.Provider != "" || f.Model != "" || f.WorkflowID != "" || f.AgentID != "" {
-		return nil, false
+// sessionScope is the part of a Filter the cache answers by: the provider,
+// workflow and agent a budget scopes to, and the sources it leaves out.
+type sessionScope struct {
+	provider, workflow, agent string
+	excluded                  []string
+}
+
+// cachedSessionFilter reports whether the cache answers f, and its scope.
+// A model, another event type, or a source excluded as "" is left to the
+// store: the cache holds a NULL source as "", which the store keeps where
+// an empty one is excluded.
+func cachedSessionFilter(f analytics.Filter) (sessionScope, bool) {
+	if f.Since.IsZero() || (f.EventType != "" && f.EventType != eventschema.EventTypePrompt) || f.Model != "" {
+		return sessionScope{}, false
 	}
 	excluded := f.ExcludedSources()
 	if slices.Contains(excluded, "") {
-		return nil, false
+		return sessionScope{}, false
 	}
-	return excluded, true
+	return sessionScope{provider: f.Provider, workflow: f.WorkflowID, agent: f.AgentID, excluded: excluded}, true
 }
 
-// excludedRow reports whether r's source is one of excluded, as the
-// store's `source IS NULL OR source NOT IN (excluded)` leaves it out: a
-// NULL source is held as "", which excluded never holds
-// (cachedSessionFilter).
-func excludedRow(r *sessionRow, excluded []string) bool {
-	return len(excluded) > 0 && slices.Contains(excluded, r.key.source)
+// holds reports whether r is in the scope, as the store's WHERE clause
+// leaves it: a provider, workflow or agent the filter names must equal the
+// row's column, and a NULL column (held as "") equals no name; a source
+// excluded is left out, and a NULL source (held as "") is never excluded.
+func (s *sessionScope) holds(r *sessionRow) bool {
+	if s.provider != "" && r.key.provider != s.provider {
+		return false
+	}
+	if s.workflow != "" && r.key.workflow != s.workflow {
+		return false
+	}
+	if s.agent != "" && r.key.agent != s.agent {
+		return false
+	}
+	return len(s.excluded) == 0 || !slices.Contains(s.excluded, r.key.source)
 }
 
 // sessionRow is one prompt event with usage as the cache holds it.
@@ -277,9 +293,9 @@ func compareNullable(aNull, bNull bool, byValue int) int {
 }
 
 // sessionKey is what a session's turns share: most of a session's turns
-// name the same session, model, client and route.
+// name the same session, model, client, agent and route.
 type sessionKey struct {
-	session, provider, model, workflow, execution, source, endpoint string
+	session, provider, model, workflow, agent, execution, source, endpoint string
 }
 
 func (r *sessionRow) usage() analytics.SessionUsage {
@@ -312,7 +328,7 @@ func compareSessionRows(a, b sessionRow) int {
 
 // sessionRowsSQL selects the rows the cache holds: every usage-carrying
 // prompt event, its rowid and flags first.
-const sessionRowsSQL = `SELECT rowid, ` + rowFlagsColumn + `, COALESCE(session_id, ''), ` + sessionUsageTail + ` FROM events`
+const sessionRowsSQL = `SELECT rowid, ` + rowFlagsColumn + `, COALESCE(agent_id, ''), COALESCE(session_id, ''), ` + sessionUsageTail + ` FROM events`
 
 // sessionRowsWhere are the rows the cache holds; its argument is the
 // prompt type.
@@ -354,15 +370,16 @@ func scanSessionRows(rs *sql.Rows, in *interner) ([]sessionRow, error) {
 		var (
 			rowid int64
 			flags uint8
+			agent string
 		)
-		u, err := scanSessionUsage(rs, &rowid, &flags)
+		u, err := scanSessionUsage(rs, &rowid, &flags, &agent)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, sessionRow{
 			rowid: rowid, at: u.At.UnixNano(), flags: flags,
 			key: in.sessionKey(sessionKey{session: u.SessionID, provider: u.Provider, model: u.Model,
-				workflow: u.WorkflowID, execution: u.ExecutionID, source: u.Source, endpoint: u.Endpoint}),
+				workflow: u.WorkflowID, agent: agent, execution: u.ExecutionID, source: u.Source, endpoint: u.Endpoint}),
 			in: u.InputTokens, out: u.OutputTokens, total: u.TotalTokens,
 			cacheRead: u.CacheReadTokens, cacheWrite: u.CacheWriteTokens, cacheWrite1h: u.CacheWrite1hTokens,
 			cost: u.CostUSD, latency: int64(u.Latency), planCovered: u.PlanCovered,
@@ -381,7 +398,7 @@ func (in *interner) sessionKey(k sessionKey) *sessionKey {
 	}
 	in.room()
 	c := &sessionKey{session: in.str(k.session), provider: in.str(k.provider), model: in.str(k.model),
-		workflow: in.str(k.workflow), execution: in.str(k.execution), source: in.str(k.source), endpoint: in.str(k.endpoint)}
+		workflow: in.str(k.workflow), agent: in.str(k.agent), execution: in.str(k.execution), source: in.str(k.source), endpoint: in.str(k.endpoint)}
 	in.keys[*c] = c
 	return c
 }
