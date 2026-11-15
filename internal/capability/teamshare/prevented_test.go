@@ -53,14 +53,14 @@ func TestPreventedRows(t *testing.T) {
 	}
 	want := map[string]teamwire.PreventedWeek{
 		teamwire.MechanismReadGuard: {Week: "2026-10-26", Mechanism: teamwire.MechanismReadGuard, Count: 7, Tokens: 700},
-		teamwire.MechanismLockout:   {Week: "2026-10-26", Mechanism: teamwire.MechanismLockout, Count: 1},
+		teamwire.MechanismLockout:   {Week: "2026-10-26", Mechanism: teamwire.MechanismLockout, Count: 1, BlockedMinutes: 300},
 	}
 	if len(rows) != len(want) {
 		t.Fatalf("rows = %+v", rows)
 	}
 	for _, r := range rows {
 		w, ok := want[r.Mechanism]
-		if !ok || r.Week != w.Week || r.Count != w.Count || r.Tokens != w.Tokens {
+		if !ok || r.Week != w.Week || r.Count != w.Count || r.Tokens != w.Tokens || r.BlockedMinutes != w.BlockedMinutes {
 			t.Errorf("row %+v; want %+v", r, w)
 		}
 		switch r.Mechanism {
@@ -116,5 +116,57 @@ func TestSchema5UploadCarriesPrevented(t *testing.T) {
 	u4, _ := Build(context.Background(), d, Options{Days: 16, RepoNames: RepoRemote, Schema: teamwire.SchemaReverts}, at)
 	if u4.Schema != teamwire.SchemaReverts || u4.Prevented != nil {
 		t.Errorf("schema 4 upload carries prevented figures: %+v", u4.Prevented)
+	}
+}
+
+// A lockout window counted on two days contributes its minutes once. Each
+// further window adds its own minutes, and the week's total is capped at
+// the bound a row may carry, so a busy week's upload still validates.
+func TestPreventedBlockedMinutesCountEachWindowOnce(t *testing.T) {
+	start := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
+	session := avoidable.AvoidedWindow{Provider: "anthropic", Window: "session", ResetsAt: start.Add(5 * time.Hour), BlockedMinutes: 120}
+	lockout := func(ws ...avoidable.AvoidedWindow) avoidable.Mechanism {
+		var sum float64
+		for _, w := range ws {
+			sum += w.BlockedMinutes
+		}
+		return avoidable.Mechanism{Key: avoidable.MechLockout, Count: len(ws), BlockedMinutes: sum, Windows: ws}
+	}
+	week := avoidable.AvoidedWindow{Provider: "anthropic", Window: "week", ResetsAt: start.AddDate(0, 0, 5), BlockedMinutes: 300}
+	ds := make([]avoidable.Day, 0, 7)
+	for i := range 7 {
+		ms := []avoidable.Mechanism{}
+		switch i {
+		case 0, 1:
+			ms = append(ms, lockout(week))
+		case 2:
+			ms = append(ms, lockout(week, session))
+		}
+		ds = append(ds, avoidable.Day{Start: start.AddDate(0, 0, i), Report: avoidable.Report{Prevented: avoidable.Prevented{Mechanisms: ms}}})
+	}
+	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	_, rows := PreventedRows(ds, coveredFrom(ds), now)
+	if len(rows) != 1 || rows[0].Mechanism != teamwire.MechanismLockout {
+		t.Fatalf("rows = %+v", rows)
+	}
+	if got := rows[0].BlockedMinutes; got != 420 || rows[0].Count != 2 {
+		t.Errorf("blocked minutes %d, count %d; want 420 (the week and the session window once each), count 2", got, rows[0].Count)
+	}
+
+	// Many distinct windows in one week sum past a week; the row is capped.
+	many := make([]avoidable.AvoidedWindow, 0, 40)
+	for i := range 40 {
+		many = append(many, avoidable.AvoidedWindow{Provider: "anthropic", Window: "session", ResetsAt: start.Add(time.Duration(i) * time.Hour), BlockedMinutes: 300})
+	}
+	ds = []avoidable.Day{{Start: start, Report: avoidable.Report{Prevented: avoidable.Prevented{Mechanisms: []avoidable.Mechanism{lockout(many...)}}}}}
+	for i := 1; i < 7; i++ {
+		ds = append(ds, avoidable.Day{Start: start.AddDate(0, 0, i)})
+	}
+	_, rows = PreventedRows(ds, coveredFrom(ds), now)
+	if len(rows) != 1 || rows[0].BlockedMinutes != teamwire.MaxBlockedMinutes {
+		t.Fatalf("capped row = %+v; want blocked minutes %d", rows, teamwire.MaxBlockedMinutes)
+	}
+	if err := rows[0].Validate(); err != nil {
+		t.Errorf("capped row does not validate: %v", err)
 	}
 }

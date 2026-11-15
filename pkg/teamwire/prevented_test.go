@@ -43,6 +43,11 @@ func TestPreventedValidate(t *testing.T) {
 		{"negative tokens", func(u *Upload) { u.Prevented[0].Tokens = -1 }, "negative"},
 		{"negative dollars", func(u *Upload) { u.Prevented[0].USD = &neg }, "usd"},
 		{"a row that counts nothing", func(u *Upload) { u.Prevented[1].Count = 0 }, "count"},
+		{"blocked minutes on a lockout", func(u *Upload) { u.Prevented[1].BlockedMinutes = 300 }, ""},
+		{"blocked minutes a week at most", func(u *Upload) { u.Prevented[1].BlockedMinutes = MaxBlockedMinutes }, ""},
+		{"blocked minutes over a week", func(u *Upload) { u.Prevented[1].BlockedMinutes = MaxBlockedMinutes + 1 }, "blocked_minutes"},
+		{"negative blocked minutes", func(u *Upload) { u.Prevented[1].BlockedMinutes = -5 }, "blocked_minutes"},
+		{"blocked minutes on a read guard", func(u *Upload) { u.Prevented[0].BlockedMinutes = 5 }, "only the lockout"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -78,6 +83,17 @@ func TestPreventedWeekJSONNames(t *testing.T) {
 func jsonOf(v any) (string, error) {
 	b, err := json.Marshal(v)
 	return string(b), err
+}
+
+// blocked_minutes is omitted when zero and named as the schema says.
+func TestPreventedBlockedMinutesJSON(t *testing.T) {
+	b, err := jsonOf(PreventedWeek{Week: "2026-11-02", Mechanism: MechanismLockout, Count: 2, BlockedMinutes: 420})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"week":"2026-11-02","mechanism":"lockout","count":2,"blocked_minutes":420}`; b != want {
+		t.Errorf("got  %s\nwant %s", b, want)
+	}
 }
 
 // A server below schema 5 gets schema 4 with no prevented key.

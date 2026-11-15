@@ -53,7 +53,14 @@ type PreventedWeek struct {
 	Tokens int64 `json:"tokens,omitempty"`
 	// USD is the dollars prevented, absent when the mechanism is not priced.
 	USD *float64 `json:"usd,omitempty"`
+	// BlockedMinutes is the minutes of plan window a lockout avoided kept
+	// the developer working, summed over the week's distinct windows. Only
+	// the lockout mechanism carries it; absent when zero.
+	BlockedMinutes int64 `json:"blocked_minutes,omitempty"`
 }
+
+// MaxBlockedMinutes bounds a row's blocked minutes: a week's worth.
+const MaxBlockedMinutes = 7 * 24 * 60
 
 // FinishedWeek reports whether the week starting week (a Monday) is final
 // at now: it ended at least FinishedWeekLag before.
@@ -79,6 +86,12 @@ func (r PreventedWeek) Validate() error {
 		if err := dollars(map[string]float64{"usd": *r.USD}); err != nil {
 			return err
 		}
+	}
+	if r.BlockedMinutes != 0 && r.Mechanism != MechanismLockout {
+		return fmt.Errorf("blocked_minutes: only the lockout mechanism counts blocked minutes, not %q", r.Mechanism)
+	}
+	if r.BlockedMinutes < 0 || r.BlockedMinutes > MaxBlockedMinutes {
+		return fmt.Errorf("blocked_minutes %d: outside 0 to %d, a week's worth", r.BlockedMinutes, MaxBlockedMinutes)
 	}
 	return nil
 }

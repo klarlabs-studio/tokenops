@@ -277,11 +277,21 @@ mechanisms already prevented. Schema 5 carries the prevented side to the
 team, as weekly totals and nothing finer:
 
 - **`prevented`** — per finished UTC week × mechanism: `count` (how many
-  times it acted), `tokens` (what it kept out, when known) and `usd` (the
-  dollars prevented, absent when the mechanism is not priced). The
+  times it acted), `tokens` (what it kept out, when known), `usd` (the
+  dollars prevented, absent when the mechanism is not priced) and
+  `blocked_minutes` (lockout only: the minutes of plan window the
+  lockouts avoided kept the developer working, absent when zero). The
   mechanism is an enumeration: `read_guard`, `fmt`, `autopilot`,
   `boundary`, `loop_breaker`, `compaction`, `lockout`. A lockout avoided
-  is a counterfactual estimate; it is counted, never priced in dollars.
+  is a counterfactual estimate; it is counted and timed in blocked
+  minutes, never priced in dollars. Each plan window counts once in its
+  week, however many days it was reported on, so its count and its
+  minutes are not repeated. `blocked_minutes` is an integer from 0 to
+  10,080 (a week's worth). A week's total is capped there. The minutes
+  measure the developer's own time, so a week cannot exceed a week's
+  minutes; parallel windows across providers are not summed beyond that
+  cap. The cap is a floor on honesty, not a measured union of the
+  windows' blocked time, which the sender does not compute.
 - **`prevented_weeks`** — the weeks (their Mondays) the upload is complete
   for: a listed week with no row for a mechanism had none.
 
@@ -295,6 +305,12 @@ Two new strings cross, each constrained: the week (a date, a Monday) and
 the mechanism (the enumeration above); `TestUploadHasNoFreeText` lists
 both. A server whose `max_schema` is below 5 gets schema 4 with both keys
 left out.
+
+Schema 5 changed before its release, on 2026-11-15: `blocked_minutes` was
+added to the prevented rows before any server accepted schema 5, so no
+server has to take a field it did not expect. It is the third figure a
+prevented row carries, and the walk of the upload type requires each
+such figure to state its bound.
 
 
 

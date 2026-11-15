@@ -48,6 +48,17 @@ var constrainedStrings = map[string]string{
 	"PreventedWeek.Mechanism": "ValidMechanism: enumeration",
 }
 
+// boundedFigures is every figure a schema 5 prevented row carries, each
+// with the bound the server enforces. A figure added to PreventedWeek is a
+// change to what crosses the boundary: it needs a bound here and a check in
+// Validate, the same as a string does above.
+var boundedFigures = map[string]string{
+	"PreventedWeek.Count":          "at least 1 (a row counts an action)",
+	"PreventedWeek.Tokens":         "0 or more, when known",
+	"PreventedWeek.BlockedMinutes": "0 to MaxBlockedMinutes (7x1440), lockout rows only; absent when 0",
+	"PreventedWeek.USD":            "0 or more, absent when not priced",
+}
+
 // numericKinds are the field kinds that hold figures, not text.
 var numericKinds = map[reflect.Kind]bool{
 	reflect.Int: true, reflect.Int64: true, reflect.Float64: true, reflect.Bool: true,
@@ -68,9 +79,15 @@ func TestUploadHasNoFreeText(t *testing.T) {
 			ft := f.Type
 			switch {
 			case ft == reflect.TypeOf(time.Time{}):
-			case numericKinds[ft.Kind()]:
-			case ft.Kind() == reflect.Pointer && numericKinds[ft.Elem().Kind()]:
-				// An optional figure: absent when it could not be measured.
+			case numericKinds[ft.Kind()], ft.Kind() == reflect.Pointer && numericKinds[ft.Elem().Kind()]:
+				// A figure, or an optional one absent when it could not be
+				// measured. Schema 5's rows state their bounds.
+				if strings.HasPrefix(name, "PreventedWeek.") {
+					if _, ok := boundedFigures[name]; !ok {
+						t.Errorf("%s is a figure with no stated bound; list it in boundedFigures "+
+							"and check it in Validate (ADR 0012, Upload schema 5)", name)
+					}
+				}
 			case ft.Kind() == reflect.String, ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.String:
 				if _, ok := constrainedStrings[name]; !ok {
 					t.Errorf("%s is a string with no rule against free text; prompts, paths, "+
@@ -89,6 +106,11 @@ func TestUploadHasNoFreeText(t *testing.T) {
 	for name := range constrainedStrings {
 		if !seen[name] {
 			t.Errorf("constrainedStrings lists %s, which the upload no longer has; delete it", name)
+		}
+	}
+	for name := range boundedFigures {
+		if !seen[name] {
+			t.Errorf("boundedFigures lists %s, which the upload no longer has; delete it", name)
 		}
 	}
 }
