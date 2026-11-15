@@ -54,6 +54,16 @@ func ProviderDrifts(ctx context.Context, o Options) map[string][]plans.TierDrift
 	if !ok {
 		return nil
 	}
+	return ProviderDriftsOf(o, since, readings, turns)
+}
+
+// ProviderDriftsOf is ProviderDrifts over the window readings and
+// plan-covered requests already read since since, by provider (o's Plans
+// and PlanHistory say which tiers and plan in force). It is the second
+// half of ProviderDrifts, so a caller that keeps the inputs by day can
+// compare them the way the full read does (ADR 0019). Readings must be
+// oldest first, as QuotaReadingsFrom sorts them.
+func ProviderDriftsOf(o Options, since time.Time, readings map[string][]plans.QuotaReading, turns map[string][]plans.DriftTurn) map[string][]plans.TierDrift {
 	out := make(map[string][]plans.TierDrift, len(o.Plans))
 	for provider, current := range o.Plans {
 		in := plans.DriftInput{
