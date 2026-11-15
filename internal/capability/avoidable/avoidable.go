@@ -94,6 +94,9 @@ type Inputs struct {
 	// Stops are the instructions the developer stopped, with the turns
 	// each ran before the stop: the stopped-work class prices them.
 	Stops []Stop
+	// line is the context line the operator's bands measured, set by
+	// gather with the override it applies to the waste detector.
+	line *ContextLine
 	// Traces are the period's workflows by ID, for the waste detector,
 	// configured by Waste.
 	Traces map[string]*workflow.Trace
@@ -225,6 +228,16 @@ type Realized struct {
 	Share *float64 `json:"share,omitempty"`
 }
 
+// ContextLine is the size the developer's own context bands measured.
+type ContextLine struct {
+	Tokens int64 `json:"tokens"`
+	// Basis says how the line was read.
+	Basis string `json:"basis"`
+}
+
+// lineBasis is how a derived context line is described.
+const lineBasis = "the lower edge of your first context band (at least 50 instructions) whose rejections rise 2 points above your lowest band"
+
 // Guardrail is one capability's case for being switched on next: the
 // avoidable usage it addresses and where its graduation stands.
 type Guardrail struct {
@@ -247,6 +260,10 @@ type Guardrail struct {
 type Report struct {
 	Since time.Time `json:"since"`
 	Until time.Time `json:"until"`
+	// ContextLine is the context size past which the developer's own
+	// bands show instructions going worse, when they show one; the
+	// oversized-context class is read at it.
+	ContextLine *ContextLine `json:"context_line,omitempty"`
 	// Usage is everything the period used; Avoidable the part the
 	// classes account for.
 	Usage     Amount      `json:"usage"`
@@ -317,7 +334,7 @@ func Build(in Inputs) Report {
 // and kind of work).
 func BuildTurns(in Inputs) (Report, []TurnWaste) {
 	var turns []TurnWaste
-	r := Report{Since: in.Since, Until: in.Until, Attribution: Attribution, Classes: []ClassCost{}, Guardrails: []Guardrail{}}
+	r := Report{Since: in.Since, Until: in.Until, Attribution: Attribution, Classes: []ClassCost{}, Guardrails: []Guardrail{}, ContextLine: in.line}
 	b := newBook(in)
 	b.claimRereads(in.Rereads)
 	b.claimCacheRebuilds()

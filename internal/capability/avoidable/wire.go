@@ -2,14 +2,17 @@ package avoidable
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/config"
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/contexts/learning"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
@@ -40,6 +43,7 @@ func DepsFor(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, 
 		Lint:    contextLint,
 		Rereads: readGuardLedger,
 		Routes:  modelAdvice,
+		Records: transcriptRecords,
 		Savings: periodSavings,
 		Steps: func(ctx context.Context, now time.Time) []savings.Step {
 			var history []ft.Summary
@@ -66,6 +70,14 @@ func DepsFor(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, 
 		}
 	}
 	return d
+}
+
+// transcriptRecords reads the transcript entries the clients wrote over
+// [since, until): the stops and the context curve. The window is the
+// period's days, read through the same reader the dx surfaces use.
+func transcriptRecords(_ context.Context, since, until time.Time) ([]agentdx.Record, error) {
+	days := max(1, int(math.Ceil(until.Sub(since).Hours()/24)))
+	return sessions.Records(sessions.Window{Days: days}, until)
 }
 
 // contextLint lints the context every session loads in the repository

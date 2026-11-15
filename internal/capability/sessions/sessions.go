@@ -179,6 +179,14 @@ const MinEffortInstructions = agentdx.MinEffortInstructions
 // empty when it does not.
 func DegradationNote(bands []ContextBand) string { return agentdx.DegradationNote(bands) }
 
+// Records reads the transcript entries in w, the raw material the units,
+// the context curve and the interrupt record are built from, without the
+// operator's words.
+func Records(w Window, now time.Time) ([]agentdx.Record, error) {
+	records, _, _, err := w.read(now, false)
+	return records, err
+}
+
 // Units reads the instructions in w, with the operator's own words, for
 // the surfaces that group or reconstruct work from them. The text is read
 // at scan time and never persisted. A client whose transcripts could not
