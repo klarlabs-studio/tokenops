@@ -28,6 +28,9 @@ scan:
     # file from the same writer, so it stays with its group.
     # Classification: False Positive
     # Last reviewed: 2026-09-14
+    # Transient: .roady/ is gitignored and no longer tracked, so it is
+    # absent from a clean checkout; a working tree that has it locally is
+    # still scanned without these false positives.
     - .roady/events.jsonl
     - .roady/state.json
     - .roady/usage.json
