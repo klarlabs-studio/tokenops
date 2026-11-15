@@ -14,6 +14,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/focus"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // ChargeReader reads a window's usage per day, provider and model, split
@@ -43,7 +44,22 @@ type FocusQuery struct {
 	Allocation *allocation.Deps
 	// Version is the FOCUS version to write; empty is the latest.
 	Version string
+	// Events, when set, are read for how each plan's windows were used,
+	// which FOCUS 1.5 writes on the plan's Purchase rows. Nil leaves those
+	// columns null.
+	Events EventReader
 }
+
+// EventReader reads the recorded events of a type since a time.
+// *sqlite.Store implements it.
+type EventReader interface {
+	ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error)
+}
+
+// planUseLookback is how far before the export's window plan-window
+// readings are read: a weekly window that resets in the window filled up
+// over the days before it, and a day absorbs reset drift.
+const planUseLookback = 8 * 24 * time.Hour
 
 // FocusDataset is spend and usage as FOCUS rows.
 type FocusDataset struct {
@@ -97,6 +113,11 @@ func FocusExport(ctx context.Context, src ChargeReader, q FocusQuery) (FocusData
 	d := FocusDataset{Version: spec.Version, Since: since, Until: until, spec: spec}
 	usage, unpriced := focusUsage(splitByTags(charges, turns), q.History, q.Plans, src)
 	purchases, notes := focusPurchases(q.History, q.Plans, since, until)
+	if spec.CarriesPlanUse() && q.Events != nil {
+		if err := measurePlanUse(ctx, q.Events, purchases, since, until); err != nil {
+			return FocusDataset{}, err
+		}
+	}
 	d.Rows = spec.Build(usage, purchases)
 	if unpriced > 0 {
 		d.Notes = append(d.Notes, fmt.Sprintf(
@@ -174,6 +195,57 @@ func focusPurchases(h plans.History, bound map[string]string, since, until time.
 		}
 	}
 	return out, notes
+}
+
+// measurePlanUse sets, on each purchase, how its plan's windows were used
+// in each of its charge periods, as plans.PlanUseOn measures it: the
+// windows that reset in the period, read from every reading before it,
+// and the share of the provider's tokens a plan covered.
+func measurePlanUse(ctx context.Context, events EventReader, purchases []focus.Purchase, since, until time.Time) error {
+	if len(purchases) == 0 {
+		return nil
+	}
+	envs, err := events.ReadEvents(ctx, eventschema.EventTypePrompt, since.Add(-planUseLookback))
+	if err != nil {
+		return fmt.Errorf("read plan-window readings: %w", err)
+	}
+	for i := range purchases {
+		p := &purchases[i]
+		for _, period := range p.ChargePeriods() {
+			// PlanUseOn's end is inclusive; a charge period's is not.
+			end := period.To
+			if until.Before(end) {
+				end = until
+			}
+			end = end.Add(-time.Nanosecond)
+			if !end.After(period.From) {
+				continue
+			}
+			report := plans.PlanUseOn(envs, period.From, end)
+			u, ok := report.For(p.Provider)
+			if !ok {
+				continue
+			}
+			use := focus.PlanUse{Start: period.From, Window: u.UtilizationWindow,
+				Utilization: fraction(u.UtilizationPct), Coverage: fraction(u.CoveragePct)}
+			for _, w := range u.Windows {
+				if w.Label == u.UtilizationWindow {
+					use.Windows = w.Windows
+				}
+			}
+			p.Use = append(p.Use, use)
+		}
+	}
+	return nil
+}
+
+// fraction is a percentage as a fraction from 0 to 1; nil stays nil.
+func fraction(pct *float64) *float64 {
+	if pct == nil {
+		return nil
+	}
+	f := *pct / 100
+	return &f
 }
 
 // tokenPrices splits a charge's tokens by kind, each at its rate. Cache

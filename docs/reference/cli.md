@@ -1031,12 +1031,15 @@ leave it: no team upload carries them.
 `tokenops spend export` writes spend and usage as
 [FOCUS](https://focus.finops.org/) 1.4 CSV, the billing format FinOps tools
 such as Vantage, CloudZero and Cloudability ingest. `--focus-version 1.2`
-writes FOCUS 1.2 for a tool that does not read 1.4 yet:
+writes FOCUS 1.2 for a tool that does not read 1.4 yet, and
+`--focus-version 1.5` writes FOCUS 1.5, a candidate recommendation until
+it is ratified:
 
 ```bash
 tokenops spend export --format focus > september.csv          # this month so far
 tokenops spend export --since 2026-09-01T00:00:00Z --until 2026-10-01T00:00:00Z -o september.csv
 tokenops spend export --focus-version 1.2 -o september-1.2.csv
+tokenops spend export --focus-version 1.5 -o september-1.5.csv
 ```
 
 FOCUS 1.4 requires `BilledCost` to be what the vendor invoiced, never an
@@ -1068,11 +1071,42 @@ is the `BilledCost` and `EffectiveCost`:
 | Usage a plan covered | `Usage` with `BilledCost` and `EffectiveCost` 0 and `ListCost` at the API price, so ListCost against EffectiveCost is what the plan was worth |
 | Usage billed per token | `Usage` at what it cost |
 
-In both versions, usage is per UTC day, provider and model. Tokens are the
+FOCUS 1.5 keeps the 1.4 rows, with these changes:
+
+| What | FOCUS 1.5 rows |
+|---|---|
+| Token SKUs | Each kind of token is its own SKU: `SkuId` and `SkuPriceId` are the model and the kind (`claude-opus-5/cache-read`), and `SkuMeter` says what it meters (`Input Tokens`, `Cache Read Input Tokens`, `Cache Write Input Tokens`, `Output Tokens`; `Tokens` for a model with no rate) |
+| `SkuPriceDetails` | A JSON object: `ModelId`; `ModelDeveloper` where it is known (the vendor of a first-party API, or the developer a router names in the model, as in `meta-llama/…`); `TokenDirection` (`Input`, `Output`) and `TokenCacheAction` (`Uncached`, `Read`, `Write`); `x_CacheRetention` (`5 Minutes`, `1 Hour`) on cache writes. A model with no rate is one SKU for all its tokens, so it has no direction or cache action |
+| Usage a plan covered | Contracted at its list rate, as 1.5 requires when no negotiated price applies; what the plan was worth is `ListCost` against `x_EstimatedCost`, which is 0 for it |
+| A plan's fee | As in 1.4, with `SkuMeter` `Subscription`, and how the plan's windows were used in the charge period in the custom columns below |
+
+The custom columns on a plan's `Purchase` rows, each empty on usage rows
+and when nothing was measured:
+
+| Column | Type | What it is |
+|---|---|---|
+| `x_PlanWindowName` | String | The plan window kind utilisation is measured on: the longest kind that reset in the charge period (`weekly`) |
+| `x_PlanWindowCount` | Integer | How many windows of that kind reset in the charge period |
+| `x_PlanUtilization` | Decimal, 0 to 1 | The mean of those windows' highest share used. A window that went unused counts as 0 |
+| `x_PlanCoverage` | Decimal, 0 to 1 | The share of the provider's tokens in the charge period a plan covered, rather than billed per token (an API key, a gateway) |
+| `x_PlanLapsedValue` | Decimal, in `BillingCurrency` | The part of the row's prorated fee that paid for window capacity that reset unused: `x_EstimatedCost × (1 − x_PlanUtilization)` |
+
+These follow the plan-window readings TokenOps has recorded; a plan with
+no readings in the charge period leaves the window columns empty.
+Utilisation is a mean of peaks, so `x_PlanLapsedValue` is an estimate of
+the unused share, not a figure the vendor reports. The subscription is
+not written as a commitment discount: no standard column changes for it.
+The money columns (`x_EstimatedCost`, `x_PlanLapsedValue`) are in the
+row's `BillingCurrency`, a national currency. FOCUS 1.5's requester
+columns (`PrincipalId`, `CredentialId`, `RequesterDetails`) are not
+written: TokenOps holds no identifier a provider publishes for a user or
+a key.
+
+In every version, usage is per UTC day, provider and model. Tokens are the
 `ConsumedQuantity` (`Tokens`); `PricingQuantity` counts millions of tokens,
 the unit API prices are published in. `ServiceCategory` is
 `AI and Machine Learning`, `ServiceSubcategory` `Generative AI`, `SkuId`
-the model or plan. A plan's charges and per-token charges are separate
+the model (in 1.5, the model and the kind of token) or plan. A plan's charges and per-token charges are separate
 billing accounts (`anthropic/subscription`, `anthropic/pay-as-you-go`).
 Calendar months stand in for billing periods.
 
@@ -1085,7 +1119,8 @@ dataset has one user-defined tag scheme.
 
 Only derived figures are written: providers, models, plans, counts, money
 and your own allocation tags. No session title, path or prompt is in it. `GET /api/spend/export`
-serves the same CSV from the daemon; `?version=1.2` asks for FOCUS 1.2.
+serves the same CSV from the daemon; `?version=1.2` asks for FOCUS 1.2 and
+`?version=1.5` for FOCUS 1.5.
 
 ### `tokenops budget {list|set|unset}`
 

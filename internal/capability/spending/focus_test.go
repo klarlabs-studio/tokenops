@@ -160,3 +160,70 @@ func TestFocusExport14PricesEachKindOfToken(t *testing.T) {
 		t.Errorf("a model without a rate is one row, got %d", unknownRows)
 	}
 }
+
+type eventsStub struct {
+	envs  []*eventschema.Envelope
+	since time.Time
+	reads int
+}
+
+func (e *eventsStub) ReadEvents(_ context.Context, _ eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
+	e.reads++
+	e.since = since
+	return e.envs, nil
+}
+
+// FOCUS 1.5 writes, on a plan's Purchase rows, how its windows were used
+// in the charge period: a weekly window that reset in it, read from a
+// reading days before, and the share of the provider's tokens the plan
+// covered. Other versions read no events for it.
+func TestFocusExport15MeasuresPlanWindowUse(t *testing.T) {
+	sep3 := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
+	reset := sep3.Add(10 * time.Hour)
+	reading := &eventschema.Envelope{Source: "claude-usage-meter", Timestamp: sep3.Add(-3 * 24 * time.Hour),
+		Attributes: map[string]string{"granularity": "quota_snapshot", "seven_day_kind": "weekly_all",
+			"seven_day_used_pct": "40.00", "seven_day_reset_at": reset.Format(time.RFC3339)},
+		Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic}}
+	turn := func(cs eventschema.CostSource, tokens int64) *eventschema.Envelope {
+		return &eventschema.Envelope{Source: "claude-code-jsonl", Timestamp: sep3.Add(time.Hour),
+			Attributes: map[string]string{"granularity": "assistant_turn"},
+			Payload:    &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic, CostSource: cs, TotalTokens: tokens}}
+	}
+	events := &eventsStub{envs: []*eventschema.Envelope{reading,
+		turn(eventschema.CostSourcePlanIncluded, 300), turn(eventschema.CostSourceMetered, 100)}}
+	history := plans.History{{Provider: "anthropic", Plan: "claude-max", From: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		Price: 100, Currency: "USD"}}
+	now := sep3.Add(24 * time.Hour)
+	q := FocusQuery{History: history, Plans: map[string]string{"anthropic": "claude-max"}, Now: now, Version: "1.5", Events: events}
+	got, err := FocusExport(context.Background(), &chargesStub{}, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC).Add(-8 * 24 * time.Hour); !events.since.Equal(want) {
+		t.Errorf("readings read from %s, want %s", events.since, want)
+	}
+	purchases := 0
+	for _, r := range got.Rows {
+		if r.ChargeCategory != "Purchase" {
+			continue
+		}
+		purchases++
+		if r.PlanWindowName == "" || r.PlanUtilization == nil || *r.PlanUtilization != 0.4 || *r.PlanWindowCount != 1 {
+			t.Fatalf("utilisation: %q %v %v", r.PlanWindowName, r.PlanUtilization, r.PlanWindowCount)
+		}
+		if r.PlanCoverage == nil || *r.PlanCoverage != 0.75 {
+			t.Errorf("coverage %v, want 0.75", r.PlanCoverage)
+		}
+		if r.PlanLapsedValue == nil || math.Abs(*r.PlanLapsedValue-r.EstimatedCost*0.6) > 1e-12 {
+			t.Errorf("lapsed %v of fee %v", r.PlanLapsedValue, r.EstimatedCost)
+		}
+	}
+	if purchases != 1 {
+		t.Fatalf("want one purchase row, got %d", purchases)
+	}
+
+	q.Version = "1.4"
+	if _, err := FocusExport(context.Background(), &chargesStub{}, q); err != nil || events.reads != 1 {
+		t.Errorf("FOCUS 1.4 must not read events for plan use: reads %d, err %v", events.reads, err)
+	}
+}

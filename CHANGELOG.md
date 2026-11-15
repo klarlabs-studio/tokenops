@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- **spend:** `tokenops spend export --focus-version 1.5` (or `GET /api/spend/export?version=1.5`) writes FOCUS 1.5, the candidate recommendation. The default stays FOCUS 1.4 until 1.5 is ratified.
+  - **tokens:** each kind of token is its own SKU (`claude-opus-5/cache-read`) with a `SkuMeter`. `SkuPriceDetails` names the model (`ModelId`, and `ModelDeveloper` where it is known) and the tokens' `TokenDirection` and `TokenCacheAction`, so a FinOps tool can group AI spend by model, direction and cache use across vendors.
+  - **plans:** usage a plan covered is contracted at its list rate, as 1.5 requires when no negotiated price applies; what the plan was worth is `ListCost` against `x_EstimatedCost`. A plan's `Purchase` rows carry how its windows were used in the charge period: `x_PlanWindowName`, `x_PlanWindowCount`, `x_PlanUtilization`, `x_PlanCoverage` and `x_PlanLapsedValue`, the part of the fee that paid for window capacity that reset unused. The columns are documented under `tokenops spend export`.
+  - 1.5's requester columns are not written; FOCUS 1.4 and 1.2 output is unchanged.
+
 ### Changed
 
 - **plans:** ChatGPT Pro 100, 200 and 500 (`gpt-pro-5x`, `gpt-pro-20x`, `gpt-pro-500`, and `gpt-pro` for an unknown tier) have only a weekly window: OpenAI lifted their five-hour limit in Work and Codex. Their weekly allowances are 10x, 20x and 50x Plus, as OpenAI states them, so plan advice now replays Codex usage across Plus and the Pro tiers. The plans show under OpenAI's names (Pro 100, Pro 200, Pro 500); the catalog names are unchanged, so existing configs keep working. The replay leaves out Codex limits other than the default one, and with no readings it names Codex's readers instead of the Claude meter.
