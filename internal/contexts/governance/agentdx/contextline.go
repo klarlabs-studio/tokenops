@@ -26,3 +26,21 @@ func ContextLine(bands []ContextBand, fallback int64) (line int64, ok bool) {
 	}
 	return fallback, false
 }
+
+// JudgedRejectRate is the reject rate over the trusted bands only (those
+// with minPromptsPerBand instructions), each weighted by its instructions,
+// and how many instructions it pools. With no trusted band it is 0 over 0.
+func JudgedRejectRate(bands []ContextBand) (pct float64, prompts int) {
+	var rejects float64
+	for _, b := range bands {
+		if b.Prompts < minPromptsPerBand {
+			continue
+		}
+		prompts += b.Prompts
+		rejects += b.RejectRatePct * float64(b.Prompts)
+	}
+	if prompts == 0 {
+		return 0, 0
+	}
+	return rejects / float64(prompts), prompts
+}

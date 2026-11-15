@@ -134,8 +134,11 @@ compacts on its own, at the same line (600k on Claude Code, 150k on Codex,
 A value you set yourself is never overwritten, and one you change after
 tokenops set it is left as you have it. Lowering `context` restores every
 file exactly as it was, byte for byte when nothing else has touched it
-since. `tokenops coach` shows each agent's setting. `ask` reports as
-`advise`: no agent offers an approval point for compacting. Setting
+since. `tokenops coach` shows each agent's setting. At `ask` the coach
+proposes the line measured from your own instructions and writes it only
+when you run `tokenops coach accept`; before that, and while the
+compaction guardrail has not graduated, it records what it would set
+without writing it. Setting
 `context` to `autonomous` in `config.yaml` by hand does not edit the
 agents' files; `tokenops coach set context autonomous` (or the
 `tokenops_coach` tool) does.

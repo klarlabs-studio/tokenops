@@ -133,6 +133,9 @@ func (f *fakeLevers) Revert() ([]LeverResult, error) {
 	return []LeverResult{{Client: "claude-code", Status: "reverted"}}, nil
 }
 func (f *fakeLevers) Check() []LeverResult { return nil }
+func (f *fakeLevers) Preview() ([]LeverResult, error) {
+	return []LeverResult{{Client: "claude-code", Key: "autoCompactWindow", Value: 633_000, Status: LeverShadow}}, nil
+}
 
 // Raising context to autonomous sets the levers and records each as a
 // move; lowering it restores them and counts as undoing those moves.
@@ -165,8 +168,8 @@ func TestContextAutonomySetsAndRestoresTheLevers(t *testing.T) {
 			t.Errorf("context move = %+v; want undone", s)
 		}
 	}
-	if m := power(t, Build(config.Config{Coach: config.CoachConfig{Autonomy: config.AutonomyAsk}}), config.PowerContext); m.Effective != config.AutonomyAdvise || m.Reason == "" {
-		t.Errorf("context ask = %+v; want advise with the reason", m)
+	if m := power(t, Build(config.Config{Coach: config.CoachConfig{Autonomy: config.AutonomyAsk}}), config.PowerContext); m.Effective != config.AutonomyAsk || m.Reason != "" || m.Note == "" {
+		t.Errorf("context ask = %+v; want ask, saying it proposes and how to accept", m)
 	}
 }
 

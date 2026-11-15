@@ -83,6 +83,7 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 		activity = append(activity, fmt.Sprintf("%d re-reads refused (~%dk tokens)", s.Blocked, s.ReclaimedTok/1000))
 	}
 	renderCompaction(out, r)
+	renderProposal(out, r)
 	renderModelPolicy(out, r)
 	if len(quota) > 0 {
 		fmt.Fprintln(out)

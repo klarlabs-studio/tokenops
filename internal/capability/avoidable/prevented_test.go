@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/explain"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
@@ -180,5 +181,58 @@ func TestHeadlineLeadsWithPreventedThenFound(t *testing.T) {
 	got := Build(in).Headline
 	if !strings.Contains(got, "prevented not priced yet") {
 		t.Errorf("headline = %q, want the unpriced boundary holds named as not priced", got)
+	}
+}
+
+// realizedWeeks is a rollup set before the period whose four weeks after
+// the setting carry 600,000 fewer tokens above the line each week, with the
+// reject rate down too: a realized saving.
+func realizedWeeks(setAt time.Time) *Weeks {
+	w := &Weeks{SetAt: setAt}
+	from := judgedFrom(setAt)
+	for i := -4; i < 4; i++ {
+		f := WeekFigs{Start: from.AddDate(0, 0, 7*i), OversizedTokens: 900_000 + int64((i+8)%2)*5_000, RejectRatePct: 15, Prompts: 100}
+		if i >= 0 {
+			f.OversizedTokens, f.RejectRatePct = 300_000+int64((i+8)%2)*5_000, 8
+		}
+		w.Weeks = append(w.Weeks, f)
+	}
+	return w
+}
+
+// A realized compaction saving counts as prevented, sized by the weekly
+// drop over the period after the setting; one not yet shown counts nothing
+// and says why.
+func TestPreventedCountsARealizedCompactionSaving(t *testing.T) {
+	in := withPrevented()
+	period := in.Until.Sub(in.Since)
+	tests := []struct {
+		name   string
+		weeks  *Weeks
+		count  int
+		tokens int64
+	}{
+		{"no setting", nil, 0, 0},
+		{"realized, set before the period", realizedWeeks(in.Since.AddDate(0, 0, -60)), 1, int64(600_000 * period.Hours() / (7 * 24))},
+		{"not yet judged", &Weeks{SetAt: in.Since.AddDate(0, 0, -3)}, 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := withPrevented()
+			in.Compaction = tt.weeks
+			m, ok := mechanism(Build(in), MechCompaction)
+			if !ok {
+				t.Fatal("no compaction mechanism")
+			}
+			if m.Count != tt.count || m.Tokens != tt.tokens || m.Basis == "" {
+				t.Errorf("= %+v; want count %d, tokens %d, with a basis", m, tt.count, tt.tokens)
+			}
+			if _, priced := m.USD.Amount(); priced != (tt.count > 0) {
+				t.Errorf("priced = %v for %+v", priced, m)
+			}
+			if tt.count == 0 && m.USD.Caveat() == "" {
+				t.Error("an unrealized saving must say why it counts nothing")
+			}
+		})
 	}
 }

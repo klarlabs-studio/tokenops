@@ -69,6 +69,10 @@ const (
 	// StatusUnavailable is a client without such a setting, or one not
 	// installed here.
 	StatusUnavailable Status = "unavailable"
+	// StatusShadow is a setting Preview found tokenops would write, and
+	// did not: the ask rung before it is accepted, or while the
+	// compaction guardrail has not graduated.
+	StatusShadow Status = "shadow"
 )
 
 // Result is one client's setting after an operation.
@@ -157,6 +161,8 @@ type state struct {
 	// touched the file since, reverting puts the original bytes back, so
 	// the operator's formatting and key order survive.
 	Files map[string]fileSnapshot `json:"files,omitempty"`
+	// dry is set by Preview: every edit is planned and none is written.
+	dry bool
 }
 
 type fileSnapshot struct {
@@ -173,6 +179,9 @@ func digest(b []byte) string {
 // editFile writes b to path, keeping the file's pre-edit bytes the first
 // time tokenops touches it.
 func (st *state) editFile(path string, b []byte, mode fs.FileMode) error {
+	if st.dry {
+		return nil
+	}
 	if st.Files == nil {
 		st.Files = map[string]fileSnapshot{}
 	}
@@ -259,7 +268,26 @@ func (st *state) drop(client, key string) {
 
 // Apply writes the plan into every client that has a setting for it.
 func Apply(p Paths, plan Plan, now time.Time) ([]Result, error) {
+	return apply(p, plan, now, false)
+}
+
+// Preview is what Apply would do, without writing anything: no agent's
+// file and no record of a setting. A setting Apply would write reports as
+// StatusShadow; one already in place, or the operator's own, as Apply
+// reports it.
+func Preview(p Paths, plan Plan, now time.Time) ([]Result, error) {
+	rs, err := apply(p, plan, now, true)
+	for i := range rs {
+		if rs[i].Status == StatusApplied {
+			rs[i].Status = StatusShadow
+		}
+	}
+	return rs, err
+}
+
+func apply(p Paths, plan Plan, now time.Time, dry bool) ([]Result, error) {
 	st := loadState(p.State)
+	st.dry = dry
 	var out []Result
 	var errs []error
 	for _, apply := range []func(Paths, Plan, *state, time.Time) ([]Result, error){applyClaude, applyCodex, applyOpencode} {
@@ -268,6 +296,9 @@ func Apply(p Paths, plan Plan, now time.Time) ([]Result, error) {
 		errs = append(errs, err)
 	}
 	out = append(out, Result{Client: ClientCursor, Status: StatusUnavailable, Note: "Cursor summarises on its own and has no setting for when"})
+	if dry {
+		return out, errors.Join(errs...)
+	}
 	if err := saveState(p.State, st); err != nil {
 		errs = append(errs, err)
 	}
@@ -413,4 +444,16 @@ func (st *state) editJSON(path string, m map[string]any) error {
 		return err
 	}
 	return st.editFile(path, b, jsonfile.ModeOf(path))
+}
+
+// SetSince is when tokenops first set a compaction line still recorded as
+// its own; ok is false when none is.
+func SetSince(p Paths) (time.Time, bool) {
+	var first time.Time
+	for _, s := range loadState(p.State).Applied {
+		if first.IsZero() || s.At.Before(first) {
+			first = s.At
+		}
+	}
+	return first, !first.IsZero()
 }

@@ -50,6 +50,9 @@ type Deps struct {
 	// Steps each guardrail's graduation.
 	Savings func(ctx context.Context, since, now time.Time) savings.Report
 	Steps   func(ctx context.Context, now time.Time) []savings.Step
+	// Weeks reads the compaction setting's weekly rollup; nil, or nil
+	// returned, leaves the compaction saving out.
+	Weeks func() *Weeks
 }
 
 // Compute builds the report for [since, until). A zero until is now.
@@ -132,6 +135,9 @@ func gather(ctx context.Context, d Deps, since, until time.Time) (Inputs, error)
 			return Inputs{}, err
 		}
 	}
+	if d.Weeks != nil {
+		in.Compaction = d.Weeks()
+	}
 	if d.Trace != nil {
 		for _, id := range workflowsIn(in) {
 			if err := ctx.Err(); err != nil {
@@ -151,7 +157,8 @@ func gather(ctx context.Context, d Deps, since, until time.Time) (Inputs, error)
 	if d.Records != nil {
 		if records, err := d.Records(ctx, since, until); err == nil {
 			in.Stops = stopsIn(records)
-			if line, ok := agentdx.ContextLine(agentdx.ComputeContextCurve(records), 0); ok {
+			in.bands = agentdx.ComputeContextCurve(records)
+			if line, ok := agentdx.ContextLine(in.bands, 0); ok {
 				in.Waste.CompactAtOverride = line
 				in.line = &ContextLine{Tokens: line, Basis: lineBasis}
 			}

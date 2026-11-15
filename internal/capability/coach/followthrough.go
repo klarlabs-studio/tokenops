@@ -295,6 +295,9 @@ func Status(cfg config.Config, l Ledger, levers ContextLevers, now time.Time) Re
 	if levers != nil {
 		r.Compaction = levers.Check()
 	}
+	if p, ok := PendingCompaction(l, now); ok && r.Effective(config.PowerContext) == config.AutonomyAsk {
+		r.Proposal = &p
+	}
 	r.Routers = DetectRouters()
 	if v := Verdicts(MoveStore(), now); len(v.Lines) > 0 {
 		r.Moves = &v

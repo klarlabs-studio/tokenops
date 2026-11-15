@@ -88,6 +88,8 @@ var subCLIOnly = map[string]string{
 	"coach delivery":            "superseded by tokenops_coach (ADR 0006); kept for existing configs",
 	"coach migrate":             "rewrites the operator's config from older keys once; an operator decision, not an agent's",
 	"coach reinstate":           "restores a model move the coach retracted after its quality dropped; only the operator or new evidence may (moveverdict)",
+	"coach accept":              "the developer's yes to a compaction proposal at the ask rung; an approval is the developer's, not an agent's (ADR 0021)",
+	"coach decline":             "the developer's no to a compaction proposal at the ask rung; an approval is the developer's, not an agent's (ADR 0021)",
 	"coach replies":             "GAP: reply-compression detection has no tool",
 	"task start":                "GAP: marking a task boundary has no tool; tokenops_story reads inferred tasks",
 	"task done":                 "GAP: marking a task boundary has no tool",

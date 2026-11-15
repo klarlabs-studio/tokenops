@@ -278,6 +278,12 @@ Consequences for the rungs:
   byte for byte when lowered; `ask` reports as `advise`. Legacy keys never
   map to `autonomous` for this power.
 
+- **2026-11-15, `ask` for `context` (ADR 0021).** `ask` no longer reports
+  as `advise`. The coach proposes the line measured from the developer's
+  own instructions as an approval offer, `tokenops coach accept` writes
+  it, and until then, and while the compaction guardrail has not
+  graduated, what would be set is kept as a shadow.
+
 - **2026-09-30, presets.** One choice sets the whole coach (observe,
   advise, guided, autopilot), installs every hook the coach needs on each
   installed agent, and sets or restores where agents compact. The CLI

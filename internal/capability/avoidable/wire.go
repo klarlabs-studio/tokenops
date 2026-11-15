@@ -3,6 +3,8 @@ package avoidable
 import (
 	"context"
 	"math"
+	"os"
+	"path/filepath"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/coach"
@@ -45,6 +47,7 @@ func DepsFor(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, 
 		Routes:  modelAdvice,
 		Records: transcriptRecords("", nil),
 		Savings: periodSavings,
+		Weeks:   storedWeeks,
 		Steps: func(ctx context.Context, now time.Time) []savings.Step {
 			var history []ft.Summary
 			if l, err := ftstore.Default(); err == nil {
@@ -70,6 +73,20 @@ func DepsFor(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, 
 		}
 	}
 	return d
+}
+
+// storedWeeks reads the compaction rollup the daemon keeps beside the
+// week's snapshot; nil when there is none or it cannot be read.
+func storedWeeks() *Weeks {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	w, err := ReadWeeks(filepath.Join(home, ".tokenops", "cache"))
+	if err != nil {
+		return nil
+	}
+	return w
 }
 
 // transcriptRecords reads the transcript entries the clients wrote over

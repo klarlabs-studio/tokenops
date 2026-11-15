@@ -13,7 +13,8 @@ type LeverResult struct {
 	Key    string `json:"key,omitempty"`
 	Value  int64  `json:"value,omitempty"`
 	// Status is applied, active, reverted, yours (the operator's own value,
-	// left alone), edited (changed since tokenops set it), or unavailable.
+	// left alone), edited (changed since tokenops set it), unavailable, or
+	// shadow (what a preview would write, not written).
 	Status string `json:"status"`
 	Note   string `json:"note,omitempty"`
 }
@@ -25,18 +26,35 @@ type ContextLevers interface {
 	Apply() ([]LeverResult, error)
 	Revert() ([]LeverResult, error)
 	Check() []LeverResult
+	// Preview is what Apply would do, writing nothing: a setting it would
+	// write reports as LeverShadow.
+	Preview() ([]LeverResult, error)
 }
 
 // reconcileContext applies the levers when the context power is
-// autonomous and restores them when it stops being so. Applying is
-// idempotent, so every change to the coach re-checks them.
+// autonomous and restores them when it stops acting (ask or autonomous).
+// Applying is idempotent, so every change to the coach re-checks them. A
+// power raised to ask proposes the line at once rather than writing it;
+// one lowered from autonomous to ask keeps what is set.
 func reconcileContext(before, after Report, levers ContextLevers, l Ledger, now time.Time) []LeverResult {
 	if levers == nil {
 		return nil
 	}
-	was := before.Effective(config.PowerContext) == config.AutonomyAutonomous
+	acts := func(r Report) bool {
+		e := r.Effective(config.PowerContext)
+		return e == config.AutonomyAutonomous || e == config.AutonomyAsk
+	}
 	is := after.Effective(config.PowerContext) == config.AutonomyAutonomous
 	switch {
+	case after.Effective(config.PowerContext) == config.AutonomyAsk:
+		if before.Effective(config.PowerContext) == config.AutonomyAsk {
+			return nil
+		}
+		would, err := wouldSet(levers)
+		if len(would) > 0 && !answeredOrPending(foldedProposals(l, now), describeSettings(would)) {
+			propose(l, now, describeSettings(would))
+		}
+		return withError(would, err)
 	case is:
 		rs, err := levers.Apply()
 		for _, r := range rs {
@@ -45,7 +63,7 @@ func reconcileContext(before, after Report, levers ContextLevers, l Ledger, now 
 			}
 		}
 		return withError(rs, err)
-	case was:
+	case acts(before) && !acts(after):
 		rs, err := levers.Revert()
 		return withError(rs, err)
 	}

@@ -39,7 +39,7 @@ func TestEffectiveRungsAreHonest(t *testing.T) {
 	c.Coach.Autonomy = config.AutonomyAsk
 	r = coach.Build(c)
 	// models asks through Claude Code's permission prompt (verified in an
-	// interactive session); the other powers have nothing to approve.
+	// interactive session); inform and waste have nothing to approve.
 	if m := power(t, r, config.PowerModels); m.Effective != config.AutonomyAsk || !strings.Contains(m.Note, "nobody is attending") {
 		t.Errorf("models ask = %+v; it asks when attended and must say it advises otherwise", m)
 	}
@@ -47,6 +47,11 @@ func TestEffectiveRungsAreHonest(t *testing.T) {
 		if p := power(t, r, name); p.Effective != config.AutonomyAdvise || p.Reason == "" {
 			t.Errorf("%s ask = %+v; must fall back to advise, saying why", name, p)
 		}
+	}
+	// context proposes the compaction line and writes it on the
+	// developer's yes.
+	if p := power(t, r, config.PowerContext); p.Effective != config.AutonomyAsk || p.Reason != "" || !strings.Contains(p.Note, coach.AcceptCommand) {
+		t.Errorf("context ask = %+v; it proposes and must name the command that accepts", p)
 	}
 }
 

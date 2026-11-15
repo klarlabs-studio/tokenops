@@ -2013,6 +2013,22 @@ for being ignored, and a model move it retracted because work it moved did
 worse (`tokenops explain moves`). The evidence before it no longer counts
 toward retiring or quieting the kind again.
 
+### `tokenops coach accept` and `tokenops coach decline`
+
+```bash
+tokenops coach accept            # the newest compaction proposal
+tokenops coach decline --id 3f2a…
+```
+
+With `context` at `ask`, the coach proposes where your agents compact: the
+context line measured from your own instructions (the `context line` of
+`tokenops spend waste`), set in each agent that has a compaction setting.
+`tokenops coach` shows the proposal. `accept` writes it, recording what it
+replaced so lowering `context` restores it. Until the compaction guardrail
+has graduated, an accepted line is recorded as what would be set (a shadow
+in the savings ledger) and written once it graduates. `decline` turns it
+down; the same line is not proposed again, and a line that moves is.
+
 ### `tokenops coach preset [observe|advise|guided|autopilot]`
 
 Sets every power and the verbosity in one choice, then makes the machine
