@@ -27,7 +27,7 @@ func TestGoldenBoundaryDecisionCarriesActorAndApproval(t *testing.T) {
 	}
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.6.1",
+  "schema_version": "1.6.2",
   "type": "decision",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "boundary",
@@ -88,6 +88,7 @@ func TestDecisionProtoMatchesGo(t *testing.T) {
 		{reflect.TypeFor[DecisionEvent](), (&eventschemav1.DecisionEvent{}).ProtoReflect().Descriptor()},
 		{reflect.TypeFor[DecisionActor](), (&eventschemav1.DecisionActor{}).ProtoReflect().Descriptor()},
 		{reflect.TypeFor[DecisionApproval](), (&eventschemav1.DecisionApproval{}).ProtoReflect().Descriptor()},
+		{reflect.TypeFor[WindowForecast](), (&eventschemav1.WindowForecast{}).ProtoReflect().Descriptor()},
 	}
 	for _, tc := range cases {
 		var goNames, protoNames []string
@@ -126,5 +127,26 @@ func TestGoldenApprovalCarriesPresence(t *testing.T) {
 	b, _ = json.Marshal(DecisionApproval{Approver: "felix", Method: "cli", At: fixedTime})
 	if strings.Contains(string(b), "presence") || strings.Contains(string(b), "would_refuse") {
 		t.Fatalf("empty presence serialised: %s", b)
+	}
+}
+
+// A boundary pause or route records each plan window as it stood: the
+// share used, the pace, and when it would run out at that pace. Figures
+// only; absent on decisions recorded before them.
+func TestGoldenDecisionCarriesWindowForecasts(t *testing.T) {
+	f := WindowForecast{Provider: "anthropic", Window: "5h", UsedPct: 80, PctPerHour: 40,
+		RunsOutAt: fixedTime.Add(30 * 60e9), ResetsAt: fixedTime.Add(2 * 3600e9), Basis: "recent"}
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"provider":"anthropic","window":"5h","used_pct":80,"pct_per_hour":40,` +
+		`"runs_out_at":"2026-05-11T12:30:00Z","resets_at":"2026-05-11T14:00:00Z","basis":"recent"}`
+	if string(b) != want {
+		t.Fatalf("got  %s\nwant %s", b, want)
+	}
+	b, _ = json.Marshal(&DecisionEvent{Kind: "boundary", Stage: DecisionStageApplied})
+	if strings.Contains(string(b), "forecasts") {
+		t.Fatalf("empty forecasts serialised: %s", b)
 	}
 }

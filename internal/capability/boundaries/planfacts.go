@@ -2,9 +2,11 @@ package boundaries
 
 import (
 	"maps"
+	"slices"
 	"time"
 
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -15,13 +17,15 @@ import (
 // in a Claude Code session, otherwise from the daemon's figures. A call
 // that starts another agent reads that agent's plan too, and each window
 // keeps the tighter reading.
-func readPlanFacts(f *domain.Facts, call Call, env Env, figs *lazyFigures, now time.Time) []eventschema.EvidenceRef {
+func readPlanFacts(f *domain.Facts, call Call, env Env, figs *lazyFigures, now time.Time) ([]eventschema.EvidenceRef, []eventschema.WindowForecast) {
 	var ev []eventschema.EvidenceRef
+	var forecasts []eventschema.WindowForecast
 	provider := call.Provider
 	if call.Harness == HarnessClaudeCode {
 		provider = "anthropic"
-		if left, early, basis, observed, ok := limitsPlan(env.LimitsPath, now); ok {
+		if left, early, basis, observed, fc, ok := limitsPlan(env.LimitsPath, now); ok {
 			f.PlanLeftPct, f.PlanEarlyMin, f.PlanEarlyBasis, f.PlanVendor = left, early, basis, planVendor(provider)
+			forecasts = fc
 			ev = append(ev, eventschema.EvidenceRef{
 				Kind: "plan_headroom", Source: "claude_code_statusline", ObservedAt: observed,
 				FreshUntil: observed.Add(limitsFreshFor), Confidence: 1, Scope: "anthropic",
@@ -32,6 +36,7 @@ func readPlanFacts(f *domain.Facts, call Call, env Env, figs *lazyFigures, now t
 		if fig, ok := figs.get(); ok {
 			if left := figuresPlanLeft(fig, provider); len(left) > 0 {
 				f.PlanEarlyMin, f.PlanEarlyBasis = figuresPlanEarly(fig, provider)
+				forecasts = append(forecasts, figuresForecasts(fig, provider)...)
 				f.PlanLeftPct, f.PlanVendor = left, planVendor(provider)
 				scope, caveat := provider, ""
 				if scope == "" {
@@ -45,17 +50,18 @@ func readPlanFacts(f *domain.Facts, call Call, env Env, figs *lazyFigures, now t
 		}
 	}
 	if len(call.Spends) == 0 {
-		return ev
+		return ev, forecasts
 	}
 	fig, ok := figs.get()
 	if !ok {
-		return ev
+		return ev, forecasts
 	}
 	for _, other := range call.Spends {
 		left := figuresPlanLeft(fig, other)
 		if len(left) == 0 {
 			continue
 		}
+		forecasts = append(forecasts, figuresForecasts(fig, other)...)
 		vendor := planVendor(other)
 		f.PlanLeftPct, f.PlanVendors, _ = mergePlan(f.PlanLeftPct, f.PlanVendors, f.PlanVendor, nil, left, vendor, nil, less)
 		early, basis := figuresPlanEarly(fig, other)
@@ -67,7 +73,51 @@ func readPlanFacts(f *domain.Facts, call Call, env Env, figs *lazyFigures, now t
 			Caveat: "the tool call starts " + vendor + ", which spends that plan",
 		})
 	}
-	return ev
+	return ev, forecasts
+}
+
+// figuresForecasts are the provider's windows as the daemon forecast
+// them, or with no provider every plan's, in a stable order.
+func figuresForecasts(fig boundaryledger.Figures, provider string) []eventschema.WindowForecast {
+	var out []eventschema.WindowForecast
+	for _, p := range slices.Sorted(maps.Keys(fig.PlanForecast)) {
+		if provider != "" && p != provider {
+			continue
+		}
+		byWindow := fig.PlanForecast[p]
+		for _, w := range slices.Sorted(maps.Keys(byWindow)) {
+			out = append(out, byWindow[w])
+		}
+	}
+	return out
+}
+
+// windowForecast is one plan window as a pause or route records it: the
+// share used, the pace the run-out is forecast at, and when it runs out
+// at that pace (zero when it lasts to its reset). false for a window with
+// no reset ahead.
+func windowForecast(provider, name string, w plans.VendorWindow, now time.Time) (eventschema.WindowForecast, bool) {
+	if name == "" || w.ResetsAt.IsZero() || !w.ResetsAt.After(now) {
+		return eventschema.WindowForecast{}, false
+	}
+	f := eventschema.WindowForecast{Provider: provider, Window: name, UsedPct: w.UsedPct, ResetsAt: w.ResetsAt.UTC()}
+	if w.UsedPct >= 100 {
+		f.RunsOutAt = now.UTC()
+		return f, true
+	}
+	pace := w.Forecast(now)
+	if pace == nil || pace.TooEarly {
+		return f, true
+	}
+	f.Basis = pace.Basis
+	switch elapsed := w.Duration - w.ResetsAt.Sub(now); {
+	case !pace.LastsToReset && pace.RunsOutIn > 0:
+		f.RunsOutAt = now.Add(pace.RunsOutIn).UTC()
+		f.PctPerHour = (100 - w.UsedPct) / pace.RunsOutIn.Hours()
+	case elapsed > 0:
+		f.PctPerHour = w.UsedPct / elapsed.Hours()
+	}
+	return f, true
 }
 
 func less(a, b float64) bool { return a < b }
@@ -158,10 +208,11 @@ func figuresByWindow(byProvider map[string]map[string]float64, provider string,
 // rate that forecast read, from the reading the status line keeps. A
 // window that has reset since is unknown, not full: the reading no longer
 // says anything about it.
-func limitsPlan(path string, now time.Time) (left, early map[domain.Window]float64, basis map[domain.Window]string, observed time.Time, ok bool) {
+func limitsPlan(path string, now time.Time) (left, early map[domain.Window]float64, basis map[domain.Window]string, observed time.Time,
+	forecasts []eventschema.WindowForecast, ok bool) {
 	r, found, err := claudelimits.Read(path)
 	if err != nil || !found || now.Sub(r.ObservedAt) > limitsFreshFor {
-		return nil, nil, nil, time.Time{}, false
+		return nil, nil, nil, time.Time{}, nil, false
 	}
 	left, early, basis = map[domain.Window]float64{}, map[domain.Window]float64{}, map[domain.Window]string{}
 	for w, win := range map[domain.Window]*claudelimits.Window{domain.Window5h: r.FiveHour, domain.WindowWeek: r.SevenDay} {
@@ -176,6 +227,9 @@ func limitsPlan(path string, now time.Time) (left, early map[domain.Window]float
 		if _, kept := left[domain.Window(vw.Name)]; !kept {
 			continue
 		}
+		if f, ok := windowForecast("anthropic", windowName(vw), vw, now); ok {
+			forecasts = append(forecasts, f)
+		}
 		if before, known := vw.RunsOutEarly(now); known {
 			early[domain.Window(vw.Name)] = before.Minutes()
 			if f := vw.Forecast(now); f != nil && f.Basis != "" {
@@ -183,5 +237,5 @@ func limitsPlan(path string, now time.Time) (left, early map[domain.Window]float
 			}
 		}
 	}
-	return left, early, basis, r.ObservedAt.UTC(), len(left) > 0
+	return left, early, basis, r.ObservedAt.UTC(), forecasts, len(left) > 0
 }

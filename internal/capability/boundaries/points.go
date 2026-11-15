@@ -136,6 +136,18 @@ func Figures(reports []plans.HeadroomReport, budgetUsed map[string]float64, now 
 			if cur, ok := byWindow[name]; !ok || left < cur {
 				byWindow[name] = left
 			}
+			if f, ok := windowForecast(r.Provider, name, w, now); ok {
+				if out.PlanForecast == nil {
+					out.PlanForecast = map[string]map[string]eventschema.WindowForecast{}
+				}
+				if out.PlanForecast[r.Provider] == nil {
+					out.PlanForecast[r.Provider] = map[string]eventschema.WindowForecast{}
+				}
+				// Two plans on one provider: the one that runs out first binds.
+				if cur, ok := out.PlanForecast[r.Provider][name]; !ok || f.UsedPct > cur.UsedPct {
+					out.PlanForecast[r.Provider][name] = f
+				}
+			}
 			if before, known := w.RunsOutEarly(now); known {
 				if out.PlanEarlyMin == nil {
 					out.PlanEarlyMin = map[string]map[string]float64{}

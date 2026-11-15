@@ -251,13 +251,13 @@ func Guard(rules []domain.Rule, call Call, env Env) (Result, error) {
 	if len(relevant) == 0 {
 		return Result{}, nil
 	}
-	facts, evidence := readFacts(relevant, call, env)
+	facts, evidence, forecasts := readFacts(relevant, call, env)
 	v := domain.Evaluate(relevant, call.Action, facts)
 	if len(v.Matches) == 0 {
 		return Result{}, nil
 	}
 	lifted := liftExtras(&v, relevant, call.Action, facts, env)
-	g := &guard{call: call, env: env, evidence: evidence, now: env.now()}
+	g := &guard{call: call, env: env, evidence: evidence, forecasts: forecasts, now: env.now()}
 	g.load()
 	// What follows the evaluation is bookkeeping around a decision already
 	// made. Its failures are reported beside the decision, never instead
@@ -300,7 +300,7 @@ func needs(rules []domain.Rule, f domain.Field) bool {
 }
 
 // readFacts reads only the figures the rules compare.
-func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventschema.EvidenceRef) {
+func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventschema.EvidenceRef, []eventschema.WindowForecast) {
 	now := env.now()
 	f := domain.Facts{
 		AgentID: call.AgentID, WorkflowID: call.WorkflowID, ModelTier: domain.TierOf(call.Model),
@@ -310,6 +310,7 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 		f.Folder = call.Folder
 	}
 	var ev []eventschema.EvidenceRef
+	var forecasts []eventschema.WindowForecast
 	figs := lazyFigures{dir: env.Dir, now: now}
 	if needs(rules, domain.FieldSessionCost) {
 		if usd, ok := coachhook.SessionCostUSD(env.CoachDir, call.SessionID); ok {
@@ -321,7 +322,8 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 		}
 	}
 	if needs(rules, domain.FieldPlanLeft) || needs(rules, domain.FieldPlanEarly) {
-		ev = append(ev, readPlanFacts(&f, call, env, &figs, now)...)
+		pe, fc := readPlanFacts(&f, call, env, &figs, now)
+		ev, forecasts = append(ev, pe...), fc
 	}
 	if needs(rules, domain.FieldLoopCalls) {
 		if loop, ok := readLoop(call, env); ok {
@@ -359,7 +361,7 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 			})
 		}
 	}
-	return f, ev
+	return f, ev, forecasts
 }
 
 // readLoop adds the call to the session's latest calls and reads the loop
@@ -420,8 +422,11 @@ type guard struct {
 	call     Call
 	env      Env
 	evidence []eventschema.EvidenceRef
-	now      time.Time
-	session  boundaryledger.Session
+	// forecasts are the plan windows as this call read them, recorded on
+	// a pause or route (avoided lockouts are judged from them).
+	forecasts []eventschema.WindowForecast
+	now       time.Time
+	session   boundaryledger.Session
 	// changed is set when a decision stage was recorded: only then is the
 	// session's file written again. The matches go to its log.
 	changed bool
@@ -791,7 +796,17 @@ func (g *guard) recordOnce(m domain.Match, stage eventschema.DecisionStage, appr
 }
 
 func (g *guard) record(m domain.Match, stage eventschema.DecisionStage, approval eventschema.DecisionApproval) error {
-	return g.env.Dir.Append(decisionEnvelope(m, stage, g.call, g.env, g.now, g.evidence, approval))
+	env := decisionEnvelope(m, stage, g.call, g.env, g.now, g.evidence, approval)
+	if d, ok := env.Payload.(*eventschema.DecisionEvent); ok && recordsForecasts(g.call.Action) {
+		d.Forecasts = g.forecasts
+	}
+	return g.env.Dir.Append(env)
+}
+
+// recordsForecasts reports whether a decision on the action records the
+// plan windows it read: a pause of the agent's next call, or a route.
+func recordsForecasts(a domain.Action) bool {
+	return a == domain.ActionContinue || a == domain.ActionModelRoute
 }
 
 // decisionEnvelope is one boundary decision, in the record the router
