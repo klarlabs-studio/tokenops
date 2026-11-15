@@ -7,8 +7,11 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/compactlever"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 )
 
@@ -29,13 +32,51 @@ func startAvoidableRuntime(cfg config.Config, c *bootstrap.Components, readers f
 	if readers != nil {
 		readers(&d)
 	}
+	var log avoidable.WeekLog
+	if c.Store != nil {
+		log = c.Store
+	}
+	after := func(ctx context.Context, s avoidable.Snapshot, now time.Time) {
+		afterAvoidable(ctx, cfg, d, log, findings.DefaultDir(), s, now, logger)
+	}
 	sup.Go("avoidable-week", func(ctx context.Context) error {
-		runAvoidable(ctx, d, findings.DefaultDir(), avoidableDelay, avoidableEvery, logger)
+		runAvoidable(ctx, d, findings.DefaultDir(), avoidableDelay, avoidableEvery, after, logger)
 		return nil
 	})
 }
 
-func runAvoidable(ctx context.Context, d avoidable.Deps, dir string, delay, every time.Duration, logger *slog.Logger) {
+// afterAvoidable runs what the week's report feeds, once it is stored: the
+// compaction setting's weekly rollup (ADR 0021), cheap because a finished
+// week is computed once, and the context power's step at the ask rung,
+// which proposes the measured line or writes an accepted one.
+func afterAvoidable(ctx context.Context, cfg config.Config, d avoidable.Deps, log avoidable.WeekLog, dir string, s avoidable.Snapshot, now time.Time, logger *slog.Logger) {
+	var line int64
+	if s.Report.ContextLine != nil {
+		line = s.Report.ContextLine.Tokens
+	}
+	var setAt time.Time
+	if p, err := compactlever.DefaultPaths(); err == nil {
+		setAt, _ = compactlever.SetSince(p)
+	}
+	if log != nil {
+		figures := func(ctx context.Context, start time.Time, line int64) (avoidable.WeekFigs, error) {
+			return avoidable.WeekFigures(ctx, d, start, line)
+		}
+		if _, err := avoidable.RefreshWeeks(ctx, log, figures, dir, line, setAt, now); err != nil {
+			logger.Warn("compaction weeks not stored", "err", err)
+		}
+	}
+	ledger, levers := coachEnv(cfg)
+	for _, r := range coachcap.StepCompaction(cfg, coachcap.AskEnv{
+		Ledger: ledger, Shadow: savings.DefaultLedger(), Levers: levers,
+		Graduated: func() bool { return coachcap.CompactionGraduated(ledger, now) },
+	}, now) {
+		logger.Info("compaction at the ask rung", "client", r.Client, "status", r.Status)
+	}
+}
+
+func runAvoidable(ctx context.Context, d avoidable.Deps, dir string, delay, every time.Duration,
+	after func(context.Context, avoidable.Snapshot, time.Time), logger *slog.Logger) {
 	wait := time.NewTimer(delay)
 	defer wait.Stop()
 	select {
@@ -52,6 +93,9 @@ func runAvoidable(ctx context.Context, d avoidable.Deps, dir string, delay, ever
 		}
 		logger.Info("waste report stored", "took", time.Since(start).Round(time.Millisecond),
 			"avoidable_tokens", s.Report.Avoidable.Tokens)
+		if after != nil {
+			after(ctx, s, start)
+		}
 	}
 	run()
 	tick := time.NewTicker(every)

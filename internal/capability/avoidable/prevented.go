@@ -39,6 +39,10 @@ const (
 	MechBoundary = "boundary"
 	// MechLoopBreaker is the calls the loop breaker stopped.
 	MechLoopBreaker = "loop_breaker"
+	// MechCompaction is the context the compaction line kept out, once
+	// the developer's own weeks show the setting realized a saving (ADR
+	// 0021).
+	MechCompaction = "compaction"
 )
 
 // Mechanism is one way TokenOps prevented spend.
@@ -80,6 +84,8 @@ const (
 	basisAut  = "the randomized holdout's difference in spend after the routed work, with its interval when the comparison concluded"
 	basisBnd  = "calls a boundary held until approved; not priced, since a held call never reached the model and its cost is not measured"
 	basisLoop = "calls the loop breaker stopped after the same call repeated; not priced, since the repeated call's cost is not measured"
+	basisCmp  = "the weekly drop in context carried above the compaction line, four weeks after the setting against four before, " +
+		"counted only when it and the reject rate fell beyond their usual week-to-week movement; at the period's average API price per token"
 )
 
 // buildPrevented sums the period's prevented spend by mechanism. It reads
@@ -144,7 +150,7 @@ func buildPrevented(in Inputs, r Report) Prevented {
 	lm := Mechanism{Key: MechLoopBreaker, Name: "calls the loop breaker stopped", Count: loop, Basis: basisLoop,
 		USD: measurement.Unknown(basisLoop)}
 
-	out.Mechanisms = []Mechanism{ref, fm, aut, bm, lm}
+	out.Mechanisms = []Mechanism{ref, fm, aut, bm, lm, compactionPrevented(in, rate)}
 	for _, m := range out.Mechanisms {
 		if v, ok := m.USD.Amount(); ok {
 			out.USD += v
@@ -212,4 +218,40 @@ func ReadPrevented(ctx context.Context, r uniteconomics.EventReader, since, unti
 		return nil, nil, fmt.Errorf("read boundary decisions: %w", err)
 	}
 	return fmtSavingsOf(fmtEnvs), holds, nil
+}
+
+// compactionPrevented is the compaction setting's realized saving over the
+// part of the period after the setting: the weekly drop in context carried
+// above the line, scaled to that part. A setting not yet judged, or judged
+// not realized, counts nothing and says why.
+func compactionPrevented(in Inputs, rate float64) Mechanism {
+	m := Mechanism{Key: MechCompaction, Name: "context kept under the compaction line", Basis: basisCmp}
+	if in.Compaction == nil {
+		m.USD = measurement.Unknown("tokenops has not set a compaction line")
+		return m
+	}
+	v, from, ok := in.Compaction.Judge()
+	if !ok {
+		m.USD = measurement.Unknown("tokenops has not set a compaction line")
+		return m
+	}
+	if !v.Realized {
+		m.USD = measurement.Unknown("not yet shown: " + v.Reason)
+		return m
+	}
+	start := in.Since
+	if start.Before(from) {
+		start = from
+	}
+	if !start.Before(in.Until) {
+		m.USD = measurement.Unknown("the period ends before the weeks the setting is judged on")
+		return m
+	}
+	m.Count = 1
+	m.Tokens = int64(v.Oversized.Drop * in.Until.Sub(start).Hours() / (7 * 24))
+	m.USD = measurement.Unknown("no API price is known for the period's usage")
+	if rate > 0 {
+		m.USD = measurement.Estimated(float64(m.Tokens)*rate, "compaction weekly rollup", basisCmp)
+	}
+	return m
 }

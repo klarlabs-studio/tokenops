@@ -23,6 +23,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/contexts/learning"
 	"go.klarlabs.de/tokenops/internal/contexts/measurement"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
@@ -97,6 +98,8 @@ type Inputs struct {
 	// line is the context line the operator's bands measured, set by
 	// gather with the override it applies to the waste detector.
 	line *ContextLine
+	// bands are the period's context bands, read with the line.
+	bands []agentdx.ContextBand
 	// Traces are the period's workflows by ID, for the waste detector,
 	// configured by Waste.
 	Traces map[string]*workflow.Trace
@@ -118,6 +121,9 @@ type Inputs struct {
 	// Holds the calls a boundary stopped: the prevented side of the report.
 	Fmt   []FmtSaving
 	Holds []Hold
+	// Compaction is the weekly rollup the compaction setting is judged
+	// on, nil when none is stored.
+	Compaction *Weeks
 }
 
 // Stop is an instruction the developer stopped: its session, when the

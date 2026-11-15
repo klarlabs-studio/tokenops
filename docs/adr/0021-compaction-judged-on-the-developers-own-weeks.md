@@ -1,6 +1,6 @@
 # ADR 0021 — A compaction setting is judged on the developer's own weeks
 
-- **Status:** Proposed
+- **Status:** Accepted 2026-11-15
 - **Date:** 2026-11-15
 - **Deciders:** TokenOps maintainers
 - **Related:** ADR 0006 (one coach; the context power), ADR 0017 (the price
@@ -64,15 +64,39 @@ carries more context regardless of any setting.
    context power acts; it is reverted to what it replaced; and a value the
    operator set is never changed.
 
-7. **Approval at the `ask` rung is not built yet.** The intended rule is
-   that the coach proposes the line and applies it on the developer's yes,
-   and that it stays in shadow until the compaction guardrail graduates.
-   The current code does not do that: an `ask` context power is advised
-   instead, because no agent offers an approval point for compacting (ADR
-   0006 and `coach` rung rules). Until that is decided, the setting is
-   written only where the context power is `autonomous`, as before this
-   change. The derived line changes the number written, not who may write
-   it.
+7. **At the `ask` rung the coach proposes the line and writes it on the
+   developer's yes.** The proposal is a follow-through approval offer,
+   the record the models power already keeps when it asks before a move;
+   `tokenops coach accept` is the yes and `tokenops coach decline` the no,
+   each recorded as the offer's resolve. A declined line is not proposed
+   again; a line that moves is. A proposal waits for its answer: it does
+   not lapse with a session.
+
+8. **Shadow until graduation.** Before the developer accepts, and while
+   the compaction guardrail has not graduated (its evidence does not yet
+   clear ADR 0005's bar to act, the same graduation `tokenops coach stats`
+   shows), what would be set is recorded as a shadow in the savings ledger
+   and nothing is written. An accepted line is written on the first daily
+   step after the guardrail graduates. At `autonomous` the setting is
+   written as before.
+
+9. **The weekly series is a small stored rollup (ADR 0019).** After the
+   daily waste report the daemon keeps, per finished week (Monday to
+   Monday, UTC), the context carried above the line and the reject rate
+   of the trusted bands, beside the week's snapshot. Only the weeks the
+   judgement needs are kept: the last four finished weeks, and four either
+   side of the setting; the week the setting fell in is on neither side.
+   A finished week is computed once, from the readers the waste report
+   uses, and again only when a change in the event log touches it, the
+   line every week is measured against moves, or the rollup's version
+   changes. A week with no band trusted enough to judge rejects is left
+   out of the comparison. There is no per-day recompute of the report.
+
+10. **A realized saving is a prevented mechanism.** The waste report's
+    prevented figures carry it as `compaction`: the weekly drop in context
+    carried above the line, scaled to the part of the period after the
+    setting, at the period's average API price per token, with its basis.
+    It is never counted as found.
 
 ## Consequences
 
@@ -85,6 +109,10 @@ carries more context regardless of any setting.
 - The figures are the developer's own. They are not shared with a team
   unless the team upload already carries them; nothing about the verdict
   leaves the machine by itself.
-- The judgement is pure: `internal/contexts/learning/compactwatch` reads nothing
-  and writes nothing. The weekly series and the caller that feeds it are
-  separate work.
+- The judgement is pure: `internal/contexts/learning/compactwatch` reads
+  nothing and writes nothing. The rollup that feeds it
+  (`internal/capability/avoidable`, `compact-weeks.json` in the cache) is
+  rebuilt from the log, so dropping it loses nothing.
+- Lowering the context power from `ask` or `autonomous` to a rung that
+  does not act restores what tokenops set; lowering `autonomous` to `ask`
+  keeps it.

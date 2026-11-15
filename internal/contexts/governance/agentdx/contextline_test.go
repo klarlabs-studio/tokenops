@@ -1,6 +1,9 @@
 package agentdx
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestContextLineFromOwnBands(t *testing.T) {
 	band := func(lo, hi int64, prompts int, reject float64) ContextBand {
@@ -55,6 +58,31 @@ func TestContextLineFromOwnBands(t *testing.T) {
 			got, ok := ContextLine(tc.bands, fallback)
 			if got != tc.want || ok != tc.found {
 				t.Errorf("ContextLine() = %d, %v; want %d, %v", got, ok, tc.want, tc.found)
+			}
+		})
+	}
+}
+
+// The judged reject rate pools the trusted bands only, weighting each by
+// its instructions; a band too small to trust adds nothing.
+func TestJudgedRejectRatePoolsTrustedBands(t *testing.T) {
+	tests := []struct {
+		name    string
+		bands   []ContextBand
+		pct     float64
+		prompts int
+	}{
+		{"no bands", nil, 0, 0},
+		{"only untrusted bands", []ContextBand{{Prompts: 10, RejectRatePct: 50}}, 0, 0},
+		{"two trusted bands, weighted", []ContextBand{
+			{Prompts: 100, RejectRatePct: 10}, {Prompts: 300, RejectRatePct: 20}, {Prompts: 5, RejectRatePct: 100},
+		}, 17.5, 400},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pct, n := JudgedRejectRate(tt.bands)
+			if n != tt.prompts || math.Abs(pct-tt.pct) > 1e-9 {
+				t.Errorf("= %v%% over %d; want %v%% over %d", pct, n, tt.pct, tt.prompts)
 			}
 		})
 	}
