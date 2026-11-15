@@ -302,7 +302,6 @@ internal/
   storage/sqlite/                 # event store
 pkg/eventschema/                  # public envelope + payload types
 docs/reference/                  # CLI, configuration and API reference
-.roady/                           # spec-driven planning
 ```
 
 ## Integrations
@@ -371,8 +370,7 @@ tokenops spend --include-source=mcp-session
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md),
-and [SECURITY.md](SECURITY.md). Plans and tasks live in `.roady/` (see
-[roady](https://roady.dev)).
+and [SECURITY.md](SECURITY.md).
 
 ## Changelog
 

@@ -66,3 +66,7 @@ menubar-dist/
 /release-archives/
 /.venv-integrations/
 __pycache__/
+
+# Planning and strategy notes live in a private repository.
+/.roady/
+/memory/

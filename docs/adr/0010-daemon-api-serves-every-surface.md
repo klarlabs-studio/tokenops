@@ -3,7 +3,7 @@
 - **Status:** Accepted. API implemented 2026-10-03 (slices 1–5, PRs #508–#515). Adapter migration complete 2026-10-07: the CLI, the daemon and the MCP server import no domain package directly (`internal/archlint/capability_test.go`), down from 94 direct imports (cli 31, daemon 32, mcp 19, proxy 12) the same morning. The daemon's startup wiring comes from `internal/bootstrap`. What remains is the proxy's five, its request path's own collaborators (the optimizer and router, the provider catalog, the tokenizer, the cost engine), exempt by design and documented in the ratchet; its `/api/*` read model answers through `internal/capability` like every other surface. The agent-DX capability this ADR calls `capability/dx` is `internal/capability/sessions`.
 - **Date:** 2026-10-03
 - **Deciders:** TokenOps maintainers
-- **Related:** ADR 0004 (phase 4 capability layer, phase 9 surface-native insight), ADR 0009 (endpoints, routers, billers), `docs/competitive-landscape.md` (G7, G8)
+- **Related:** ADR 0004 (phase 4 capability layer, phase 9 surface-native insight), ADR 0009 (endpoints, routers, billers)
 
 ## Context
 

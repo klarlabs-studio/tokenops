@@ -3,7 +3,7 @@
 - **Status:** Accepted 2026-10-06. Phase 1 shipped (#559, #560); phase 2 shipped: Claude Code sign-in (opt-in) and Codex app server (on by default).
 - **Date:** 2026-10-06
 - **Deciders:** TokenOps maintainers
-- **Related:** ADR 0003 (authoritative cost), ADR 0010 (daemon API), `docs/competitive-landscape.md` (update 2026-10-06), `internal/contexts/observability/freshness`
+- **Related:** ADR 0003 (authoritative cost), ADR 0010 (daemon API), `internal/contexts/observability/freshness`
 
 ## Context
 
