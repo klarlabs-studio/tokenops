@@ -121,6 +121,10 @@ func Advise(ctx context.Context, d Deps, q AdviceQuery, now time.Time) (AdviceRe
 	if err != nil {
 		return AdviceResult{}, err
 	}
+	historyFrom, err := historyStart(ctx, d.Reader, envs, since)
+	if err != nil {
+		return AdviceResult{}, err
+	}
 	var observed plans.ObservedLimits
 	if d.Observed != nil {
 		observed = d.Observed()
@@ -137,6 +141,7 @@ func Advise(ctx context.Context, d Deps, q AdviceQuery, now time.Time) (AdviceRe
 			res.Notes = append(res.Notes, note)
 			continue
 		}
+		in.HistoryFrom = historyFrom
 		a := plans.Replay(in)
 		if q.Project {
 			a.AtReset = projectLongest(ctx, d.Reader, provider, envs, days, now)
@@ -144,6 +149,35 @@ func Advise(ctx context.Context, d Deps, q AdviceQuery, now time.Time) (AdviceRe
 		res.Providers = append(res.Providers, a)
 	}
 	return res, nil
+}
+
+// historyStart is when the store's history begins within the period from
+// since, the first event of any provider: a day with no event of one
+// provider after it is a day that provider was not used, while a day
+// before it says nothing. Zero when the store holds events from before
+// since, or none at all. Only when the period's first event is more than
+// a day after since does it count the events before since, through the
+// store's index.
+func historyStart(ctx context.Context, r Reader, envs []*eventschema.Envelope, since time.Time) (time.Time, error) {
+	var first time.Time
+	for _, e := range envs {
+		if e != nil && (first.IsZero() || e.Timestamp.Before(first)) {
+			first = e.Timestamp
+		}
+	}
+	if first.IsZero() || first.Sub(since) <= 24*time.Hour {
+		return time.Time{}, nil
+	}
+	counts, err := r.CountBySource(ctx, time.Time{}, since)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("count events before the period: %w", err)
+	}
+	for _, n := range counts {
+		if n > 0 {
+			return time.Time{}, nil
+		}
+	}
+	return first, nil
 }
 
 // projectLongest is where provider's longest plan window is headed by its

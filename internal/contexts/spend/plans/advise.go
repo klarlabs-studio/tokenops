@@ -250,7 +250,8 @@ type Advice struct {
 	Display  string    `json:"display"`
 	Since    time.Time `json:"since"`
 	Until    time.Time `json:"until"`
-	// Days is how much of the period the readings cover.
+	// Days is how much of the period the readings cover, or with no
+	// readings how much of it the event history covers.
 	Days float64 `json:"days"`
 	// WindowsMeasured counts the window instances replayed.
 	WindowsMeasured int `json:"windows_measured"`
@@ -305,6 +306,12 @@ func (a Advice) WorthSaying() bool {
 type ReplayInput struct {
 	Provider     string
 	Since, Until time.Time
+	// HistoryFrom is when the event history the period is read from
+	// begins: the first stored event, when that falls inside the period.
+	// Zero when the history reaches back past Since. With no readings the
+	// replay prices the days from it on, since a day before the first
+	// event says nothing about the usage.
+	HistoryFrom time.Time
 	// Readings are the meter's window readings over the period.
 	Readings []QuotaReading
 	// FactorAt is the allowance of the plan in force at a moment in a
@@ -320,7 +327,7 @@ type ReplayInput struct {
 	// out; nil when there is no rate card. The replay asks it for the days
 	// it prices: those the readings cover, so the API and overflow options
 	// and the value multiple read the same demand the tiers are replayed
-	// on, or the whole period when there are no readings.
+	// on, or with no readings the days of the period from HistoryFrom on.
 	ListValue func(from, to time.Time) (usd float64, unpriced int)
 	// EarlyResets are the vendor's early resets of this provider's windows
 	// in the period (EarlyResetsIn). A lockout one ended is blocked only
@@ -686,16 +693,27 @@ func setListValue(a *Advice, v listValue, monthlyFee float64) {
 	}
 }
 
+// historyStart is where the period's event history begins: HistoryFrom
+// when it falls inside the period, Since otherwise.
+func (in ReplayInput) historyStart() time.Time {
+	if in.HistoryFrom.After(in.Since) && in.HistoryFrom.Before(in.Until) {
+		return in.HistoryFrom
+	}
+	return in.Since
+}
+
 // feeAgainstAPI is the advice for a plan whose windows no meter read in
 // the period: with nothing to replay, only the fee is weighed against the
-// usage at API list price, over the whole period, at low confidence. How
+// usage at API list price, over the days of the period the event history
+// covers, at low confidence. How
 // often any tier would have run out is unknown, so no tier is compared.
 func feeAgainstAPI(a Advice, in ReplayInput) Advice {
 	if in.ListValue == nil || in.Current.MonthlyUSD <= 0 || !in.Until.After(in.Since) {
 		return a
 	}
-	a.Days = math.Round(in.Until.Sub(in.Since).Hours()/24*10) / 10
-	v := valueOver(in, in.Since)
+	from := in.historyStart()
+	a.Days = math.Round(in.Until.Sub(from).Hours()/24*10) / 10
+	v := valueOver(in, from)
 	setListValue(&a, v, in.Current.MonthlyUSD)
 	perMonth := averageMonthDays / a.Days
 	fee := round2(in.Current.MonthlyUSD)

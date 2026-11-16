@@ -718,3 +718,47 @@ func TestReplayPricesTheValueOverTheDaysReplayed(t *testing.T) {
 		})
 	}
 }
+
+// With no readings, the fee-versus-API replay prices the days the event
+// history covers: a period reaching back before the first stored event
+// would spread the usage over days nothing was recorded on, and the API
+// option per month would come out too low.
+func TestReplayWithoutReadingsPricesOnlyTheDaysWithHistory(t *testing.T) {
+	until := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	since := until.Add(-60 * 24 * time.Hour)
+	_, five, _ := maxTiers()
+	for _, tc := range []struct {
+		name        string
+		historyFrom time.Time
+		days        float64
+	}{
+		{"history unknown", time.Time{}, 60},
+		{"history reaches back past the period", since.Add(-24 * time.Hour), 60},
+		{"history starts 28 days back", until.Add(-28 * 24 * time.Hour), 28},
+		{"history starts after the period ends", until.Add(time.Hour), 60},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var priced [2]time.Time
+			a := Replay(ReplayInput{Provider: "anthropic", Since: since, Until: until, HistoryFrom: tc.historyFrom,
+				Current: five, Candidates: []Tier{five},
+				ListValue: func(from, to time.Time) (float64, int) {
+					priced = [2]time.Time{from, to}
+					return 280, 0
+				}})
+			if a.Days != tc.days {
+				t.Fatalf("days = %v, want %v", a.Days, tc.days)
+			}
+			if want := until.Add(-time.Duration(tc.days*24) * time.Hour); !priced[0].Equal(want) || !priced[1].Equal(until) {
+				t.Errorf("priced %v..%v, want %v..%v", priced[0], priced[1], want, until)
+			}
+			perMonth := 280 * averageMonthDays / tc.days
+			if api := optionFor(t, a, OptionAPI, ""); api.MonthlyUSD == nil || math.Abs(*api.MonthlyUSD-perMonth) > 0.01 {
+				t.Errorf("api = %v, want %.2f", deref(api.MonthlyUSD), perMonth)
+			}
+			multiple := math.Round(280/(five.MonthlyUSD*tc.days/averageMonthDays)*100) / 100
+			if a.ValueMultiple == nil || *a.ValueMultiple != multiple {
+				t.Errorf("value multiple = %v, want %.2f", deref(a.ValueMultiple), multiple)
+			}
+		})
+	}
+}
