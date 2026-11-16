@@ -2,16 +2,33 @@
 
 ## Unreleased
 
+## 0.121.0 - 2026-11-16
+
 ### Added
 
 - **spend:** `tokenops spend export --focus-version 1.5` (or `GET /api/spend/export?version=1.5`) writes FOCUS 1.5, the candidate recommendation. The default stays FOCUS 1.4 until 1.5 is ratified.
   - **tokens:** each kind of token is its own SKU (`claude-opus-5/cache-read`) with a `SkuMeter`. `SkuPriceDetails` names the model (`ModelId`, and `ModelDeveloper` where it is known) and the tokens' `TokenDirection` and `TokenCacheAction`, so a FinOps tool can group AI spend by model, direction and cache use across vendors.
   - **plans:** usage a plan covered is contracted at its list rate, as 1.5 requires when no negotiated price applies; what the plan was worth is `ListCost` against `x_EstimatedCost`. A plan's `Purchase` rows carry how its windows were used in the charge period: `x_PlanWindowName`, `x_PlanWindowCount`, `x_PlanUtilization`, `x_PlanCoverage` and `x_PlanLapsedValue`, the part of the fee that paid for window capacity that reset unused. The columns are documented under `tokenops spend export`.
   - 1.5's requester columns are not written; FOCUS 1.4 and 1.2 output is unchanged.
+- **coach:** `tokenops coach accept` and `tokenops coach decline` answer the compaction-line proposal the coach makes at its ask rung: the context size past which your instructions get worse, measured from your own instructions. Accepting writes the line; declining turns it down. Lowering the coach's power from ask restores what an accepted line set. Before acceptance, and while the compaction guardrail has not graduated, the line that would be set is recorded as a shadow in the savings ledger and nothing is written.
+- **compact:** Gemini CLI and Pi get a compaction line. Gemini CLI takes `model.compressionThreshold`, a fraction of its model's context window; Pi takes `compaction.modelOverrides[provider/modelId].reserveTokens`, the tokens kept free below the window. Both are sized from the context window TokenOps knows for the model and written only from the measured context line; a model it cannot size is reported as unavailable. Values you set yourself, under current or older keys, are left alone, and a revert restores each file byte for byte.
+- **spend:** context windows for models outside the Claude table come from the LiteLLM catalog, which states `max_input_tokens` for Gemini CLI and Pi models. The Claude table keeps precedence, `max_tokens` is not read (LiteLLM documents it as the output limit), and a model in neither source stays unknown.
+- **waste:** `spend waste`, the glance's waste line and the MCP `tokenops_waste` tool show what was prevented beside what is found. Prevented covers read-guard refusals, `fmt` compressions, model moves the holdout verified, boundary holds, loop-breaker stops and a realized compaction saving, each with its count, its basis and its dollars when they can be priced. Prevented is never added into found.
+  - **plans:** a plan lockout that a pause or route avoided counts as prevented. A window counts once when, at the pace recorded before the first pause or route in it, it would have run out before its reset. It is priced in the minutes it would have stayed used up, labelled a counterfactual estimate.
+- **team:** upload schema 5 carries the prevented figures per finished week: per mechanism, a count, tokens and dollars when priced, keyed by the week's Monday. A week is listed only once final, three days after it ended, and a lockout window counted on two days counts once. A lockout row also carries `blocked_minutes`, the minutes of plan window the avoided lockouts would have blocked, each window counted once in its week.
 
 ### Changed
 
 - **plans:** ChatGPT Pro 100, 200 and 500 (`gpt-pro-5x`, `gpt-pro-20x`, `gpt-pro-500`, and `gpt-pro` for an unknown tier) have only a weekly window: OpenAI lifted their five-hour limit in Work and Codex. Their weekly allowances are 10x, 20x and 50x Plus, as OpenAI states them, so plan advice now replays Codex usage across Plus and the Pro tiers. The plans show under OpenAI's names (Pro 100, Pro 200, Pro 500); the catalog names are unchanged, so existing configs keep working. The replay leaves out Codex limits other than the default one, and with no readings it names Codex's readers instead of the Claude meter.
+- **waste:** the report names three waste patterns with their fixes. Idle-gap cache rebuilds are their own class, split from cache rebuilds, and stopped turns are a new class: the instruction's turn in flight when it was stopped, priced as stopped work only when its send time is known. Each class names the setting or habit that prevents it and the fewest sessions carrying half its dollars. The oversized class is read at the context line your own context bands show, when they show quality falling past a size, and at the default otherwise. The weekly finding's action names the fix of the largest class that acts.
+  - **dx:** each model and effort level shows what its instructions cost at list price, beside its first-try success, with its share of all costed instructions and the cost of one.
+  - **cache:** the report, the team upload and the API share the daemon's transcript cache, so a report with nothing changed since the last one opens no transcript.
+- **compact:** Claude Code and Codex compact at the developer's own measured context line when the last avoidable snapshot measured one (at least 20k tokens, and not stale), instead of the configured plan value. Values you set yourself are still left alone.
+  - **compact:** a compaction setting is judged on the developer's own weeks. The daemon keeps a rollup of finished weeks (ADR 0019), and the context carried above the line and the reject rate must both fall beyond the baseline's own week-to-week movement before the setting counts as realized (ADR 0021).
+
+### Upgrade
+
+- Team members' uploads use schema 5 only against a team server that advertises it. A server below schema 5 gets schema 4, without the prevented keys. The hosted team plane already runs schema 5.
 
 ## 0.120.1 - 2026-11-15
 
