@@ -202,12 +202,15 @@ func TestSavingsRows(t *testing.T) {
 }
 
 func TestAdviceRows(t *testing.T) {
-	five, twenty := 100.0, 200.0
+	five, twenty, value, peak, api := 100.0, 200.0, 250.0, 62.4, 271.79
 	advs := []plans.Advice{
 		{Provider: "anthropic", Plan: "claude-max-20x", Confidence: plans.ConfidenceMedium, Days: 28, WindowsMeasured: 4,
+			ListValueUSD: &value,
 			Options: []plans.Option{
-				{Kind: plans.OptionPlan, Plan: "claude-max-5x", Lockouts: 1, BlockedMinutes: 90, MonthlyUSD: &five},
+				{Kind: plans.OptionPlan, Plan: "claude-max-5x", Lockouts: 1, BlockedMinutes: 90, MonthlyUSD: &five, PeakPct: &peak,
+					Display: "Claude Max", PeakWindow: "weekly"},
 				{Kind: plans.OptionPlan, Plan: "claude-max-20x", Current: true, MonthlyUSD: &twenty},
+				{Kind: plans.OptionAPI, Display: "API at list price (no subscription)", MonthlyUSD: &api},
 			},
 			Recommendation: &plans.Recommendation{Verdict: plans.VerdictSwitch, Kind: plans.OptionPlan, Plan: "claude-max-5x",
 				SavingsUSD: 100, Material: true, Summary: "Max 5x would have saved $100 a month"},
@@ -218,12 +221,20 @@ func TestAdviceRows(t *testing.T) {
 	got := AdviceRows(advs)
 	want := teamwire.PlanAdvice{Provider: "anthropic", Plan: "claude-max-20x", Verdict: "switch", Kind: "plan",
 		RecommendedPlan: "claude-max-5x", MonthlyDeltaUSD: 100, Material: true, RecommendedLockouts: 1,
-		RecommendedBlockedMinutes: 90, Confidence: "medium", Days: 28, WindowsMeasured: 4}
-	if len(got) != 1 || got[0] != want {
+		RecommendedBlockedMinutes: 90, Confidence: "medium", Days: 28, WindowsMeasured: 4, ListValueUSD: &value,
+		Options: []teamwire.AdviceOption{
+			{Kind: "plan", Plan: "claude-max-5x", MonthlyUSD: &five, Lockouts: 1, BlockedMinutes: 90, PeakPct: ptr(62.0)},
+			{Kind: "plan", Plan: "claude-max-20x", MonthlyUSD: &twenty},
+			{Kind: "api", MonthlyUSD: &api},
+		}}
+	if len(got) != 1 {
 		t.Fatalf("advice = %+v", got)
 	}
+	if g, _ := json.Marshal(got[0]); string(g) != string(must(json.Marshal(want))) {
+		t.Fatalf("advice = %s\nwant     %s", g, must(json.Marshal(want)))
+	}
 	raw, _ := json.Marshal(got)
-	for _, prose := range []string{"saved", "caveat"} {
+	for _, prose := range []string{"saved", "caveat", "Claude Max", "list price", "weekly"} {
 		if strings.Contains(string(raw), prose) {
 			t.Errorf("advice carries prose %q: %s", prose, raw)
 		}
@@ -309,7 +320,8 @@ func TestSyncNegotiatesTheSchema(t *testing.T) {
 		"schema 3 server":           {3, 3, true},
 		"schema 4 server":           {4, 4, true},
 		"schema 5 server":           {5, 5, true},
-		"newer server":              {6, 5, true},
+		"schema 6 server":           {6, 6, true},
+		"newer server":              {7, 6, true},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -334,7 +346,7 @@ func TestSyncNegotiatesTheSchema(t *testing.T) {
 					t.Errorf("%s sent: %v, want %v", k, has, c.newKeys)
 				}
 			}
-			if string(m["schema"]) != map[int]string{1: "1", 2: "2", 3: "3", 4: "4", 5: "5"}[c.wantSchema] {
+			if string(m["schema"]) != map[int]string{1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6"}[c.wantSchema] {
 				t.Errorf("schema on the wire = %s", m["schema"])
 			}
 		})
@@ -380,4 +392,13 @@ func TestServerSchemaWhenTheServerCannotBeAsked(t *testing.T) {
 	if got := ServerSchema(context.Background(), failingMe{}, &st, now); got != teamwire.SchemaFinOps {
 		t.Errorf("stale answer with the server unreachable: schema %d, want the last known 2", got)
 	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
+func must[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return v
 }

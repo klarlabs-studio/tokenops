@@ -102,6 +102,15 @@ func addFinOps(ctx context.Context, f FinOps, turns TurnReader, took func(string
 			} else {
 				u.PlanAdvice = AdviceRows(advice)
 			}
+			// Schema 6's snapshots; Build leaves them out of an older
+			// schema.
+			u.PlanBindings, err = planBindings(d, now)
+			if err != nil {
+				notes.unread("plan bindings", err)
+			}
+			done = lap(took, "plan windows")
+			u.PlanWindows = PlanWindows(ctx, d.Reader, d.Config.Plans, now)
+			done()
 		}
 	}
 	var ds []avoidable.Day
@@ -140,7 +149,23 @@ func planDays(ctx context.Context, d headroom.Deps, first time.Time, days []stri
 	if err != nil {
 		return nil, err
 	}
-	return PlanDays(envs, d.Config.Plans, history, days, now), nil
+	rows := PlanDays(envs, d.Config.Plans, history, days, now)
+	AddPlanValue(rows, envs, d.Price, now)
+	return rows, nil
+}
+
+// planBindings is the bound plans with the plan history's dates and the
+// member's shared flags.
+func planBindings(d headroom.Deps, now time.Time) ([]teamwire.PlanBinding, error) {
+	var history plans.History
+	if d.PlanHistory != nil {
+		h, err := d.PlanHistory()
+		if err != nil {
+			return nil, fmt.Errorf("read plan history: %w", err)
+		}
+		history = h
+	}
+	return PlanBindings(d.Config.Plans, history, d.Config.Team.SharedPlans, now), nil
 }
 
 // dropInvalid removes the rows that would fail validation, saying how
@@ -162,6 +187,10 @@ func dropInvalid(u *teamwire.Upload) []string {
 	note("savings", n)
 	u.PlanAdvice, n = keepValid(u.PlanAdvice, teamwire.PlanAdvice.Validate)
 	note("plan advice", n)
+	u.PlanBindings, n = keepValid(u.PlanBindings, teamwire.PlanBinding.Validate)
+	note("plan bindings", n)
+	u.PlanWindows, n = keepValid(u.PlanWindows, teamwire.PlanWindow.Validate)
+	note("plan windows", n)
 	return warnings
 }
 
@@ -297,8 +326,9 @@ func SavingsRows(ds []avoidable.Day, covered map[string]bool) []teamwire.Savings
 }
 
 // AdviceRows is each replay that recommends something, reduced to the
-// verdict, the tier and the figures that back it. The summary and the
-// caveats are prose and stay on the machine.
+// verdict, the tier and the figures that back it, with the list value and
+// every option it priced. The summary, the caveats and the options'
+// display names are prose and stay on the machine.
 func AdviceRows(advs []plans.Advice) []teamwire.PlanAdvice {
 	var out []teamwire.PlanAdvice
 	for _, a := range advs {
@@ -308,7 +338,11 @@ func AdviceRows(advs []plans.Advice) []teamwire.PlanAdvice {
 		}
 		row := teamwire.PlanAdvice{Provider: a.Provider, Plan: a.Plan, Verdict: rec.Verdict, Kind: rec.Kind,
 			RecommendedPlan: rec.Plan, MonthlyDeltaUSD: rec.SavingsUSD, Material: rec.Material,
-			Confidence: a.Confidence, Days: a.Days, WindowsMeasured: int64(a.WindowsMeasured)}
+			Confidence: a.Confidence, Days: a.Days, WindowsMeasured: int64(a.WindowsMeasured),
+			Options: adviceOptions(a.Options)}
+		if a.ListValueUSD != nil {
+			row.ListValueUSD = ptrFloat(*a.ListValueUSD)
+		}
 		for _, o := range a.Options {
 			if o.Current && o.Kind == plans.OptionPlan {
 				row.Lockouts, row.BlockedMinutes = int64(o.Lockouts), int64(o.BlockedMinutes)

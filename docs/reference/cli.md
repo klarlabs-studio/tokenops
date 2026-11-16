@@ -241,6 +241,17 @@ owner or billing manager; a user budget names a GitHub login, matched to the
 team member of that name. OpenAI's per-seat credit limits are set only in
 its billing settings, with no API to read them.
 
+`preview` shows each part of the upload under the oldest schema that
+carries it, and says whether the server accepts that schema yet. Upload
+schema 6 adds seat value: the plans bound on this machine (with the date the
+plan history has each in force from, and `team.shared_plans`), even one you
+never used; each plan day's plan-covered usage at API list price, the figure
+`plan advise` sums into its value; every option the plan advice priced, with
+its monthly cost, lockouts, blocked minutes and peak; and each plan's weekly
+window projected to its reset (used, share at the reset, whether and about
+how many hours, in 6-hour steps, before the reset it runs out, the reset's
+date and the rate it reads). No 5-hour window and no time of day is sent.
+
 `join` takes `--name` (how people granted to see individual figures see
 you) and `--device`. The enrolment is kept in `~/.tokenops/team.json`
 (mode 0600), not in `config.yaml`; `leave --force` forgets it locally when

@@ -8,7 +8,10 @@
 // advice keyed by the same and by catalog names (finops.go); schema 3 adds
 // spend by provider, units of work and vendor cost (spend.go); schema 4
 // adds the reverted commits to the units; schema 5 adds what was prevented
-// per finished week and mechanism (prevented.go). It has no
+// per finished week and mechanism (prevented.go); schema 6 adds seat
+// value: each plan day's value at list price, the plan advice's options,
+// the plans bound and where each plan's week is headed (seatvalue.go). It
+// has no
 // field that can hold a prompt, a file
 // path, a transcript, a commit message or a model output: every string in
 // it is either an enumeration or a label matched against a pattern that
@@ -30,7 +33,8 @@ import (
 // FinOps sections (plan days, waste, savings, plan advice); schema 3 adds
 // spend by provider, units of work and vendor cost; schema 4 adds the
 // commits a revert undid to each unit row; schema 5 adds the prevented
-// figures per finished week and mechanism. A client sends a
+// figures per finished week and mechanism; schema 6 adds seat value. A
+// client sends a
 // schema only to a server whose Me advertises a MaxSchema at least as
 // high, and otherwise the newest it reads, byte for byte as before: the
 // newer sections are omitted when empty, so an upload has no key an older
@@ -41,8 +45,9 @@ const (
 	SchemaSpend     = 3
 	SchemaReverts   = 4
 	SchemaPrevented = 5
+	SchemaSeats     = 6
 	// SchemaVersion is the newest upload format this package describes.
-	SchemaVersion = SchemaPrevented
+	SchemaVersion = SchemaSeats
 )
 
 // Limits a server enforces on an upload.
@@ -167,16 +172,34 @@ type Upload struct {
 	// so a week sent never changes.
 	PreventedWeeks []string        `json:"prevented_weeks,omitempty"`
 	Prevented      []PreventedWeek `json:"prevented,omitempty"`
+
+	// Schema 6 only (seatvalue.go), with the value on PlanDays and the
+	// list value and options on PlanAdvice. Both are snapshots as of
+	// ComputedAt, replaced whole with each upload, like PlanAdvice.
+
+	// PlanBindings are the plans bound on the machine, used or not.
+	PlanBindings []PlanBinding `json:"plan_bindings,omitempty"`
+	// PlanWindows are where each plan's longest window is headed by its
+	// reset.
+	PlanWindows []PlanWindow `json:"plan_windows,omitempty"`
 }
 
 // ForServer is u as a server that reads formats up to maxSchema accepts
-// it: without the prevented figures when maxSchema is below 5, without the
+// it: without the seat value when maxSchema is below 6, without the
+// prevented figures when maxSchema is below 5, without the
 // units' reverted commits when maxSchema is below 4,
 // without the schema 3 sections when it is below 3, and schema 1, without
 // the FinOps sections either, when it is below 2 (an older server, or one
 // that does not say). The rows are shared, not copied, except the units
-// when their reverted commits are dropped.
+// when their reverted commits are dropped and the plan days and advice
+// when their seat value is.
 func (u Upload) ForServer(maxSchema int) Upload {
+	if maxSchema < SchemaSeats {
+		u = u.withoutSeatValue()
+		if u.Schema > SchemaPrevented {
+			u.Schema = SchemaPrevented
+		}
+	}
 	if maxSchema < SchemaPrevented && u.Schema > SchemaReverts {
 		u.Schema = SchemaReverts
 		u.PreventedWeeks, u.Prevented = nil, nil
@@ -283,13 +306,19 @@ func (u Upload) Validate() error {
 		}
 		seen[k] = true
 	}
+	if u.Schema < SchemaSeats && u.seatValueCarried() {
+		return fmt.Errorf("schema %d carries no seat value (plan value, list value, options, bindings or windows)", u.Schema)
+	}
 	if err := u.validateFinOps(covered); err != nil {
 		return err
 	}
 	if err := u.validateSpend(covered); err != nil {
 		return err
 	}
-	return u.validatePrevented()
+	if err := u.validatePrevented(); err != nil {
+		return err
+	}
+	return u.validateSeats()
 }
 
 // Validate reports the first reason the bucket is malformed, or nil.

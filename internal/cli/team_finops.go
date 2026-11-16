@@ -131,3 +131,110 @@ func writeSpend(out io.Writer, u teamwire.Upload, note string) {
 		_ = w.Flush()
 	}
 }
+
+// seatsNote says whether the schema 6 seat value of a preview is sent.
+func seatsNote(joined bool, sentSchema int) string {
+	switch {
+	case !joined:
+		return "Sent only to a team server that accepts upload schema 6:"
+	case sentSchema < teamwire.SchemaSeats:
+		return "Withheld: the team server does not accept upload schema 6 yet. It is sent once it does (checked daily):"
+	}
+	return "Sent with the buckets (upload schema 6):"
+}
+
+// writeSeats prints the schema 6 seat value of u under note: the plans
+// bound, each day's plan-covered usage at list price, every option the
+// plan advice priced, and where each plan's week is headed.
+func writeSeats(out io.Writer, u teamwire.Upload, note string) {
+	if len(u.PlanBindings) == 0 {
+		fmt.Fprintln(out, "\nNo plans bound, so no seat value.")
+		return
+	}
+	fmt.Fprintln(out, "\n"+note)
+	fmt.Fprintf(out, "\nPlans bound: %d.\n", len(u.PlanBindings))
+	w := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "PROVIDER\tPLAN\tSINCE\tSHARED")
+	for _, b := range u.PlanBindings {
+		since, shared := b.Since, "no"
+		if since == "" {
+			since = "—"
+		}
+		if b.Shared {
+			shared = "yes"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", b.Provider, b.Plan, since, shared)
+	}
+	_ = w.Flush()
+	writePlanValue(out, u.PlanDays)
+	writeAdviceOptions(out, u.PlanAdvice)
+	writePlanWindows(out, u.PlanWindows)
+}
+
+// writePlanValue prints each priced plan day's value at list price.
+func writePlanValue(out io.Writer, days []teamwire.PlanDay) {
+	var priced []teamwire.PlanDay
+	for _, d := range days {
+		if d.PlanValueUSD != nil {
+			priced = append(priced, d)
+		}
+	}
+	if len(priced) == 0 {
+		return
+	}
+	fmt.Fprintf(out, "\nPlan-covered usage at API list price: %d rows.\n", len(priced))
+	w := tabwriter.NewWriter(out, 0, 4, 2, ' ', tabwriter.AlignRight)
+	fmt.Fprintln(w, "DAY\tPROVIDER\tPLAN\tVALUE\tUNPRICED TURNS\t")
+	for _, d := range priced {
+		fmt.Fprintf(w, "%s\t%s\t%s\t$%.2f\t%d\t\n", d.Day, d.Provider, d.Plan, *d.PlanValueUSD, d.PlanUnpricedTurns)
+	}
+	_ = w.Flush()
+}
+
+// writeAdviceOptions prints every option each plan advice priced.
+func writeAdviceOptions(out io.Writer, advice []teamwire.PlanAdvice) {
+	for _, a := range advice {
+		if len(a.Options) == 0 {
+			continue
+		}
+		value := "not priced"
+		if a.ListValueUSD != nil {
+			value = fmt.Sprintf("$%.2f at API list price", *a.ListValueUSD)
+		}
+		fmt.Fprintf(out, "\nPlan advice options for %s (%s over %.0f days):\n", a.Provider, value, a.Days)
+		w := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(w, "OPTION\tPLAN\tPER MONTH\tLOCKOUTS\tBLOCKED MIN\tPEAK")
+		for _, o := range a.Options {
+			plan, monthly := o.Plan, "—"
+			if plan == "" {
+				plan = "—"
+			}
+			if o.MonthlyUSD != nil {
+				monthly = fmt.Sprintf("$%.2f", *o.MonthlyUSD)
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\t%s\n", o.Kind, plan, monthly, o.Lockouts, o.BlockedMinutes, optPct(o.PeakPct))
+		}
+		_ = w.Flush()
+	}
+}
+
+// writePlanWindows prints where each plan's longest window is headed.
+func writePlanWindows(out io.Writer, windows []teamwire.PlanWindow) {
+	if len(windows) == 0 {
+		return
+	}
+	fmt.Fprintf(out, "\nEach plan's longest window, projected to its reset (no 5-hour window, no time of day): %d rows.\n", len(windows))
+	w := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "PROVIDER\tWINDOW\tUSED\tAT RESET\tRUNS OUT\tSHORT BY\tRESETS ON\tBASIS")
+	for _, x := range windows {
+		atReset, runsOut, short := fmt.Sprintf("%d%%", x.ProjectedPctAtReset), "no", "—"
+		if x.TooEarly {
+			atReset = "too early"
+		}
+		if x.RunsOut {
+			runsOut, short = "yes", fmt.Sprintf("≈%dh", x.ShortHours)
+		}
+		fmt.Fprintf(w, "%s\t%s\t%d%%\t%s\t%s\t%s\t%s\t%s\n", x.Provider, x.Window, x.UsedPct, atReset, runsOut, short, x.ResetsOn, x.Basis)
+	}
+	_ = w.Flush()
+}

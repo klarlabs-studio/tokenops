@@ -128,6 +128,12 @@ type PlanDay struct {
 	// day, overlapping windows counted once.
 	Lockouts       int64 `json:"lockouts"`
 	BlockedMinutes int64 `json:"blocked_minutes"`
+	// PlanValueUSD is the day's plan-covered turns at API list price,
+	// the figure the plan advice's list value sums; absent when there is
+	// no rate card. PlanUnpricedTurns counts the turns with no rate, left
+	// out of it. Schema 6 only.
+	PlanValueUSD      *float64 `json:"plan_value_usd,omitempty"`
+	PlanUnpricedTurns int64    `json:"plan_unpriced_turns,omitempty"`
 }
 
 // Waste is the avoidable usage one machine's work of one kind, in one
@@ -202,6 +208,11 @@ type PlanAdvice struct {
 	// windows it replayed.
 	Days            float64 `json:"days"`
 	WindowsMeasured int64   `json:"windows_measured"`
+	// ListValueUSD is the plan-covered usage over the days replayed at API
+	// list price; absent when there is no rate card. Options are every
+	// way of paying the replay priced. Schema 6 only.
+	ListValueUSD *float64       `json:"list_value_usd,omitempty"`
+	Options      []AdviceOption `json:"options,omitempty"`
 }
 
 // validateFinOps checks the schema 2 sections; covered are the upload's
@@ -280,7 +291,7 @@ func (r PlanDay) Validate() error {
 	if r.BlockedMinutes > minutesPerDay {
 		return errors.New("blocked_minutes: more than a day")
 	}
-	return nil
+	return r.validateSeatAdditions()
 }
 
 // Validate reports the first reason the row is malformed, or nil.
@@ -360,7 +371,7 @@ func (r PlanAdvice) Validate() error {
 	if limit := int64(MaxAdviceDays * minutesPerDay); r.BlockedMinutes > limit || r.RecommendedBlockedMinutes > limit {
 		return errors.New("blocked minutes: longer than the period")
 	}
-	return nil
+	return r.validateSeatAdditions()
 }
 
 func validDay(d string) error {

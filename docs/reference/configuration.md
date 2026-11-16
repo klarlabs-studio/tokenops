@@ -1265,7 +1265,14 @@ team:
   days: 14             # UTC days each upload recomputes and replaces (max 62)
   repo_names: remote   # remote (owner/name from origin) | directory | hidden
   state_path: ""       # default ~/.tokenops/team.json
+  shared_plans: []     # providers whose subscription you share with someone else, e.g. [openai]
 ```
+
+`shared_plans` names the providers whose subscription this machine's member
+shares with someone else, such as one ChatGPT account two people use. Each
+plan the upload lists (upload schema 6) then carries `shared: true`, a yes or
+no and never who, so the team view does not count one subscription as two
+seats. Default: none.
 
 `repo_names: hidden` files every repository's work under `hidden`; work
 outside a git repository is always filed under `none`. Allocation tags are
