@@ -131,7 +131,7 @@ func planAdvice(ctx context.Context, d PlanDeps, in planAdviceInput) (*planAdvic
 	if d.fromDaemon(ctx, path, &fromDaemon) {
 		return &fromDaemon, nil
 	}
-	res, err := headroom.Advise(ctx, d.headroomDeps(), headroom.AdviceQuery{Days: in.Days}, time.Now().UTC())
+	res, err := headroom.Advise(ctx, d.headroomDeps(), headroom.AdviceQuery{Days: in.Days, Project: true}, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}

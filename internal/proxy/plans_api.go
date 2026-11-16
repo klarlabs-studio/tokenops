@@ -58,7 +58,7 @@ func (s *Server) registerPlanRoutes(mux RouteMux) {
 	}))
 	// Plan right-sizing: advice only, it binds nothing.
 	mux.HandleFunc("GET /api/plans/advice", func(w http.ResponseWriter, r *http.Request) {
-		var q headroom.AdviceQuery
+		q := headroom.AdviceQuery{Project: true}
 		if raw := r.URL.Query().Get("days"); raw != "" {
 			days, err := strconv.Atoi(raw)
 			if err != nil || days < 1 || days > headroom.MaxAdviceDays {

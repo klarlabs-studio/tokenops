@@ -274,6 +274,10 @@ type Advice struct {
 	// observed limits instead of the catalog, each with both figures; nil
 	// when it used the catalog throughout.
 	Observed []ObservedLimit `json:"observed,omitempty"`
+	// AtReset is where the plan's longest window is headed by its reset,
+	// on the forecast glance shows; nil when no window has a current
+	// reading or it was not asked for.
+	AtReset *ResetProjection `json:"at_reset,omitempty"`
 }
 
 // EarlyResetCut is the lockouts a vendor's early resets ended, and the

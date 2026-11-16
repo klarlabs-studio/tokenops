@@ -366,3 +366,37 @@ func TestAdviseUsesTheObservedOverlay(t *testing.T) {
 		})
 	}
 }
+
+// Asked to, the advice projects the plan's week to its reset on the
+// forecast glance shows; the glance's cached replay leaves it out, since
+// it is live and the replay is kept for an hour.
+func TestAdviseProjectsTheWeekToItsReset(t *testing.T) {
+	now := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	envs := adviceEvents(now, "15")
+	// Four days into the current week, 40% used: 70% by the reset.
+	reset := now.Add(3 * 24 * time.Hour)
+	envs = append(envs, &eventschema.Envelope{Source: "claude-usage-meter", Timestamp: now.Add(-10 * time.Minute), Attributes: map[string]string{
+		"granularity":    "quota_snapshot",
+		"seven_day_kind": "weekly_all", "seven_day_used_pct": "40", "seven_day_reset_at": reset.Format(time.RFC3339),
+	}, Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic}})
+	deps := headroom.Deps{
+		Config: cfgWith(map[string]string{"anthropic": "claude-max"}),
+		Reader: &eventsReader{envs: envs},
+		Price:  tenDollars,
+	}
+	res, err := headroom.Advise(context.Background(), deps, headroom.AdviceQuery{Project: true}, now)
+	if err != nil || len(res.Providers) != 1 {
+		t.Fatalf("result = %+v, %v", res, err)
+	}
+	p := res.Providers[0].AtReset
+	if p == nil || p.Window != "week" || p.UsedPct != 40 || p.AtResetPct == nil || *p.AtResetPct != 70 || p.RunsOut || !p.ResetsAt.Equal(reset) {
+		t.Fatalf("projection = %+v", p)
+	}
+	if v := res.Providers[0].ValueMultiple; v == nil || *v <= 0 {
+		t.Errorf("value multiple = %v", v)
+	}
+	res, err = headroom.Advise(context.Background(), deps, headroom.AdviceQuery{}, now)
+	if err != nil || res.Providers[0].AtReset != nil {
+		t.Errorf("unasked: %+v, %v", res.Providers[0].AtReset, err)
+	}
+}
