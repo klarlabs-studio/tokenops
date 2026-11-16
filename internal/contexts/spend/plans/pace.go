@@ -38,6 +38,11 @@ type WindowPace struct {
 	// Basis is the rate the projection reads: empty for the window's
 	// average so far, BasisRecent for the last hour's (ApplyBurn).
 	Basis string `json:"basis,omitempty"`
+	// recentAtReset is the share of the window the last hour's rate
+	// reaches by the reset (ApplyBurn), when recentKnown. It is kept with
+	// the pace because the rate behind it is not.
+	recentAtReset float64
+	recentKnown   bool
 }
 
 // BasisRecent is a projection from the rate of the last hour and the last
@@ -101,11 +106,39 @@ func (w VendorWindow) PaceAt(now time.Time) *WindowPace {
 		p.TooEarly = true
 		return p
 	}
-	// At the rate so far, the rest of the window lasts this long.
+	// At the rate so far, the rest of the window lasts this long. Whether
+	// it lasts is read off the share at the reset, so ProjectAtReset never
+	// says otherwise.
 	toFull := time.Duration((100 - w.UsedPct) / w.UsedPct * float64(elapsed))
-	p.LastsToReset = toFull >= left
+	p.LastsToReset = averageAtReset(w.UsedPct, w.Duration, elapsed) <= 100
 	if !p.LastsToReset {
 		p.RunsOutIn = toFull.Round(time.Minute)
 	}
 	return p
+}
+
+// averageAtReset is the share of a window of length d, used used after
+// elapsed, that its average rate so far reaches by the reset.
+func averageAtReset(used float64, d, elapsed time.Duration) float64 {
+	return used * float64(d) / float64(elapsed)
+}
+
+// ProjectAtReset is the share of w its forecast at now reaches by the
+// reset: above 100 runs out before it. It reads the rate Forecast reads
+// (the last hour's where ApplyBurn measured the window, else the average
+// so far) and holds to the same too-early bar, so it is above 100 exactly
+// when the forecast says the window does not last. A used-up window
+// projects above 100. ok is false when Forecast has no projection: the
+// window's length or reset is unknown, nothing is used yet, or it is too
+// early in the window to tell.
+func ProjectAtReset(w VendorWindow, now time.Time) (pct float64, ok bool) {
+	f := w.Forecast(now)
+	if f == nil || f.TooEarly {
+		return 0, false
+	}
+	if f.Basis == BasisRecent {
+		return f.recentAtReset, f.recentKnown
+	}
+	elapsed := w.Duration - w.ResetsAt.Sub(now)
+	return averageAtReset(w.UsedPct, w.Duration, elapsed), true
 }
