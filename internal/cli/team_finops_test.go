@@ -147,3 +147,22 @@ func TestWriteSeatsGolden(t *testing.T) {
 		t.Errorf("empty preview = %q", out.String())
 	}
 }
+
+// The spend by model a preview shows, pinned by a golden file; an upload
+// without it shows nothing.
+func TestWriteModelSpendGolden(t *testing.T) {
+	u := teamwire.Upload{SpendModels: []teamwire.ModelSpend{
+		{Day: "2026-11-12", Repo: "acme/api", Provider: "anthropic", Model: "claude-opus-4-8", Agent: "claude-code",
+			Turns: 3, Tokens: 1000, CostUSD: 0.1, APIEquivalentUSD: 1.0},
+		{Day: "2026-11-12", Repo: "acme/api", Provider: "anthropic", Model: teamwire.ModelOther, Agent: "opencode",
+			Turns: 1, Tokens: 200, UnpricedTurns: 1},
+	}}
+	var out bytes.Buffer
+	writeModelSpend(&out, u, seatsNote(true, teamwire.SchemaSeats))
+	assertGolden(t, "team/preview-models.txt", out.String())
+	out.Reset()
+	writeModelSpend(&out, teamwire.Upload{}, seatsNote(true, teamwire.SchemaSeats))
+	if out.Len() != 0 {
+		t.Errorf("empty preview = %q", out.String())
+	}
+}

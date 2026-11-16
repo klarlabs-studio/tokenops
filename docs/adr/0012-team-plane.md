@@ -1,6 +1,6 @@
 # ADR 0012 — The team plane: hosted, derived figures only, aggregate by default
 
-- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*; amended 2026-11-10: an upload with a part unread is not sent, see *An upload is sent whole* under *Upload schema 2*; amended 2026-11-15: upload schema 5 (what was prevented, per finished week and mechanism), see *Upload schema 5*; amended 2026-11-16: upload schema 6 (seat value), see *Upload schema 6*.
+- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*; amended 2026-11-10: an upload with a part unread is not sent, see *An upload is sent whole* under *Upload schema 2*; amended 2026-11-15: upload schema 5 (what was prevented, per finished week and mechanism), see *Upload schema 5*; amended 2026-11-16: upload schema 6 (seat value), see *Upload schema 6*; amended again 2026-11-16: schema 6 splits spend by catalog model and agent, see *Spend by model and agent* under *Upload schema 6*.
 - **Date:** 2026-10-08
 - **Deciders:** TokenOps maintainers
 - **Related:** issue #250, ADR 0004 (local-first; no BI product), ADR 0010 §5 (the API's privacy line)
@@ -144,7 +144,8 @@ The privacy claim is enforced by structure, in three layers:
   `owner/name` (or directory name, or `hidden`, per `team.repo_names`). A
   canary test builds an upload from a machine full of prompts, secrets,
   paths, file names, model names and session IDs and asserts none appear in
-  the JSON.
+  the JSON; from schema 6, a model appears only as a public catalog ID or
+  `other`, and a model the catalog does not price never by its name.
 - **The server.** Ingestion decodes with unknown fields refused and runs
   the same `Validate` from this repository's `pkg/teamwire`, which it
   imports by version; its database repeats the label pattern and the kind
@@ -232,7 +233,8 @@ least 3 and computed only then:
   unpriced turns, the estimated bill (usage a plan covered bills nothing)
   and the API-equivalent value. The same turns as the day's buckets,
   split by provider rather than by kind of work. **No model name**: the
-  organisation's dataset is by provider.
+  organisation's dataset is by provider. (Schema 6 adds a split by catalog
+  model and agent in a section of its own; see *Upload schema 6*.)
 - **`units`** — per UTC day × repository label: the inferred tasks that
   started that day with recorded usage and their value (`tokenops story
   --runtime`), and the commits and merged pull requests the member's work
@@ -370,6 +372,55 @@ its bound in the same test and is checked in `Validate`. A server whose
 `max_schema` is below 6 gets schema 5 with all four left out, and the
 server refuses a schema 5 upload that carries any of them. Schema 6 may
 gain further derived fields before any release carries it.
+
+**Spend by model and agent (amended 2026-11-16).** Schema 6 also carries
+**`spend_models[]`**: per UTC day × repository label × provider × model ×
+agent, the same turns, tokens, unpriced turns, estimated bill and
+API-equivalent value as `spend`. It replaces schema 3's rule "no model
+name": a team cannot tell whether the expensive model is doing the work
+that needs it without knowing which model it was, and the agent says which
+coding agent ran it.
+
+- **Its own section, not columns on `spend`.** `spend` keeps its key (day ×
+  repository × provider) and its meaning, so the organisation's FOCUS
+  dataset and every server query over it read the same rows for every
+  schema, and a schema 3 to 5 client's upload is read as before. The
+  split is a further breakdown the server may use or ignore. `Validate`
+  holds it to `spend`: when present, the rows of each day, repository and
+  provider add up to its spend row (turns, tokens and unpriced turns
+  exactly, dollars to a millionth), every spend row is split, and no row
+  is without one. A client whose split would not cross whole (more than
+  `MaxModelSpend` rows, or a row that fails) leaves the section out and
+  says so in `tokenops team preview`.
+- **A model is a public catalog ID, or `other`.** The model crosses only
+  as the ID of the row in the pricing catalog that ships with TokenOps
+  (`internal/contexts/spend/spend/pricing.yaml`) that prices it,
+  normalised as the pricer resolves it: a dated or aliased ID is its row's
+  (`claude-opus-4-8-20261001` is `claude-opus-4-8`), a gateway's
+  namespaced ID its bare one, a model a reseller serves its vendor's row.
+  Anything the catalog does not price — a fine-tune, a custom or
+  router-local model, a local one, a name nobody publishes — crosses as
+  the literal `other`. A catalog ID is not personal: it names a public
+  product every member could be using, and the list it is drawn from is
+  published in this repository; a fine-tune's or deployment's own name
+  (which can carry a customer, a project or a person) never crosses. The
+  server checks it with `teamwire.ValidModel(provider, model)` — a
+  registered provider and `other` or an ID that is its own normal form —
+  against the catalog of the `pkg/teamwire` version it is built with, so a
+  model added to the catalog is accepted once the server takes that
+  version.
+- **The agent is an enumeration** (`teamwire.Agents`): the harnesses
+  TokenOps reads sessions from — `claude-code`, `codex`, `opencode`,
+  `cursor`, `gemini-cli`, `pi`, `copilot` — as `allocation.HarnessOf`
+  files a turn's source, and `other` for any other source (the proxy, an
+  SDK). A test holds the list to allocation's.
+- **No reasoning effort.** The client records effort per instruction, as
+  the client's own label, not per turn; it is not split.
+
+New strings: the model (`ValidModel`) and the agent (`ValidAgent`), listed
+in `TestUploadHasNoFreeText` with each figure's bound. A server below
+schema 6 gets schema 5 without the section, and a schema 5 upload carrying
+it is refused.
 
 
 

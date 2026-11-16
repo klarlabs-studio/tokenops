@@ -180,14 +180,33 @@ func (t Table) Without(keys map[Key]bool) Table {
 // "*" — e.g. "gpt-4o-2024-08-06" matches "gpt-4o*". Returns ErrUnknownModel
 // when nothing matches.
 func (t Table) Lookup(provider eventschema.Provider, model string) (Rate, error) {
+	_, r, err := t.match(provider, model)
+	return r, err
+}
+
+// CatalogModel is the row of t that prices provider's model: its ID with a
+// prefix row's "*" dropped ("claude-opus-4-8" for
+// "claude-opus-4-8-20261001"), under the provider whose row it is (a
+// reseller's model is its vendor's). False when no row prices it, and for
+// what is priced at nothing without a row: a router's free variant, a
+// model run locally.
+func (t Table) CatalogModel(provider eventschema.Provider, model string) (Key, bool) {
+	k, _, err := t.match(provider, model)
+	return k, err == nil && k.Model != ""
+}
+
+// match is Lookup with the key of the row that priced the model, the
+// zero key when the price is nothing without a row.
+func (t Table) match(provider eventschema.Provider, model string) (Key, Rate, error) {
 	if model == "" {
-		return Rate{}, fmt.Errorf("%w: empty model", ErrUnknownModel)
+		return Key{}, Rate{}, fmt.Errorf("%w: empty model", ErrUnknownModel)
 	}
 	if r, ok := t.Rates[Key{provider, model}]; ok {
-		return r, nil
+		return Key{provider, model}, r, nil
 	}
 	var (
 		bestRate Rate
+		bestKey  Key
 		bestLen  int
 		found    bool
 	)
@@ -205,40 +224,41 @@ func (t Table) Lookup(provider eventschema.Provider, model string) (Rate, error)
 		if len(prefix) > bestLen {
 			bestLen = len(prefix)
 			bestRate = v
+			bestKey = Key{provider, prefix}
 			found = true
 		}
 	}
-	if !found {
-		// A gateway records its own namespace ("accounts/fireworks/
-		// models/kimi-k3"); the card keys the bare name. Retry once
-		// without it.
-		if bare := gatewayModel(model); bare != model {
-			return t.Lookup(provider, bare)
-		}
-		// A "-latest" alias points at the vendor's current version, which
-		// the card keys by its own name ("gpt-5.2-chat-latest" is
-		// "gpt-5.2-chat").
-		if base, ok := strings.CutSuffix(model, "-latest"); ok && base != "" {
-			return t.Lookup(provider, base)
-		}
-		// A ":free" variant is a router's free tier of a model
-		// (OpenRouter, Kilo): it costs nothing, whether or not the card
-		// lists it, and catalogs drop the variants as they rotate.
-		if strings.HasSuffix(model, FreeVariantSuffix) {
-			return Rate{}, nil
-		}
-		// A model run on the operator's own machine has no vendor bill.
-		if LocalModel(provider, model) {
-			return Rate{}, nil
-		}
-		// A reseller's model its own list does not price is valued at
-		// its vendor's list price, as the lists that do price it are.
-		if vendor, vendorModel, ok := resoldModel(provider, model); ok {
-			return t.Lookup(vendor, vendorModel)
-		}
-		return Rate{}, fmt.Errorf("%w: provider=%s model=%s", ErrUnknownModel, provider, model)
+	if found {
+		return bestKey, bestRate, nil
 	}
-	return bestRate, nil
+	// A gateway records its own namespace ("accounts/fireworks/
+	// models/kimi-k3"); the card keys the bare name. Retry once
+	// without it.
+	if bare := gatewayModel(model); bare != model {
+		return t.match(provider, bare)
+	}
+	// A "-latest" alias points at the vendor's current version, which
+	// the card keys by its own name ("gpt-5.2-chat-latest" is
+	// "gpt-5.2-chat").
+	if base, ok := strings.CutSuffix(model, "-latest"); ok && base != "" {
+		return t.match(provider, base)
+	}
+	// A ":free" variant is a router's free tier of a model
+	// (OpenRouter, Kilo): it costs nothing, whether or not the card
+	// lists it, and catalogs drop the variants as they rotate.
+	if strings.HasSuffix(model, FreeVariantSuffix) {
+		return Key{}, Rate{}, nil
+	}
+	// A model run on the operator's own machine has no vendor bill.
+	if LocalModel(provider, model) {
+		return Key{}, Rate{}, nil
+	}
+	// A reseller's model its own list does not price is valued at
+	// its vendor's list price, as the lists that do price it are.
+	if vendor, vendorModel, ok := resoldModel(provider, model); ok {
+		return t.match(vendor, vendorModel)
+	}
+	return Key{}, Rate{}, fmt.Errorf("%w: provider=%s model=%s", ErrUnknownModel, provider, model)
 }
 
 // resellers are the providers that serve other vendors' models at those

@@ -335,6 +335,7 @@ func newTeamPreviewCmd(rf *rootFlags) *cobra.Command {
 				writeFinOps(out, full, finOpsNote(joined, sent.Schema))
 				writeSpend(out, full, spendNote(joined, sent.Schema))
 				writeSeats(out, full, seatsNote(joined, sent.Schema))
+				writeModelSpend(out, full, seatsNote(joined, sent.Schema))
 				for _, w := range notes.Dropped {
 					fmt.Fprintln(out, "warning:", w)
 				}

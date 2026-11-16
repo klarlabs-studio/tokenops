@@ -214,10 +214,12 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 		u.Schema = teamwire.SchemaPrevented
 		u.PreventedWeeks, u.Prevented = PreventedRows(ds, covered, now)
 	}
-	// Schema 6's seat value was read with the FinOps sections; an upload
+	// Schema 6's seat value was read with the FinOps sections, and its
+	// spend by model splits the spend rows; an upload
 	// that does not reach schema 6 leaves it out.
 	if opts.Schema >= teamwire.SchemaSeats && u.Schema == teamwire.SchemaPrevented {
 		u.Schema = teamwire.SchemaSeats
+		addModelSpend(&u, turns, repoOf, &notes)
 	} else {
 		u = u.ForServer(u.Schema)
 	}

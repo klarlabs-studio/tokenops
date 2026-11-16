@@ -10,8 +10,8 @@
 // adds the reverted commits to the units; schema 5 adds what was prevented
 // per finished week and mechanism (prevented.go); schema 6 adds seat
 // value: each plan day's value at list price, the plan advice's options,
-// the plans bound and where each plan's week is headed (seatvalue.go). It
-// has no
+// the plans bound and where each plan's week is headed (seatvalue.go),
+// and the spend split by catalog model and agent (models.go). It has no
 // field that can hold a prompt, a file
 // path, a transcript, a commit message or a model output: every string in
 // it is either an enumeration or a label matched against a pattern that
@@ -33,7 +33,8 @@ import (
 // FinOps sections (plan days, waste, savings, plan advice); schema 3 adds
 // spend by provider, units of work and vendor cost; schema 4 adds the
 // commits a revert undid to each unit row; schema 5 adds the prevented
-// figures per finished week and mechanism; schema 6 adds seat value. A
+// figures per finished week and mechanism; schema 6 adds seat value and
+// the spend by model and agent. A
 // client sends a
 // schema only to a server whose Me advertises a MaxSchema at least as
 // high, and otherwise the newest it reads, byte for byte as before: the
@@ -182,10 +183,15 @@ type Upload struct {
 	// PlanWindows are where each plan's longest window is headed by its
 	// reset.
 	PlanWindows []PlanWindow `json:"plan_windows,omitempty"`
+	// SpendModels are the spend rows split by catalog model and agent
+	// (models.go), complete for every day in Days as Spend is. Absent, the
+	// split was not sent; present, it covers every spend row.
+	SpendModels []ModelSpend `json:"spend_models,omitempty"`
 }
 
 // ForServer is u as a server that reads formats up to maxSchema accepts
-// it: without the seat value when maxSchema is below 6, without the
+// it: without the seat value and the spend by model when maxSchema is
+// below 6, without the
 // prevented figures when maxSchema is below 5, without the
 // units' reverted commits when maxSchema is below 4,
 // without the schema 3 sections when it is below 3, and schema 1, without
@@ -316,6 +322,9 @@ func (u Upload) Validate() error {
 		return err
 	}
 	if err := u.validatePrevented(); err != nil {
+		return err
+	}
+	if err := u.validateModelSpend(covered); err != nil {
 		return err
 	}
 	return u.validateSeats()
