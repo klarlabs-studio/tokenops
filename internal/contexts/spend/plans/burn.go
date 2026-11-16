@@ -1,6 +1,7 @@
 package plans
 
 import (
+	"math"
 	"sort"
 	"time"
 )
@@ -55,6 +56,10 @@ func (b BurnWarning) BeforeReset() time.Duration { return b.Window.ResetsAt.Sub(
 type BurnProjection struct {
 	Window    QuotaWindow
 	RunsOutAt time.Time
+	// AtResetPct is the share of the window the slower look-back's rate
+	// reaches by the reset: above 100 exactly when RunsOutAt is set. Zero
+	// when not measured.
+	AtResetPct float64
 }
 
 // BurnVerdict is the burn-rate reading of a plan's windows.
@@ -86,17 +91,18 @@ func AssessBurn(cur QuotaReading, long, short *QuotaReading, now time.Time) Burn
 		if !longOK || !shortOK {
 			continue
 		}
+		atReset := burnAtReset(w, cur.At, min(longBurn, shortBurn))
 		// Either look-back that lasts to the reset says the window does:
 		// the forecast claims no more urgency than both agree on.
 		if longAt.IsZero() || shortAt.IsZero() || !longAt.Before(w.ResetsAt) || !shortAt.Before(w.ResetsAt) {
-			v.Projections = append(v.Projections, BurnProjection{Window: w})
+			v.Projections = append(v.Projections, BurnProjection{Window: w, AtResetPct: min(atReset, 100)})
 			continue
 		}
 		runsOut := longAt
 		if shortAt.After(runsOut) {
 			runsOut = shortAt
 		}
-		v.Projections = append(v.Projections, BurnProjection{Window: w, RunsOutAt: runsOut})
+		v.Projections = append(v.Projections, BurnProjection{Window: w, RunsOutAt: runsOut, AtResetPct: math.Max(atReset, math.Nextafter(100, 101))})
 		v.Warnings = append(v.Warnings, BurnWarning{Window: w, RunsOutAt: runsOut, LongBurn: longBurn, ShortBurn: shortBurn})
 	}
 	sort.Slice(v.Warnings, func(i, j int) bool { return v.Warnings[i].RunsOutAt.Before(v.Warnings[j].RunsOutAt) })
@@ -126,6 +132,14 @@ func projectBurn(w QuotaWindow, at time.Time, past *QuotaReading, lookback time.
 	return runsOut, burn, true
 }
 
+// burnAtReset is the share of w reached by its reset from the reading at
+// at, at burn times the even rate. The slower look-back's burn is the one
+// whose run-out the forecast takes, so this agrees with it; rounding in
+// the run-out time is absorbed by the caller's clamp.
+func burnAtReset(w QuotaWindow, at time.Time, burn float64) float64 {
+	return w.UsedPct + burn*100*float64(w.ResetsAt.Sub(at))/float64(w.Duration)
+}
+
 // ApplyBurn makes each window's pace say what the burn-rate reading says,
 // where it measured the window: one forecast, whichever surface shows it.
 // The coach warned from the last hour's rate while glance projected the
@@ -146,6 +160,7 @@ func ApplyBurn(ws []VendorWindow, v BurnVerdict, now time.Time) {
 			pace := *w.Pace
 			pace.Basis, pace.TooEarly = BasisRecent, false
 			pace.LastsToReset, pace.RunsOutIn = p.RunsOutAt.IsZero(), 0
+			pace.recentAtReset, pace.recentKnown = p.AtResetPct, p.AtResetPct > 0
 			if !pace.LastsToReset {
 				pace.RunsOutIn = max(0, p.RunsOutAt.Sub(now)).Round(time.Minute)
 			}

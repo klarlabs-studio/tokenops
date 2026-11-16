@@ -446,6 +446,8 @@ and the monthly cost, then recommends one:
 
 ```text
 anthropic: Claude Max, replayed over the last 27 days (8 windows), confidence medium
+  Value: $252.00 of usage at API list price, 2.8x what the plan cost for those days (a floor: only usage TokenOps sees counts).
+  This week: 40% used; at this pace about 70% by its reset on Sat 14 Nov 09:00.
 
   OPTION                               LOCKOUTS  BLOCKED  PEAK            PER MONTH  SAVES
   Claude Pro                           4         24.0d    400% of weekly  $20.00     $80.00
@@ -463,6 +465,23 @@ it was taken (`plan history`), so a switch inside the period is handled.
 Blocked time runs from the moment a window would have run out to its
 reset, with overlapping windows counted once. Overflow and API prices
 come from the rate card applied to the usage your plan covered.
+
+The two lines under the heading are about you rather than the tiers.
+**Value** is the usage your plan covered, priced at API list price, as a
+multiple of what the plan cost for the same days: above 1x the plan carried
+more than it cost. It counts only the usage TokenOps sees (not a web chat or
+another machine), so it is a floor. **This week** projects the plan's
+longest window to its reset on the same forecast the glance shows: at this
+pace (the window's average so far) or at the last hour's rate, where the
+burn-rate look-backs measured it. Above 100% it runs out before the reset;
+early in the window (the first tenth) it says it is too early to tell, and a
+reading that is stale or from a window that has already reset is not
+projected. `--json` carries both as `value_multiple` and `at_reset`.
+
+When no meter read the plan's windows in the period but the usage can be
+priced, the replay cannot compare tiers (how often they would have run out
+is unknown), so it weighs only the fee against the API at list price over the
+whole period, at `low` confidence; the table shows `-` for lockouts.
 
 Read it with its confidence label. Max (5x Pro every 5 hours and every
 week) and Ultra (10x Pro every week, no 5-hour limit) are Anthropic's

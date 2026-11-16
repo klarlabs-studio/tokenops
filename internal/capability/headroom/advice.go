@@ -24,6 +24,17 @@ const (
 // AdviceOption is one way the period could have been paid for.
 type AdviceOption = plans.Option
 
+// Advice is one provider's replay, and ResetProjection where its longest
+// window is headed by the reset.
+type (
+	Advice          = plans.Advice
+	ResetProjection = plans.ResetProjection
+)
+
+// RateWords names the rate a forecast projects, in the words every surface
+// uses for it (plans.RateWords).
+func RateWords(basis string) string { return plans.RateWords(basis) }
+
 // AdviceCacheTTL is how long the glance reuses one replay: the advice is
 // about weeks of history, and an hour more changes nothing in it.
 const AdviceCacheTTL = time.Hour
@@ -32,6 +43,10 @@ const AdviceCacheTTL = time.Hour
 type AdviceQuery struct {
 	// Days is how far back; zero is plans.AdviceDays.
 	Days int
+	// Project also projects each plan's longest window to its reset
+	// (plans.Advice.AtReset). The projection is live, so the glance's
+	// hour-long cached replay leaves it out.
+	Project bool
 }
 
 // AdviceResult is plan right-sizing advice for every bound plan whose tiers
@@ -122,9 +137,47 @@ func Advise(ctx context.Context, d Deps, q AdviceQuery, now time.Time) (AdviceRe
 			res.Notes = append(res.Notes, note)
 			continue
 		}
-		res.Providers = append(res.Providers, plans.Replay(in))
+		a := plans.Replay(in)
+		if q.Project {
+			a.AtReset = projectLongest(ctx, d.Reader, provider, envs, days, now)
+		}
+		res.Providers = append(res.Providers, a)
 	}
 	return res, nil
+}
+
+// projectLongest is where provider's longest plan window is headed by its
+// reset, on the forecast glance shows. The events the replay read hold
+// the newest reading when they reach back as far as the windows are read
+// (two weeks); a shorter replay reads the store.
+func projectLongest(ctx context.Context, r Reader, provider string, envs []*eventschema.Envelope, days int, now time.Time) *plans.ResetProjection {
+	var events plans.EventReader = r
+	if days >= vendorWindowDays {
+		events = envelopes(envs)
+	}
+	windows := plans.VendorWindows(ctx, events, eventschema.Provider(provider), now)
+	applyRecentRate(ctx, r, provider, windows, now)
+	return plans.LongestProjection(windows, now)
+}
+
+// vendorWindowDays is how far back plans.VendorWindows reads.
+const vendorWindowDays = 14
+
+// envelopes answers a read of prompt events from the ones the replay
+// already read, which are all of that type.
+type envelopes []*eventschema.Envelope
+
+func (es envelopes) ReadEvents(_ context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
+	if t != eventschema.EventTypePrompt {
+		return nil, fmt.Errorf("only prompt events are held, not %s", t)
+	}
+	out := make([]*eventschema.Envelope, 0, len(es))
+	for _, e := range es {
+		if e != nil && !e.Timestamp.Before(since) {
+			out = append(out, e)
+		}
+	}
+	return out, nil
 }
 
 // replayInput gathers what one provider's replay reads, or says why it

@@ -74,7 +74,7 @@ func TestPlanAdvise(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Claude Ultra", "Claude Max", "API at list price", "LOCKOUTS", "peaked", "confidence low", "no 5-hour limit",
-		"unverified", "TokenOps never switches a plan",
+		"unverified", "TokenOps never switches a plan", "of usage at API list price", "what the plan cost for those days",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
@@ -103,5 +103,49 @@ func TestPlanAdvise(t *testing.T) {
 	}
 	if _, err := executeRoot(t, "--config", cfgPath, "plan", "advise", "--db", db, "--days", "91"); err == nil {
 		t.Error("--days 91 is refused")
+	}
+}
+
+// The value multiple and the projection at the reset read as the other
+// lines do; with no window read, lockouts are unknown, not zero.
+func TestWritePlanAdviceValueAndProjection(t *testing.T) {
+	pct := func(v float64) *float64 { return &v }
+	reset := time.Date(2026, 11, 14, 9, 0, 0, 0, time.Local)
+	advice := func(p *headroom.ResetProjection, windows int) headroom.AdviceResult {
+		return headroom.AdviceResult{Providers: []headroom.Advice{{Provider: "anthropic", Display: "Claude Max", Days: 30,
+			WindowsMeasured: windows, Confidence: "low", ListValueUSD: pct(284.08), ValueMultiple: pct(2.84), AtReset: p,
+			Options: []headroom.AdviceOption{{Kind: "plan", Plan: "claude-max", Display: "Claude Max", Current: true, MonthlyUSD: pct(100)}}}}}
+	}
+	for _, tc := range []struct {
+		name    string
+		p       *headroom.ResetProjection
+		windows int
+		want    []string
+		not     []string
+	}{
+		{"lasts", &headroom.ResetProjection{Window: "week", UsedPct: 40, AtResetPct: pct(70), ResetsAt: reset}, 4,
+			[]string{"Value: $284.08 of usage at API list price, 2.8x what the plan cost", "This week: 40% used; at this pace about 70% by its reset on Sat 14 Nov 09:00."},
+			[]string{"runs out"}},
+		{"runs out recently", &headroom.ResetProjection{Window: "week", UsedPct: 80, AtResetPct: pct(140), RunsOut: true, ResetsAt: reset, Basis: "recent"}, 4,
+			[]string{"at the last hour's rate about 140% by its reset on Sat 14 Nov 09:00, so it runs out before then."}, nil},
+		{"too early", &headroom.ResetProjection{Window: "week", UsedPct: 2, TooEarly: true, ResetsAt: reset}, 4,
+			[]string{"This week: 2% used; too early in the window to project"}, []string{"about"}},
+		{"no windows", nil, 0, []string{"Claude Max (now)  -"}, []string{"This week"}},
+	} {
+		var b strings.Builder
+		if err := writePlanAdvice(&b, advice(tc.p, tc.windows)); err != nil {
+			t.Fatal(err)
+		}
+		out := b.String()
+		for _, w := range tc.want {
+			if !strings.Contains(out, w) {
+				t.Errorf("%s: output missing %q:\n%s", tc.name, w, out)
+			}
+		}
+		for _, n := range tc.not {
+			if strings.Contains(out, n) {
+				t.Errorf("%s: output has %q:\n%s", tc.name, n, out)
+			}
+		}
 	}
 }

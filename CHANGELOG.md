@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+
+- **plans:** `tokenops plan advise` shows two lines about you above the options. **Value** is the usage your plan covered at API list price as a multiple of what the plan cost for the same days (a floor: only usage TokenOps sees counts). **This week** projects the plan's longest window to its reset on the forecast the glance shows, at this pace or at the last hour's rate, and says when it runs out before then. `--json` and `GET /api/plans/advice` carry them as `value_multiple` and `at_reset`.
+  - **plans:** a plan whose windows no meter read in the period, but whose usage can be priced, gets a fee-versus-API recommendation at `low` confidence instead of none. Tiers are not compared, since how often they would have run out is unknown.
+- **team:** `pkg/teamwire` maps a plan advice row to a seat action (keep, move down, upgrade, cancel), with the plan's allowance multiple and list price from the catalog, retired plan names included. Cancel needs a material saving on the API, a limit measured below 10% used and a seat marked company-paid; otherwise the seat is kept.
+
 ## 0.121.0 - 2026-11-16
 
 ### Added

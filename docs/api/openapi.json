@@ -3869,6 +3869,34 @@
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "at_reset": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "at_reset_pct": {
+                                "type": "number"
+                              },
+                              "basis": {
+                                "type": "string"
+                              },
+                              "resets_at": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "runs_out": {
+                                "type": "boolean"
+                              },
+                              "too_early": {
+                                "type": "boolean"
+                              },
+                              "used_pct": {
+                                "type": "number"
+                              },
+                              "window": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
                           "caveats": {
                             "items": {
                               "type": "string"
@@ -4042,6 +4070,9 @@
                           "until": {
                             "format": "date-time",
                             "type": "string"
+                          },
+                          "value_multiple": {
+                            "type": "number"
                           },
                           "windows_measured": {
                             "type": "integer"
@@ -5068,6 +5099,34 @@
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "at_reset": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "at_reset_pct": {
+                                "type": "number"
+                              },
+                              "basis": {
+                                "type": "string"
+                              },
+                              "resets_at": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "runs_out": {
+                                "type": "boolean"
+                              },
+                              "too_early": {
+                                "type": "boolean"
+                              },
+                              "used_pct": {
+                                "type": "number"
+                              },
+                              "window": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
                           "caveats": {
                             "items": {
                               "type": "string"
@@ -5241,6 +5300,9 @@
                           "until": {
                             "format": "date-time",
                             "type": "string"
+                          },
+                          "value_multiple": {
+                            "type": "number"
                           },
                           "windows_measured": {
                             "type": "integer"

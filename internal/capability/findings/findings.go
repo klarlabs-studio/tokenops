@@ -410,11 +410,8 @@ func allowanceNoun(kind string) string {
 }
 
 // Headroom about to lapse: a weekly window this close to its reset with
-// at least this much of it left.
-const (
-	lapseWithin  = 24 * time.Hour
-	lapseMinLeft = 40.0
-)
+// at least plans.LapseMinLeftPct of it left.
+const lapseWithin = 24 * time.Hour
 
 // lapsing reports whether w is a weekly window about to reset with much
 // of it unused.
@@ -423,7 +420,7 @@ func lapsing(w plans.VendorWindow) bool {
 		return false
 	}
 	in := resetsIn(w)
-	return in > 0 && in <= lapseWithin && 100-w.UsedPct >= lapseMinLeft
+	return in > 0 && in <= lapseWithin && 100-w.UsedPct >= plans.LapseMinLeftPct
 }
 
 func resetsIn(w plans.VendorWindow) time.Duration {

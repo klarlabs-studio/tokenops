@@ -55,7 +55,7 @@ confidence label. It is advice: TokenOps never switches a plan.`,
 				return fmt.Errorf("open store: %w (run `tokenops init`)", err)
 			}
 			defer func() { _ = store.Close() }()
-			res, err := headroom.Advise(ctx, localHeadroomDeps(&cfg, store), headroom.AdviceQuery{Days: days}, time.Now().UTC())
+			res, err := headroom.Advise(ctx, localHeadroomDeps(&cfg, store), headroom.AdviceQuery{Days: days, Project: true}, time.Now().UTC())
 			if err != nil {
 				return err
 			}
@@ -88,6 +88,12 @@ func writePlanAdvice(w io.Writer, res headroom.AdviceResult) error {
 		}
 		fmt.Fprintf(w, "%s: %s, replayed over the last %.0f days (%d windows), confidence %s\n",
 			a.Provider, a.Display, a.Days, a.WindowsMeasured, a.Confidence)
+		if line := valueLine(a); line != "" {
+			fmt.Fprintf(w, "  %s\n", line)
+		}
+		if line := atResetLine(a.AtReset); line != "" {
+			fmt.Fprintf(w, "  %s\n", line)
+		}
 		if len(a.Options) > 0 {
 			fmt.Fprintln(w)
 			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
@@ -97,7 +103,7 @@ func writePlanAdvice(w io.Writer, res headroom.AdviceResult) error {
 				if o.Current {
 					name += " (now)"
 				}
-				fmt.Fprintf(tw, "  %s\t%d\t%s\t%s\t%s\t%s\n", name, o.Lockouts, blockedWords(o.BlockedMinutes),
+				fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\t%s\n", name, lockoutsWords(a, o), blockedWords(o.BlockedMinutes),
 					peakWords(o), moneyOrDash(o.MonthlyUSD), savingWords(o))
 			}
 			if err := tw.Flush(); err != nil {
@@ -120,6 +126,43 @@ func writePlanAdvice(w io.Writer, res headroom.AdviceResult) error {
 	fmt.Fprintln(w, "\nAdvice only: TokenOps never switches a plan. Change it with the vendor; "+
 		"TokenOps follows the plan your client then reports.")
 	return nil
+}
+
+// valueLine says what the plan carried at API list price against what it
+// cost for the same days; "" when either is not priced.
+func valueLine(a headroom.Advice) string {
+	if a.ListValueUSD == nil || a.ValueMultiple == nil {
+		return ""
+	}
+	return fmt.Sprintf("Value: $%.2f of usage at API list price, %.1fx what the plan cost for those days "+
+		"(a floor: only usage TokenOps sees counts).", *a.ListValueUSD, *a.ValueMultiple)
+}
+
+// atResetLine says where the plan's longest window is headed by its
+// reset, in the words every surface uses for the forecast's rate.
+func atResetLine(p *headroom.ResetProjection) string {
+	if p == nil {
+		return ""
+	}
+	when := p.ResetsAt.Local().Format("Mon 2 Jan 15:04")
+	if p.TooEarly || p.AtResetPct == nil {
+		return fmt.Sprintf("This %s: %.0f%% used; too early in the window to project to its reset on %s.", p.Window, p.UsedPct, when)
+	}
+	s := fmt.Sprintf("This %s: %.0f%% used; %s about %.0f%% by its reset on %s", p.Window, p.UsedPct,
+		headroom.RateWords(p.Basis), *p.AtResetPct, when)
+	if p.RunsOut {
+		return s + ", so it runs out before then."
+	}
+	return s + "."
+}
+
+// lockoutsWords is an option's lockouts, or "-" when no window was read
+// to count them.
+func lockoutsWords(a headroom.Advice, o headroom.AdviceOption) string {
+	if a.WindowsMeasured == 0 {
+		return "-"
+	}
+	return fmt.Sprint(o.Lockouts)
 }
 
 func blockedWords(minutes int) string {

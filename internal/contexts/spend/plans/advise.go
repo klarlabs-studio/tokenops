@@ -53,10 +53,14 @@ const (
 	// saving worth a switch: both must be met.
 	adviceMaterialUSD   = 10.0
 	adviceMaterialShare = 0.10
-	// adviceFewLockouts and adviceFewBlocked are the most running out per
-	// month an option may have and still be recommended.
-	adviceFewLockouts = 1.0
-	adviceFewBlocked  = 2 * time.Hour
+)
+
+// AdviceFewLockouts and AdviceFewBlocked are the most running out per
+// month an option may have and still be recommended: the acceptable rate
+// of lockouts and of blocked time.
+const (
+	AdviceFewLockouts = 1.0
+	AdviceFewBlocked  = 2 * time.Hour
 )
 
 // Tier is a plan as a replay candidate.
@@ -252,7 +256,13 @@ type Advice struct {
 	WindowsMeasured int `json:"windows_measured"`
 	// ListValueUSD is the plan-covered usage at API list price over the
 	// period; nil when there is no rate card to price it.
-	ListValueUSD   *float64        `json:"list_value_usd,omitempty"`
+	ListValueUSD *float64 `json:"list_value_usd,omitempty"`
+	// ValueMultiple is ListValueUSD over what the plan in force cost for
+	// the days the replay prices (its fee times Days over an average
+	// month): above 1 the plan carried more than it cost at list price.
+	// It counts only usage TokenOps saw, so it is a floor. nil when the
+	// usage or the fee is not priced.
+	ValueMultiple  *float64        `json:"value_multiple,omitempty"`
 	Options        []Option        `json:"options,omitempty"`
 	Recommendation *Recommendation `json:"recommendation,omitempty"`
 	Confidence     string          `json:"confidence"`
@@ -264,6 +274,10 @@ type Advice struct {
 	// observed limits instead of the catalog, each with both figures; nil
 	// when it used the catalog throughout.
 	Observed []ObservedLimit `json:"observed,omitempty"`
+	// AtReset is where the plan's longest window is headed by its reset,
+	// on the forecast glance shows; nil when no window has a current
+	// reading or it was not asked for.
+	AtReset *ResetProjection `json:"at_reset,omitempty"`
 }
 
 // EarlyResetCut is the lockouts a vendor's early resets ended, and the
@@ -561,7 +575,7 @@ func Replay(in ReplayInput) Advice {
 	if len(ws) == 0 {
 		a.Caveats = append(a.Caveats, "No plan window readings in the period, so there is nothing to replay; "+
 			windowMeterHint(in.Provider))
-		return a
+		return feeAgainstAPI(a, in)
 	}
 	first := in.Until
 	for _, w := range ws {
@@ -577,10 +591,7 @@ func Replay(in ReplayInput) Advice {
 		a.Days = 0.1
 	}
 	perMonth := averageMonthDays / a.Days
-	if in.ListValueKnown {
-		v := round2(in.ListValueUSD)
-		a.ListValueUSD = &v
-	}
+	setListValue(&a, in)
 
 	candidates := in.Candidates
 	if !hasTier(candidates, in.Current.Name) {
@@ -636,6 +647,60 @@ func Replay(in ReplayInput) Advice {
 			Vendor: vendorName(in.Provider), Window: windowWord(s.cut)}
 	}
 	a.Recommendation = recommend(a.Options, cur, perMonth, a.EarlyResets)
+	return a
+}
+
+// setListValue records the period's list value on a and, with the fee
+// of the plan in force, the value multiple over a.Days.
+func setListValue(a *Advice, in ReplayInput) {
+	if !in.ListValueKnown {
+		return
+	}
+	v := round2(in.ListValueUSD)
+	a.ListValueUSD = &v
+	if fee := in.Current.MonthlyUSD * a.Days / averageMonthDays; fee > 0 {
+		a.ValueMultiple = ptrFloat(round2(in.ListValueUSD / fee))
+	}
+}
+
+// feeAgainstAPI is the advice for a plan whose windows no meter read in
+// the period: with nothing to replay, only the fee is weighed against the
+// usage at API list price, over the whole period, at low confidence. How
+// often any tier would have run out is unknown, so no tier is compared.
+func feeAgainstAPI(a Advice, in ReplayInput) Advice {
+	if !in.ListValueKnown || in.Current.MonthlyUSD <= 0 || !in.Until.After(in.Since) {
+		return a
+	}
+	a.Days = math.Round(in.Until.Sub(in.Since).Hours()/24*10) / 10
+	setListValue(&a, in)
+	perMonth := averageMonthDays / a.Days
+	fee := round2(in.Current.MonthlyUSD)
+	metered := round2(in.ListValueUSD * perMonth)
+	a.Options = []Option{
+		{Kind: OptionPlan, Plan: in.Current.Name, Display: in.Current.Display, Current: true,
+			FeeUSD: in.Current.MonthlyUSD, MonthlyUSD: ptrFloat(fee), SavingsUSD: ptrFloat(0), PriceSource: in.Current.PriceSource},
+		{Kind: OptionAPI, Display: "API at list price (no subscription)", MeteredUSD: &metered,
+			MonthlyUSD: ptrFloat(metered), SavingsUSD: ptrFloat(round2(fee - metered)), PriceSource: "list"},
+	}
+	a.Caveats = append(a.Caveats, "Only the fee is weighed against your usage at API list price; "+
+		"usage TokenOps does not see (a web chat, another machine) is not in it.")
+	if in.UnpricedRequests > 0 {
+		a.Caveats = append(a.Caveats, fmt.Sprintf("%d request(s) used models with no API rate, so the API figure understates them.", in.UnpricedRequests))
+	}
+	r := recommend(a.Options, &a.Options[0], perMonth, nil)
+	if r == nil {
+		return a
+	}
+	r.Summary = fmt.Sprintf("With no window readings, only the fee is weighed: your usage would have cost $%.0f/mo at API list price, against %s's $%.0f/mo", metered, in.Current.Display, fee)
+	switch {
+	case r.Verdict == VerdictSwitch:
+		r.Summary += fmt.Sprintf(", $%.0f/mo less.", r.SavingsUSD)
+	case metered < fee:
+		r.Summary += "; the difference is too small to switch."
+	default:
+		r.Summary += "."
+	}
+	a.Recommendation = r
 	return a
 }
 
@@ -743,8 +808,8 @@ func caveats(in ReplayInput, cur *Option, candidates []Tier) []string {
 
 // acceptable is an option that runs out at most a few times a month.
 func acceptable(o Option, perMonth float64) bool {
-	return float64(o.Lockouts)*perMonth <= adviceFewLockouts &&
-		time.Duration(float64(o.BlockedMinutes)*perMonth)*time.Minute <= adviceFewBlocked
+	return float64(o.Lockouts)*perMonth <= AdviceFewLockouts &&
+		time.Duration(float64(o.BlockedMinutes)*perMonth)*time.Minute <= AdviceFewBlocked
 }
 
 var kindRank = map[string]int{OptionPlan: 0, OptionPlanOverflow: 1, OptionAPI: 2}
