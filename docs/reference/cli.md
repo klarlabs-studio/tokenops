@@ -476,7 +476,10 @@ pace (the window's average so far) or at the last hour's rate, where the
 burn-rate look-backs measured it. Above 100% it runs out before the reset;
 early in the window (the first tenth) it says it is too early to tell, and a
 reading that is stale or from a window that has already reset is not
-projected. `--json` carries both as `value_multiple` and `at_reset`.
+projected. `--json` carries both as `value_multiple` and `at_reset`. Value,
+the metered overflow options and the API option price the usage of the days
+the window readings cover, the days the tiers are replayed on, so when the
+readings start later than the period, usage before them is left out.
 
 When no meter read the plan's windows in the period but the usage can be
 priced, the replay cannot compare tiers (how often they would have run out

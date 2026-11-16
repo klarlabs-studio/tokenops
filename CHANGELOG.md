@@ -8,6 +8,10 @@
   - **plans:** a plan whose windows no meter read in the period, but whose usage can be priced, gets a fee-versus-API recommendation at `low` confidence instead of none. Tiers are not compared, since how often they would have run out is unknown.
 - **team:** `pkg/teamwire` maps a plan advice row to a seat action (keep, move down, upgrade, cancel), with the plan's allowance multiple and list price from the catalog, retired plan names included. Cancel needs a material saving on the API, a limit measured below 10% used and a seat marked company-paid; otherwise the seat is kept.
 
+### Fixed
+
+- **plans:** `tokenops plan advise` prices the API option, the metered overflow options and the value multiple over the days the window readings cover, the days the tiers are replayed on. The usage was priced over the whole period but spread over the readings' days, so when the readings started later than the period and there was usage before them, those figures came out too high. Recommendations can change for you when your readings start late: the API and overflow options get cheaper, so they are recommended more often, and the value multiple drops.
+
 ## 0.121.0 - 2026-11-16
 
 ### Added

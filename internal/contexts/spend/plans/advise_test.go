@@ -135,7 +135,7 @@ func TestReplayScalesWindowsAcrossTiers(t *testing.T) {
 		Provider: "anthropic", Since: since, Until: until, Readings: rs,
 		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true },
 		Current:  twenty, Candidates: []Tier{pro, five, twenty},
-		ListValueUSD: 280, ListValueKnown: true,
+		ListValue: flatValue(280),
 	}
 	a := Replay(in)
 
@@ -210,7 +210,7 @@ func TestReplayRecommendsStayingWhenNothingCheaperFits(t *testing.T) {
 		Provider: "anthropic", Since: since, Until: until, Readings: rs,
 		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true },
 		Current:  twenty, Candidates: []Tier{pro, five, twenty},
-		ListValueUSD: 4000, ListValueKnown: true,
+		ListValue: flatValue(4000),
 	})
 	if r := a.Recommendation; r == nil || r.Verdict != VerdictStay || r.Plan != "claude-max-20x" {
 		t.Fatalf("recommendation = %+v", a.Recommendation)
@@ -410,7 +410,7 @@ func TestReplayAtTheTopTierNeverUpgradesToItself(t *testing.T) {
 		Provider: "anthropic", Since: since, Until: until, Readings: rs,
 		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true },
 		Current:  twenty, Candidates: []Tier{pro, five, twenty},
-		ListValueUSD: 4000, ListValueKnown: true,
+		ListValue: flatValue(4000),
 	})
 	if cur := optionFor(t, a, OptionPlan, "claude-max-20x"); cur.Lockouts == 0 {
 		t.Fatalf("setup: current = %+v, want lockouts", cur)
@@ -539,7 +539,7 @@ func TestDerivedCaveatDescribesTheProvidersBase(t *testing.T) {
 		{"openai", "gpt-pro-5x", "model-dependent", "no longer publishes"},
 	} {
 		tier, _, _ := tierOf(tc.plan)
-		got := strings.Join(caveats(ReplayInput{Provider: tc.provider, Current: tier}, nil, TierFamily(tc.plan)), " ")
+		got := strings.Join(caveats(ReplayInput{Provider: tc.provider, Current: tier}, nil, TierFamily(tc.plan), listValue{}), " ")
 		if !strings.Contains(got, tc.want) || strings.Contains(got, tc.not) {
 			t.Errorf("%s: caveats = %q, want %q and not %q", tc.provider, got, tc.want, tc.not)
 		}
@@ -568,7 +568,7 @@ func TestReplayWithoutReadingsWeighsTheFeeAgainstTheAPI(t *testing.T) {
 		{"worth the fee", 400, VerdictStay, OptionPlan, false, 4.06},
 	} {
 		a := Replay(ReplayInput{Provider: "anthropic", Since: since, Until: until, Current: five,
-			Candidates: []Tier{five}, ListValueUSD: tc.value, ListValueKnown: true})
+			Candidates: []Tier{five}, ListValue: flatValue(tc.value)})
 		r := a.Recommendation
 		if r == nil || r.Verdict != tc.verdict || r.Kind != tc.kind || r.Material != tc.material {
 			t.Errorf("%s: recommendation = %+v", tc.name, r)
@@ -597,7 +597,7 @@ func TestReplayWithoutReadingsWeighsTheFeeAgainstTheAPI(t *testing.T) {
 	}
 	five.MonthlyUSD = 0
 	a = Replay(ReplayInput{Provider: "anthropic", Since: since, Until: until, Current: five, Candidates: []Tier{five},
-		ListValueUSD: 15, ListValueKnown: true})
+		ListValue: flatValue(15)})
 	if a.Recommendation != nil {
 		t.Errorf("no fee: %+v", a.Recommendation)
 	}
@@ -618,7 +618,7 @@ func TestReplayValueMultiple(t *testing.T) {
 		Provider: "anthropic", Since: since, Until: until, Readings: rs,
 		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true },
 		Current:  twenty, Candidates: []Tier{pro, five, twenty},
-		ListValueUSD: 400, ListValueKnown: true,
+		ListValue: flatValue(400),
 	}
 	a := Replay(in)
 	// The readings cover 27 days: $400 against $200 x 27/30.44.
@@ -626,8 +626,95 @@ func TestReplayValueMultiple(t *testing.T) {
 	if a.ValueMultiple == nil || math.Abs(*a.ValueMultiple-math.Round(want*100)/100) > 1e-9 {
 		t.Errorf("value multiple = %v, want %.2f", a.ValueMultiple, want)
 	}
-	in.ListValueKnown = false
+	in.ListValue = nil
 	if a := Replay(in); a.ValueMultiple != nil {
 		t.Errorf("unpriced value multiple = %v", *a.ValueMultiple)
+	}
+}
+
+// flatValue prices any span at usd: the plan-covered usage all falls in
+// the days the replay prices.
+func flatValue(usd float64) func(from, to time.Time) (float64, int) {
+	return func(time.Time, time.Time) (float64, int) { return usd, 0 }
+}
+
+// dailyValue prices a span by the whole days of perDay it holds, the first
+// starting at since.
+func dailyValue(since time.Time, perDay []float64) func(from, to time.Time) (float64, int) {
+	return func(from, to time.Time) (float64, int) {
+		var usd float64
+		for i, v := range perDay {
+			if at := since.Add(time.Duration(i) * 24 * time.Hour); !at.Before(from) && !at.After(to) {
+				usd += v
+			}
+		}
+		return usd, 0
+	}
+}
+
+// The API option, the overflow option and the value multiple price the
+// usage of the days the readings cover, the demand the tiers are replayed
+// on, whether or not the period has usage before the readings start.
+func TestReplayPricesTheValueOverTheDaysReplayed(t *testing.T) {
+	until := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	since := until.Add(-28 * 24 * time.Hour)
+	pro, five, twenty := maxTiers()
+	days := func(first, last int, usd float64) []float64 {
+		out := make([]float64, 28)
+		for i := first; i <= last; i++ {
+			out[i] = usd
+		}
+		return out
+	}
+	cases := []struct {
+		name string
+		// fromWeek is the first of the period's four weeks with readings.
+		fromWeek int
+		peaks    []float64
+		perDay   []float64
+		days     float64
+		// daily is the plan-covered usage a day over the days replayed.
+		daily float64
+		// share is the overflow share on Max 5x: the points over its cap,
+		// in Pro windows, of the demand the readings show.
+		share float64
+	}{
+		{"readings cover the period", 0, []float64{31, 20, 24, 10}, days(0, 27, 10), 28, 10, 1.2 / 17},
+		{"readings start halfway, usage throughout", 2, []float64{31, 10}, days(0, 27, 10), 14, 10, 1.2 / 8.2},
+		{"readings start halfway, usage only since", 2, []float64{31, 10}, days(14, 27, 20), 14, 20, 1.2 / 8.2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var rs []QuotaReading
+			for i, p := range tc.peaks {
+				reset := since.Add(time.Duration(tc.fromWeek+i+1) * week)
+				rs = append(rs, weekReadings(reset, []time.Duration{0, 4 * 24 * time.Hour}, []float64{p / 4, p})...)
+			}
+			a := Replay(ReplayInput{
+				Provider: "anthropic", Since: since, Until: until, Readings: rs,
+				FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true },
+				Current:  twenty, Candidates: []Tier{pro, five, twenty},
+				ListValue: dailyValue(since, tc.perDay),
+			})
+			if a.Days != tc.days {
+				t.Fatalf("days = %v, want %v", a.Days, tc.days)
+			}
+			value := tc.daily * tc.days
+			if a.ListValueUSD == nil || *a.ListValueUSD != value {
+				t.Errorf("list value = %v, want %.2f", deref(a.ListValueUSD), value)
+			}
+			perMonth := tc.daily * averageMonthDays
+			if api := optionFor(t, a, OptionAPI, ""); api.MonthlyUSD == nil || math.Abs(*api.MonthlyUSD-perMonth) > 0.01 {
+				t.Errorf("api = %v, want %.2f", deref(api.MonthlyUSD), perMonth)
+			}
+			ov := optionFor(t, a, OptionPlanOverflow, "claude-max-5x")
+			if ov.MeteredUSD == nil || math.Abs(*ov.MeteredUSD-tc.share*perMonth) > 0.01 {
+				t.Errorf("overflow metered = %v, want %.2f", deref(ov.MeteredUSD), tc.share*perMonth)
+			}
+			multiple := math.Round(perMonth/200*100) / 100
+			if a.ValueMultiple == nil || *a.ValueMultiple != multiple {
+				t.Errorf("value multiple = %v, want %.2f", deref(a.ValueMultiple), multiple)
+			}
+		})
 	}
 }

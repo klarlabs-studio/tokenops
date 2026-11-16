@@ -67,8 +67,10 @@ func TestAdviseReplaysTheBoundPlan(t *testing.T) {
 	if cur.Plan != "claude-max" || cur.MonthlyUSD == nil || *cur.MonthlyUSD != 90 || cur.PriceSource != "yours" {
 		t.Errorf("current = %+v", cur)
 	}
-	if a.ListValueUSD == nil || *a.ListValueUSD != 280 {
-		t.Errorf("list value = %v, want 28 turns at $10", a.ListValueUSD)
+	// The readings start a day into the period, so the value prices the 27
+	// turns from then on, the days the tiers are replayed on.
+	if a.ListValueUSD == nil || *a.ListValueUSD != 270 {
+		t.Errorf("list value = %v, want 27 turns at $10", a.ListValueUSD)
 	}
 	r := a.Recommendation
 	if r == nil || r.Verdict != plans.VerdictSwitch || r.Plan != "claude-pro" || r.SavingsUSD != 70 {
