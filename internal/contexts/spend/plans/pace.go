@@ -45,6 +45,12 @@ type WindowPace struct {
 	recentKnown   bool
 }
 
+// LapseMinLeftPct is the share of a window, in points, that resetting
+// unused makes a lapse: the local finding fires on a weekly window with
+// this much left near its reset, and a projection at the reset of no more
+// than 100 minus this is a window that will reset mostly unused.
+const LapseMinLeftPct = 40.0
+
 // BasisRecent is a projection from the rate of the last hour and the last
 // quarter hour, the coach's run-out warning.
 const BasisRecent = "recent"

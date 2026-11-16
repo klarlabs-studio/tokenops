@@ -53,10 +53,14 @@ const (
 	// saving worth a switch: both must be met.
 	adviceMaterialUSD   = 10.0
 	adviceMaterialShare = 0.10
-	// adviceFewLockouts and adviceFewBlocked are the most running out per
-	// month an option may have and still be recommended.
-	adviceFewLockouts = 1.0
-	adviceFewBlocked  = 2 * time.Hour
+)
+
+// AdviceFewLockouts and AdviceFewBlocked are the most running out per
+// month an option may have and still be recommended: the acceptable rate
+// of lockouts and of blocked time.
+const (
+	AdviceFewLockouts = 1.0
+	AdviceFewBlocked  = 2 * time.Hour
 )
 
 // Tier is a plan as a replay candidate.
@@ -743,8 +747,8 @@ func caveats(in ReplayInput, cur *Option, candidates []Tier) []string {
 
 // acceptable is an option that runs out at most a few times a month.
 func acceptable(o Option, perMonth float64) bool {
-	return float64(o.Lockouts)*perMonth <= adviceFewLockouts &&
-		time.Duration(float64(o.BlockedMinutes)*perMonth)*time.Minute <= adviceFewBlocked
+	return float64(o.Lockouts)*perMonth <= AdviceFewLockouts &&
+		time.Duration(float64(o.BlockedMinutes)*perMonth)*time.Minute <= AdviceFewBlocked
 }
 
 var kindRank = map[string]int{OptionPlan: 0, OptionPlanOverflow: 1, OptionAPI: 2}
