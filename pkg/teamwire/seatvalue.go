@@ -269,10 +269,11 @@ func (r PlanAdvice) validateSeatAdditions() error {
 	})
 }
 
-// withoutSeatValue is u's plan days and plan advice without schema 6's
-// additions, copied so the caller's rows are left as they are.
+// withoutSeatValue is u without schema 6's additions, the spend by model
+// among them; its plan days and plan advice are copied so the caller's
+// rows are left as they are.
 func (u Upload) withoutSeatValue() Upload {
-	u.PlanBindings, u.PlanWindows = nil, nil
+	u.PlanBindings, u.PlanWindows, u.SpendModels = nil, nil, nil
 	if u.PlanDays != nil {
 		days := make([]PlanDay, len(u.PlanDays))
 		for i, d := range u.PlanDays {

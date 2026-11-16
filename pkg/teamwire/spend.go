@@ -10,8 +10,10 @@ import (
 // economics across the organisation; and what the vendor billed, for
 // reconciling the estimate with the invoice. Like every other section,
 // each string is a date, a repository label or a provider from the
-// registry, and each figure a sum or a bounded amount. No section names a
-// model: the dataset is by provider.
+// registry, and each figure a sum or a bounded amount. The FOCUS dataset
+// is by provider; schema 6 splits the same rows by model and agent in a
+// section of its own (models.go), where a model is a public catalog ID or
+// "other", never a name the member's machine made up.
 
 // Limits on the schema 3 sections.
 const (

@@ -67,6 +67,15 @@ var harnesses = []struct{ prefix, harness string }{
 	{"github-copilot", "copilot"},
 }
 
+// Harnesses lists the harnesses HarnessOf names, in its order.
+func Harnesses() []string {
+	out := make([]string, len(harnesses))
+	for i, h := range harnesses {
+		out[i] = h.harness
+	}
+	return out
+}
+
 // HarnessOf names the harness a turn recorded by source ran in; a source
 // no harness is known for names itself.
 func HarnessOf(source string) string {

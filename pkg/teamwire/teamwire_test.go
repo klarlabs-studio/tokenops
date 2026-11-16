@@ -57,6 +57,11 @@ var constrainedStrings = map[string]string{
 	"PlanWindow.Window":    "weekly or monthly: enumeration, never a 5-hour window",
 	"PlanWindow.ResetsOn":  "DayLayout date within the window's length of computed_at: no instant",
 	"PlanWindow.Basis":     "average or recent: enumeration",
+	"ModelSpend.Day":       "DayLayout date",
+	"ModelSpend.Repo":      "ValidRepo",
+	"ModelSpend.Provider":  "ValidProvider: the provider registry",
+	"ModelSpend.Model":     "ValidModel: an ID of the public pricing catalog in its normal form, or \"other\"",
+	"ModelSpend.Agent":     "ValidAgent: enumeration",
 }
 
 // boundedFigures is every figure a schema 5 prevented row and the schema 6
@@ -83,11 +88,16 @@ var boundedFigures = map[string]string{
 	"PlanWindow.RunsOut":             "a boolean, true only at 100 or more",
 	"PlanWindow.ShortHours":          "0 to 168 in steps of 6, only when it runs out",
 	"PlanWindow.TooEarly":            "a boolean; no projection with it",
+	"ModelSpend.Turns":               "0 or more; with its day, repo and provider's rows, the spend row's turns",
+	"ModelSpend.Tokens":              "0 or more; adds up to the spend row's tokens",
+	"ModelSpend.CostUSD":             "0 to 1e7; adds up to the spend row's cost_usd",
+	"ModelSpend.APIEquivalentUSD":    "0 to 1e7; adds up to the spend row's api_equivalent_usd",
+	"ModelSpend.UnpricedTurns":       "0 to turns; adds up to the spend row's unpriced_turns",
 }
 
 // boundedPrefixes are the types and fields from schema 5 on whose figures
 // must each state a bound in boundedFigures.
-var boundedPrefixes = []string{"PreventedWeek.", "AdviceOption.", "PlanBinding.", "PlanWindow.",
+var boundedPrefixes = []string{"PreventedWeek.", "AdviceOption.", "PlanBinding.", "PlanWindow.", "ModelSpend.",
 	"PlanDay.PlanValueUSD", "PlanDay.PlanUnpricedTurns", "PlanAdvice.ListValueUSD"}
 
 // numericKinds are the field kinds that hold figures, not text.

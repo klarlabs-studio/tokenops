@@ -251,6 +251,13 @@ its monthly cost, lockouts, blocked minutes and peak; and each plan's weekly
 window projected to its reset (used, share at the reset, whether and about
 how many hours, in 6-hour steps, before the reset it runs out, the reset's
 date and the rate it reads). No 5-hour window and no time of day is sent.
+Schema 6 also splits the spend rows by model and agent: per day,
+repository and provider, the turns, tokens and cost of each model on each
+coding agent (`claude-code`, `codex`, `opencode`, `cursor`, `gemini-cli`,
+`pi`, `copilot`, or `other`). A model is sent only as its ID in the
+pricing catalog TokenOps ships, normalised (a dated ID is sent as its
+catalog row's); a model the catalog does not list, such as a fine-tune or
+a custom or local model, is sent as `other`.
 
 `join` takes `--name` (how people granted to see individual figures see
 you) and `--device`. The enrolment is kept in `~/.tokenops/team.json`

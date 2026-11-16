@@ -17,8 +17,8 @@ import (
 	"go.klarlabs.de/tokenops/pkg/teamwire"
 )
 
-// seatModel is the model the fictional turns ran on: a name that must not
-// cross.
+// seatModel is the model the fictional turns ran on: a name the pricing
+// catalog does not have, which must not cross (it would be "other").
 const seatModel = "claude-opus-canary-model"
 
 // seatEvents is a fictional machine on a plan whose week resets three days
@@ -184,7 +184,8 @@ func TestPlanValueIsTheDaysListValue(t *testing.T) {
 // A schema 6 upload carries the seat value: an idle seat's binding, the
 // days' value, the advice's options and the weekly snapshot. Built from a
 // machine full of prompts, paths and model names, it carries none of
-// them, and no instant.
+// them (a model only as a catalog ID, TestSchema6SpendByModel), and no
+// instant.
 func TestSchema6UploadCarriesSeatValue(t *testing.T) {
 	u, notes := Build(context.Background(), seatDeps(), Options{Days: 14, RepoNames: RepoRemote, Schema: teamwire.SchemaSeats}, now)
 	// The fixture's turns name no provider, so its spend rows are dropped;

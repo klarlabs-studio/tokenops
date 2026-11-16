@@ -23,8 +23,9 @@ import (
 // owner's or admin's machine, what the vendors billed. They are built
 // from what this machine already computes for its own surfaces — the
 // turns, `tokenops story --runtime`'s tasks and `tokenops spend units`'
-// joins — reduced to teamwire's labels and sums. No model, commit subject
-// or session leaves.
+// joins — reduced to teamwire's labels and sums. No commit subject or
+// session leaves, and no model name (schema 6's split by model, models.go,
+// sends a public catalog ID or "other").
 
 // Schema3 are the readers of a schema 3 upload's sections beyond the
 // turns. A nil field leaves its section out.

@@ -1,0 +1,7 @@
+
+Sent with the buckets (upload schema 6):
+
+Spend by model and agent (a model the pricing catalog does not list is "other"): 2 rows.
+         DAY      REPO   PROVIDER            MODEL        AGENT  TURNS  TOKENS  BILLED  VALUE  UNPRICED
+  2026-11-12  acme/api  anthropic  claude-opus-4-8  claude-code      3    1000   $0.10  $1.00         0
+  2026-11-12  acme/api  anthropic            other     opencode      1     200   $0.00  $0.00         1

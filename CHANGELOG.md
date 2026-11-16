@@ -9,6 +9,7 @@
 - **team:** `pkg/teamwire` maps a plan advice row to a seat action (keep, move down, upgrade, cancel), with the plan's allowance multiple and list price from the catalog, retired plan names included. Cancel needs a material saving on the API, a limit measured below 10% used and a seat marked company-paid; otherwise the seat is kept.
 
 - **team:** upload schema 6, seat value. `tokenops team preview` shows it and a server that accepts schema 6 gets it: the plans bound on the machine (even one never used), each plan day's plan-covered usage at API list price, every option the plan advice priced, and each plan's weekly window projected to its reset (whole points, the shortfall in 6-hour steps, the reset as a date; never a 5-hour window or a time of day). The new `team.shared_plans` setting marks a subscription you share with someone else. A server below schema 6 gets schema 5 as before. ADR 0012 has the amendment.
+- **team:** upload schema 6 also splits spend by model and agent: per day, repository and provider, each model's turns, tokens and cost on each coding agent. A model is sent only as its ID in the pricing catalog TokenOps ships, normalised (`claude-opus-4-8-20261001` is sent as `claude-opus-4-8`); a fine-tune, a custom or local model, or any other model the catalog does not list is sent as `other`. The split adds up to the spend rows, which are unchanged. `pkg/teamwire` adds `ValidModel` and `CatalogModel` so a server checks the model against the same catalog. ADR 0012 has the amendment.
 
 ### Fixed
 
