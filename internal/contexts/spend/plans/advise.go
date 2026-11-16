@@ -255,11 +255,12 @@ type Advice struct {
 	// WindowsMeasured counts the window instances replayed.
 	WindowsMeasured int `json:"windows_measured"`
 	// ListValueUSD is the plan-covered usage at API list price over the
-	// period; nil when there is no rate card to price it.
+	// days the replay prices, the last Days of the period; nil when there
+	// is no rate card to price it.
 	ListValueUSD *float64 `json:"list_value_usd,omitempty"`
 	// ValueMultiple is ListValueUSD over what the plan in force cost for
-	// the days the replay prices (its fee times Days over an average
-	// month): above 1 the plan carried more than it cost at list price.
+	// the same days (its fee times Days over an average month): above 1
+	// the plan carried more than it cost at list price.
 	// It counts only usage TokenOps saw, so it is a floor. nil when the
 	// usage or the fee is not priced.
 	ValueMultiple  *float64        `json:"value_multiple,omitempty"`
@@ -314,12 +315,13 @@ type ReplayInput struct {
 	// Current is the plan in force now, priced; Candidates its family.
 	Current    Tier
 	Candidates []Tier
-	// ListValueUSD is the plan-covered usage at API list price over the
-	// period, when ListValueKnown. UnpricedRequests counts requests with
-	// no rate, which the value leaves out.
-	ListValueUSD     float64
-	ListValueKnown   bool
-	UnpricedRequests int
+	// ListValue prices the plan-covered usage in [from, to] at API list
+	// price and counts the requests with no rate, which the value leaves
+	// out; nil when there is no rate card. The replay asks it for the days
+	// it prices: those the readings cover, so the API and overflow options
+	// and the value multiple read the same demand the tiers are replayed
+	// on, or the whole period when there are no readings.
+	ListValue func(from, to time.Time) (usd float64, unpriced int)
 	// EarlyResets are the vendor's early resets of this provider's windows
 	// in the period (EarlyResetsIn). A lockout one ended is blocked only
 	// until it, not until the window's scheduled reset.
@@ -591,7 +593,10 @@ func Replay(in ReplayInput) Advice {
 		a.Days = 0.1
 	}
 	perMonth := averageMonthDays / a.Days
-	setListValue(&a, in)
+	// The value is priced over the days the readings cover, the demand
+	// the tiers are replayed on, so every option reads the same days.
+	v := valueOver(in, first)
+	setListValue(&a, v, in.Current.MonthlyUSD)
 
 	candidates := in.Candidates
 	if !hasTier(candidates, in.Current.Name) {
@@ -610,20 +615,20 @@ func Replay(in ReplayInput) Advice {
 		}
 		a.Options = append(a.Options, o)
 	}
-	if in.ListValueKnown {
+	if v.known {
 		for _, t := range candidates {
 			s := sims[t.Name]
 			if s.lockouts == 0 || t.MonthlyUSD <= 0 {
 				continue
 			}
-			metered := round2(s.overflowShare * in.ListValueUSD * perMonth)
+			metered := round2(s.overflowShare * v.usd * perMonth)
 			o := Option{Kind: OptionPlanOverflow, Plan: t.Name, Display: t.Display + " + metered overflow",
 				FeeUSD: t.MonthlyUSD, MeteredUSD: &metered, PriceSource: t.PriceSource,
 				MonthlyUSD: ptrFloat(round2(t.MonthlyUSD + metered))}
 			o.PeakPct, o.PeakWindow = ptrFloat(s.peakPct), s.peakWindow
 			a.Options = append(a.Options, o)
 		}
-		metered := round2(in.ListValueUSD * perMonth)
+		metered := round2(v.usd * perMonth)
 		a.Options = append(a.Options, Option{Kind: OptionAPI, Display: "API at list price (no subscription)",
 			MeteredUSD: &metered, MonthlyUSD: ptrFloat(metered), PriceSource: "list"})
 	}
@@ -636,7 +641,7 @@ func Replay(in ReplayInput) Advice {
 		}
 	}
 	a.Confidence = confidence(in, a.Days, ws)
-	a.Caveats = caveats(in, cur, candidates)
+	a.Caveats = caveats(in, cur, candidates, v)
 	for _, l := range in.Observed {
 		a.Caveats = append(a.Caveats, "Uses the limit your own windows show, not the catalog's: "+l.Words()+
 			"; `tokenops plan observed reset` goes back to the catalog")
@@ -650,16 +655,34 @@ func Replay(in ReplayInput) Advice {
 	return a
 }
 
-// setListValue records the period's list value on a and, with the fee
-// of the plan in force, the value multiple over a.Days.
-func setListValue(a *Advice, in ReplayInput) {
-	if !in.ListValueKnown {
+// listValue is the plan-covered usage at API list price over the days a
+// replay prices, and how many requests had no rate.
+type listValue struct {
+	usd      float64
+	unpriced int
+	known    bool
+}
+
+// valueOver prices the plan-covered usage from from to the period's end;
+// unknown when there is no rate card.
+func valueOver(in ReplayInput, from time.Time) listValue {
+	if in.ListValue == nil {
+		return listValue{}
+	}
+	usd, unpriced := in.ListValue(from, in.Until)
+	return listValue{usd: usd, unpriced: unpriced, known: true}
+}
+
+// setListValue records the list value on a and, with the monthly fee of
+// the plan in force, the value multiple over a.Days, the days it was
+// priced over.
+func setListValue(a *Advice, v listValue, monthlyFee float64) {
+	if !v.known {
 		return
 	}
-	v := round2(in.ListValueUSD)
-	a.ListValueUSD = &v
-	if fee := in.Current.MonthlyUSD * a.Days / averageMonthDays; fee > 0 {
-		a.ValueMultiple = ptrFloat(round2(in.ListValueUSD / fee))
+	a.ListValueUSD = ptrFloat(round2(v.usd))
+	if fee := monthlyFee * a.Days / averageMonthDays; fee > 0 {
+		a.ValueMultiple = ptrFloat(round2(v.usd / fee))
 	}
 }
 
@@ -668,14 +691,15 @@ func setListValue(a *Advice, in ReplayInput) {
 // usage at API list price, over the whole period, at low confidence. How
 // often any tier would have run out is unknown, so no tier is compared.
 func feeAgainstAPI(a Advice, in ReplayInput) Advice {
-	if !in.ListValueKnown || in.Current.MonthlyUSD <= 0 || !in.Until.After(in.Since) {
+	if in.ListValue == nil || in.Current.MonthlyUSD <= 0 || !in.Until.After(in.Since) {
 		return a
 	}
 	a.Days = math.Round(in.Until.Sub(in.Since).Hours()/24*10) / 10
-	setListValue(&a, in)
+	v := valueOver(in, in.Since)
+	setListValue(&a, v, in.Current.MonthlyUSD)
 	perMonth := averageMonthDays / a.Days
 	fee := round2(in.Current.MonthlyUSD)
-	metered := round2(in.ListValueUSD * perMonth)
+	metered := round2(v.usd * perMonth)
 	a.Options = []Option{
 		{Kind: OptionPlan, Plan: in.Current.Name, Display: in.Current.Display, Current: true,
 			FeeUSD: in.Current.MonthlyUSD, MonthlyUSD: ptrFloat(fee), SavingsUSD: ptrFloat(0), PriceSource: in.Current.PriceSource},
@@ -684,8 +708,8 @@ func feeAgainstAPI(a Advice, in ReplayInput) Advice {
 	}
 	a.Caveats = append(a.Caveats, "Only the fee is weighed against your usage at API list price; "+
 		"usage TokenOps does not see (a web chat, another machine) is not in it.")
-	if in.UnpricedRequests > 0 {
-		a.Caveats = append(a.Caveats, fmt.Sprintf("%d request(s) used models with no API rate, so the API figure understates them.", in.UnpricedRequests))
+	if v.unpriced > 0 {
+		a.Caveats = append(a.Caveats, fmt.Sprintf("%d request(s) used models with no API rate, so the API figure understates them.", v.unpriced))
 	}
 	r := recommend(a.Options, &a.Options[0], perMonth, nil)
 	if r == nil {
@@ -765,7 +789,7 @@ func baseAllowanceNote(provider, base string) string {
 	return base + "'s own allowance is unverified (the vendor no longer publishes it)"
 }
 
-func caveats(in ReplayInput, cur *Option, candidates []Tier) []string {
+func caveats(in ReplayInput, cur *Option, candidates []Tier, v listValue) []string {
 	var out []string
 	var derived []string
 	base := ""
@@ -794,11 +818,11 @@ func caveats(in ReplayInput, cur *Option, candidates []Tier) []string {
 		out = append(out, fmt.Sprintf("You ran out %d time(s) on %s: work you could not do then left no readings, "+
 			"so the larger tiers' figures are a floor.", cur.Lockouts, cur.Display))
 	}
-	if in.ListValueKnown {
+	if v.known {
 		out = append(out, "Overflow and API costs price the plan-covered usage at API list price; "+
 			"usage already billed per token is the same under every option and is left out.")
-		if in.UnpricedRequests > 0 {
-			out = append(out, fmt.Sprintf("%d request(s) used models with no API rate, so the metered figures understate them.", in.UnpricedRequests))
+		if v.unpriced > 0 {
+			out = append(out, fmt.Sprintf("%d request(s) used models with no API rate, so the metered figures understate them.", v.unpriced))
 		}
 	} else {
 		out = append(out, "No rate card to price the usage at API rates, so the overflow and API options are left out.")
