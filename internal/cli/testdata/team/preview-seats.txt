@@ -1,0 +1,22 @@
+
+Sent with the buckets (upload schema 6):
+
+Plans bound: 2.
+PROVIDER   PLAN        SINCE       SHARED
+anthropic  claude-max  2026-09-01  no
+openai     gpt-plus    —           yes
+
+Plan-covered usage at API list price: 2 rows.
+         DAY   PROVIDER        PLAN   VALUE  UNPRICED TURNS
+  2026-11-12  anthropic  claude-max  $12.50               2
+  2026-11-13  anthropic  claude-max   $0.00               0
+
+Plan advice options for anthropic ($250.00 at API list price over 28 days):
+OPTION  PLAN        PER MONTH  LOCKOUTS  BLOCKED MIN  PEAK
+plan    claude-pro  $20.00     0         0            75%
+plan    claude-max  $100.00    0         0            —
+api     —           $271.79    0         0            —
+
+Each plan's longest window, projected to its reset (no 5-hour window, no time of day): 1 rows.
+PROVIDER   WINDOW  USED  AT RESET  RUNS OUT  SHORT BY  RESETS ON   BASIS
+anthropic  weekly  61%   112%      yes       ≈12h      2026-11-16  average

@@ -45,6 +45,11 @@ type TeamConfig struct {
 	// StatePath overrides where the enrolment is kept, default
 	// ~/.tokenops/team.json.
 	StatePath string `yaml:"state_path,omitempty"`
+	// SharedPlans names the providers whose subscription this member
+	// shares with someone else, such as one account two people use. The
+	// upload says so beside the plan (a yes or no, never who), so the team
+	// view does not count one subscription as two seats. Default none.
+	SharedPlans []string `yaml:"shared_plans,omitempty"`
 }
 
 // UploadsEnabled reports whether uploads may run once joined.

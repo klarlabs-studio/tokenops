@@ -24,35 +24,43 @@ type ResetProjection struct {
 }
 
 // LongestProjection is the projection at the reset of the longest of ws
-// that has a current forecast: a stale reading, a window whose reset has
-// passed and a limit of unknown kind are passed over. Of two windows of
-// that length, it is the one projected fullest. nil when none has a
-// forecast.
+// that has a current forecast (LongestWindow). nil when none has one.
 func LongestProjection(ws []VendorWindow, now time.Time) *ResetProjection {
-	var best *ResetProjection
-	var bestLen time.Duration
+	w, ok := LongestWindow(ws, now)
+	if !ok {
+		return nil
+	}
+	f := w.Forecast(now)
+	pct, projected := ProjectAtReset(w, now)
+	p := &ResetProjection{Window: w.Name, UsedPct: w.UsedPct, ResetsAt: w.ResetsAt, TooEarly: !projected, Basis: f.Basis}
+	if projected {
+		p.AtResetPct = ptrFloat(math.Round(pct))
+		p.RunsOut = !f.LastsToReset
+	}
+	return p
+}
+
+// LongestWindow is the longest of ws that has a current forecast: a stale
+// reading, a window whose reset has passed and a limit of unknown kind
+// are passed over. Of two windows of that length, it is the one projected
+// fullest, a window too early to project counting below any projection.
+// ok is false when none has a forecast.
+func LongestWindow(ws []VendorWindow, now time.Time) (VendorWindow, bool) {
+	var best VendorWindow
+	var found bool
 	var bestPct float64
 	for _, w := range ws {
-		if w.Stale || w.Lapsed || w.Name == OtherLimit {
-			continue
-		}
-		f := w.Forecast(now)
-		if f == nil {
+		if w.Stale || w.Lapsed || w.Name == OtherLimit || w.Forecast(now) == nil {
 			continue
 		}
 		pct, ok := ProjectAtReset(w, now)
 		if !ok {
 			pct = -1 // too early: below any projection
 		}
-		if best != nil && (w.Duration < bestLen || (w.Duration == bestLen && pct <= bestPct)) {
+		if found && (w.Duration < best.Duration || (w.Duration == best.Duration && pct <= bestPct)) {
 			continue
 		}
-		p := &ResetProjection{Window: w.Name, UsedPct: w.UsedPct, ResetsAt: w.ResetsAt, TooEarly: !ok, Basis: f.Basis}
-		if ok {
-			p.AtResetPct = ptrFloat(math.Round(pct))
-			p.RunsOut = !f.LastsToReset
-		}
-		best, bestLen, bestPct = p, w.Duration, pct
+		best, found, bestPct = w, true, pct
 	}
-	return best
+	return best, found
 }

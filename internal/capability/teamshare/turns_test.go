@@ -92,7 +92,7 @@ func TestUploadTimesEachPart(t *testing.T) {
 	if _, notes := Build(context.Background(), spendDeps(), opts, now); len(notes.All()) > 0 {
 		t.Fatalf("notes: %v", notes.All())
 	}
-	want := []string{"transcripts", "turns", "repositories", "plan days", "plan advice", "waste", "units of work", "vendor cost"}
+	want := []string{"transcripts", "turns", "repositories", "plan days", "plan advice", "plan windows", "waste", "units of work", "vendor cost"}
 	if !slices.Equal(parts, want) {
 		t.Errorf("parts timed = %q, want %q", parts, want)
 	}

@@ -1,6 +1,6 @@
 # ADR 0012 — The team plane: hosted, derived figures only, aggregate by default
 
-- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*; amended 2026-11-10: an upload with a part unread is not sent, see *An upload is sent whole* under *Upload schema 2*; amended 2026-11-15: upload schema 5 (what was prevented, per finished week and mechanism), see *Upload schema 5*.
+- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*; amended 2026-11-10: an upload with a part unread is not sent, see *An upload is sent whole* under *Upload schema 2*; amended 2026-11-15: upload schema 5 (what was prevented, per finished week and mechanism), see *Upload schema 5*; amended 2026-11-16: upload schema 6 (seat value), see *Upload schema 6*.
 - **Date:** 2026-10-08
 - **Deciders:** TokenOps maintainers
 - **Related:** issue #250, ADR 0004 (local-first; no BI product), ADR 0010 §5 (the API's privacy line)
@@ -311,6 +311,65 @@ added to the prevented rows before any server accepted schema 5, so no
 server has to take a field it did not expect. It is the third figure a
 prevented row carries, and the walk of the upload type requires each
 such figure to state its bound.
+
+## Upload schema 6 (amended 2026-11-16)
+
+A seat is a member, a provider and the catalog plan in force. To say
+whether a seat is worth its fee, and whether its week will run out or reset
+mostly unused, the team needs four things schema 5 does not carry. Each is
+a figure the member's own `tokenops plan advise` already shows them, so the
+team view adds nothing a person cannot see about themselves.
+
+- **`plan_days[].plan_value_usd`** (optional, 0 to 10,000,000) and
+  **`plan_unpriced_turns`** (0 or more, only beside a value): the day's
+  plan-covered turns at API list price and the turns with no rate, the same
+  figure the plan advice's list value sums (`plans.ListValue`). It replaces
+  an approximation from the spend rows, which is wrong wherever the bill is
+  not at list price and is not split by plan.
+- **`plan_advice[].list_value_usd`** and **`options[]`**: the replay's
+  list value and every option it priced, each `{kind, plan, monthly_usd,
+  lockouts, blocked_minutes, peak_pct}`, at most 12 (a family's tiers, each
+  with metered overflow, and the API). Comparing plan mixes across an
+  organisation needs each seat's cost and lockouts under every candidate,
+  not only under the recommended one. The kind is the existing enumeration
+  and the plan a catalog plan of the advice's provider.
+- **`plan_bindings[]`**, replaced whole with each upload: provider, catalog
+  plan, `since` (the UTC date the plan history has the plan in force from,
+  absent when it does not say) and `shared`. A plan day is sent only when
+  something was measured and an advice only when it recommends something,
+  so a seat nobody used, the clearest case for cancelling, would otherwise
+  not be seen at all.
+- **`plan_windows[]`**, replaced whole with each upload: one row per
+  provider, for the plan's longest window, and only when that is weekly
+  (`monthly` is reserved for a plan with a monthly allowance): `used_pct`
+  and `projected_pct_at_reset` (0 to 999) in whole points, `runs_out`,
+  `short_hours` (how long before the reset it runs out, in 6-hour steps,
+  at most 168), `resets_on` (a UTC date), `basis` (`average` or `recent`)
+  and `too_early`. It is the projection the member's status line and
+  `plan advise` show (`plans.ProjectAtReset`), computed on the machine; the
+  server does not forecast.
+
+**Why 5-hour windows and timestamps stay home.** A 5-hour window starts
+with the first request, so its reset says when someone started working,
+and a live "locked out now" is monitoring a person, not fitting a plan.
+No 5-hour window crosses, and no instant: the reset is a date, no finer
+than the plan days already are, and the run-out is a shortfall in 6-hour
+steps, not a time.
+
+**The shared flag.** One subscription that two members use uploads the
+same vendor meter twice, and no account identifier is uploaded, by design,
+so the server cannot tell. `team.shared_plans` lets a member say so; the
+upload carries a boolean, never who it is shared with. It defaults to false.
+
+New strings cross, each constrained and listed in `TestUploadHasNoFreeText`:
+the option's kind (enumeration) and plan (catalog), the binding's provider
+(registry), plan (catalog) and since (a date not after the upload), and the
+window's provider (registry), kind and basis (enumerations) and reset (a
+date within the window's length of the upload). Every new figure states
+its bound in the same test and is checked in `Validate`. A server whose
+`max_schema` is below 6 gets schema 5 with all four left out, and the
+server refuses a schema 5 upload that carries any of them. Schema 6 may
+gain further derived fields before any release carries it.
 
 
 

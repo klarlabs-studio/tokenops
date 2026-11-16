@@ -3,6 +3,7 @@ package teamwire
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -46,9 +47,20 @@ var constrainedStrings = map[string]string{
 	"Upload.PreventedWeeks":   "DayLayout date, a Monday: the UTC week",
 	"PreventedWeek.Week":      "DayLayout date, a Monday: the UTC week",
 	"PreventedWeek.Mechanism": "ValidMechanism: enumeration",
+	// Schema 6 (ADR 0012, Upload schema 6).
+	"AdviceOption.Kind":    "AdviceKinds: enumeration",
+	"AdviceOption.Plan":    "ValidPlan: the plan catalog of the advice's provider, or empty for the API",
+	"PlanBinding.Provider": "ValidProvider: the provider registry",
+	"PlanBinding.Plan":     "ValidPlan: the plan catalog",
+	"PlanBinding.Since":    "DayLayout date, not after computed_at, or empty",
+	"PlanWindow.Provider":  "ValidProvider: the provider registry",
+	"PlanWindow.Window":    "weekly or monthly: enumeration, never a 5-hour window",
+	"PlanWindow.ResetsOn":  "DayLayout date within the window's length of computed_at: no instant",
+	"PlanWindow.Basis":     "average or recent: enumeration",
 }
 
-// boundedFigures is every figure a schema 5 prevented row carries, each
+// boundedFigures is every figure a schema 5 prevented row and the schema 6
+// additions carry, each
 // with the bound the server enforces. A figure added to PreventedWeek is a
 // change to what crosses the boundary: it needs a bound here and a check in
 // Validate, the same as a string does above.
@@ -57,7 +69,26 @@ var boundedFigures = map[string]string{
 	"PreventedWeek.Tokens":         "0 or more, when known",
 	"PreventedWeek.BlockedMinutes": "0 to MaxBlockedMinutes (7x1440), lockout rows only; absent when 0",
 	"PreventedWeek.USD":            "0 or more, absent when not priced",
+	// Schema 6 (ADR 0012, Upload schema 6).
+	"PlanDay.PlanValueUSD":           "0 to 1e7, absent when not priced",
+	"PlanDay.PlanUnpricedTurns":      "0 or more, only beside plan_value_usd",
+	"PlanAdvice.ListValueUSD":        "0 to 1e7, absent when not priced",
+	"AdviceOption.MonthlyUSD":        "0 to 1e7, absent when the fee is unknown",
+	"AdviceOption.Lockouts":          "0 or more",
+	"AdviceOption.BlockedMinutes":    "0 to MaxAdviceDays x 1440",
+	"AdviceOption.PeakPct":           "0 to MaxPeakPct (10000), absent when not measured",
+	"PlanBinding.Shared":             "a boolean the member sets",
+	"PlanWindow.UsedPct":             "0 to 100, whole points",
+	"PlanWindow.ProjectedPctAtReset": "0 to 999, whole points; 0 when too early",
+	"PlanWindow.RunsOut":             "a boolean, true only at 100 or more",
+	"PlanWindow.ShortHours":          "0 to 168 in steps of 6, only when it runs out",
+	"PlanWindow.TooEarly":            "a boolean; no projection with it",
 }
+
+// boundedPrefixes are the types and fields from schema 5 on whose figures
+// must each state a bound in boundedFigures.
+var boundedPrefixes = []string{"PreventedWeek.", "AdviceOption.", "PlanBinding.", "PlanWindow.",
+	"PlanDay.PlanValueUSD", "PlanDay.PlanUnpricedTurns", "PlanAdvice.ListValueUSD"}
 
 // numericKinds are the field kinds that hold figures, not text.
 var numericKinds = map[reflect.Kind]bool{
@@ -81,11 +112,11 @@ func TestUploadHasNoFreeText(t *testing.T) {
 			case ft == reflect.TypeOf(time.Time{}):
 			case numericKinds[ft.Kind()], ft.Kind() == reflect.Pointer && numericKinds[ft.Elem().Kind()]:
 				// A figure, or an optional one absent when it could not be
-				// measured. Schema 5's rows state their bounds.
-				if strings.HasPrefix(name, "PreventedWeek.") {
+				// measured. Schema 5's and 6's figures state their bounds.
+				if slices.ContainsFunc(boundedPrefixes, func(p string) bool { return strings.HasPrefix(name, p) }) {
 					if _, ok := boundedFigures[name]; !ok {
 						t.Errorf("%s is a figure with no stated bound; list it in boundedFigures "+
-							"and check it in Validate (ADR 0012, Upload schema 5)", name)
+							"and check it in Validate (ADR 0012, Upload schemas 5 and 6)", name)
 					}
 				}
 			case ft.Kind() == reflect.String, ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.String:

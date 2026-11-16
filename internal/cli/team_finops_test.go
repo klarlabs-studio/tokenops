@@ -97,3 +97,53 @@ func TestWriteMeNamesPersonalRetention(t *testing.T) {
 		})
 	}
 }
+
+// The seat value a preview shows: the plans bound, an idle one included,
+// each day's value, every option the advice priced and where the week is
+// headed, pinned by a golden file.
+func TestWriteSeatsGolden(t *testing.T) {
+	value, unpriced, list, pro, maxPlan, api, peak := 12.5, 0.0, 250.0, 20.0, 100.0, 271.79, 75.0
+	u := teamwire.Upload{
+		PlanDays: []teamwire.PlanDay{
+			{Day: "2026-11-12", Provider: "anthropic", Plan: "claude-max", PlanValueUSD: &value, PlanUnpricedTurns: 2},
+			{Day: "2026-11-13", Provider: "anthropic", Plan: "claude-max", PlanValueUSD: &unpriced},
+			// Not priced: no rate card, so not shown.
+			{Day: "2026-11-13", Provider: "zai", Plan: "pay-as-you-go"},
+		},
+		PlanAdvice: []teamwire.PlanAdvice{{Provider: "anthropic", Plan: "claude-max", Verdict: "switch", Kind: "plan",
+			RecommendedPlan: "claude-pro", MonthlyDeltaUSD: 80, Confidence: "medium", Days: 28, ListValueUSD: &list,
+			Options: []teamwire.AdviceOption{
+				{Kind: "plan", Plan: "claude-pro", MonthlyUSD: &pro, PeakPct: &peak},
+				{Kind: "plan", Plan: "claude-max", MonthlyUSD: &maxPlan},
+				{Kind: "api", MonthlyUSD: &api, Lockouts: 0},
+			}}},
+		PlanBindings: []teamwire.PlanBinding{
+			{Provider: "anthropic", Plan: "claude-max", Since: "2026-09-01"},
+			{Provider: "openai", Plan: "gpt-plus", Shared: true},
+		},
+		PlanWindows: []teamwire.PlanWindow{{Provider: "anthropic", Window: teamwire.WindowWeekly, UsedPct: 61,
+			ProjectedPctAtReset: 112, RunsOut: true, ShortHours: 12, ResetsOn: "2026-11-16", Basis: teamwire.BasisAverage}},
+	}
+	var out bytes.Buffer
+	writeSeats(&out, u, seatsNote(true, teamwire.SchemaSeats))
+	assertGolden(t, "team/preview-seats.txt", out.String())
+
+	for _, c := range []struct {
+		joined bool
+		schema int
+		want   string
+	}{
+		{false, 0, "Sent only to a team server that accepts upload schema 6"},
+		{true, teamwire.SchemaPrevented, "Withheld: the team server does not accept upload schema 6 yet"},
+		{true, teamwire.SchemaSeats, "Sent with the buckets (upload schema 6)"},
+	} {
+		if got := seatsNote(c.joined, c.schema); !strings.Contains(got, c.want) {
+			t.Errorf("joined %v, schema %d: note %q, want %q", c.joined, c.schema, got, c.want)
+		}
+	}
+	out.Reset()
+	writeSeats(&out, teamwire.Upload{}, seatsNote(true, teamwire.SchemaSeats))
+	if !strings.Contains(out.String(), "No plans bound") {
+		t.Errorf("empty preview = %q", out.String())
+	}
+}
