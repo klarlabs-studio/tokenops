@@ -545,3 +545,89 @@ func TestDerivedCaveatDescribesTheProvidersBase(t *testing.T) {
 		}
 	}
 }
+
+// With no window readings but the usage priced, the replay still weighs
+// the fee against the API at list price, at low confidence: lockouts are
+// unknown, so no tier is compared.
+func TestReplayWithoutReadingsWeighsTheFeeAgainstTheAPI(t *testing.T) {
+	until := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	since := until.Add(-30 * 24 * time.Hour)
+	_, five, _ := maxTiers()
+	for _, tc := range []struct {
+		name     string
+		value    float64
+		verdict  string
+		kind     string
+		material bool
+		multiple float64
+	}{
+		// $15 of usage in 30 days is $15.22 a month against a $100 fee.
+		{"barely used", 15, VerdictSwitch, OptionAPI, true, 0.15},
+		// $95 a month at list price saves $4.6: not worth a switch.
+		{"close to the fee", 95 * 30 / averageMonthDays, VerdictStay, OptionPlan, false, 0.95},
+		{"worth the fee", 400, VerdictStay, OptionPlan, false, 4.06},
+	} {
+		a := Replay(ReplayInput{Provider: "anthropic", Since: since, Until: until, Current: five,
+			Candidates: []Tier{five}, ListValueUSD: tc.value, ListValueKnown: true})
+		r := a.Recommendation
+		if r == nil || r.Verdict != tc.verdict || r.Kind != tc.kind || r.Material != tc.material {
+			t.Errorf("%s: recommendation = %+v", tc.name, r)
+			continue
+		}
+		if a.Confidence != ConfidenceLow || a.WindowsMeasured != 0 || a.Days != 30 {
+			t.Errorf("%s: confidence %s, windows %d, days %v", tc.name, a.Confidence, a.WindowsMeasured, a.Days)
+		}
+		if len(a.Options) != 2 || optionFor(t, a, OptionAPI, "").MonthlyUSD == nil {
+			t.Errorf("%s: options = %+v, want the plan and the API only", tc.name, a.Options)
+		}
+		if a.ValueMultiple == nil || math.Abs(*a.ValueMultiple-tc.multiple) > 0.01 {
+			t.Errorf("%s: value multiple = %v, want %.2f", tc.name, a.ValueMultiple, tc.multiple)
+		}
+		if !strings.Contains(r.Summary, "no window readings") || strings.Contains(r.Summary, "fits") {
+			t.Errorf("%s: summary = %q", tc.name, r.Summary)
+		}
+		if a.WorthSaying() {
+			t.Errorf("%s: a low-confidence answer is not for an ambient surface", tc.name)
+		}
+	}
+	// Unpriced usage, or a fee unknown, still gives nothing to weigh.
+	a := Replay(ReplayInput{Provider: "anthropic", Since: since, Until: until, Current: five, Candidates: []Tier{five}})
+	if a.Recommendation != nil || len(a.Options) != 0 {
+		t.Errorf("unpriced: %+v", a)
+	}
+	five.MonthlyUSD = 0
+	a = Replay(ReplayInput{Provider: "anthropic", Since: since, Until: until, Current: five, Candidates: []Tier{five},
+		ListValueUSD: 15, ListValueKnown: true})
+	if a.Recommendation != nil {
+		t.Errorf("no fee: %+v", a.Recommendation)
+	}
+}
+
+// The value multiple is the plan-covered usage at list price over what the
+// plan cost for the same days.
+func TestReplayValueMultiple(t *testing.T) {
+	until := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	since := until.Add(-28 * 24 * time.Hour)
+	pro, five, twenty := maxTiers()
+	rs := make([]QuotaReading, 0, 8)
+	for i := range 4 {
+		reset := since.Add(time.Duration(i+1) * week)
+		rs = append(rs, weekReadings(reset, []time.Duration{24 * time.Hour, 6 * 24 * time.Hour}, []float64{40, 90})...)
+	}
+	in := ReplayInput{
+		Provider: "anthropic", Since: since, Until: until, Readings: rs,
+		FactorAt: func(time.Time, time.Duration) (float64, bool) { return 20, true },
+		Current:  twenty, Candidates: []Tier{pro, five, twenty},
+		ListValueUSD: 400, ListValueKnown: true,
+	}
+	a := Replay(in)
+	// The readings cover 27 days: $400 against $200 x 27/30.44.
+	want := 400 / (200 * 27 / averageMonthDays)
+	if a.ValueMultiple == nil || math.Abs(*a.ValueMultiple-math.Round(want*100)/100) > 1e-9 {
+		t.Errorf("value multiple = %v, want %.2f", a.ValueMultiple, want)
+	}
+	in.ListValueKnown = false
+	if a := Replay(in); a.ValueMultiple != nil {
+		t.Errorf("unpriced value multiple = %v", *a.ValueMultiple)
+	}
+}

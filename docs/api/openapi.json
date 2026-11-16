@@ -4043,6 +4043,9 @@
                             "format": "date-time",
                             "type": "string"
                           },
+                          "value_multiple": {
+                            "type": "number"
+                          },
                           "windows_measured": {
                             "type": "integer"
                           }
@@ -5241,6 +5244,9 @@
                           "until": {
                             "format": "date-time",
                             "type": "string"
+                          },
+                          "value_multiple": {
+                            "type": "number"
                           },
                           "windows_measured": {
                             "type": "integer"
