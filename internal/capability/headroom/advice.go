@@ -189,9 +189,21 @@ func projectLongest(ctx context.Context, r Reader, provider string, envs []*even
 	if days >= vendorWindowDays {
 		events = envelopes(envs)
 	}
+	return plans.LongestProjection(forecastWindows(ctx, r, events, provider, now), now)
+}
+
+// ForecastWindows are provider's plan windows at now with the forecast
+// every surface shows: the last hour's rate where the burn-rate
+// look-backs measured a window, else its average so far.
+func ForecastWindows(ctx context.Context, r Reader, provider string, now time.Time) []plans.VendorWindow {
+	return forecastWindows(ctx, r, r, provider, now)
+}
+
+// forecastWindows reads the windows from events and the look-backs from r.
+func forecastWindows(ctx context.Context, r Reader, events plans.EventReader, provider string, now time.Time) []plans.VendorWindow {
 	windows := plans.VendorWindows(ctx, events, eventschema.Provider(provider), now)
 	applyRecentRate(ctx, r, provider, windows, now)
-	return plans.LongestProjection(windows, now)
+	return windows
 }
 
 // vendorWindowDays is how far back plans.VendorWindows reads.
