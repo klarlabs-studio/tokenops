@@ -483,8 +483,10 @@ readings start later than the period, usage before them is left out.
 
 When no meter read the plan's windows in the period but the usage can be
 priced, the replay cannot compare tiers (how often they would have run out
-is unknown), so it weighs only the fee against the API at list price over the
-whole period, at `low` confidence; the table shows `-` for lockouts.
+is unknown), so it weighs only the fee against the API at list price at
+`low` confidence; the table shows `-` for lockouts. It prices the days of
+the period the event history covers: asked for 60 days with 28 days of
+events stored, it prices those 28 days.
 
 Read it with its confidence label. Max (5x Pro every 5 hours and every
 week) and Ultra (10x Pro every week, no 5-hour limit) are Anthropic's
