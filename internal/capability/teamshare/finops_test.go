@@ -52,6 +52,25 @@ func TestWireVocabulariesMatchTheDomains(t *testing.T) {
 	}
 }
 
+// The seat labels compare tiers by the same allowance multiple the replay
+// scales by, and price them from the same catalog, under every name a
+// plan has had.
+func TestSeatFiguresMatchThePlansDomain(t *testing.T) {
+	for _, name := range plans.Names() {
+		p, _ := plans.Lookup(name)
+		for _, n := range append([]string{name}, p.FormerNames...) {
+			_, want, _ := plans.TierOf(n)
+			if got := teamwire.PlanFactor(n); got != want {
+				t.Errorf("PlanFactor(%q) = %v, the replay's factor %v", n, got, want)
+			}
+			usd, perSeat, ok := teamwire.ListPriceUSD(n)
+			if ok != (p.MonthlyUSD > 0) || usd != p.MonthlyUSD || (ok && perSeat != p.PerSeat) {
+				t.Errorf("ListPriceUSD(%q) = %v %v %v, the catalog %v %v", n, usd, perSeat, ok, p.MonthlyUSD, p.PerSeat)
+			}
+		}
+	}
+}
+
 type eventsReader struct{ envs []*eventschema.Envelope }
 
 func (r eventsReader) ReadEvents(_ context.Context, _ eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
