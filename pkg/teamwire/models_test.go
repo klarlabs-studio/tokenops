@@ -7,9 +7,9 @@ import (
 )
 
 // modelUpload is a valid schema 6 upload whose spend rows are split by
-// model and agent: an Anthropic row over two catalog models and two
-// agents, and an OpenAI row on a model the catalog does not price. The
-// figures are invented.
+// model, agent and effort: an Anthropic row over two catalog models, two
+// agents and two effort levels, and an OpenAI row on a model the catalog
+// does not price with no effort recorded. The figures are invented.
 func modelUpload() Upload {
 	u := seatUpload()
 	u.Spend = []SpendBucket{
@@ -19,12 +19,15 @@ func modelUpload() Upload {
 	}
 	u.SpendModels = []ModelSpend{
 		{Day: "2026-11-12", Repo: "acme/api", Provider: "anthropic", Model: "claude-opus-4-8", Agent: "claude-code",
-			Turns: 3, Tokens: 1000, CostUSD: 0.1, APIEquivalentUSD: 1.0},
+			Effort: "high", Turns: 2, Tokens: 700, CostUSD: 0.06, APIEquivalentUSD: 0.7},
+		{Day: "2026-11-12", Repo: "acme/api", Provider: "anthropic", Model: "claude-opus-4-8", Agent: "claude-code",
+			Effort: "low", Turns: 1, Tokens: 300, CostUSD: 0.04, APIEquivalentUSD: 0.3},
 		{Day: "2026-11-12", Repo: "acme/api", Provider: "anthropic", Model: "claude-opus-4-8", Agent: "opencode",
-			Turns: 1, Tokens: 300, CostUSD: 0.2, APIEquivalentUSD: 0.3},
+			Effort: EffortOther, Turns: 1, Tokens: 300, CostUSD: 0.2, APIEquivalentUSD: 0.3},
 		{Day: "2026-11-12", Repo: "acme/api", Provider: "anthropic", Model: ModelOther, Agent: AgentOther,
-			Turns: 1, Tokens: 200, UnpricedTurns: 1},
-		{Day: "2026-11-13", Repo: RepoNone, Provider: "openai", Model: ModelOther, Agent: "codex", Turns: 2, Tokens: 300},
+			Effort: EffortUnknown, Turns: 1, Tokens: 200, UnpricedTurns: 1},
+		{Day: "2026-11-13", Repo: RepoNone, Provider: "openai", Model: ModelOther, Agent: "codex", Effort: EffortUnknown,
+			Turns: 2, Tokens: 300},
 	}
 	return u
 }
@@ -47,18 +50,21 @@ func TestModelSpendValidate(t *testing.T) {
 		{"a sentence as a model", func(u *Upload) { u.SpendModels[0].Model = "fix the login bug" }, "not a catalog model"},
 		{"an empty model", func(u *Upload) { u.SpendModels[0].Model = "" }, "not a catalog model"},
 		{"an unknown agent", func(u *Upload) { u.SpendModels[0].Agent = "my-editor" }, "not an agent"},
-		{"an unknown provider", func(u *Upload) { u.SpendModels[3].Provider = "acme" }, "provider"},
+		{"an unknown provider", func(u *Upload) { u.SpendModels[4].Provider = "acme" }, "provider"},
 		{"a path as a repo", func(u *Upload) { u.SpendModels[0].Repo = "/Users/alice/x" }, "repo"},
-		{"a day not covered", func(u *Upload) { u.SpendModels[3].Day = "2026-11-01" }, "not in days"},
+		{"a day not covered", func(u *Upload) { u.SpendModels[4].Day = "2026-11-01" }, "not in days"},
 		{"negative tokens", func(u *Upload) { u.SpendModels[0].Tokens = -1 }, "negative"},
-		{"unpriced past turns", func(u *Upload) { u.SpendModels[2].UnpricedTurns = 2 }, "unpriced_turns"},
-		{"a row twice", func(u *Upload) { u.SpendModels[1].Agent = "claude-code" }, "appears twice"},
+		{"unpriced past turns", func(u *Upload) { u.SpendModels[3].UnpricedTurns = 2 }, "unpriced_turns"},
+		{"an effort outside the set", func(u *Upload) { u.SpendModels[0].Effort = "turbo" }, "not an effort"},
+		{"a client's raw label", func(u *Upload) { u.SpendModels[0].Effort = "High " }, "not an effort"},
+		{"no effort", func(u *Upload) { u.SpendModels[0].Effort = "" }, "not an effort"},
+		{"a row twice", func(u *Upload) { u.SpendModels[1].Effort = "high" }, "appears twice"},
 		{"too many rows", func(u *Upload) {
 			u.SpendModels = make([]ModelSpend, MaxModelSpend+1)
 		}, "at most"},
 		{"rows that do not add up", func(u *Upload) { u.SpendModels[0].Turns = 4 }, "do not add up"},
 		{"dollars that do not add up", func(u *Upload) { u.SpendModels[0].APIEquivalentUSD = 1.01 }, "do not add up"},
-		{"a spend row left unsplit", func(u *Upload) { u.SpendModels = u.SpendModels[:3] }, "no rows for spend"},
+		{"a spend row left unsplit", func(u *Upload) { u.SpendModels = u.SpendModels[:4] }, "no rows for spend"},
 		{"a split with no spend row", func(u *Upload) { u.Spend = u.Spend[:1] }, "has no spend row"},
 	}
 	for _, tt := range tests {
@@ -119,7 +125,7 @@ func TestModelSpendJSONNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := `{"day":"2026-11-12","repo":"acme/api","provider":"anthropic","model":"claude-opus-4-8","agent":"claude-code",` +
-		`"turns":3,"tokens":1000,"cost_usd":0.1,"api_equivalent_usd":1,"unpriced_turns":0}`
+		`"effort":"high","turns":2,"tokens":700,"cost_usd":0.06,"api_equivalent_usd":0.7,"unpriced_turns":0}`
 	if b != want {
 		t.Errorf("got  %s\nwant %s", b, want)
 	}
@@ -142,7 +148,50 @@ func TestForServerDropsSpendModelsBelowSchema6(t *testing.T) {
 	if full.SpendModels == nil {
 		t.Error("ForServer changed the upload it was given")
 	}
-	if got := full.ForServer(SchemaSeats); len(got.SpendModels) != 4 {
+	if got := full.ForServer(SchemaSeats); len(got.SpendModels) != 5 {
 		t.Errorf("a schema 6 server gets the split whole: %+v", got.SpendModels)
+	}
+}
+
+// Each client's raw effort label crosses only as a level of the closed
+// set, "other" for a label outside it, or "unknown" when none was
+// recorded.
+func TestEffortLevel(t *testing.T) {
+	for _, c := range []struct{ raw, want string }{
+		{"none", "none"},
+		{"minimal", "minimal"},
+		{"low", "low"},
+		{"medium", "medium"},
+		{"high", "high"},
+		{"xhigh", "xhigh"},
+		{"max", "max"},
+		{"High", "high"},       // Claude Code and opencode labels, as typed
+		{" MEDIUM ", "medium"}, // Codex's turn_context, padded
+		{"x-high", "xhigh"},
+		{"extra-high", "xhigh"},
+		{"extra_high", "xhigh"},
+		{"maximum", "max"},
+		{"med", "medium"},
+		{"turbo", EffortOther},             // an opencode variant of the operator's own naming
+		{"my secret project", EffortOther}, // free text never crosses
+		{"ultrathink", EffortOther},
+		{"", EffortUnknown},
+		{"   ", EffortUnknown},
+	} {
+		got := EffortLevel(c.raw)
+		if got != c.want {
+			t.Errorf("EffortLevel(%q) = %q; want %q", c.raw, got, c.want)
+		}
+		if !ValidEffort(got) {
+			t.Errorf("EffortLevel(%q) = %q is not a valid effort", c.raw, got)
+		}
+	}
+	for _, e := range Efforts {
+		if EffortLevel(e) != e {
+			t.Errorf("EffortLevel(%q) = %q; every level is its own normal form", e, EffortLevel(e))
+		}
+	}
+	if ValidEffort("") || ValidEffort("High") {
+		t.Error("ValidEffort accepts a label outside the set")
 	}
 }
