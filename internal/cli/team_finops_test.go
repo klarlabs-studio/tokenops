@@ -153,9 +153,9 @@ func TestWriteSeatsGolden(t *testing.T) {
 func TestWriteModelSpendGolden(t *testing.T) {
 	u := teamwire.Upload{SpendModels: []teamwire.ModelSpend{
 		{Day: "2026-11-12", Repo: "acme/api", Provider: "anthropic", Model: "claude-opus-4-8", Agent: "claude-code",
-			Turns: 3, Tokens: 1000, CostUSD: 0.1, APIEquivalentUSD: 1.0},
+			Effort: "high", Turns: 3, Tokens: 1000, CostUSD: 0.1, APIEquivalentUSD: 1.0},
 		{Day: "2026-11-12", Repo: "acme/api", Provider: "anthropic", Model: teamwire.ModelOther, Agent: "opencode",
-			Turns: 1, Tokens: 200, UnpricedTurns: 1},
+			Effort: teamwire.EffortUnknown, Turns: 1, Tokens: 200, UnpricedTurns: 1},
 	}}
 	var out bytes.Buffer
 	writeModelSpend(&out, u, seatsNote(true, teamwire.SchemaSeats))
