@@ -219,7 +219,7 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 	// that does not reach schema 6 leaves it out.
 	if opts.Schema >= teamwire.SchemaSeats && u.Schema == teamwire.SchemaPrevented {
 		u.Schema = teamwire.SchemaSeats
-		addModelSpend(&u, turns, repoOf, &notes)
+		addModelSpend(&u, turns, units, repoOf, &notes)
 	} else {
 		u = u.ForServer(u.Schema)
 	}
