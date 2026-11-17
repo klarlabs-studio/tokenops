@@ -44,7 +44,7 @@ func TestAdviseReplaysTheBoundPlan(t *testing.T) {
 	// week, which Pro would have carried.
 	history := plans.History{{Provider: "anthropic", Plan: "claude-max", From: now.Add(-90 * 24 * time.Hour), Price: 90, Currency: "USD"}}
 	deps := headroom.Deps{
-		Config:      cfgWith(map[string]string{"anthropic": "claude-max", "openai": "gpt-pro"}),
+		Config:      cfgWith(map[string]string{"anthropic": "claude-max", "openai": "pay-as-you-go"}),
 		Reader:      &eventsReader{envs: adviceEvents(now, "15")},
 		Price:       tenDollars,
 		PlanHistory: func() (plans.History, error) { return history, nil },
@@ -79,8 +79,8 @@ func TestAdviseReplaysTheBoundPlan(t *testing.T) {
 	if !a.WorthSaying() {
 		t.Error("a $70 saving with no lockouts is worth a glance finding")
 	}
-	// A plan with no modelled multiple is named, not dropped.
-	if len(res.Notes) != 1 || !strings.Contains(res.Notes[0], "gpt-pro") {
+	// A plan billed per token has no fee to weigh: it is named, not dropped.
+	if len(res.Notes) != 1 || !strings.Contains(res.Notes[0], "pay-as-you-go") {
 		t.Errorf("notes = %q", res.Notes)
 	}
 	// Advice never rebinds: the config is untouched.
@@ -400,5 +400,68 @@ func TestAdviseProjectsTheWeekToItsReset(t *testing.T) {
 	res, err = headroom.Advise(context.Background(), deps, headroom.AdviceQuery{}, now)
 	if err != nil || res.Providers[0].AtReset != nil {
 		t.Errorf("unasked: %+v, %v", res.Providers[0].AtReset, err)
+	}
+}
+
+// A plan whose tiers state no usage multiple of each other (Cursor,
+// Copilot, ChatGPT Pro with no tier named) is not replayed but valued: its
+// plan-covered usage at the underlying models' API list price and its
+// multiple of the fee, at the operator's own price where one is recorded,
+// with a recommendation to stay.
+func TestAdviseValuesPlansItCannotReplay(t *testing.T) {
+	now := time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)
+	since := now.Add(-30 * 24 * time.Hour)
+	envs := make([]*eventschema.Envelope, 0, 60)
+	for i := range 30 {
+		at := since.Add(time.Duration(i)*24*time.Hour + time.Hour)
+		for _, p := range []eventschema.Provider{eventschema.ProviderCursor, eventschema.ProviderGitHub} {
+			envs = append(envs, &eventschema.Envelope{Source: "test", Timestamp: at,
+				Attributes: map[string]string{"granularity": "assistant_turn"},
+				Payload:    &eventschema.PromptEvent{Provider: p, CostSource: eventschema.CostSourcePlanIncluded}})
+		}
+	}
+	history := plans.History{{Provider: "github", Plan: "copilot-business", From: now.Add(-90 * 24 * time.Hour), Price: 30, Currency: "USD"}}
+	deps := headroom.Deps{
+		Config:      cfgWith(map[string]string{"cursor": "cursor-pro", "github": "copilot-business", "openai": "gpt-pro"}),
+		Reader:      &eventsReader{envs: envs},
+		Price:       tenDollars,
+		PlanHistory: func() (plans.History, error) { return history, nil },
+	}
+	res, err := headroom.Advise(context.Background(), deps, headroom.AdviceQuery{}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Notes) != 0 || len(res.Providers) != 3 {
+		t.Fatalf("notes %q, providers %+v", res.Notes, res.Providers)
+	}
+	for _, tc := range []struct {
+		provider, plan string
+		value          float64
+		fee            float64
+		source         string
+	}{
+		{"cursor", "cursor-pro", 300, 20, "list"},
+		{"github", "copilot-business", 300, 30, "yours"},
+		{"openai", "gpt-pro", 0, 0, ""}, // no turns, and no price in the catalog
+	} {
+		var a plans.Advice
+		for _, p := range res.Providers {
+			if p.Provider == tc.provider {
+				a = p
+			}
+		}
+		if !a.ValueOnly || a.Plan != tc.plan || a.ListValueUSD == nil || *a.ListValueUSD != tc.value {
+			t.Errorf("%s: advice = %+v", tc.provider, a)
+			continue
+		}
+		if r := a.Recommendation; r == nil || r.Verdict != plans.VerdictStay || r.Plan != tc.plan {
+			t.Errorf("%s: recommendation = %+v", tc.provider, r)
+		}
+		if len(a.Options) != 1 || a.Options[0].FeeUSD != tc.fee || a.Options[0].PriceSource != tc.source {
+			t.Errorf("%s: options = %+v, want the plan at $%v (%s)", tc.provider, a.Options, tc.fee, tc.source)
+		}
+		if (tc.fee > 0) != (a.ValueMultiple != nil) {
+			t.Errorf("%s: value multiple = %v with a fee of $%v", tc.provider, a.ValueMultiple, tc.fee)
+		}
 	}
 }
