@@ -50,7 +50,8 @@ type AdviceQuery struct {
 }
 
 // AdviceResult is plan right-sizing advice for every bound plan whose tiers
-// TokenOps can replay. It recommends; it never binds or switches a plan.
+// TokenOps can replay, and the value of every other plan with a fee
+// (plans.ValueOnly). It recommends; it never binds or switches a plan.
 type AdviceResult struct {
 	Since     time.Time
 	Until     time.Time
@@ -90,9 +91,11 @@ func (r AdviceResult) Payload() *AdvicePayload {
 
 // Advise replays the last q.Days of each bound plan's windows against the
 // other tiers of its family, metered overflow and the API at list price
-// (plans.Replay). The plan in force at each reading comes from the plan
-// history (ADR 0008), so readings from before a switch are scaled by the
-// plan they were taken on. It reads; it binds nothing.
+// (plans.Replay); a plan whose tiers state no multiple of each other is
+// valued at API list price instead (plans.ValueOnly). The plan in force
+// at each reading comes from the plan history (ADR 0008), so readings from
+// before a switch are scaled by the plan they were taken on. It reads; it
+// binds nothing.
 func Advise(ctx context.Context, d Deps, q AdviceQuery, now time.Time) (AdviceResult, error) {
 	days := q.Days
 	if days == 0 {
@@ -136,13 +139,20 @@ func Advise(ctx context.Context, d Deps, q AdviceQuery, now time.Time) (AdviceRe
 	sort.Strings(providers)
 	for _, provider := range providers {
 		name, _ := plans.ResolveAlias(d.Config.Plans[provider])
-		in, note := replayInput(provider, name, history, envs, d.Price, since, now, observed)
-		if note != "" {
-			res.Notes = append(res.Notes, note)
-			continue
+		var a plans.Advice
+		if tier, ok := plans.ValueTier(name); ok {
+			// No tier to replay against: the plan is valued, not replayed.
+			a = plans.ValueOnly(plans.ReplayInput{Provider: provider, Since: since, Until: now, HistoryFrom: historyFrom,
+				Current: withYourPrice(tier, history, provider, now), ListValue: listValue(envs, provider, d.Price)})
+		} else {
+			in, note := replayInput(provider, name, history, envs, d.Price, since, now, observed)
+			if note != "" {
+				res.Notes = append(res.Notes, note)
+				continue
+			}
+			in.HistoryFrom = historyFrom
+			a = plans.Replay(in)
 		}
-		in.HistoryFrom = historyFrom
-		a := plans.Replay(in)
 		if q.Project {
 			a.AtReset = projectLongest(ctx, d.Reader, provider, envs, days, now)
 		}
@@ -242,13 +252,7 @@ func replayInput(provider, name string, h plans.History, envs []*eventschema.Env
 		if family[i].Name != name {
 			continue
 		}
-		periods := h.Periods(provider, now.Add(-time.Minute), now, name)
-		if len(periods) > 0 {
-			if p, fee := planswitch.PriceOf(periods[len(periods)-1]); fee && p.Source == "yours" && p.Monthly > 0 &&
-				(p.Currency == "" || strings.EqualFold(p.Currency, "USD")) {
-				family[i].MonthlyUSD, family[i].PriceSource = p.Monthly, "yours"
-			}
-		}
+		family[i] = withYourPrice(family[i], h, provider, now)
 		current = family[i]
 	}
 	in := plans.ReplayInput{
@@ -266,12 +270,33 @@ func replayInput(provider, name string, h plans.History, envs []*eventschema.Env
 	}
 	in.EarlyResets = plans.EarlyResetsIn(envs, eventschema.Provider(provider), since, now,
 		func(from, to time.Time) bool { return h.ChangedBetween(provider, from, to) })
-	if price != nil {
-		in.ListValue = func(from, to time.Time) (float64, int) {
-			return plans.ListValue(envs, provider, from, to, price)
-		}
-	}
+	in.ListValue = listValue(envs, provider, price)
 	return in, ""
+}
+
+// withYourPrice is t priced at what the operator said they pay for it in
+// US dollars, by the plan history's newest period, when they said so.
+func withYourPrice(t plans.Tier, h plans.History, provider string, now time.Time) plans.Tier {
+	periods := h.Periods(provider, now.Add(-time.Minute), now, t.Name)
+	if len(periods) == 0 {
+		return t
+	}
+	if p, fee := planswitch.PriceOf(periods[len(periods)-1]); fee && p.Source == "yours" && p.Monthly > 0 &&
+		(p.Currency == "" || strings.EqualFold(p.Currency, "USD")) {
+		t.MonthlyUSD, t.PriceSource = p.Monthly, "yours"
+	}
+	return t
+}
+
+// listValue prices provider's plan-covered usage in a span at API list
+// price; nil without a rate card.
+func listValue(envs []*eventschema.Envelope, provider string, price plans.Pricer) func(from, to time.Time) (float64, int) {
+	if price == nil {
+		return nil
+	}
+	return func(from, to time.Time) (float64, int) {
+		return plans.ListValue(envs, provider, from, to, price)
+	}
 }
 
 // AdviceCache keeps one replay for the glance, which the menu bar asks

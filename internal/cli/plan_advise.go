@@ -86,15 +86,19 @@ func writePlanAdvice(w io.Writer, res headroom.AdviceResult) error {
 		if i > 0 {
 			fmt.Fprintln(w)
 		}
-		fmt.Fprintf(w, "%s: %s, replayed over the last %.0f days (%d windows), confidence %s\n",
-			a.Provider, a.Display, a.Days, a.WindowsMeasured, a.Confidence)
+		if a.ValueOnly {
+			fmt.Fprintf(w, "%s: %s, valued over the last %.0f days, confidence %s\n", a.Provider, a.Display, a.Days, a.Confidence)
+		} else {
+			fmt.Fprintf(w, "%s: %s, replayed over the last %.0f days (%d windows), confidence %s\n",
+				a.Provider, a.Display, a.Days, a.WindowsMeasured, a.Confidence)
+		}
 		if line := valueLine(a); line != "" {
 			fmt.Fprintf(w, "  %s\n", line)
 		}
 		if line := atResetLine(a.AtReset); line != "" {
 			fmt.Fprintf(w, "  %s\n", line)
 		}
-		if len(a.Options) > 0 {
+		if len(a.Options) > 0 && !a.ValueOnly {
 			fmt.Fprintln(w)
 			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 			fmt.Fprintln(tw, "  OPTION\tLOCKOUTS\tBLOCKED\tPEAK\tPER MONTH\tSAVES")
@@ -129,8 +133,17 @@ func writePlanAdvice(w io.Writer, res headroom.AdviceResult) error {
 }
 
 // valueLine says what the plan carried at API list price against what it
-// cost for the same days; "" when either is not priced.
+// cost for the same days; "" when either is not priced. A plan valued
+// rather than replayed is an estimate at the underlying models' list
+// price, shown without a price too.
 func valueLine(a headroom.Advice) string {
+	if a.ValueOnly && a.ListValueUSD != nil {
+		s := fmt.Sprintf("Value: $%.2f of usage at the underlying models' API list price (an estimate)", *a.ListValueUSD)
+		if a.ValueMultiple == nil {
+			return s + "; no price is recorded for the plan."
+		}
+		return s + fmt.Sprintf(", %.1fx what the plan cost for those days.", *a.ValueMultiple)
+	}
 	if a.ListValueUSD == nil || a.ValueMultiple == nil {
 		return ""
 	}

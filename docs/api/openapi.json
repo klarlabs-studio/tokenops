@@ -4074,6 +4074,9 @@
                           "value_multiple": {
                             "type": "number"
                           },
+                          "value_only": {
+                            "type": "boolean"
+                          },
                           "windows_measured": {
                             "type": "integer"
                           }
@@ -5303,6 +5306,9 @@
                           },
                           "value_multiple": {
                             "type": "number"
+                          },
+                          "value_only": {
+                            "type": "boolean"
                           },
                           "windows_measured": {
                             "type": "integer"

@@ -239,3 +239,55 @@ func TestSchema6UploadCarriesSeatValue(t *testing.T) {
 		}
 	}
 }
+
+// A Cursor or Copilot seat crosses with its value: each plan day's value
+// and the advice's list value, the plan in force as its one option, and a
+// stay that the seat table reads as keep, never a tier move or a cancel.
+func TestValuedSeatCrosses(t *testing.T) {
+	seat := seatEvents()
+	envs := make([]*eventschema.Envelope, 0, len(seat))
+	for _, e := range seat {
+		c := *e
+		p := *e.Payload.(*eventschema.PromptEvent)
+		p.Provider = eventschema.ProviderCursor
+		c.Payload, c.Source = &p, "cursor-turns"
+		envs = append(envs, &c)
+	}
+	days := CoveredDays(now, 4)
+	rows := PlanDays(envs, map[string]string{"cursor": "cursor-pro"}, nil, days, now)
+	AddPlanValue(rows, envs, tokenPrice, now)
+	if len(rows) == 0 {
+		t.Fatal("no Cursor plan days")
+	}
+	for _, r := range rows {
+		if r.PlanValueUSD == nil {
+			t.Errorf("%s: no plan value: %+v", r.Day, r)
+		}
+		if err := r.Validate(); err != nil {
+			t.Errorf("%s: %v", r.Day, err)
+		}
+	}
+
+	tier, ok := plans.ValueTier("cursor-pro")
+	if !ok {
+		t.Fatal("cursor-pro is not valued")
+	}
+	a := plans.ValueOnly(plans.ReplayInput{Provider: "cursor", Since: now.Add(-30 * 24 * time.Hour), Until: now, Current: tier,
+		ListValue: func(from, to time.Time) (float64, int) { return plans.ListValue(envs, "cursor", from, to, tokenPrice) }})
+	advice := AdviceRows([]plans.Advice{a})
+	if len(advice) != 1 {
+		t.Fatalf("advice rows = %+v", advice)
+	}
+	row := advice[0]
+	if err := row.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if row.ListValueUSD == nil || *row.ListValueUSD != 1.75 || len(row.Options) != 1 || row.Options[0].Plan != "cursor-pro" {
+		t.Errorf("advice row = %+v", row)
+	}
+	for _, companyPaid := range []bool{false, true} {
+		if got := teamwire.SeatAction(row, 1, companyPaid); got != teamwire.SeatKeep {
+			t.Errorf("seat action (company paid %v) = %s, want keep", companyPaid, got)
+		}
+	}
+}

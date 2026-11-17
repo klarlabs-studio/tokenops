@@ -280,6 +280,10 @@ type Advice struct {
 	// on the forecast glance shows; nil when no window has a current
 	// reading or it was not asked for.
 	AtReset *ResetProjection `json:"at_reset,omitempty"`
+	// ValueOnly marks the advice for a plan whose tiers cannot be replayed
+	// (ValueOnly): its value and value multiple are an estimate at the
+	// underlying models' API list price, and it recommends staying.
+	ValueOnly bool `json:"value_only,omitempty"`
 }
 
 // EarlyResetCut is the lockouts a vendor's early resets ended, and the
