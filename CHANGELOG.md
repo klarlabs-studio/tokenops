@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.122.0 - 2026-11-17
+
 ### Added
 
 - **plans:** `tokenops plan advise` shows two lines about you above the options. **Value** is the usage your plan covered at API list price as a multiple of what the plan cost for the same days (a floor: only usage TokenOps sees counts). **This week** projects the plan's longest window to its reset on the forecast the glance shows, at this pace or at the last hour's rate, and says when it runs out before then. `--json` and `GET /api/plans/advice` carry them as `value_multiple` and `at_reset`.
@@ -18,6 +20,10 @@
 
 - **plans:** `tokenops plan advise` prices the API option, the metered overflow options and the value multiple over the days the window readings cover, the days the tiers are replayed on. The usage was priced over the whole period but spread over the readings' days, so when the readings started later than the period and there was usage before them, those figures came out too high. Recommendations can change for you when your readings start late: the API and overflow options get cheaper, so they are recommended more often, and the value multiple drops.
 - **plans:** with no window readings, `tokenops plan advise` weighs the fee against the API over the days of the period the event history covers. A period reaching back before the first stored event (`--days 60` with 28 days of events) spread the usage over days nothing was recorded on, so the API option per month came out too low and the value multiple too low with it. The history starts at the first event of any provider; when events from before the period are stored, the whole period is priced as before.
+
+### Upgrade
+
+- Team members' uploads use schema 6 only against a team server that advertises it. A server below schema 6 gets schema 5, without the seat value and the spend by model, agent and effort. The hosted team plane runs schema 6.
 
 ## 0.121.0 - 2026-11-16
 
