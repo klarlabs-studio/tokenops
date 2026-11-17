@@ -1827,8 +1827,9 @@ through shell history. It restarts the supervised daemon so the change is
 live; `--no-restart` skips that.
 
 The local transcript readers (`claude-code-jsonl`, `codex-jsonl`,
-`opencode`, `gemini-cli`, `pi-sessions`) need no command: `tokenops init`
-and the daemon turn on each one whose sessions are on this machine.
+`opencode`, `gemini-cli`, `pi-sessions`, `copilot-cli`) need no command:
+`tokenops init` and the daemon turn on each one whose sessions are on this
+machine.
 `--disable` on one of them is remembered (`switched_off: true` in the
 config), and nothing turns it back on until you enable it again.
 
@@ -2447,6 +2448,7 @@ typed, and everything the agent did before the next one.
 ```bash
 tokenops dx                       # last 7 days, every client found
 tokenops dx --days 30 --source codex
+tokenops dx --source copilot      # GitHub Copilot CLI's sessions only
 tokenops dx --json                # {window, metrics, grades, recommendation, cohort}, as tokenops_agent_dx
 tokenops dx --role primary        # your own instructions only
 tokenops dx --source codex --role auto_review   # Codex's automatic reviews only
@@ -2472,6 +2474,14 @@ describes neither. The same filters exist on `tokenops story`, on the
 `tokenops_sessions` MCP tool (`source`, `model`, `role`) and on the
 daemon's `/api/dx`, `/api/story` and `/api/story/runtime`; one selection
 gives the same answer on each.
+
+**Clients read.** Claude Code, Codex, Cursor, opencode and GitHub
+Copilot CLI (`--source copilot`, from `~/.copilot/session-state`, or
+`$COPILOT_HOME/session-state`). Copilot CLI records instructions, the
+model's messages, each tool call and its result, interrupts and
+compactions, but not a turn's tokens, so its context-growth and
+tokens-per-instruction figures stay empty. Copilot Chat in VS Code is not
+read.
 
 The **by model and effort** table splits instructions by the model and
 the reasoning effort that handled them (Claude Code, Codex and opencode
