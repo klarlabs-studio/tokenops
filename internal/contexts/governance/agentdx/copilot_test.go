@@ -36,7 +36,7 @@ func TestCopilotRecords(t *testing.T) {
 		`{"type":"session.compaction_complete","id":"e9","timestamp":"2026-11-10T09:00:09Z","data":{"success":true}}`,
 		`{"type":"assistant.usage","id":"e10","timestamp":"2026-11-10T09:00:10Z","ephemeral":true,"data":{"model":"gpt-5"}}`,
 	)
-	var kinds []string
+	kinds := make([]string, 0, len(got))
 	for _, r := range got {
 		kinds = append(kinds, string(r.Kind))
 		if r.SessionID != "cp1" {
