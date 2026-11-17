@@ -1,6 +1,6 @@
 # ADR 0012 — The team plane: hosted, derived figures only, aggregate by default
 
-- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*; amended 2026-11-10: an upload with a part unread is not sent, see *An upload is sent whole* under *Upload schema 2*; amended 2026-11-15: upload schema 5 (what was prevented, per finished week and mechanism), see *Upload schema 5*; amended 2026-11-16: upload schema 6 (seat value), see *Upload schema 6*; amended again 2026-11-16: schema 6 splits spend by catalog model and agent, see *Spend by model and agent* under *Upload schema 6*.
+- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*; amended 2026-11-10: an upload with a part unread is not sent, see *An upload is sent whole* under *Upload schema 2*; amended 2026-11-15: upload schema 5 (what was prevented, per finished week and mechanism), see *Upload schema 5*; amended 2026-11-16: upload schema 6 (seat value), see *Upload schema 6*; amended again 2026-11-16: schema 6 splits spend by catalog model and agent, see *Spend by model and agent* under *Upload schema 6*; amended 2026-11-17: a grant holder sees the seat advice of the members the grant covers, see *Seat advice under a grant*.
 - **Date:** 2026-10-08
 - **Deciders:** TokenOps maintainers
 - **Related:** issue #250, ADR 0004 (local-first; no BI product), ADR 0010 §5 (the API's privacy line)
@@ -422,7 +422,40 @@ in `TestUploadHasNoFreeText` with each figure's bound. A server below
 schema 6 gets schema 5 without the section, and a schema 5 upload carrying
 it is refused.
 
+## Seat advice under a grant (amended 2026-11-17)
 
+This replaces the rule of 2026-11-01 that a member's plan advice is theirs
+alone: that no one else sees one person's recommendation, only the counts
+the weekly release holds.
+
+- **Under a grant, the seat recommendation is shown.** Under an owner's
+  grant — given with a reason, visible to the member, and every view
+  listed in the web view and in `tokenops team status` — the grant holder
+  also sees, for each seat of each member the grant covers, the seat's
+  recommendation (keep, move down, upgrade or cancel, as
+  `teamwire.SeatAction` maps the advice) and its monthly effect. Deciding
+  seats across an organisation needs the seat, not a count; a grant is
+  already how someone else sees one person's figures, visibly and on the
+  record, and it lets the grant holder replay a plan mix over the seats
+  it covers. Without a grant nothing changes: others see only the released
+  counts.
+- **The prose still stays home.** Only what schemas 2 and 6 already carry
+  is shown: enumerations and bounded figures. The advice's summary and
+  caveats never leave the machine. Nothing new crosses and no schema
+  changes.
+- **The effect may be repriced.** Where an owner or admin entered the
+  organisation's contract price for a plan, the server reprices a seat's
+  monthly effect at it; otherwise the effect stands at the catalog list
+  price the member's machine used. The member and the grant holder see
+  the same figure.
+- **One threshold, one classification.** `pkg/teamwire` exports
+  `LapseMinLeftPct` (the share left that makes a reset a lapse, the
+  member's own lapse finding's) and `SpendDenominated(plan)` (a plan billed
+  per token: pay-as-you-go and usage-based Enterprise, read from the plan
+  catalog), so the server calls a week a lapse and a seat billed per token
+  exactly as the member's machine does.
+
+## What the service promises about what crosses
 
 These are commitments of the hosted service, recorded here so members and
 works councils can hold it to them; the server enforces them and the
@@ -434,10 +467,11 @@ private ADR has the construction.
   organisation's higher floor) contributed to is withheld, and so are as
   many other groups as needed that no sum or difference of what is shown
   gives a withheld one back. A week is computed once and never changes.
-- **Individual figures only by a visible grant.** A member's own figures
-  are visible to them, and to someone else only under an owner's grant
-  with a reason. The member sees every grant that covers them and every
-  view, in the web view and in `tokenops team status`.
+- **Individual figures only by a visible grant.** A member's own figures,
+  their seat recommendations included, are visible to them, and to someone
+  else only under an owner's grant with a reason. The member sees every
+  grant that covers them and every view, in the web view and in
+  `tokenops team status`.
 - **Retention and erasure.** Figures are kept 400 days by default (30 to
   3650 per organisation), the audit log 730. `tokenops team leave` revokes
   the device and erases its figures unless `--keep-history`; removing a

@@ -3,6 +3,9 @@ package teamwire
 import (
 	"math"
 	"testing"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
 func TestPlanFactor(t *testing.T) {
@@ -88,6 +91,48 @@ func TestSeatAction(t *testing.T) {
 	} {
 		if got := SeatAction(tc.a, tc.limitUsed, tc.companyPaid); got != tc.want {
 			t.Errorf("%s: SeatAction = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestLapseMinLeftPctIsPlans(t *testing.T) {
+	if LapseMinLeftPct != plans.LapseMinLeftPct {
+		t.Fatalf("LapseMinLeftPct = %v, want plans.LapseMinLeftPct %v", LapseMinLeftPct, plans.LapseMinLeftPct)
+	}
+}
+
+func TestSpendDenominated(t *testing.T) {
+	for _, tc := range []struct {
+		plan string
+		want bool
+	}{
+		{"pay-as-you-go", true},     // per token, against a limit the operator sets
+		{"claude-enterprise", true}, // usage-based Enterprise: API rates from the first token
+		{"claude-pro", false},
+		{"claude-max-20x", false}, // former name of a windowed plan
+		{"claude-team-premium", false},
+		{"gpt-pro-20x", false},
+		{"cursor-pro", false},
+		{"copilot-business", false},
+		{"subscription", false},
+		{"", false},
+		{"nope", false},
+	} {
+		if got := SpendDenominated(tc.plan); got != tc.want {
+			t.Errorf("SpendDenominated(%q) = %v, want %v", tc.plan, got, tc.want)
+		}
+	}
+}
+
+// TestSpendDenominatedFollowsCatalog holds SpendDenominated to the provider
+// catalog for every plan and every name a vendor retired, so a plan added
+// to the catalog is classified without a change here.
+func TestSpendDenominatedFollowsCatalog(t *testing.T) {
+	for _, p := range providers.Plans() {
+		for _, name := range append([]string{p.Name}, p.FormerNames...) {
+			if got := SpendDenominated(name); got != p.SpendDenominated {
+				t.Errorf("SpendDenominated(%q) = %v, want the catalog's %v", name, got, p.SpendDenominated)
+			}
 		}
 	}
 }
