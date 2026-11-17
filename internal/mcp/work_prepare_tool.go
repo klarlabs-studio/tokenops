@@ -8,8 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/workestimate"
+	"go.klarlabs.de/tokenops/internal/capability/workquote"
 	"go.klarlabs.de/tokenops/internal/config"
 )
 
@@ -35,6 +37,8 @@ type prepareWorkInput struct {
 	ExecutionID string  `json:"execution_id,omitempty" jsonschema:"description=Stable execution identifier when the caller already knows it."`
 	ActorID     string  `json:"actor_id,omitempty" jsonschema:"description=Actor performing the execution when known."`
 	WorkflowID  string  `json:"workflow_id,omitempty" jsonschema:"description=Stable workflow identifier to preserve across prepare, execution attribution, and review. tokenops_prepare_work generates one when omitted."`
+	Client      string  `json:"client,omitempty" jsonschema:"description=The agent you run in (claude-code, codex, opencode), when you know it. The quote is then drawn from that client's instructions only."`
+	Effort      string  `json:"effort,omitempty" jsonschema:"description=The reasoning effort the task runs at (low, medium, high, ...), when you know it. The quote prefers earlier instructions at the same effort."`
 }
 
 func (in prepareWorkInput) advice() routingAdviceInput {
@@ -57,6 +61,11 @@ type prepareWorkResult struct {
 	Recommendation    routingAdviceResult  `json:"recommendation"`
 	PlanHeadroom      planHeadroomResult   `json:"plan_headroom"`
 	WindowShare       *windowShareEstimate `json:"window_share,omitempty"`
+	// Quote is the task's price before it starts: p50/p90 cost at list
+	// prices from the developer's own similar instructions, the share of
+	// each plan window that would take, and any boundary a p90 task would
+	// meet. An estimate, and labelled so.
+	Quote *workquote.Result `json:"quote,omitempty"`
 	// CoachTips are the coach's tips for the work about to start, each
 	// naming one object (a window, a model): given here, at the decision,
 	// rather than after the turn. The coach's dials, its throttle and
@@ -67,7 +76,7 @@ type prepareWorkResult struct {
 func registerWorkPreparationTool(s *Server, d RoutingAdviceDeps) error {
 	planDeps := PlanDeps{Config: d.Config, ConfigGetter: d.ConfigGetter, Store: d.Store, Spend: d.Spend}
 	s.Tool("tokenops_prepare_work").
-		Description("Before starting a task, get one evidence-backed view of subscription headroom, the model recommendation for the supplied instruction, and the task's expected share of the plan window (a range from earlier tasks of the same kind in the same repository, suppressed until there are enough of them, plus the p50 and p90 of those runs with their count, since runs of one task vary widely; read only from measured outcomes, never from an agent's own guess; with a suggestion to proceed, use a lighter model tier, or defer). The result includes a stable workflow_id: propagate it as X-Tokenops-Workflow-Id when the execution path supports request headers, then pass it unchanged to tokenops_review_work, which records the actual share against the estimate. TokenOps issues correlation here but does not claim that execution started. The tool includes measurement caveats and never changes the caller's model. It also returns coach_tips: the coach's tips for the work about to start, each naming one window or model, given at most a few an hour and never the same twice in a row. Pass provider when several plans are configured; pass the current model to compare alternatives; pass repository to scope the estimate.").
+		Description("Before starting a task, get one evidence-backed view of subscription headroom, the model recommendation for the supplied instruction, and the task's expected share of the plan window (a range from earlier tasks of the same kind in the same repository, suppressed until there are enough of them, plus the p50 and p90 of those runs with their count, since runs of one task vary widely; read only from measured outcomes, never from an agent's own guess; with a suggestion to proceed, use a lighter model tier, or defer). The result includes a stable workflow_id: propagate it as X-Tokenops-Workflow-Id when the execution path supports request headers, then pass it unchanged to tokenops_review_work, which records the actual share against the estimate. TokenOps issues correlation here but does not claim that execution started. The tool includes measurement caveats and never changes the caller's model. It also returns quote: an estimate of the task's cost at list prices (p50 and p90) and tokens from the developer's own instructions in the last 30 days on the same model (and effort and kind of work where known), no number below 20 of them, the share of each current plan window a p90 task would take, and any boundary it would meet; when needs_approval is set, ask the operator before starting, who approves through the boundaries flow, never the agent. It also returns coach_tips: the coach's tips for the work about to start, each naming one window or model, given at most a few an hour and never the same twice in a row. Pass provider when several plans are configured; pass the current model to compare alternatives; pass repository to scope the estimate; pass client and effort to narrow the quote.").
 		OutputSchema(prepareWorkResult{}).
 		Handler(func(ctx context.Context, in prepareWorkInput) (*prepareWorkResult, error) {
 			if strings.TrimSpace(in.Instruction) == "" {
@@ -92,6 +101,10 @@ func registerWorkPreparationTool(s *Server, d RoutingAdviceDeps) error {
 			if err != nil {
 				return nil, err
 			}
+			q, err := workQuote(ctx, d, in, workflowID, headroom)
+			if err != nil {
+				return nil, err
+			}
 			tips := prepareTips(d, in, workflowID, recommendation, headroom, share)
 			return &prepareWorkResult{
 				WorkflowID:        workflowID,
@@ -103,6 +116,7 @@ func registerWorkPreparationTool(s *Server, d RoutingAdviceDeps) error {
 				Recommendation: *recommendation,
 				PlanHeadroom:   *headroom,
 				WindowShare:    share,
+				Quote:          q,
 				CoachTips:      tips,
 			}, nil
 		})
@@ -124,6 +138,33 @@ func windowShare(ctx context.Context, d RoutingAdviceDeps, in prepareWorkInput, 
 		req.SwitchTo = rec.Model
 	}
 	return workestimate.Prepare(ctx, deps, req, time.Now().UTC())
+}
+
+// workQuote prices the task from the developer's own history before it
+// starts and records the quote, so review can check it.
+func workQuote(ctx context.Context, d RoutingAdviceDeps, in prepareWorkInput, workflowID string, headroom *planHeadroomResult) (*workquote.Result, error) {
+	dir := d.QuoteDir
+	if dir == "" {
+		dir = workquote.DefaultDir()
+	}
+	basis, err := workquote.Read(dir)
+	if err != nil {
+		basis = nil // an unreadable basis is one not computed yet
+	}
+	deps := workquote.Deps{Basis: basis}
+	if headroom != nil {
+		deps.Reports = headroom.Reports
+	}
+	if cfg := d.activeConfig(); cfg != nil {
+		deps.Rules = bcap.AllRules(*cfg)
+	}
+	if d.Store != nil {
+		deps.Store = d.Store
+	}
+	return workquote.Prepare(ctx, deps, workquote.Request{
+		WorkflowID: workflowID, Instruction: in.Instruction, Client: in.Client, Provider: in.Provider,
+		Model: in.Model, Effort: in.Effort,
+	}, time.Now().UTC())
 }
 
 // prepareTips are the coach's tips for the work about to start, given
