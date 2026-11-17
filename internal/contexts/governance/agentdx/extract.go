@@ -29,6 +29,7 @@ const (
 	SourceCodex      Source = "codex"
 	SourceCursor     Source = "cursor"
 	SourceOpencode   Source = "opencode"
+	SourceCopilot    Source = "copilot"
 )
 
 // ExtractOptions selects which transcripts to read.
@@ -463,6 +464,8 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 		return stamped(SourceCursor)(withFacts(opts, ExtractCursor))
 	case opts.Source == SourceOpencode:
 		return stamped(SourceOpencode)(withFacts(opts, ExtractOpencode))
+	case opts.Source == SourceCopilot:
+		return stamped(SourceCopilot)(withFacts(opts, ExtractCopilot))
 	case opts.Root != "":
 		// Pinned tree, unnamed source: read it as Claude Code, the
 		// historical meaning of Root.
@@ -475,6 +478,9 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 	}
 	if cx, err := stamped(SourceCodex)(ExtractCodex(opts)); err == nil {
 		out = append(out, cx...)
+	}
+	if cp, err := stamped(SourceCopilot)(withFacts(opts, ExtractCopilot)); err == nil {
+		out = append(out, cp...)
 	}
 	// A schema failure is not a silent skip. Auto mode swallowing it would
 	// put these readers back in the class of bugs they were written to

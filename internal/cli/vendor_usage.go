@@ -65,6 +65,7 @@ var vendorUsageSources = []string{
 	"opencode",
 	"gemini-cli",
 	"pi-sessions",
+	"copilot-cli",
 	"anthropic-admin",
 	"anthropic-analytics",
 	"fireworks",
@@ -335,6 +336,14 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		}
 		if f.interval > 0 {
 			cfg.VendorUsage.GeminiCLI.Interval = f.interval
+		}
+	case "copilot-cli":
+		cfg.SetLocalReader(source, enabled)
+		if f.root != "" {
+			cfg.VendorUsage.CopilotCLI.Root = f.root
+		}
+		if f.interval > 0 {
+			cfg.VendorUsage.CopilotCLI.Interval = f.interval
 		}
 	case "pi-sessions":
 		cfg.SetLocalReader(source, enabled)

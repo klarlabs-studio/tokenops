@@ -147,7 +147,7 @@ func TestAgentsAreTheHarnesses(t *testing.T) {
 	}
 	for source, want := range map[string]string{
 		"claude-code-jsonl": "claude-code", "codex-sessions": "codex", "pi-sessions": "pi",
-		"github-copilot-chat": "copilot", "proxy": teamwire.AgentOther, "": teamwire.AgentOther,
+		"github-copilot-chat": "copilot", "copilot-cli": "copilot", "proxy": teamwire.AgentOther, "": teamwire.AgentOther,
 		"/Users/alice/tool": teamwire.AgentOther,
 	} {
 		if got := AgentOf(source); got != want {

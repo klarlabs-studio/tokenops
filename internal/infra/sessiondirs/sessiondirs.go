@@ -1,6 +1,6 @@
 // Package sessiondirs maps agent sessions to the directory they ran in,
-// from the clients' own records: the first lines of Claude Code's and
-// Codex's transcripts, and opencode's session table. Attributing cost to
+// from the clients' own records: the first lines of Claude Code's,
+// Codex's and Copilot CLI's session logs, and opencode's session table. Attributing cost to
 // a repository, and from there to a commit, starts here.
 package sessiondirs
 
@@ -15,6 +15,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexrollout"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilotcli"
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
 	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 )
@@ -29,7 +30,7 @@ type Dir struct {
 // Roots are where each client keeps its sessions; zero values read the
 // defaults.
 type Roots struct {
-	Claude, Codex, Opencode string
+	Claude, Codex, Opencode, Copilot string
 }
 
 // claudeHeadLines is how far into a Claude Code transcript the working
@@ -59,6 +60,15 @@ func Find(roots Roots, since time.Time) map[string]Dir {
 			for _, f := range changedSince(files, since) {
 				if id, d, ok := codexDir(f); ok {
 					out[id] = d
+				}
+			}
+		}
+	}
+	if root := orDefault(roots.Copilot, copilotcli.DefaultRoot); root != "" {
+		if files, err := copilotcli.FindSessionFiles(root); err == nil {
+			for _, f := range changedSince(files, since) {
+				if id, w, ok := copilotcli.SessionHead(f); ok {
+					out[id] = Dir{CWD: w.CWD, Branch: w.Branch}
 				}
 			}
 		}

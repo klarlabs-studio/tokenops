@@ -217,9 +217,11 @@ func carries(h Source, k RecordKind) bool { return !unrecorded[h][k] }
 var escalationTools = map[string]bool{"task": true, "agent": true}
 
 // editTools are the tools that modify a file, for the rework signal.
+// str_replace and create are Copilot CLI's.
 var editTools = map[string]bool{
 	"edit": true, "write": true, "notebookedit": true,
 	"multiedit": true, "patch": true, "apply_patch": true,
+	"str_replace": true, "create": true,
 }
 
 // isEscalation and isEdit compare tool names without regard to case.

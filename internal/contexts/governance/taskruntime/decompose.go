@@ -163,7 +163,9 @@ func top(active map[Category]int) Category {
 // its own entry.
 var (
 	recordsRequests    = map[string]bool{string(agentdx.SourceClaudeCode): true}
-	recordsToolResults = map[string]bool{string(agentdx.SourceClaudeCode): true, string(agentdx.SourceCodex): true}
+	recordsToolResults = map[string]bool{
+		string(agentdx.SourceClaudeCode): true, string(agentdx.SourceCodex): true, string(agentdx.SourceCopilot): true,
+	}
 )
 
 // describe says where a category's figure comes from for a harness, or

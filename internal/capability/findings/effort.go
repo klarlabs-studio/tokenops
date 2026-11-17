@@ -9,7 +9,7 @@ import (
 )
 
 // clientNames names each client as its users do.
-var clientNames = map[string]string{"claude-code": "Claude Code", "codex": "Codex", "opencode": "opencode", "cursor": "Cursor"}
+var clientNames = map[string]string{"claude-code": "Claude Code", "codex": "Codex", "opencode": "opencode", "cursor": "Cursor", "copilot": "Copilot CLI"}
 
 func clientName(c string) string {
 	if n, ok := clientNames[c]; ok {

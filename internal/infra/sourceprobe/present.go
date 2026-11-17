@@ -6,6 +6,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexhome"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilotcli"
 )
 
 // PresentLocalReaders lists the local transcript readers whose data is on
@@ -30,6 +31,7 @@ func PresentLocalReaders() []string {
 	if dataHome == "" {
 		dataHome = filepath.Join(home, ".local", "share")
 	}
+	copilotRoot, _ := copilotcli.DefaultRoot()
 	var out []string
 	for _, c := range []struct{ name, path string }{
 		{"claude-code-jsonl", filepath.Join(claudeDir, "projects")},
@@ -38,6 +40,7 @@ func PresentLocalReaders() []string {
 		{"gemini-cli", filepath.Join(geminiDir, "tmp")},
 		{"pi-sessions", filepath.Join(home, ".pi", "agent", "sessions")},
 		{"pi-sessions", filepath.Join(home, ".omp", "agent", "sessions")},
+		{"copilot-cli", copilotRoot},
 	} {
 		if len(out) > 0 && out[len(out)-1] == c.name {
 			continue

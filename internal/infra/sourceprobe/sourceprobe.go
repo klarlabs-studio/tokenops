@@ -16,6 +16,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilotcli"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/geminicli"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pisessions"
@@ -45,6 +46,11 @@ func All(cfg config.Config) map[string]config.SourceProbe {
 	if cfg.VendorUsage.GeminiCLI.Enabled {
 		out["gemini-cli"] = probeRoot(cfg.VendorUsage.GeminiCLI.Root, geminicli.DefaultRoot, func(root string) (time.Time, bool) {
 			return newestFoundAt([]string{root}, geminicli.FindSessionFiles)
+		})
+	}
+	if cfg.VendorUsage.CopilotCLI.Enabled {
+		out[copilotcli.SourceTag] = probeRoot(cfg.VendorUsage.CopilotCLI.Root, copilotcli.DefaultRoot, func(root string) (time.Time, bool) {
+			return newestFoundAt([]string{root}, copilotcli.FindSessionFiles)
 		})
 	}
 	if cfg.VendorUsage.Pi.Enabled {

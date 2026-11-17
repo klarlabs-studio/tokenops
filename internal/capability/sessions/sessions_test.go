@@ -25,6 +25,7 @@ func isolateHome(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_DATA_HOME", "")
 	t.Setenv("OPENCODE_DB", "")
+	t.Setenv("COPILOT_HOME", "")
 }
 
 // session is one Claude Code transcript: an instruction and the agent's

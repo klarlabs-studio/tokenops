@@ -25,6 +25,7 @@ func (c *Config) localReaders() map[string]LocalReader {
 		"opencode":          {&v.OpenCode.Enabled, &v.OpenCode.SwitchedOff},
 		"gemini-cli":        {&v.GeminiCLI.Enabled, &v.GeminiCLI.SwitchedOff},
 		"pi-sessions":       {&v.Pi.Enabled, &v.Pi.SwitchedOff},
+		"copilot-cli":       {&v.CopilotCLI.Enabled, &v.CopilotCLI.SwitchedOff},
 	}
 }
 
