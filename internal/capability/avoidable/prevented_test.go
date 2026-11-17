@@ -6,10 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/effortweeks"
 	"go.klarlabs.de/tokenops/internal/capability/explain"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/learning"
+	"go.klarlabs.de/tokenops/internal/contexts/learning/effortwatch"
 	"go.klarlabs.de/tokenops/internal/contexts/measurement"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -311,5 +313,50 @@ func TestLockoutsNameTheirWindows(t *testing.T) {
 	m, _ := mechanism(Build(in), MechLockout)
 	if len(m.Windows) != 1 || m.Windows[0].Window != "week" || m.Windows[0].BlockedMinutes != 120 {
 		t.Errorf("windows = %+v", m.Windows)
+	}
+}
+
+// A lower effort level the developer's weeks judged a saving counts as
+// prevented, an estimate scaled to the part of the period after the
+// change; one not judged, or judged not realized, counts nothing and says
+// why. It is never part of the found figures.
+func TestPreventedCountsARealizedEffortSaving(t *testing.T) {
+	in := withPrevented()
+	period := in.Until.Sub(in.Since)
+	realized := func(at time.Time) effortweeks.Watch {
+		return effortweeks.Watch{Model: "m", PreventedUSDPerWeek: 70,
+			Verdict: effortwatch.Verdict{Judged: true, Realized: true, Change: effortwatch.Change{At: at, From: "xhigh", To: "medium"}}}
+	}
+	tests := []struct {
+		name  string
+		watch []effortweeks.Watch
+		count int
+		usd   float64
+	}{
+		{"no change observed", nil, 0, 0},
+		{"realized before the period", []effortweeks.Watch{realized(in.Since.AddDate(0, 0, -60))}, 1, 70 * period.Hours() / (7 * 24)},
+		{"realized mid-period counts from the change", []effortweeks.Watch{realized(in.Since.Add(period / 2))}, 1, 70 * (period / 2).Hours() / (7 * 24)},
+		{"not yet judged", []effortweeks.Watch{{Model: "m", Verdict: effortwatch.Verdict{Reason: "waiting"}}}, 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := withPrevented()
+			in.Effort = tt.watch
+			r := Build(in)
+			m, ok := mechanism(r, MechEffort)
+			if !ok {
+				t.Fatal("no effort mechanism")
+			}
+			got, priced := m.USD.Amount()
+			if m.Count != tt.count || priced != (tt.count > 0) || math.Abs(got-tt.usd) > 0.01 || m.Basis == "" {
+				t.Errorf("= %+v (%v); want count %d, usd %.2f", m, got, tt.count, tt.usd)
+			}
+			if tt.count > 0 && !strings.Contains(m.Basis, "estimate") {
+				t.Errorf("basis %q does not say it is an estimate", m.Basis)
+			}
+			if tt.count == 0 && m.USD.Caveat() == "" {
+				t.Error("an unrealized saving must say why it counts nothing")
+			}
+		})
 	}
 }

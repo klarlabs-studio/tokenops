@@ -154,6 +154,14 @@ func terms() []Term {
 				"TokenOps never changes the setting: for Claude Code it names modelSettings.<model>.effortLevel in ~/.claude/settings.json (or /effort), " +
 				"for Codex model_reasoning_effort in ~/.codex/config.toml, which applies to every model; other clients get the advice alone.",
 			Where: "tokenops glance (findings), tokenops dx, the menu bar"},
+		{Name: "effort-change", Aliases: []string{"effort change", "effort watch", "effort before and after"}, Area: "dx",
+			Short: "what a change of a model's usual effort level did, on your own weeks before and after",
+			What:  "When the level most of a model's instructions run at changes from one week to the next, whoever changed it, TokenOps compares four of your weeks before with four from the change.",
+			How: "A week counts with 10+ instructions of the model and a cost. Cost per instruction, first-try, rejected and interrupted rates are weekly means with 95% intervals. " +
+				"A saving is realized when the cost per instruction fell by more than its usual week-to-week change and no outcome rate worsened by more than 5 points. " +
+				"The prevented figure is an estimate: the fall times the weekly instructions after, kept apart from found waste (ADR 0022).",
+			Read:  "A comparison, not an experiment: harder work or a new project in the same weeks is not ruled out. Until four weeks each side, it says how many it is waiting for.",
+			Where: "tokenops coach, tokenops spend waste (prevented)"},
 
 		{Name: "total-spend", Aliases: []string{"total spend", "cost", "spend"}, Area: "spend",
 			Short: "what usage billed per token cost",

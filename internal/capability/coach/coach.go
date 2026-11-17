@@ -6,6 +6,7 @@
 package coach
 
 import (
+	"go.klarlabs.de/tokenops/internal/capability/effortweeks"
 	"go.klarlabs.de/tokenops/internal/capability/routers"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/config"
@@ -47,6 +48,10 @@ type Report struct {
 	// Proposal is the compaction line the context power proposes at the
 	// ask rung and the developer has not answered. Only Status fills it.
 	Proposal *CompactProposal `json:"proposal,omitempty"`
+	// Effort is each model whose usual effort level changed, with the
+	// before-and-after on the developer's own weeks (ADR 0022). Only
+	// Status fills it.
+	Effort []effortweeks.Watch `json:"effort,omitempty"`
 	// Preset names the preset the coach matches, "" when it has been tuned
 	// away from all of them.
 	Preset string `json:"preset,omitempty"`

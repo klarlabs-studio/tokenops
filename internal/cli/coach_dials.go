@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/effortweeks"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
@@ -84,6 +85,7 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 	}
 	renderCompaction(out, r)
 	renderProposal(out, r)
+	renderEffortWatch(out, r.Effort)
 	renderModelPolicy(out, r)
 	if len(quota) > 0 {
 		fmt.Fprintln(out)
@@ -524,6 +526,43 @@ func contextLevers() coachcap.ContextLevers {
 		return nil
 	}
 	return l
+}
+
+// renderEffortWatch shows each model whose usual effort level changed,
+// and what the developer's own weeks say about it since (ADR 0022).
+func renderEffortWatch(out io.Writer, ws []effortweeks.Watch) {
+	if len(ws) == 0 {
+		return
+	}
+	fmt.Fprintln(out, "\n  effort (a model's usual level changed; your own weeks before and after):")
+	for _, w := range ws {
+		v := w.Verdict
+		model := w.Model
+		if w.Client != "" {
+			model += " (" + w.Client + ")"
+		}
+		fmt.Fprintf(out, "    %s %s → %s from the week of %s\n", model, v.Change.From, v.Change.To, v.Change.At.Format(time.DateOnly))
+		if v.Judged {
+			fmt.Fprintf(out, "      cost per instruction %s → %s\n", usdInterval(v.Cost.Before), usdInterval(v.Cost.After))
+			fmt.Fprintf(out, "      first try %s → %s · rejected %s → %s · interrupted %s → %s\n",
+				pctInterval(v.FirstTry.Before), pctInterval(v.FirstTry.After), pctInterval(v.Rejected.Before), pctInterval(v.Rejected.After),
+				pctInterval(v.Interrupted.Before), pctInterval(v.Interrupted.After))
+		}
+		verdict := v.Reason
+		if w.PreventedUSDPerWeek > 0 {
+			verdict += fmt.Sprintf("; about %s a week prevented (an estimate, kept apart from found waste)", usd(w.PreventedUSDPerWeek))
+		}
+		fmt.Fprintf(out, "      %s\n", verdict)
+	}
+	fmt.Fprintln(out, "      Weekly means with 95% intervals. A comparison, not an experiment: other changes in the same weeks are not ruled out.")
+}
+
+func usdInterval(i effortweeks.Interval) string {
+	return fmt.Sprintf("%s (%s–%s)", usd(i.Mean), usd(max(i.Low, 0)), usd(i.High))
+}
+
+func pctInterval(i effortweeks.Interval) string {
+	return fmt.Sprintf("%.0f%% (%.0f–%.0f)", i.Mean, max(i.Low, 0), min(i.High, 100))
 }
 
 // renderCompaction shows where each agent compacts on its own when the

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/commits"
+	"go.klarlabs.de/tokenops/internal/capability/effortweeks"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
@@ -53,6 +54,9 @@ type Deps struct {
 	// Weeks reads the compaction setting's weekly rollup; nil, or nil
 	// returned, leaves the compaction saving out.
 	Weeks func() *Weeks
+	// Effort reads the judged changes of effort level; nil leaves the
+	// effort saving out.
+	Effort func() []effortweeks.Watch
 }
 
 // Compute builds the report for [since, until). A zero until is now.
@@ -137,6 +141,9 @@ func gather(ctx context.Context, d Deps, since, until time.Time) (Inputs, error)
 	}
 	if d.Weeks != nil {
 		in.Compaction = d.Weeks()
+	}
+	if d.Effort != nil {
+		in.Effort = d.Effort()
 	}
 	if d.Trace != nil {
 		for _, id := range workflowsIn(in) {
