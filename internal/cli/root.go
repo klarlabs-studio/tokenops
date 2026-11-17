@@ -94,7 +94,7 @@ func NewRoot() *cobra.Command {
 		newOptimizationsCmd(),
 		newVendorUsageCmd(),
 		newCoachCmd(),
-		newTaskCmd(),
+		newTaskCmd(rf),
 		newFmtCmd(rf),
 		newReadGuardCmd(rf),
 		newRouteGuardCmd(),

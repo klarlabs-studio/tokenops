@@ -26,6 +26,7 @@ var subToMCP = map[string][]string{
 	"coach preset":          {"tokenops_coach"},
 	"config show":           {"tokenops_status"},
 	"experiment start":      {"tokenops_experiment"},
+	"task quote":            {"tokenops_prepare_work"},
 	"experiment status":     {"tokenops_experiment"},
 	"experiment stop":       {"tokenops_experiment"},
 	"fmt analyze":           {"tokenops_fmt"},
