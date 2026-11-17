@@ -259,6 +259,12 @@ pricing catalog TokenOps ships, normalised (a dated ID is sent as its
 catalog row's); a model the catalog does not list, such as a fine-tune or
 a custom or local model, is sent as `other`.
 
+Your plan advice's verdict, its seat recommendation (keep, move down,
+upgrade, cancel) and its monthly effect are individual figures: someone
+else sees them only under an owner's grant, which `status` lists with every
+view. The advice's wording is never uploaded. The server may reprice the
+effect at your organisation's contract price for the plan.
+
 `join` takes `--name` (how people granted to see individual figures see
 you) and `--device`. The enrolment is kept in `~/.tokenops/team.json`
 (mode 0600), not in `config.yaml`; `leave --force` forgets it locally when

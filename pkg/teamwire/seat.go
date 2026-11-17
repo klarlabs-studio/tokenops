@@ -3,6 +3,7 @@ package teamwire
 import (
 	"math"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
@@ -62,6 +63,24 @@ func SeatAction(a PlanAdvice, limitUsedPct float64, companyPaid bool) string {
 		}
 	}
 	return SeatKeep
+}
+
+// LapseMinLeftPct is the share of a window, in points, that resetting
+// unused makes a lapse: a weekly window projected to reset with no more
+// than 100 minus this used will reset mostly unused. It is the threshold
+// the member's own lapse finding uses, so the team view and the member's
+// machine call the same week a lapse.
+const LapseMinLeftPct = plans.LapseMinLeftPct
+
+// SpendDenominated reports whether plan is billed per token against a
+// spend limit rather than a seat fee with usage windows: pay-as-you-go
+// and usage-based Enterprise. Such a seat has no tier to move and no
+// window to project; its use is spend at API rates. It reads the plan
+// catalog, by a plan's current name or one the vendor retired; a name the
+// catalog does not know is false.
+func SpendDenominated(plan string) bool {
+	p, ok := plans.Lookup(CurrentPlan(plan))
+	return ok && p.SpendDenominated
 }
 
 // PlanFactor is a catalog plan's weekly allowance as a multiple of its
