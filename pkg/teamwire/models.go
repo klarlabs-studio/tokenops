@@ -45,8 +45,8 @@ const (
 )
 
 // EffortLevels are the reasoning effort levels clients set, lowest first:
-// the order internal/contexts/governance/agentdx ranks them in (a test in
-// internal/capability/teamshare holds the two to each other).
+// the order internal/contexts/governance/agentdx ranks them in (a test
+// there holds the two to each other).
 var EffortLevels = []string{"none", "minimal", "low", "medium", "high", "xhigh", "max"}
 
 // Efforts are every effort a model row may carry: EffortLevels,

@@ -57,16 +57,6 @@ var effortOrder = map[string]int{
 	"none": 0, "minimal": 1, "low": 2, "medium": 3, "high": 4, "xhigh": 5, "max": 6,
 }
 
-// EffortLevels are the effort levels clients use, lowest first.
-func EffortLevels() []string {
-	out := make([]string, 0, len(effortOrder))
-	for l := range effortOrder {
-		out = append(out, l)
-	}
-	sort.Slice(out, func(i, j int) bool { return effortOrder[out[i]] < effortOrder[out[j]] })
-	return out
-}
-
 // ByEffort groups instructions by the model and effort that served most
 // of their turns. Units are built per session, so concurrent sessions do
 // not lend each other turns. Instructions with no recorded effort are

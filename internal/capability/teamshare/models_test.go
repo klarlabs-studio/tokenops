@@ -11,7 +11,6 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
-	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/pkg/teamwire"
 )
@@ -157,14 +156,6 @@ func TestAgentsAreTheHarnesses(t *testing.T) {
 	}
 }
 
-// The effort levels a row may carry are the levels agentdx ranks, in its
-// order.
-func TestEffortLevelsAreAgentdxs(t *testing.T) {
-	if !slices.Equal(teamwire.EffortLevels, agentdx.EffortLevels()) {
-		t.Errorf("teamwire.EffortLevels %v; agentdx's %v", teamwire.EffortLevels, agentdx.EffortLevels())
-	}
-}
-
 // A turn takes the effort of the instruction it answered, in its session:
 // the instruction's span runs from its prompt to its last activity. A turn
 // between instructions, or in a session with none, is unknown.
@@ -202,11 +193,11 @@ func TestTurnEffort(t *testing.T) {
 func TestModelSpendCollapsesEffortBeforeDropping(t *testing.T) {
 	day := now.Format(teamwire.DayLayout)
 	levels := teamwire.EffortLevels
-	var turns []analytics.SessionTurn
-	var units []sessions.Unit
 	// Each session's one turn at its own level: as many model rows as
 	// sessions split by effort, one per repository without it.
 	n := teamwire.MaxModelSpend/len(levels) + 1
+	turns := make([]analytics.SessionTurn, 0, n*len(levels))
+	units := make([]sessions.Unit, 0, n*len(levels))
 	repoOf := map[string]string{}
 	for i := range n * len(levels) {
 		id := "s" + strconv.Itoa(i)
