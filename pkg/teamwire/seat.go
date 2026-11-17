@@ -2,6 +2,7 @@ package teamwire
 
 import (
 	"math"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
@@ -71,6 +72,16 @@ func SeatAction(a PlanAdvice, limitUsedPct float64, companyPaid bool) string {
 // the member's own lapse finding uses, so the team view and the member's
 // machine call the same week a lapse.
 const LapseMinLeftPct = plans.LapseMinLeftPct
+
+// AcceptableLockoutsPerMonth and AcceptableBlockedMinutesPerMonth are the
+// most running out per 30.44-day month a plan option may show and still
+// count as fitting: the line the member's plan advice draws between
+// options. A server replaying a plan mix flags seats above it with the
+// same line.
+const (
+	AcceptableLockoutsPerMonth       = plans.AdviceFewLockouts
+	AcceptableBlockedMinutesPerMonth = float64(plans.AdviceFewBlocked / time.Minute)
+)
 
 // SpendDenominated reports whether plan is billed per token against a
 // spend limit rather than a seat fee with usage windows: pay-as-you-go
