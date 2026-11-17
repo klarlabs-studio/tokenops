@@ -225,7 +225,7 @@ func Rates(windows map[string][]plans.QuotaWindow, turns []analytics.SessionTurn
 		providers = append(providers, p)
 	}
 	sort.Strings(providers)
-	var out []plans.ValueRate
+	out := make([]plans.ValueRate, 0, len(providers)*2)
 	for _, p := range providers {
 		ps := cumulative[p]
 		upTo := func(at time.Time) float64 { // sum of turns at or before at

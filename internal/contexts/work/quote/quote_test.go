@@ -166,7 +166,7 @@ func TestUnquotedTaskHasNoWindowShare(t *testing.T) {
 
 func TestCalibrate(t *testing.T) {
 	scored := func(within, over int) []Scored {
-		var out []Scored
+		out := make([]Scored, 0, within+over)
 		for range within {
 			out = append(out, Scored{P90: 10, Actual: 8})
 		}
@@ -200,7 +200,7 @@ func TestCalibrate(t *testing.T) {
 }
 
 func TestCalibrationNoteSaysWhenTheP90RunsLow(t *testing.T) {
-	var s []Scored
+	s := make([]Scored, 0, 12)
 	for i := range 12 {
 		s = append(s, Scored{P90: 10, Actual: float64(5 + i)})
 	}
