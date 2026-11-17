@@ -22,6 +22,7 @@ func isolateHome(t *testing.T) string {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_DATA_HOME", "")
 	t.Setenv("OPENCODE_DB", "")
+	t.Setenv("COPILOT_HOME", "")
 	return home
 }
 
@@ -227,7 +228,10 @@ func TestFindMergesEveryClient(t *testing.T) {
 		Claude:   filepath.Join(base, "claude"),
 		Codex:    filepath.Join(base, "codex"),
 		Opencode: filepath.Join(base, "opencode.db"),
+		Copilot:  filepath.Join(base, "copilot"),
 	}
+	write(t, filepath.Join(roots.Copilot, "cp-1", "events.jsonl"),
+		lines(`{"type":"session.start","id":"e1","data":{"sessionId":"cp-1","context":{"cwd":"/w/copilot","branch":"feat"}}}`), fresh)
 	write(t, filepath.Join(roots.Claude, "proj", "cc-new.jsonl"),
 		lines(`{"sessionId":"cc-new","cwd":"/w/claude","gitBranch":"main"}`), fresh)
 	write(t, filepath.Join(roots.Claude, "proj", "cc-old.jsonl"),
@@ -245,6 +249,7 @@ func TestFindMergesEveryClient(t *testing.T) {
 		"cc-new": {CWD: "/w/claude", Branch: "main"},
 		"cx-1":   {CWD: "/w/codex", Branch: "dev"},
 		"oc-1":   {CWD: "/w/opencode"},
+		"cp-1":   {CWD: "/w/copilot", Branch: "feat"},
 	}
 	if len(got) != len(want) {
 		t.Errorf("Find = %+v, want %+v", got, want)

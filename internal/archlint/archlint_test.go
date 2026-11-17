@@ -169,6 +169,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexrollout",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot",
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilotcli",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/fireworks",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/geminicli",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/heartbeat",

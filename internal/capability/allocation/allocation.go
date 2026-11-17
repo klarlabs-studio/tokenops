@@ -11,6 +11,7 @@ package allocation
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -65,13 +66,18 @@ var harnesses = []struct{ prefix, harness string }{
 	{"gemini-cli", "gemini-cli"},
 	{"pi-sessions", "pi"},
 	{"github-copilot", "copilot"},
+	{"copilot-cli", "copilot"},
 }
 
-// Harnesses lists the harnesses HarnessOf names, in its order.
+// Harnesses lists the harnesses HarnessOf names, in its order, each once:
+// several sources can name one harness (Copilot's quota and its CLI's
+// sessions).
 func Harnesses() []string {
-	out := make([]string, len(harnesses))
-	for i, h := range harnesses {
-		out[i] = h.harness
+	out := make([]string, 0, len(harnesses))
+	for _, h := range harnesses {
+		if !slices.Contains(out, h.harness) {
+			out = append(out, h.harness)
+		}
 	}
 	return out
 }
