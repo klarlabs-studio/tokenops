@@ -9,6 +9,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
+	"go.klarlabs.de/tokenops/internal/capability/effortweeks"
 	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
@@ -48,6 +49,7 @@ func DepsFor(cfg config.Config, agg *analytics.Aggregator, store *sqlite.Store, 
 		Records: transcriptRecords("", nil),
 		Savings: periodSavings,
 		Weeks:   storedWeeks,
+		Effort:  effortweeks.Stored,
 		Steps: func(ctx context.Context, now time.Time) []savings.Step {
 			var history []ft.Summary
 			if l, err := ftstore.Default(); err == nil {

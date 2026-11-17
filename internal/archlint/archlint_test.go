@@ -127,6 +127,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/intervention",
 	"go.klarlabs.de/tokenops/internal/contexts/learning",
 	"go.klarlabs.de/tokenops/internal/contexts/learning/compactwatch",
+	"go.klarlabs.de/tokenops/internal/contexts/learning/effortwatch",
 	"go.klarlabs.de/tokenops/internal/contexts/measurement",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",

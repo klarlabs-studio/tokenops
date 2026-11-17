@@ -790,6 +790,229 @@
                       },
                       "type": "array"
                     },
+                    "effort": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "client": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "prevented_usd_per_week_estimate": {
+                            "type": "number"
+                          },
+                          "verdict": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "change": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "at": {
+                                    "format": "date-time",
+                                    "type": "string"
+                                  },
+                                  "from": {
+                                    "type": "string"
+                                  },
+                                  "to": {
+                                    "type": "string"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "cost_per_instruction": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "after": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "before": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "change": {
+                                    "type": "number"
+                                  },
+                                  "spread": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "first_try_pct": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "after": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "before": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "change": {
+                                    "type": "number"
+                                  },
+                                  "spread": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "interrupted_pct": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "after": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "before": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "change": {
+                                    "type": "number"
+                                  },
+                                  "spread": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "judged": {
+                                "type": "boolean"
+                              },
+                              "outcomes_worse": {
+                                "type": "boolean"
+                              },
+                              "realized": {
+                                "type": "boolean"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "rejected_pct": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "after": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "before": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "change": {
+                                    "type": "number"
+                                  },
+                                  "spread": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "weekly_instructions_after": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "follow_through": {
                       "items": {
                         "additionalProperties": false,
@@ -1598,6 +1821,229 @@
                           },
                           "value": {
                             "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "effort": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "client": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "prevented_usd_per_week_estimate": {
+                            "type": "number"
+                          },
+                          "verdict": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "change": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "at": {
+                                    "format": "date-time",
+                                    "type": "string"
+                                  },
+                                  "from": {
+                                    "type": "string"
+                                  },
+                                  "to": {
+                                    "type": "string"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "cost_per_instruction": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "after": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "before": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "change": {
+                                    "type": "number"
+                                  },
+                                  "spread": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "first_try_pct": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "after": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "before": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "change": {
+                                    "type": "number"
+                                  },
+                                  "spread": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "interrupted_pct": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "after": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "before": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "change": {
+                                    "type": "number"
+                                  },
+                                  "spread": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "judged": {
+                                "type": "boolean"
+                              },
+                              "outcomes_worse": {
+                                "type": "boolean"
+                              },
+                              "realized": {
+                                "type": "boolean"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "rejected_pct": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "after": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "before": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "high": {
+                                        "type": "number"
+                                      },
+                                      "low": {
+                                        "type": "number"
+                                      },
+                                      "mean": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "change": {
+                                    "type": "number"
+                                  },
+                                  "spread": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "weekly_instructions_after": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
                           }
                         },
                         "type": "object"

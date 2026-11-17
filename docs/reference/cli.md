@@ -2066,6 +2066,33 @@ forecast to run out) are never retired. Retirement is reversible:
 [`tokenops coach reinstate <kind>`](#tokenops-coach-reinstate-kind-all)
 brings a kind back, and only evidence after that counts again.
 
+#### Effort before and after
+
+When the effort level most of a model's instructions run at changes from
+one week to the next, whoever changed it (following the
+[effort suggestion](#effort-suggestion) or not), `tokenops coach` shows
+the change and what your own weeks say about it since:
+
+```
+  effort (a model's usual level changed; your own weeks before and after):
+    claude-opus-5-5 (claude-code) xhigh → medium from the week of 2026-10-05
+      cost per instruction $1.20 ($1.10–$1.30) → $0.50 ($0.45–$0.55)
+      first try 70% (65–75) → 71% (66–76) · rejected 5% (3–7) → 5% (4–6) · interrupted 4% (2–6) → 4% (3–5)
+      the cost per instruction fell beyond its week-to-week movement, …; about $35.00 a week prevented (an estimate, kept apart from found waste)
+```
+
+A week counts with 10 or more instructions of the model and a cost.
+Four counted weeks before the change are compared with the first four
+from it; until then the line says how many weeks it is waiting for.
+Figures are weekly means with 95% intervals. A saving is realized when the
+cost per instruction fell by more than its usual week-to-week change and
+no outcome rate worsened by more than 5 points; it then shows in the
+waste report's prevented figures as `effort`, an estimate, never in found
+waste. The same verdict is in the `tokenops_coach` MCP tool and the
+daemon's coach API as `effort`. It is a comparison, not an experiment:
+other changes in the same weeks are not ruled out
+([ADR 0022](../adr/0022-effort-judged-on-the-developers-own-weeks.md)).
+
 ### `tokenops coach reinstate <kind|all>`
 
 ```bash

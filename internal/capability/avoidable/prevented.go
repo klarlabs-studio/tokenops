@@ -44,6 +44,10 @@ const (
 	// the developer's own weeks show the setting realized a saving (ADR
 	// 0021).
 	MechCompaction = "compaction"
+	// MechEffort is the cost a lower effort level saved per instruction,
+	// once the developer's own weeks show the change realized a saving
+	// (ADR 0022). Observed, whoever made the change; an estimate.
+	MechEffort = "effort"
 	// MechLockout is the plan-window lockouts a pause or route avoided: a
 	// counterfactual estimate, priced in blocked minutes.
 	MechLockout = "lockout"
@@ -110,6 +114,8 @@ const (
 		"it would have run out before its reset; the minutes are those it would have stayed used up; not priced in dollars"
 	basisCmp = "the weekly drop in context carried above the compaction line, four weeks after the setting against four before, " +
 		"counted only when it and the reject rate fell beyond their usual week-to-week movement; at the period's average API price per token"
+	basisEff = "an estimate: the weekly fall in list-price cost per instruction after a model's usual effort level dropped, four weeks after against four before, " +
+		"times the instructions a week after it; counted only when the cost fell beyond its usual week-to-week movement and no outcome rate worsened by more than 5 points"
 )
 
 // buildPrevented sums the period's prevented spend by mechanism. It reads
@@ -174,7 +180,7 @@ func buildPrevented(in Inputs, r Report) Prevented {
 	lm := Mechanism{Key: MechLoopBreaker, Name: "calls the loop breaker stopped", Count: loop, Basis: basisLoop,
 		USD: measurement.Unknown(basisLoop)}
 
-	out.Mechanisms = []Mechanism{ref, fm, aut, bm, lm, compactionPrevented(in, rate), lockoutsAvoided(in)}
+	out.Mechanisms = []Mechanism{ref, fm, aut, bm, lm, compactionPrevented(in, rate), effortPrevented(in), lockoutsAvoided(in)}
 	for _, m := range out.Mechanisms {
 		if v, ok := m.USD.Amount(); ok {
 			out.USD += v
@@ -276,6 +282,33 @@ func compactionPrevented(in Inputs, rate float64) Mechanism {
 	m.USD = measurement.Unknown("no API price is known for the period's usage")
 	if rate > 0 {
 		m.USD = measurement.Estimated(float64(m.Tokens)*rate, "compaction weekly rollup", basisCmp)
+	}
+	return m
+}
+
+// effortPrevented is the realized saving of each lower effort level the
+// developer's weeks judged, over the part of the period after the change.
+// A change not yet judged, or judged not realized, counts nothing.
+func effortPrevented(in Inputs) Mechanism {
+	m := Mechanism{Key: MechEffort, Name: "cost saved by a lower effort level", Basis: basisEff,
+		USD: measurement.Unknown("no lower effort level has been judged a saving yet")}
+	var usd float64
+	for _, w := range in.Effort {
+		if !w.Verdict.Realized || w.PreventedUSDPerWeek <= 0 {
+			continue
+		}
+		start := in.Since
+		if start.Before(w.Verdict.Change.At) {
+			start = w.Verdict.Change.At
+		}
+		if !start.Before(in.Until) {
+			continue
+		}
+		m.Count++
+		usd += w.PreventedUSDPerWeek * in.Until.Sub(start).Hours() / (7 * 24)
+	}
+	if m.Count > 0 {
+		m.USD = measurement.Estimated(usd, "effort weekly rollup", basisEff)
 	}
 	return m
 }

@@ -8,6 +8,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/effortweeks"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/config"
@@ -65,6 +66,7 @@ func afterAvoidable(ctx context.Context, cfg config.Config, d avoidable.Deps, lo
 		if _, err := avoidable.RefreshWeeks(ctx, log, figures, dir, line, setAt, now); err != nil {
 			logger.Warn("compaction weeks not stored", "err", err)
 		}
+		refreshEffortWeeks(ctx, d, log, dir, now, logger)
 	}
 	ledger, levers := coachEnv(cfg)
 	for _, r := range coachcap.StepCompaction(cfg, coachcap.AskEnv{
@@ -107,5 +109,20 @@ func runAvoidable(ctx context.Context, d avoidable.Deps, dir string, delay, ever
 		case <-tick.C:
 			run()
 		}
+	}
+}
+
+// refreshEffortWeeks keeps each model's weekly series per effort level, so
+// a change of the level a model mostly runs at is judged on the
+// developer's own weeks (ADR 0022). A finished week is computed once.
+func refreshEffortWeeks(ctx context.Context, d avoidable.Deps, log avoidable.WeekLog, dir string, now time.Time, logger *slog.Logger) {
+	if d.Records == nil {
+		return
+	}
+	figures := func(ctx context.Context, start time.Time) (effortweeks.Week, error) {
+		return effortweeks.Figures(ctx, d.Records, d.Turns, start)
+	}
+	if _, err := effortweeks.Refresh(ctx, log, figures, dir, now); err != nil {
+		logger.Warn("effort weeks not stored", "err", err)
 	}
 }

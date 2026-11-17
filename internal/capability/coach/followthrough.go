@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/effortweeks"
 	"go.klarlabs.de/tokenops/internal/capability/routers"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 
@@ -299,6 +300,7 @@ func Status(cfg config.Config, l Ledger, levers ContextLevers, now time.Time) Re
 		r.Proposal = &p
 	}
 	r.Routers = DetectRouters()
+	r.Effort = StoredEffort()
 	if v := Verdicts(MoveStore(), now); len(v.Lines) > 0 {
 		r.Moves = &v
 	}
@@ -328,6 +330,10 @@ var SavingsDeps = func() savings.Deps {
 	d.Commits = nil
 	return d
 }
+
+// StoredEffort reads the judged changes of effort level the daemon keeps;
+// a variable so tests do not read the machine's cache.
+var StoredEffort = effortweeks.Stored
 
 // DetectRouters finds the external routers in each harness's path; a
 // variable so tests do not read the machine's settings.

@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/effortweeks"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
@@ -124,6 +125,8 @@ type Inputs struct {
 	// Compaction is the weekly rollup the compaction setting is judged
 	// on, nil when none is stored.
 	Compaction *Weeks
+	// Effort is each model's judged change of effort level (ADR 0022).
+	Effort []effortweeks.Watch
 }
 
 // Stop is an instruction the developer stopped: its session, when the
