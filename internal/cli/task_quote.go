@@ -16,7 +16,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/workquote"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -69,7 +68,7 @@ calibration line says how often quoted tasks stayed within their p90.`,
 			if err != nil {
 				return err
 			}
-			deps := workquote.Deps{Basis: basis, Rules: bcap.AllRules(cfg), Reports: quoteReports(ctx, cfg, store, now)}
+			deps := workquote.Deps{Basis: basis, Rules: bcap.AllRules(cfg), Reports: quoteHeadroom(ctx, cfg, store, now).Reports}
 			res, err := workquote.Prepare(ctx, deps, workquote.Request{
 				Instruction: args[0], Model: model, Effort: effort, Client: client, Provider: provider,
 			}, now)
@@ -112,18 +111,18 @@ func quoteBasis(ctx context.Context, cfg config.Config, store *sqlite.Store, now
 	return &b, nil
 }
 
-// quoteReports are the plans' current windows: the daemon's when it
+// quoteHeadroom is the plans' current windows: the daemon's when it
 // answers, else computed here.
-func quoteReports(ctx context.Context, cfg config.Config, store *sqlite.Store, now time.Time) []plans.HeadroomReport {
+func quoteHeadroom(ctx context.Context, cfg config.Config, store *sqlite.Store, now time.Time) headroom.HeadroomPayload {
 	var fromDaemon headroom.HeadroomPayload
 	if askDaemon(ctx, cfg, "/api/plans/headroom", 5*time.Second, &fromDaemon) {
-		return fromDaemon.Reports
+		return fromDaemon
 	}
 	res, err := headroom.Compute(ctx, localHeadroomDeps(&cfg, store), now)
 	if err != nil {
-		return nil
+		return headroom.HeadroomPayload{}
 	}
-	return res.Reports
+	return headroom.HeadroomPayload{Reports: res.Reports}
 }
 
 func writeQuote(w io.Writer, r *workquote.Result) {
