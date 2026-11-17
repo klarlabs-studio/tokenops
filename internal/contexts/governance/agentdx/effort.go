@@ -19,6 +19,10 @@ import (
 // likely to mean harder instructions as a worse setting. Compare levels
 // within one model, and only where both have enough instructions.
 type EffortRow struct {
+	// Client is the agent the instructions were read from (claude-code,
+	// codex, opencode): a model's effort is set per client, so levels are
+	// compared only within one.
+	Client       string `json:"client,omitempty"`
 	Model        string `json:"model"`
 	Effort       string `json:"effort"`
 	Instructions int    `json:"instructions"`
@@ -96,20 +100,21 @@ func ByEffortCosted(records []Record, cost CostOf) []EffortRow {
 	for _, r := range records {
 		bySession[r.SessionID] = append(bySession[r.SessionID], r)
 	}
-	groups := map[[2]string][]Unit{}
+	groups := map[[3]string][]Unit{}
 	for _, recs := range bySession {
 		for _, u := range Units(recs) {
 			if u.Effort == "" || u.Turns == 0 {
 				continue
 			}
-			k := [2]string{u.Model, u.Effort}
+			k := [3]string{u.Harness, u.Model, u.Effort}
 			groups[k] = append(groups[k], u)
 		}
 	}
 	rows := make([]EffortRow, 0, len(groups))
 	var total float64
 	for k, units := range groups {
-		row := effortRow(k[0], k[1], units)
+		row := effortRow(k[1], k[2], units)
+		row.Client = k[0]
 		if cost != nil {
 			for _, u := range units {
 				row.APIEquivalentUSD += cost(u)
@@ -127,6 +132,9 @@ func ByEffortCosted(records []Record, cost CostOf) []EffortRow {
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].Model != rows[j].Model {
 			return rows[i].Model < rows[j].Model
+		}
+		if rows[i].Client != rows[j].Client {
+			return rows[i].Client < rows[j].Client
 		}
 		return effortLess(rows[i].Effort, rows[j].Effort)
 	})

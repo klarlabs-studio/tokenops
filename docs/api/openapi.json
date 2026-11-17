@@ -3213,6 +3213,9 @@
                               "api_equivalent_usd": {
                                 "type": "number"
                               },
+                              "client": {
+                                "type": "string"
+                              },
                               "effort": {
                                 "type": "string"
                               },

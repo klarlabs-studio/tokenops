@@ -170,6 +170,8 @@ type (
 	ContextBand = agentdx.ContextBand
 	// EffortRow is one model and effort level's figures.
 	EffortRow = agentdx.EffortRow
+	// EffortSuggestion is a lower default effort worth trying for a model.
+	EffortSuggestion = agentdx.EffortSuggestion
 	// Unit is one instruction and everything the agent did for it.
 	Unit = agentdx.Unit
 )
@@ -177,6 +179,16 @@ type (
 // MinEffortInstructions is how many instructions a model and effort
 // level needs before its row is worth comparing.
 const MinEffortInstructions = agentdx.MinEffortInstructions
+
+// EffortOutcomeMargin is how far a lower level's outcome rates may trail
+// and still count as not worse, in percentage points.
+const EffortOutcomeMargin = agentdx.EffortOutcomeMargin
+
+// SuggestEffort finds, per client and model, a lower default effort that
+// did as well for materially less over a window of windowDays.
+func SuggestEffort(rows []EffortRow, windowDays int) []EffortSuggestion {
+	return agentdx.SuggestEffort(rows, windowDays)
+}
 
 // DegradationNote names how quality falls off as context grows, or is
 // empty when it does not.
