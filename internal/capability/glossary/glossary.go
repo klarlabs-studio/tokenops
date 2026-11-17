@@ -141,6 +141,19 @@ func terms() []Term {
 			How:   "Read per turn; an instruction takes the level most of its turns used.",
 			Read:  "Compare levels within one model and only with 30+ instructions each. A higher level doing worse may mean harder instructions, not a worse setting.",
 			Where: "tokenops dx (by model and effort)"},
+		{Name: "effort-suggestion", Aliases: []string{"effort suggestion", "lower effort", "effort lever", "default effort"}, Area: "dx",
+			Short: "a lower default effort for a model, where your own week shows it did as well for less",
+			What: "A model's price per token does not depend on its effort, but the tokens do: reasoning is billed as output. " +
+				"The suggestion names a lower level whose instructions went as well as the level you mostly use, and cost materially less.",
+			How: fmt.Sprintf("Within one model in one client, over the last 7 days: the level with the most instructions is the current one. "+
+				"A lower level qualifies when both have %d+ instructions and a cost, its first-try, rejected and interrupted rates are within %.0f points of the current level's, "+
+				"and one instruction costs at least %.0f%% less. Of several, the cheapest. The monthly figure is an estimate: your instructions at the current level, "+
+				"each priced at the difference, scaled to 30 days at list prices.",
+				agentdx.MinEffortInstructions, agentdx.EffortOutcomeMargin, agentdx.MinEffortCostDrop*100),
+			Read: agentdx.EffortConfound + " Treat it as a default worth trying, and raise the level for work that needs it. " +
+				"TokenOps never changes the setting: for Claude Code it names modelSettings.<model>.effortLevel in ~/.claude/settings.json (or /effort), " +
+				"for Codex model_reasoning_effort in ~/.codex/config.toml, which applies to every model; other clients get the advice alone.",
+			Where: "tokenops glance (findings), tokenops dx, the menu bar"},
 
 		{Name: "total-spend", Aliases: []string{"total spend", "cost", "spend"}, Area: "spend",
 			Short: "what usage billed per token cost",

@@ -131,6 +131,7 @@ func Compute(in Inputs) Report {
 	if in.Sessions != nil {
 		out = append(out, sessionFindings(in.Sessions.DX.Warnings, in.Sessions.DX.Recommendation)...)
 	}
+	out = append(out, effortFindings(in.Sessions, in.Coach)...)
 	out = append(out, anomalyFindings(in.Anomalies)...)
 	out = append(out, waste(in.ReadGuard, in.Coach)...)
 	out = append(out, wasteWeek(in.Waste, time.Now())...)

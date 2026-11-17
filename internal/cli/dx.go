@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 )
@@ -239,7 +240,7 @@ func writeDXText(w io.Writer, dx sessions.DX, bands []sessions.ContextBand, days
 		}
 	}
 
-	writeDXEffort(w, m.ByEffort)
+	writeDXEffort(w, m.ByEffort, days)
 
 	if len(bands) > 0 {
 		fmt.Fprintln(w, "\nQUALITY vs CONTEXT")
@@ -267,14 +268,17 @@ func writeDXText(w io.Writer, dx sessions.DX, bands []sessions.ContextBand, days
 
 // writeDXEffort prints the model × effort rows, where clients record
 // effort. Rows with a cost add what each level cost beside its first-try
-// success.
-func writeDXEffort(w io.Writer, rows []sessions.EffortRow) {
+// success, and a lower level that did as well for materially less is
+// suggested beneath them.
+func writeDXEffort(w io.Writer, rows []sessions.EffortRow, days int) {
 	if len(rows) == 0 {
 		return
 	}
 	costed := false
+	clients := map[string]bool{}
 	for _, r := range rows {
 		costed = costed || r.APIEquivalentUSD > 0
+		clients[r.Client] = true
 	}
 	fmt.Fprintln(w, "\nBY MODEL AND EFFORT")
 	fmt.Fprintf(w, "  %-26s %-7s %6s %6s %8s %9s %10s %9s",
@@ -293,6 +297,10 @@ func writeDXEffort(w io.Writer, rows []sessions.EffortRow) {
 		if model == "" {
 			model = "(unrecorded)"
 		}
+		if len(clients) > 1 && r.Client != "" {
+			// The same model in two clients is two rows: name the client.
+			model += " (" + r.Client + ")"
+		}
 		fmt.Fprintf(w, "  %-26s %-7s %6d %6.1f %8s %8dk %9.1f%% %8.1f%%",
 			model, r.Effort, r.Instructions, r.MedianTurns, humanSeconds(r.MedianSeconds),
 			r.MedianPeakContext/1000, r.FirstTryPct, r.RejectedPct)
@@ -308,6 +316,25 @@ func writeDXEffort(w io.Writer, rows []sessions.EffortRow) {
 	fmt.Fprintln(w, "  higher level doing worse may mean harder instructions, not a worse setting.")
 	if costed {
 		fmt.Fprintln(w, "  COST is what the instructions cost at list prices, not what was billed.")
+	}
+	writeEffortSuggestions(w, sessions.SuggestEffort(rows, days))
+}
+
+// writeEffortSuggestions prints each lower default effort worth trying,
+// with the exact setting where the client has one.
+func writeEffortSuggestions(w io.Writer, sgs []sessions.EffortSuggestion) {
+	for _, sg := range sgs {
+		fmt.Fprintf(w, "\n  Try %s effort for %s (%s): %.0f%% less per instruction than %s, with first-try,\n",
+			sg.To.Effort, sg.Model, sg.Client, sg.CostDropPct, sg.From.Effort)
+		fmt.Fprintf(w, "  rejected and interrupted within %.0f points.", sessions.EffortOutcomeMargin)
+		if sg.MonthlySavingUSD > 0 {
+			fmt.Fprintf(w, " About %s a month at your volume (estimate).", usd(sg.MonthlySavingUSD))
+		}
+		fmt.Fprintln(w)
+		if change, ok := coach.EffortChange(sg.Client, sg.Model, sg.To.Effort); ok {
+			fmt.Fprintf(w, "  To make it the default: %s.\n", change)
+		}
+		fmt.Fprintln(w, "  TokenOps does not change it for you. `tokenops explain effort-suggestion`")
 	}
 }
 

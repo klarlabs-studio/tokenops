@@ -2450,7 +2450,47 @@ the reasoning effort that handled them (Claude Code, Codex and opencode
 record both), so comparing `high` with `medium` on the same model is a
 matter of running a week at each. A row with fewer than 30 instructions
 is shown but marked as too small to compare. Sessions in throwaway directories (`/tmp`, benchmark clones)
-are excluded unless you pass `--include-scratch`.
+are excluded unless you pass `--include-scratch`. The same model in two
+clients is two rows, named by client.
+
+#### Effort suggestion
+
+A model's price per token does not depend on its effort, but the tokens
+do: reasoning is billed as output. Where your own instructions show a
+lower level doing as well for materially less, the coach suggests it as
+the default for that model. It is advice: TokenOps never changes the
+setting.
+
+A level is suggested, within one model in one client, when:
+
+- the current level is the one with the most instructions in the window,
+  and both it and the lower level have 30 or more instructions and a cost;
+- the lower level's first-try, rejected and interrupted rates are within
+  5 percentage points of the current level's;
+- one instruction at the lower level costs at least 25% less.
+
+Of several such levels, the cheapest is suggested. The monthly figure is
+labelled an estimate: your instructions at the current level in the
+window, each priced at the difference, scaled to 30 days at list prices.
+
+The suggestion is an observation, not an experiment. You raise effort for
+harder work, so the instructions at the lower level may simply have been
+easier; the suggestion says so every time. Try the lower level as the
+default and raise it for the work that needs it.
+
+Where the client has a setting for the default effort, the suggestion
+names it:
+
+| Client | The setting |
+|---|---|
+| Claude Code (2.1.251 or later) | `"modelSettings": {"<model>": {"effortLevel": "<level>"}}` in `~/.claude/settings.json`, or `/effort <level>` in a session on that model, which saves the same entry. Levels `low`, `medium`, `high`, `xhigh`; a suggested `max` or lower-than-`low` level gets advice only |
+| Codex | `model_reasoning_effort = "<level>"` in `~/.codex/config.toml`. It applies to every model Codex runs |
+| opencode | none verified; the advice alone |
+
+The suggestion shows in `tokenops dx` beneath the table and as a coach
+finding in `tokenops glance`, the menu bar and `/api/findings`, while the
+coach's `models` power is not `off`. `tokenops explain effort-suggestion`
+gives the rule.
 
 ## Story
 
