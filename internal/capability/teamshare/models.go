@@ -123,28 +123,29 @@ func ModelSpendRows(turns []analytics.SessionTurn, units []sessions.Unit, repoOf
 // prompt to its last activity, mapped by teamwire.EffortLevel; unknown
 // outside every instruction.
 func turnEffort(units []sessions.Unit) func(session string, at time.Time) string {
-	bySession := map[string][]sessions.Unit{}
-	for _, u := range units {
-		bySession[u.SessionID] = append(bySession[u.SessionID], u)
+	type span struct {
+		start, end time.Time
+		effort     string
 	}
-	for _, us := range bySession {
-		slices.SortFunc(us, func(a, b sessions.Unit) int { return a.Start.Compare(b.Start) })
+	bySession := map[string][]span{}
+	for _, u := range units {
+		end := u.End
+		if u.LastActivity.After(end) {
+			end = u.LastActivity
+		}
+		bySession[u.SessionID] = append(bySession[u.SessionID], span{u.Start, end, teamwire.EffortLevel(u.Effort)})
+	}
+	for _, ss := range bySession {
+		slices.SortFunc(ss, func(a, b span) int { return a.start.Compare(b.start) })
 	}
 	return func(session string, at time.Time) string {
-		us := bySession[session]
+		ss := bySession[session]
 		// The last instruction typed at or before the moment.
-		i := sort.Search(len(us), func(i int) bool { return us[i].Start.After(at) }) - 1
-		if i < 0 {
+		i := sort.Search(len(ss), func(i int) bool { return ss[i].start.After(at) }) - 1
+		if i < 0 || at.After(ss[i].end) {
 			return teamwire.EffortUnknown
 		}
-		end := us[i].End
-		if us[i].LastActivity.After(end) {
-			end = us[i].LastActivity
-		}
-		if at.After(end) {
-			return teamwire.EffortUnknown
-		}
-		return teamwire.EffortLevel(us[i].Effort)
+		return ss[i].effort
 	}
 }
 
