@@ -19,6 +19,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexappserver"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	copilotusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilotcli"
 	cursorusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursor"
 	cursorturnspoll "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursorturns"
 	fireworksusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/fireworks"
@@ -121,6 +122,14 @@ func StartVendorUsagePollers(
 		})
 		sup.Go("pi-sessions", refreshable(sig, p.Run))
 		logger.Info("pi sessions poller live", "interval", cfg.VendorUsage.Pi.Interval, "root", cfg.VendorUsage.Pi.Root)
+	}
+	if cfg.VendorUsage.CopilotCLI.Enabled {
+		p := copilotcli.NewPoller(bus, copilotcli.PollerOptions{
+			Root: cfg.VendorUsage.CopilotCLI.Root, Interval: cfg.VendorUsage.CopilotCLI.Interval,
+			Logger: logger, CostSource: PlanCostSource(cfg, eventschema.ProviderGitHub),
+		})
+		sup.Go(copilotcli.SourceTag, refreshable(sig, p.Run))
+		logger.Info("copilot cli poller live", "interval", cfg.VendorUsage.CopilotCLI.Interval, "root", cfg.VendorUsage.CopilotCLI.Root)
 	}
 	if cfg.VendorUsage.Cursor.Enabled {
 		p := cursorusage.NewPoller(bus, cursorusage.PollerOptions{

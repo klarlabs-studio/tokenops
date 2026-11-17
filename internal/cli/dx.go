@@ -84,7 +84,7 @@ line says what the window held either way.`,
 		},
 	}
 	cmd.Flags().StringVar(&root, "root", "", "transcript root (defaults per source)")
-	cmd.Flags().StringVar(&source, "source", "auto", "client: auto | claude-code | codex | cursor | opencode")
+	cmd.Flags().StringVar(&source, "source", "auto", "client: auto | claude-code | codex | copilot | cursor | opencode")
 	cmd.Flags().IntVar(&days, "days", 7, "window in days; 0 reads everything")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	cmd.Flags().BoolVar(&fresh, "fresh", false, "read the transcripts now instead of the daemon's recent analysis (takes minutes on a busy machine)")

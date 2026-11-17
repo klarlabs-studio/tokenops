@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ func isolateHome(t *testing.T) string {
 	t.Setenv("XDG_DATA_HOME", "")
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("OPENCODE_DB", "")
+	t.Setenv("COPILOT_HOME", "")
 	return home
 }
 
@@ -334,5 +336,34 @@ func TestMissingDefaultStoreIsEmptyAndMissingConfiguredRootUnknown(t *testing.T)
 	missing := filepath.Join(t.TempDir(), "absent")
 	if at, ok := probeRoot(missing, func() (string, error) { return "", nil }, newestJSONLAt)(); ok || !at.IsZero() {
 		t.Errorf("configured missing root = %v, %v; want unknown", at, ok)
+	}
+}
+
+// Copilot CLI is probed through its reader's finder: a session-state
+// directory holding only operation locks is a real empty, and a session's
+// log is what the probe dates.
+func TestAllProbesCopilotCLI(t *testing.T) {
+	home := isolateHome(t)
+	var c config.Config
+	c.VendorUsage.CopilotCLI.Enabled = true
+	probe := All(c)["copilot-cli"]
+	if probe == nil {
+		t.Fatal("no copilot-cli probe")
+	}
+	if at, ok := probe(); !ok || !at.IsZero() {
+		t.Errorf("nothing installed = %v, %v; want zero, true", at, ok)
+	}
+	base := time.Date(2026, 11, 10, 9, 0, 0, 0, time.UTC)
+	state := filepath.Join(home, ".copilot", "session-state")
+	touch(t, filepath.Join(state, ".session-operation-locks", "a.lock"), base.Add(time.Hour))
+	if at, ok := probe(); !ok || !at.IsZero() {
+		t.Errorf("only locks = %v, %v; want zero, true", at, ok)
+	}
+	touch(t, filepath.Join(state, "s1", "events.jsonl"), base)
+	if at, ok := probe(); !ok || !at.Equal(base) {
+		t.Errorf("= %v, %v; want %v, true", at, ok, base)
+	}
+	if got := PresentLocalReaders(); !slices.Contains(got, "copilot-cli") {
+		t.Errorf("present readers %v; want copilot-cli", got)
 	}
 }

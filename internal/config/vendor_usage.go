@@ -16,6 +16,7 @@ type VendorUsageConfig struct {
 	OpenCode         OpenCodeUsageConfig        `yaml:"opencode"`
 	GeminiCLI        GeminiCLIUsageConfig       `yaml:"gemini_cli"`
 	Pi               PiUsageConfig              `yaml:"pi"`
+	CopilotCLI       CopilotCLIUsageConfig      `yaml:"copilot_cli"`
 	Anthropic        AnthropicUsageConfig       `yaml:"anthropic"`
 	GitHubCopilot    GitHubCopilotUsageConfig   `yaml:"github_copilot"`
 	Cursor           CursorUsageConfig          `yaml:"cursor"`
@@ -245,6 +246,19 @@ type OpenCodeUsageConfig struct {
 // chat recordings under ~/.gemini/tmp/*/chats for each model turn's
 // tokens. Empty Root defaults to that directory (GEMINI_CLI_HOME honoured).
 type GeminiCLIUsageConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// SwitchedOff records that the operator switched the reader off, so
+	// it is not turned back on when its data is found (see LocalReader).
+	SwitchedOff bool          `yaml:"switched_off,omitempty"`
+	Root        string        `yaml:"root"`
+	Interval    time.Duration `yaml:"interval"`
+}
+
+// CopilotCLIUsageConfig enables the GitHub Copilot CLI reader, which
+// parses the session logs under ~/.copilot/session-state for each
+// session's tokens per model, written when the session ends. Empty Root
+// defaults to that directory (COPILOT_HOME honoured).
+type CopilotCLIUsageConfig struct {
 	Enabled bool `yaml:"enabled"`
 	// SwitchedOff records that the operator switched the reader off, so
 	// it is not turned back on when its data is found (see LocalReader).

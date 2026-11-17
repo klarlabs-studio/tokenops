@@ -21,12 +21,20 @@ func providerGitHub() Descriptor {
 				Package: "internal/contexts/spend/vendorusage/copilot",
 				Fixture: "internal/contexts/spend/vendorusage/copilot/copilot_test.go",
 				Shows:   "the month's AI Credits (premium requests on annual plans) against the allowance; an org seat with none says so"},
+			// Copilot CLI writes tokens to its session log only when a
+			// session ends: the per-call usage event is ephemeral
+			// (github/copilot-sdk, session-events.schema.json).
+			{Name: "copilot_cli", Tag: "copilot-cli", Kind: LocalLog, Credential: LocalFile,
+				Switch: SwitchConfig, Reader: BespokeReader, Verified: FromClientSource,
+				Package: "internal/contexts/spend/vendorusage/copilotcli",
+				Fixture: "internal/contexts/spend/vendorusage/copilotcli/reader_test.go",
+				Shows:   "each Copilot CLI session's tokens per model from its session log, when the session ends"},
 		},
 		Opencode: []OpencodeID{{ID: "github-copilot"}, {ID: "github"}},
 		// models.dev lists the models Copilot serves at their vendors'
 		// per-token prices: the API-equivalent value of a Copilot turn.
 		ModelsDev: []string{"github-copilot"},
-		Docs:      Docs{Label: "GitHub Copilot", Setup: "`vendor_usage.github_copilot.enabled: true`; the OAuth token is found where the Copilot IDE plugins (~/.config/github-copilot) or the Copilot CLI (its environment variables, Keychain item or ~/.copilot/config.json) keep it; `use_gh_cli: true` also asks the GitHub CLI"},
+		Docs:      Docs{Label: "GitHub Copilot", Setup: "`vendor_usage.github_copilot.enabled: true`; the OAuth token is found where the Copilot IDE plugins (~/.config/github-copilot) or the Copilot CLI (its environment variables, Keychain item or ~/.copilot/config.json) keep it; `use_gh_cli: true` also asks the GitHub CLI; `vendor_usage.copilot_cli.enabled: true` reads Copilot CLI's session logs (turned on by `tokenops init` when they are on this machine)"},
 		// Since 2026-06-01 every monthly plan bills in GitHub AI Credits
 		// (1 credit = 0.01 USD), reset at 00:00 UTC on the 1st. The
 		// allowance is in the SourceURL; the vendor's own meter carries

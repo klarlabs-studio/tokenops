@@ -129,13 +129,15 @@ func ConsumptionInWindow(ctx context.Context, r EventReader, provider string, no
 	return out, nil
 }
 
-// perRequest reports whether an event is one request rather than a
-// vendor aggregate (a daily bucket, a quota snapshot). Only a request is
-// priced from its tokens: an aggregate repeats tokens the per-turn events
-// already carry, and pricing both would count the usage twice.
+// perRequest reports whether an event is priced from its tokens: one
+// request, or a session's aggregate that no per-turn event repeats
+// (Copilot CLI writes tokens only at a session's end), rather than a
+// vendor aggregate (a daily bucket, a quota snapshot). An aggregate that
+// repeats tokens the per-turn events already carry is not priced:
+// pricing both would count the usage twice.
 func perRequest(env *eventschema.Envelope) bool {
 	switch env.Attributes["granularity"] {
-	case "", "assistant_turn", "request":
+	case "", "assistant_turn", "request", "session":
 		return true
 	default:
 		return false
@@ -160,7 +162,7 @@ func countsAsMessage(env *eventschema.Envelope) bool {
 		return v == "true"
 	}
 	switch env.Attributes["granularity"] {
-	case "assistant_turn", "daily", "bucket", "quota_snapshot", "monthly_snapshot":
+	case "assistant_turn", "session", "daily", "bucket", "quota_snapshot", "monthly_snapshot":
 		return false
 	default:
 		return true

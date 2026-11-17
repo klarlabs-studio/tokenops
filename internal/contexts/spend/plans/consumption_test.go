@@ -132,6 +132,7 @@ func TestWindowConsumptionSkipsNonMessageGranularity(t *testing.T) {
 		mk("turn-1", "assistant_turn"), // JSONL reader → tokens only
 		mk("turn-2", "assistant_turn"), // JSONL reader → tokens only
 		mk("day-1", "daily"),           // legacy stats cache → tokens only
+		mk("sess-1", "session"),        // Copilot CLI session aggregate → tokens only
 	}}
 	got, err := ConsumptionInWindow(context.Background(), r, "anthropic", now, 5*time.Hour)
 	if err != nil {
@@ -140,8 +141,8 @@ func TestWindowConsumptionSkipsNonMessageGranularity(t *testing.T) {
 	if got.MessagesInWindow != 1 {
 		t.Errorf("MessagesInWindow = %d; want 1 (turns + daily rollups are not messages)", got.MessagesInWindow)
 	}
-	if got.TokensInWindow != 400 {
-		t.Errorf("TokensInWindow = %d; want 400 (all events' tokens count)", got.TokensInWindow)
+	if got.TokensInWindow != 500 {
+		t.Errorf("TokensInWindow = %d; want 500 (all events' tokens count)", got.TokensInWindow)
 	}
 }
 
@@ -184,11 +185,14 @@ func TestSpendInWindowPricesUsageAPlanWronglyCovered(t *testing.T) {
 	measured.Payload.(*eventschema.PromptEvent).CostUSD = 2
 	daily := envAt(at, "anthropic", 1000, "")
 	daily.Attributes = map[string]string{"granularity": "daily"}
+	session := envAt(at, "anthropic", 100, "")
+	session.Attributes = map[string]string{"granularity": "session"}
 	r := fakeReader{envs: []*eventschema.Envelope{
 		measured, // proxy-measured: $2 as is
 		envAt(at, "anthropic", 100, eventschema.CostSourcePlanIncluded), // stamped covered by mistake
 		envAt(at, "anthropic", 100, ""),                                 // billed, priced on read
 		daily,                                                           // a vendor aggregate repeats the turns
+		session,                                                         // a session aggregate no turn repeats
 		envAt(at, "openai", 100, ""),                                    // another provider
 	}}
 	var priced []eventschema.CostSource
@@ -200,8 +204,8 @@ func TestSpendInWindowPricesUsageAPlanWronglyCovered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != 4 {
-		t.Errorf("spend = %v, want 4 ($2 measured + $1 + $1 priced)", got)
+	if got != 5 {
+		t.Errorf("spend = %v, want 5 ($2 measured + $1 + $1 + $1 priced)", got)
 	}
 	for _, src := range priced {
 		if src != eventschema.CostSourceMetered {

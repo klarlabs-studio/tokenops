@@ -105,7 +105,7 @@ func TestHarnessOf(t *testing.T) {
 	for src, want := range map[string]string{
 		"claude-code-jsonl": "claude-code", "claude-code-statusline": "claude-code", "codex-jsonl": "codex",
 		"codex-app-server": "codex", "opencode": "opencode", "cursor-hook": "cursor", "pi-sessions": "pi",
-		"something-else": "something-else",
+		"copilot-cli": "copilot", "github-copilot": "copilot", "something-else": "something-else",
 	} {
 		if got := HarnessOf(src); got != want {
 			t.Errorf("HarnessOf(%q) = %q, want %q", src, got, want)

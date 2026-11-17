@@ -70,6 +70,7 @@ var configSwitches = map[string]func(Config) (enabled, alwaysOn bool){
 	"opencode":               func(c Config) (bool, bool) { return c.VendorUsage.OpenCode.Enabled, false },
 	"gemini-cli":             func(c Config) (bool, bool) { return c.VendorUsage.GeminiCLI.Enabled, false },
 	"pi-sessions":            func(c Config) (bool, bool) { return c.VendorUsage.Pi.Enabled, false },
+	"copilot-cli":            func(c Config) (bool, bool) { return c.VendorUsage.CopilotCLI.Enabled, false },
 	"vendor-usage-anthropic": func(c Config) (bool, bool) { return c.VendorUsage.Anthropic.Enabled, false },
 	"github-copilot":         func(c Config) (bool, bool) { return c.VendorUsage.GitHubCopilot.Enabled, false },
 	"cursor-web":             func(c Config) (bool, bool) { return c.VendorUsage.Cursor.Enabled, false },

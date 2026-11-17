@@ -40,6 +40,11 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 			return "set vendor_usage.pi.enabled: true (reads Pi's and OMP's session transcripts under ~/.pi/agent/sessions and ~/.omp/agent/sessions — per-turn tokens per provider and model)"
 		}
 		return ""
+	case "copilot-cli":
+		if !c.VendorUsage.CopilotCLI.Enabled {
+			return "set vendor_usage.copilot_cli.enabled: true (reads GitHub Copilot CLI's session logs under ~/.copilot/session-state — each session's tokens per model, when it ends)"
+		}
+		return ""
 	case "vendor-usage-anthropic":
 		return configHintAnthropic(c.VendorUsage.Anthropic)
 	case "github-copilot":

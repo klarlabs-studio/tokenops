@@ -109,7 +109,7 @@ same filters tokenops_sessions takes.`,
 		},
 	}
 	cmd.Flags().StringVar(&root, "root", "", "transcript root (defaults per source)")
-	cmd.Flags().StringVar(&source, "source", "auto", "client: auto | claude-code | codex | cursor | opencode")
+	cmd.Flags().StringVar(&source, "source", "auto", "client: auto | claude-code | codex | copilot | cursor | opencode")
 	cmd.Flags().IntVar(&days, "days", 7, "window in days; 0 reads everything")
 	cmd.Flags().IntVar(&limit, "limit", 10, "show at most this many tasks; 0 for all")
 	cmd.Flags().DurationVar(&idleGap, "idle-gap", 0, "pause that starts a new task (default 10m; negative disables splitting)")
