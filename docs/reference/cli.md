@@ -520,9 +520,20 @@ It is advice: TokenOps never switches a plan. When a cheaper option would
 have saved at least $10 and a tenth of the bill with no more than one
 lockout a month, the glance, the menu bar and `/api/findings` say so once
 as an info finding. `--json`, `GET /api/plans/advice?days=` and
-`tokenops_glance (view=plan_advice)` give the same answer. Only Claude's
-tiers are replayed so far; ChatGPT's tiers are not modelled as multiples
-of each other, and `plan advise` says so.
+`tokenops_glance (view=plan_advice)` give the same answer. Only tiers
+with stated multiples of each other are replayed (Claude's, and ChatGPT
+Plus with its named Pro tiers).
+
+A plan whose tiers the catalog states no usage multiple between (Cursor,
+GitHub Copilot, ChatGPT Pro with no tier named) cannot be replayed, so it
+is valued instead: `plan advise` says `valued over the last N days`, prints
+the usage the plan covered at the underlying models' API list price as an
+estimate (not what the vendor charges), with its multiple of the fee when
+the plan has a price (yours from `plan history`, else the list price), and
+recommends keeping the plan. With no limit measured it never suggests
+another tier or cancelling. `--json` marks such advice `value_only`. A plan
+billed per token (pay-as-you-go, usage-based Enterprise) has no fee to
+weigh and is only noted.
 
 #### Limits your windows show: `plan observed`
 
