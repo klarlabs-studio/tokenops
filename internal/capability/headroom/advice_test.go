@@ -411,7 +411,7 @@ func TestAdviseProjectsTheWeekToItsReset(t *testing.T) {
 func TestAdviseValuesPlansItCannotReplay(t *testing.T) {
 	now := time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)
 	since := now.Add(-30 * 24 * time.Hour)
-	var envs []*eventschema.Envelope
+	envs := make([]*eventschema.Envelope, 0, 60)
 	for i := range 30 {
 		at := since.Add(time.Duration(i)*24*time.Hour + time.Hour)
 		for _, p := range []eventschema.Provider{eventschema.ProviderCursor, eventschema.ProviderGitHub} {

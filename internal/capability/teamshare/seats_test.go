@@ -244,8 +244,9 @@ func TestSchema6UploadCarriesSeatValue(t *testing.T) {
 // and the advice's list value, the plan in force as its one option, and a
 // stay that the seat table reads as keep, never a tier move or a cancel.
 func TestValuedSeatCrosses(t *testing.T) {
-	var envs []*eventschema.Envelope
-	for _, e := range seatEvents() {
+	seat := seatEvents()
+	envs := make([]*eventschema.Envelope, 0, len(seat))
+	for _, e := range seat {
 		c := *e
 		p := *e.Payload.(*eventschema.PromptEvent)
 		p.Provider = eventschema.ProviderCursor
