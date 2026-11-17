@@ -181,6 +181,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow",
 	"go.klarlabs.de/tokenops/internal/contexts/tasks",
 	"go.klarlabs.de/tokenops/internal/contexts/work/fromstory",
+	"go.klarlabs.de/tokenops/internal/contexts/work/quote",
 	"go.klarlabs.de/tokenops/internal/contexts/work",
 	"go.klarlabs.de/tokenops/internal/contexts/work/windowshare",
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb",

@@ -2,6 +2,7 @@ package plans
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -155,4 +156,53 @@ func Calibrate(provider string, ws []QuotaWindow, since, now time.Time,
 		mid = (ratios[len(ratios)/2-1] + mid) / 2
 	}
 	return WindowCalibration{Provider: provider, Window: longest.Label, Windows: len(ratios), TokensPerPct: mid}, true
+}
+
+// ValueRate is the list value one percent of a provider's plan window
+// held, per window kind, measured from the operator's own windows. Plan
+// windows meter use at about the vendor's API-equivalent rates (ADR
+// 0017), so it converts a price into a share of the window. It is an
+// estimate: the vendor's weights are not published.
+type ValueRate struct {
+	Provider string        `json:"provider"`
+	Window   string        `json:"window"`
+	Duration time.Duration `json:"duration_ns"`
+	// Windows is how many reset windows the rate was measured over.
+	Windows   int     `json:"windows"`
+	USDPerPct float64 `json:"usd_per_pct"`
+}
+
+// ValueRates measures, for each window kind that is not scoped to one
+// model, the median list value per percent over the windows that reset
+// in [since, now] and filled to MinCalibrationPeakPct. valueIn is the
+// list value of the provider's plan-covered turns in [from, to]. Kinds
+// are ordered shortest first.
+func ValueRates(provider string, ws []QuotaWindow, since, now time.Time, valueIn func(from, to time.Time) float64) []ValueRate {
+	ratios := map[string][]float64{}
+	length := map[string]time.Duration{}
+	for _, in := range WindowInstances(ws, since, now) {
+		if in.Duration <= 0 || in.PeakPct < MinCalibrationPeakPct || strings.Contains(in.Label, " ") {
+			continue
+		}
+		if v := valueIn(in.Start, in.End); v > 0 {
+			ratios[in.Label] = append(ratios[in.Label], v/in.PeakPct)
+			length[in.Label] = in.Duration
+		}
+	}
+	out := make([]ValueRate, 0, len(ratios))
+	for label, rs := range ratios {
+		sort.Float64s(rs)
+		mid := rs[len(rs)/2]
+		if len(rs)%2 == 0 {
+			mid = (rs[len(rs)/2-1] + mid) / 2
+		}
+		out = append(out, ValueRate{Provider: provider, Window: label, Duration: length[label], Windows: len(rs), USDPerPct: mid})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Duration != out[j].Duration {
+			return out[i].Duration < out[j].Duration
+		}
+		return out[i].Window < out[j].Window
+	})
+	return out
 }
