@@ -3,6 +3,7 @@ package teamwire
 import (
 	"math"
 	"testing"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
@@ -98,6 +99,15 @@ func TestSeatAction(t *testing.T) {
 func TestLapseMinLeftPctIsPlans(t *testing.T) {
 	if LapseMinLeftPct != plans.LapseMinLeftPct {
 		t.Fatalf("LapseMinLeftPct = %v, want plans.LapseMinLeftPct %v", LapseMinLeftPct, plans.LapseMinLeftPct)
+	}
+}
+
+func TestAcceptableRateIsPlans(t *testing.T) {
+	if AcceptableLockoutsPerMonth != plans.AdviceFewLockouts {
+		t.Fatalf("AcceptableLockoutsPerMonth = %v, want plans.AdviceFewLockouts %v", AcceptableLockoutsPerMonth, plans.AdviceFewLockouts)
+	}
+	if got, want := time.Duration(AcceptableBlockedMinutesPerMonth*float64(time.Minute)), plans.AdviceFewBlocked; got != want {
+		t.Fatalf("AcceptableBlockedMinutesPerMonth = %v, want plans.AdviceFewBlocked %v", got, want)
 	}
 }
 
