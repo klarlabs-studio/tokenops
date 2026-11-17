@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -143,6 +144,47 @@ func TestWritePlanAdviceValueAndProjection(t *testing.T) {
 			}
 		}
 		for _, n := range tc.not {
+			if strings.Contains(out, n) {
+				t.Errorf("%s: output has %q:\n%s", tc.name, n, out)
+			}
+		}
+	}
+}
+
+// A plan valued rather than replayed says its value is an estimate at the
+// underlying models' list price and shows no table of tiers: there is
+// only the plan in force.
+func TestWritePlanAdviceValueOnly(t *testing.T) {
+	usd := func(v float64) *float64 { return &v }
+	for _, tc := range []struct {
+		name     string
+		multiple *float64
+		want     []string
+	}{
+		{"priced", usd(15.2), []string{
+			"cursor: Cursor Pro, valued over the last 30 days, confidence low",
+			"Value: $300.00 of usage at the underlying models' API list price (an estimate), 15.2x what the plan cost for those days",
+			"Recommendation: stay. Keep Cursor Pro",
+		}},
+		{"no price", nil, []string{
+			"Value: $300.00 of usage at the underlying models' API list price (an estimate); no price is recorded for the plan.",
+		}},
+	} {
+		res := headroom.AdviceResult{Providers: []headroom.Advice{{Provider: "cursor", Plan: "cursor-pro", Display: "Cursor Pro",
+			Days: 30, Confidence: "low", ValueOnly: true, ListValueUSD: usd(300), ValueMultiple: tc.multiple,
+			Options:        []headroom.AdviceOption{{Kind: "plan", Plan: "cursor-pro", Display: "Cursor Pro", Current: true, MonthlyUSD: usd(20)}},
+			Recommendation: &plans.Recommendation{Verdict: "stay", Kind: "plan", Plan: "cursor-pro", Summary: "Keep Cursor Pro: an estimate."}}}}
+		var b strings.Builder
+		if err := writePlanAdvice(&b, res); err != nil {
+			t.Fatal(err)
+		}
+		out := b.String()
+		for _, w := range tc.want {
+			if !strings.Contains(out, w) {
+				t.Errorf("%s: output missing %q:\n%s", tc.name, w, out)
+			}
+		}
+		for _, n := range []string{"replayed over", "LOCKOUTS", "a floor"} {
 			if strings.Contains(out, n) {
 				t.Errorf("%s: output has %q:\n%s", tc.name, n, out)
 			}
