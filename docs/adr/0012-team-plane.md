@@ -1,6 +1,6 @@
 # ADR 0012 — The team plane: hosted, derived figures only, aggregate by default
 
-- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*; amended 2026-11-10: an upload with a part unread is not sent, see *An upload is sent whole* under *Upload schema 2*; amended 2026-11-15: upload schema 5 (what was prevented, per finished week and mechanism), see *Upload schema 5*; amended 2026-11-16: upload schema 6 (seat value), see *Upload schema 6*; amended again 2026-11-16: schema 6 splits spend by catalog model and agent, see *Spend by model and agent* under *Upload schema 6*; amended 2026-11-17: a grant holder sees the seat advice of the members the grant covers, see *Seat advice under a grant*.
+- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation; amended 2026-10-28: beta billing (free while the Paddle billing is not yet configured), see *Beta billing*; amended 2026-10-30: upload schema 3 (spend by provider, units of work, vendor cost), see *Upload schema 3*; amended 2026-11-01: upload schema 4 (reverted commits on the units), see *Upload schema 4*; amended 2026-11-10: an upload with a part unread is not sent, see *An upload is sent whole* under *Upload schema 2*; amended 2026-11-15: upload schema 5 (what was prevented, per finished week and mechanism), see *Upload schema 5*; amended 2026-11-16: upload schema 6 (seat value), see *Upload schema 6*; amended again 2026-11-16: schema 6 splits spend by catalog model and agent, see *Spend by model and agent* under *Upload schema 6*; amended 2026-11-17: the split also carries reasoning effort as a closed enumeration, see the same section; amended 2026-11-17: a grant holder sees the seat advice of the members the grant covers, see *Seat advice under a grant*.
 - **Date:** 2026-10-08
 - **Deciders:** TokenOps maintainers
 - **Related:** issue #250, ADR 0004 (local-first; no BI product), ADR 0010 §5 (the API's privacy line)
@@ -414,11 +414,40 @@ coding agent ran it.
   `cursor`, `gemini-cli`, `pi`, `copilot` — as `allocation.HarnessOf`
   files a turn's source, and `other` for any other source (the proxy, an
   SDK). A test holds the list to allocation's.
-- **No reasoning effort.** The client records effort per instruction, as
-  the client's own label, not per turn; it is not split.
+- **Reasoning effort is a closed enumeration** (amended 2026-11-17,
+  replacing "no reasoning effort"). The key becomes day × repository ×
+  provider × model × agent × effort. Effort is the second dial on the
+  same decision as the model — a lookup at high effort on a flagship
+  model may be better served by lowering the effort than by switching
+  models — so a team deciding what its spend buys needs both. It crosses
+  only as one of `teamwire.Efforts`: the levels clients set, `none`,
+  `minimal`, `low`, `medium`, `high`, `xhigh`, `max` (the order
+  `agentdx` ranks them in; a test holds the two lists to each other),
+  `other` for a label outside that set, and `unknown` when no effort was
+  recorded — the single spelling of "not recorded". The client maps its
+  own label with `teamwire.EffortLevel` (case and spacing aside, a few
+  spellings such as `x-high` or `maximum`) and never sends the label
+  itself: an opencode variant, which the operator may name, crosses as
+  `other`. A closed list of a vendor's published setting names carries
+  nothing personal — it says how hard a model was asked to think, the
+  same for every member who chose it — and like the model it cannot
+  carry a name, a project or a sentence. Clients record effort with the
+  instruction (Claude Code on each entry of the session, Codex on each
+  turn's context, opencode on each message), and the transcripts are
+  read per instruction, so a turn takes the effort that served most of
+  the turns of the instruction it answered, in its session, from the
+  prompt to the instruction's last activity; a turn that answered no
+  instruction the transcripts hold (the proxy, Cursor, a client that
+  records no effort) is `unknown`. The rows still add up to the spend
+  rows exactly. Effort multiplies the rows, and `MaxModelSpend` stays the
+  spend rows' bound: a client whose split by effort would pass it sends
+  every row's effort as `other` (the split by model and agent alone), and
+  leaves the section out only if that still passes; `tokenops team
+  preview` says which.
 
-New strings: the model (`ValidModel`) and the agent (`ValidAgent`), listed
-in `TestUploadHasNoFreeText` with each figure's bound. A server below
+New strings: the model (`ValidModel`), the agent (`ValidAgent`) and the
+effort (`ValidEffort`), listed in `TestUploadHasNoFreeText` with each
+figure's bound. A server below
 schema 6 gets schema 5 without the section, and a schema 5 upload carrying
 it is refused.
 

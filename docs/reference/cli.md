@@ -257,7 +257,14 @@ coding agent (`claude-code`, `codex`, `opencode`, `cursor`, `gemini-cli`,
 `pi`, `copilot`, or `other`). A model is sent only as its ID in the
 pricing catalog TokenOps ships, normalised (a dated ID is sent as its
 catalog row's); a model the catalog does not list, such as a fine-tune or
-a custom or local model, is sent as `other`.
+a custom or local model, is sent as `other`. Each row also carries the
+reasoning effort of the instruction its turns answered, as one of `none`,
+`minimal`, `low`, `medium`, `high`, `xhigh`, `max`; a level your client
+names otherwise (an opencode variant you named, say) is sent as `other`,
+never by its name, and a turn with no effort recorded (the proxy, Cursor,
+a turn outside any instruction) as `unknown`. If splitting by effort would
+make more rows than an upload carries, every row's effort is sent as
+`other` and `preview` says so.
 
 Your plan advice's verdict, its seat recommendation (keep, move down,
 upgrade, cancel) and its monthly effect are individual figures: someone

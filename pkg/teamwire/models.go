@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strings"
 	"sync"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
@@ -19,7 +20,9 @@ import (
 // "claude-opus-4-8". Anything the catalog does not price — a custom or
 // fine-tuned model, a router's or a local one, a name nobody knows — is
 // sent as ModelOther, so a model's name can say nothing the catalog does
-// not already publish. The agent is an enumeration.
+// not already publish. The agent is an enumeration, and so is the
+// reasoning effort: the client maps its own label to one of Efforts
+// (EffortLevel) and never sends the label.
 
 // Vocabulary and limits of the model split.
 const (
@@ -28,10 +31,54 @@ const (
 	// AgentOther is a turn recorded by no known coding agent: the proxy,
 	// an SDK, a reader of another client.
 	AgentOther = "other"
+	// EffortOther is a reasoning effort the client recorded under a label
+	// outside the set of levels; EffortUnknown a turn with no effort
+	// recorded, by a client that records none or a turn outside any
+	// instruction.
+	EffortOther   = "other"
+	EffortUnknown = "unknown"
 	// MaxModelSpend bounds the model rows. A day's rows split its spend
-	// rows, so the bound is theirs.
+	// rows, so the bound is theirs: the split by effort multiplies the
+	// rows, and a client whose split would pass the bound sends every
+	// row's effort as EffortOther before it leaves the split out.
 	MaxModelSpend = MaxSpend
 )
+
+// EffortLevels are the reasoning effort levels clients set, lowest first:
+// the order internal/contexts/governance/agentdx ranks them in (a test
+// there holds the two to each other).
+var EffortLevels = []string{"none", "minimal", "low", "medium", "high", "xhigh", "max"}
+
+// Efforts are every effort a model row may carry: EffortLevels,
+// EffortOther and EffortUnknown.
+var Efforts = append(slices.Clone(EffortLevels), EffortOther, EffortUnknown)
+
+// effortSynonyms are other spellings of a level that clients use.
+var effortSynonyms = map[string]string{
+	"x-high": "xhigh", "x_high": "xhigh", "extra-high": "xhigh", "extra_high": "xhigh", "extra high": "xhigh",
+	"maximum": "max", "med": "medium",
+}
+
+// EffortLevel is the effort a client's raw label crosses as: one of
+// Efforts, case and surrounding space aside, or a known spelling of a
+// level; EffortUnknown for an empty label; EffortOther for anything else.
+// The label itself never crosses.
+func EffortLevel(raw string) string {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	if s == "" {
+		return EffortUnknown
+	}
+	if ValidEffort(s) {
+		return s
+	}
+	if l, ok := effortSynonyms[s]; ok {
+		return l
+	}
+	return EffortOther
+}
+
+// ValidEffort reports whether s is one of Efforts.
+func ValidEffort(s string) bool { return slices.Contains(Efforts, s) }
 
 // Agents are the coding agents a turn can be filed under: the harnesses
 // TokenOps reads sessions from (internal/capability/allocation, which a
@@ -40,10 +87,10 @@ const (
 var Agents = []string{"claude-code", "codex", "opencode", "cursor", "gemini-cli", "pi", "copilot", AgentOther}
 
 // ModelSpend is what one machine's turns on one UTC day, in one
-// repository, with one provider, cost on one model through one agent. A
-// day's model rows are its spend rows split further: for each day,
-// repository and provider their turns, tokens, unpriced turns and dollars
-// add up to the spend row's.
+// repository, with one provider, cost on one model through one agent at
+// one reasoning effort. A day's model rows are its spend rows split
+// further: for each day, repository and provider their turns, tokens,
+// unpriced turns and dollars add up to the spend row's.
 type ModelSpend struct {
 	Day      string `json:"day"`
 	Repo     string `json:"repo"`
@@ -52,6 +99,9 @@ type ModelSpend struct {
 	Model string `json:"model"`
 	// Agent is one of Agents.
 	Agent string `json:"agent"`
+	// Effort is the reasoning effort of the instruction the turns answered,
+	// one of Efforts.
+	Effort string `json:"effort"`
 	// The figures, as on SpendBucket.
 	Turns            int64   `json:"turns"`
 	Tokens           int64   `json:"tokens"`
@@ -100,6 +150,9 @@ func (r ModelSpend) Validate() error {
 	if !ValidAgent(r.Agent) {
 		return fmt.Errorf("agent %q: not an agent", r.Agent)
 	}
+	if !ValidEffort(r.Effort) {
+		return fmt.Errorf("effort %q: not an effort", r.Effort)
+	}
 	return nil
 }
 
@@ -114,7 +167,7 @@ func (u Upload) validateModelSpend(covered map[string]bool) error {
 		return nil
 	}
 	if err := checkRows("spend_models", u.SpendModels, MaxModelSpend, covered, func(r ModelSpend) (string, string, error) {
-		return r.Day, r.Day + "/" + r.Repo + "/" + r.Provider + "/" + r.Model + "/" + r.Agent, r.Validate()
+		return r.Day, r.Day + "/" + r.Repo + "/" + r.Provider + "/" + r.Model + "/" + r.Agent + "/" + r.Effort, r.Validate()
 	}); err != nil {
 		return err
 	}

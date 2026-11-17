@@ -62,6 +62,7 @@ var constrainedStrings = map[string]string{
 	"ModelSpend.Provider":  "ValidProvider: the provider registry",
 	"ModelSpend.Model":     "ValidModel: an ID of the public pricing catalog in its normal form, or \"other\"",
 	"ModelSpend.Agent":     "ValidAgent: enumeration",
+	"ModelSpend.Effort":    "ValidEffort: enumeration of effort levels, \"other\" or \"unknown\"; never the client's label",
 }
 
 // boundedFigures is every figure a schema 5 prevented row and the schema 6

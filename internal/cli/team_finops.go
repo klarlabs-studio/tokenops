@@ -246,13 +246,14 @@ func writeModelSpend(out io.Writer, u teamwire.Upload, note string) {
 		return
 	}
 	fmt.Fprintln(out, "\n"+note)
-	fmt.Fprintf(out, "\nSpend by model and agent (a model the pricing catalog does not list is %q): %d rows.\n",
-		teamwire.ModelOther, len(u.SpendModels))
+	fmt.Fprintf(out, "\nSpend by model, agent and effort (a model the pricing catalog does not list is %q; "+
+		"an effort level outside the set is %q, none recorded %q): %d rows.\n",
+		teamwire.ModelOther, teamwire.EffortOther, teamwire.EffortUnknown, len(u.SpendModels))
 	w := tabwriter.NewWriter(out, 0, 4, 2, ' ', tabwriter.AlignRight)
-	fmt.Fprintln(w, "DAY\tREPO\tPROVIDER\tMODEL\tAGENT\tTURNS\tTOKENS\tBILLED\tVALUE\tUNPRICED\t")
+	fmt.Fprintln(w, "DAY\tREPO\tPROVIDER\tMODEL\tAGENT\tEFFORT\tTURNS\tTOKENS\tBILLED\tVALUE\tUNPRICED\t")
 	for _, r := range u.SpendModels {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\t%d\t$%.2f\t$%.2f\t%d\t\n", r.Day, r.Repo, r.Provider, r.Model, r.Agent,
-			r.Turns, r.Tokens, r.CostUSD, r.APIEquivalentUSD, r.UnpricedTurns)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t$%.2f\t$%.2f\t%d\t\n", r.Day, r.Repo, r.Provider, r.Model, r.Agent,
+			r.Effort, r.Turns, r.Tokens, r.CostUSD, r.APIEquivalentUSD, r.UnpricedTurns)
 	}
 	_ = w.Flush()
 }
