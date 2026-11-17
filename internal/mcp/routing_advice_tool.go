@@ -31,6 +31,9 @@ type RoutingAdviceDeps struct {
 	// tokenops_prepare_work gives are recorded and throttled. Nil gives
 	// tips by the coach's dials alone and records none.
 	CoachLedger func() coachcap.Ledger
+	// QuoteDir is where the daemon keeps the quote's basis; empty is
+	// workquote.DefaultDir.
+	QuoteDir string
 }
 
 func (d RoutingAdviceDeps) activeConfig() *config.Config {

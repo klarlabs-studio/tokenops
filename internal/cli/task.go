@@ -16,7 +16,7 @@ import (
 // newTaskCmd assembles the `tokenops task` family. Three verbs
 // today (start / done / list) — the cli surface stays flat so
 // `tokenops task start "fix auth"` reads naturally.
-func newTaskCmd() *cobra.Command {
+func newTaskCmd(rf *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "task",
 		Short: "Mark where a task starts and ends, so figures are per task",
@@ -35,6 +35,7 @@ Examples:
 	cmd.AddCommand(newTaskStartCmd())
 	cmd.AddCommand(newTaskDoneCmd())
 	cmd.AddCommand(newTaskListCmd())
+	cmd.AddCommand(newTaskQuoteCmd(rf))
 	return cmd
 }
 

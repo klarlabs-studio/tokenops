@@ -1365,6 +1365,56 @@ tokenops task list --since 7d --metrics
 tokenops task list --since 30d --json   # MCP-host friendly
 ```
 
+### `tokenops task quote <instruction>`
+
+A price before the work. `task quote` estimates what a task will take
+from your own similar instructions, before it starts:
+
+- **Cost at list prices**, p50 and p90: the median and the 90th
+  percentile of what your instructions in the last 30 days cost on the
+  same model, preferring the same effort and the same kind of work
+  (lookup, research, edit, deep) when there are enough of them. The
+  tokens they processed (cache reads included) beside it.
+- **Share of each current plan window** (5h, week): the price divided by
+  the list value one percent of that window held in your own past
+  windows, and what would be left after a p90 task. A window whose rate
+  was never measured shows only what is left.
+- **Boundaries**: each `continue` or `spend` rule a p90 task would meet,
+  with the plan as it would stand after the task and the task's cost read
+  as a session's. An enforced rule that asks means the operator approves
+  before the work, through the boundaries flow; an agent never approves
+  its own.
+
+Everything is labelled an estimate. With fewer than 20 instructions on
+the model in the last 30 days there is no number, only the count. The
+instruction is classified for its kind of work in memory and never stored.
+
+```bash
+tokenops task quote "fix the flaky retry test" --model claude-opus-4-5
+tokenops task quote "design the cache layer" --model claude-opus-4-5 --effort high --json
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--model` | the model the task will run on (required) |
+| `--effort` | the reasoning effort, when known |
+| `--client` | draw only on one client's instructions (`claude-code`, `codex`, `opencode`) |
+| `--provider` | the plan to set the quote against; default the provider most of the history went to |
+| `--json` | the full quote |
+
+The history is a stored basis the daemon keeps in
+`~/.tokenops/cache/work-quote-basis.json`: it computes it a few minutes
+after it starts and again whenever the event log has moved (checked every
+three hours). Without one, `task quote` computes it on the spot, which
+reads a month of transcripts and takes longer.
+
+Agents get the same quote in `tokenops_prepare_work`'s `quote`, which is
+recorded under the workflow. `tokenops_review_work` then sets it against
+what the task took — the cost of the turns that carried the workflow, and
+the share of the plan window read from the plan's meter at both ends —
+and the calibration line reports how often quoted tasks stayed within
+their p90 (shown once 10 have been checked; about 90% is honest).
+
 ## Vendor-side usage
 
 ### `tokenops vendor-usage setup claude-subscription`

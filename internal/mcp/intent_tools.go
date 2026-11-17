@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	mcpgo "go.klarlabs.de/mcp"
@@ -12,6 +13,7 @@ import (
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/workestimate"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
+	"go.klarlabs.de/tokenops/internal/capability/workquote"
 	"go.klarlabs.de/tokenops/internal/presentation"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -46,6 +48,10 @@ type reviewWorkResult struct {
 	// the estimate made at prepare. Absent for a workflow that was never
 	// prepared, since there is no starting point to measure from.
 	WindowShare *workestimate.ReviewResult `json:"window_share,omitempty"`
+	// Quote sets the quote prepare gave against the measured cost and
+	// window share, with how earlier quotes fared. Absent for a workflow
+	// that was never quoted.
+	Quote *workquote.Check `json:"quote,omitempty"`
 }
 
 func registerIntentTools(s *Server, d Deps) error {
@@ -53,7 +59,7 @@ func registerIntentTools(s *Server, d Deps) error {
 		return errors.New("mcp: server must not be nil")
 	}
 	s.Tool("tokenops_review_work").
-		Description("Review one completed or in-progress workflow in one call. Pass the workflow_id returned by tokenops_prepare_work. The result explicitly distinguishes measured evidence from no_evidence, summarizes steps and context growth, measures token and cost totals, and returns existing coaching findings. Findings are evidence-based suggestions, not applied changes. Returns aggregate trace metrics, not prompt content; no finding is not a quality assessment.").
+		Description("Review one completed or in-progress workflow in one call. Pass the workflow_id returned by tokenops_prepare_work. The result explicitly distinguishes measured evidence from no_evidence, summarizes steps and context growth, measures token and cost totals, sets the quote prepare gave against what the task took (with how often quotes stayed within their p90), and returns existing coaching findings. Findings are evidence-based suggestions, not applied changes. Returns aggregate trace metrics, not prompt content; no finding is not a quality assessment.").
 		OutputSchema(reviewWorkResult{}).
 		Handler(func(ctx context.Context, in reviewWorkInput) (mcpgo.StructuredResult, error) {
 			trace, err := workflowTrace(ctx, d, workflowTraceInput(in))
@@ -102,6 +108,11 @@ func registerIntentTools(s *Server, d Deps) error {
 					return mcpgo.StructuredResult{}, err
 				}
 				result.WindowShare = share
+				check, err := workquote.Review(ctx, d.Store, in.WorkflowID, quoteActual(result), time.Now().UTC())
+				if err != nil {
+					return mcpgo.StructuredResult{}, err
+				}
+				result.Quote = check
 			}
 			encoded, err := json.Marshal(result)
 			if err != nil {
@@ -119,6 +130,40 @@ func registerIntentTools(s *Server, d Deps) error {
 	return nil
 }
 
+// quoteActual is what review measured of the task, for checking its
+// quote: the cost of the turns that carried the workflow, and the share of
+// the plan window the meter read across it.
+func quoteActual(r *reviewWorkResult) workquote.Actual {
+	var a workquote.Actual
+	if r.EvidenceStatus == "measured" && r.Trace.TotalCostUSD > 0 {
+		a.CostUSD, a.CostMeasured = r.Trace.TotalCostUSD, true
+	}
+	if ws := r.WindowShare; ws != nil && ws.Actual.Measured {
+		if d, ok := windowLength(ws.Window); ok {
+			a.Window, a.SharePct, a.ShareMeasured = d, ws.Actual.SharePct, true
+		}
+	}
+	return a
+}
+
+// windowLength reads a window label as workestimate writes it: 5h, 7d.
+func windowLength(label string) (time.Duration, bool) {
+	if len(label) < 2 {
+		return 0, false
+	}
+	n, err := strconv.Atoi(label[:len(label)-1])
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	switch label[len(label)-1] {
+	case 'h':
+		return time.Duration(n) * time.Hour, true
+	case 'd':
+		return time.Duration(n) * 24 * time.Hour, true
+	}
+	return 0, false
+}
+
 func workInsight(stepCount int, findings []*eventschema.CoachingEvent) presentation.WorkInsight {
 	summaries := make([]string, 0, len(findings))
 	for _, finding := range findings {
@@ -133,6 +178,9 @@ func renderWorkInsight(result *reviewWorkResult) string {
 	body := renderWorkEvidence(result)
 	if result.WindowShare != nil {
 		body += "\n\nPlan window: " + result.WindowShare.Summary + "."
+	}
+	if result.Quote != nil {
+		body += "\n\nQuote: " + result.Quote.Summary + "."
 	}
 	return body
 }
