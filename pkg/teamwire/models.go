@@ -211,3 +211,21 @@ func (u Upload) validateModelSpend(covered map[string]bool) error {
 func sameDollars(a, b float64) bool {
 	return math.Abs(a-b) <= 1e-6*math.Max(1, math.Max(math.Abs(a), math.Abs(b)))
 }
+
+// CatalogModels are every model ID a row may carry, whichever provider
+// served it: each catalog row's ID (a prefix row as its stem, so
+// "claude-opus-4-8*" is "claude-opus-4-8") that is its own normal form,
+// sorted, then ModelOther. A reseller's row carries its vendor's ID, which
+// is listed under that vendor's row. A server that publishes a figure for
+// every one of them, used or not, reveals nothing by which names appear.
+func CatalogModels() []string {
+	var ms []string
+	for k := range catalog().Rates {
+		m := strings.TrimSuffix(k.Model, "*")
+		if m != ModelOther && CatalogModel(string(k.Provider), m) == m {
+			ms = append(ms, m)
+		}
+	}
+	slices.Sort(ms)
+	return append(slices.Compact(ms), ModelOther)
+}

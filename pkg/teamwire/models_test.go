@@ -195,3 +195,37 @@ func TestEffortLevel(t *testing.T) {
 		t.Error("ValidEffort accepts a label outside the set")
 	}
 }
+
+// A server that publishes a figure for every model a row may carry needs
+// the list itself, so which models a week used is never revealed by which
+// names appear.
+func TestCatalogModelsAreEveryUploadableID(t *testing.T) {
+	ms := CatalogModels()
+	if len(ms) < 2 || ms[len(ms)-1] != ModelOther {
+		t.Fatalf("CatalogModels() = %v, want catalog IDs then %q", ms, ModelOther)
+	}
+	seen := map[string]bool{}
+	for i, m := range ms {
+		if strings.HasSuffix(m, "*") {
+			t.Errorf("%q is a prefix row, not an ID", m)
+		}
+		if seen[m] {
+			t.Errorf("%q listed twice", m)
+		}
+		seen[m] = true
+		if i > 0 && m != ModelOther && ms[i-1] >= m {
+			t.Errorf("not sorted at %q after %q", m, ms[i-1])
+		}
+	}
+	// Every ID an upload can carry is listed, a reseller's included.
+	for _, c := range []struct{ provider, model string }{
+		{"anthropic", "claude-opus-4-8-20261001"},
+		{"openai", "gpt-4o-2024-08-06"},
+		{"github", "claude-opus-4.8"},
+		{"ollama", "llama3:8b"},
+	} {
+		if id := CatalogModel(c.provider, c.model); !seen[id] {
+			t.Errorf("CatalogModel(%s, %q) = %q is not listed", c.provider, c.model, id)
+		}
+	}
+}
