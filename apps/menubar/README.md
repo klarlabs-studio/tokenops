@@ -47,7 +47,8 @@ tokenops menubar    # installs it to ~/Applications and opens it
 ```
 
 Right-click the icon for Launch at Login. Upgrades replace the installed copy and
-restart it if it is running. The app is signed ad hoc, not notarized, so it
+reopen it when it was running or you keep it in the menu bar: the app records in
+its preferences that it is open, and that you quit it when you use Quit. The app is signed ad hoc, not notarized, so it
 reaches you through the Homebrew cask, whose install step clears macOS's
 quarantine flag; a copy downloaded with a browser is blocked by Gatekeeper.
 `scripts/build-menubar-app.sh` builds it (universal, arm64 and x86_64) for

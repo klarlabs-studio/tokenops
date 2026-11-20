@@ -209,6 +209,13 @@ type settings struct {
 	// Ring is the provider whose plan the icon shows; empty is Auto, the
 	// tightest plan across every one.
 	Ring string `json:"ring,omitempty"`
+	// Open is true while the app runs and false once the person quits it
+	// from its menu; nil from an app that did not record it. An upgrade
+	// reads it (with LaunchAtLogin) to reopen the app on the new version
+	// (internal/infra/menubarapp.Wanted reads the same keys).
+	Open *bool `json:"open,omitempty"`
+	// LaunchAtLogin mirrors the Launch at Login item.
+	LaunchAtLogin bool `json:"launch_at_login,omitempty"`
 }
 
 func (s settings) alertsOn() bool { return s.Alerts == nil || *s.Alerts }

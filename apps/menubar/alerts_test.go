@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -234,5 +235,36 @@ func TestWarningNamesTheForecastRate(t *testing.T) {
 		if got := warning(m, 1).Body; got != tc.want {
 			t.Errorf("basis %q: %q, want %q", tc.basis, got, tc.want)
 		}
+	}
+}
+
+// The app records whether the person keeps it in the menu bar, in the
+// keys the daemon reads on an upgrade (menubarapp.Wanted): open while it
+// runs, closed once they quit it, and the other settings kept.
+func TestOpenIsRecordedForTheUpgrade(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "TokenOps", "menubar.json")
+	m := &menubar{prefs: path, settings: settings{Ring: "openai"}}
+	tests := []struct {
+		name string
+		do   func()
+		want string
+	}{
+		{"started", func() { m.recordOpen(true) }, `{"ring":"openai","open":true}`},
+		{"quit from the menu", func() { m.recordOpen(false) }, `{"ring":"openai","open":false}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.do()
+			b, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(b) != tc.want {
+				t.Errorf("saved %s, want %s", b, tc.want)
+			}
+			if loadSettings(path).Ring != "openai" {
+				t.Error("the ring pin was lost")
+			}
+		})
 	}
 }

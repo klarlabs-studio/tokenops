@@ -1,10 +1,12 @@
 package menubarapp
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // bundle lays out a minimal app bundle: an Info.plist with the given
@@ -251,5 +253,213 @@ func TestShippedBesideResolvesSymlinkedBinary(t *testing.T) {
 	}
 	if ShippedBeside(filepath.Join(root, "nowhere", "tokenops")) != "" {
 		t.Error("a binary with no bundle beside it reported one")
+	}
+}
+
+// writeIntent writes the app's preferences file with the given JSON.
+func writeIntent(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "TokenOps", "menubar.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// The app records whether the person keeps it in the menu bar; the daemon
+// reads that back. Only an explicit yes counts: a missing, unreadable or
+// older file (no such keys) is not a request to open anything.
+func TestWantedReadsTheAppsIntent(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"left open", `{"open":true}`, true},
+		{"quit from its menu", `{"open":false}`, false},
+		{"quit, but launch at login on", `{"open":false,"launch_at_login":true}`, true},
+		{"launch at login on, open unknown", `{"launch_at_login":true}`, true},
+		{"an older app that records neither", `{"ring":"anthropic"}`, false},
+		{"garbage", `not json`, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Wanted(writeIntent(t, tc.body)); got != tc.want {
+				t.Errorf("Wanted = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	if Wanted(filepath.Join(t.TempDir(), "absent.json")) {
+		t.Error("a missing file asked for the app")
+	}
+}
+
+// The incident: after an upgrade the app was gone from the menu bar,
+// because a refresh reopened it only when it happened to be running at the
+// moment the new daemon started. Whether the person keeps it in the menu
+// bar decides as well, so an app that was not running then (it had exited,
+// or macOS had not started it after a reboot) comes back on the new version.
+func TestRefreshReopensWhatThePersonKeepsInTheMenuBar(t *testing.T) {
+	tests := []struct {
+		name         string
+		running      bool
+		wanted       bool
+		wantQuit     int
+		wantOpened   int
+		wantReopened bool
+	}{
+		{"running and wanted", true, true, 1, 1, true},
+		{"running, intent unknown", true, false, 1, 1, true},
+		{"not running but kept in the menu bar", false, true, 0, 1, true},
+		{"not running and quit by the person", false, false, 0, 0, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			shipped := bundle(t, filepath.Join(root, "s"), "0.67.0", "1", "new")
+			installed := bundle(t, filepath.Join(root, "Applications"), "0.66.0", "1", "old")
+			f := &fakeOps{running: tc.running}
+			ops := f.ops()
+			ops.Wanted = func() bool { return tc.wanted }
+			res, err := Refresh(shipped, installed, ops)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !res.Refreshed || res.Relaunched != tc.wantReopened || f.quits != tc.wantQuit || len(f.opened) != tc.wantOpened {
+				t.Errorf("result=%+v quits=%d opened=%v", res, f.quits, f.opened)
+			}
+		})
+	}
+}
+
+// `tokenops menubar` always ends with the app open: it installs or
+// replaces the copy only when that is needed, never quits an app that is
+// already the shipped one, and opens it when it is not running.
+func TestInstallEndsWithTheAppOpen(t *testing.T) {
+	tests := []struct {
+		name          string
+		installed     string // "" means not installed
+		shipped       bool
+		running       bool
+		wantCopies    int
+		wantQuits     int
+		wantOpened    int
+		wantRefreshed bool
+	}{
+		{"first install", "", true, false, 1, 0, 1, true},
+		{"installed, current, not running", "new", true, false, 0, 0, 1, false},
+		{"installed, current, running", "new", true, true, 0, 0, 0, false},
+		{"installed, stale, running", "old", true, true, 1, 1, 1, true},
+		{"installed, stale, not running", "old", true, false, 1, 0, 1, true},
+		{"installed, nothing shipped (source build), not running", "old", false, false, 0, 0, 1, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			src := ""
+			if tc.shipped {
+				src = bundle(t, filepath.Join(root, "s"), "0.67.0", "1", "new")
+			}
+			dst := filepath.Join(root, "Applications", AppName)
+			if tc.installed != "" {
+				v := "0.67.0"
+				if tc.installed == "old" {
+					v = "0.66.0"
+				}
+				dst = bundle(t, filepath.Join(root, "Applications"), v, "1", tc.installed)
+			}
+			f := &fakeOps{running: tc.running}
+			ops := f.ops()
+			// A quit stops the app; an open starts it.
+			ops.Quit = func() { f.quits++; f.running = false }
+			ops.Open = func(p string) error { f.opened = append(f.opened, p); f.running = true; return nil }
+			res, err := Install(src, dst, ops)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(f.copies) != tc.wantCopies || f.quits != tc.wantQuits || len(f.opened) != tc.wantOpened || res.Refreshed != tc.wantRefreshed {
+				t.Errorf("result=%+v copies=%v quits=%d opened=%v", res, f.copies, f.quits, f.opened)
+			}
+			if !f.running {
+				t.Error("the app is not open at the end")
+			}
+		})
+	}
+}
+
+func TestInstallWithoutAnyAppSaysWhereItComesFrom(t *testing.T) {
+	f := &fakeOps{}
+	_, err := Install("", filepath.Join(t.TempDir(), AppName), f.ops())
+	if !errors.Is(err, ErrNotShipped) {
+		t.Fatalf("err = %v, want ErrNotShipped", err)
+	}
+}
+
+// An open is confirmed: `open` can return before the app is up, or hand
+// the request to an instance that is still exiting. The launch waits for
+// the process and asks once more before it reports failure.
+func TestLaunchConfirmsTheAppRuns(t *testing.T) {
+	tests := []struct {
+		name      string
+		upAfter   int // the app is seen running from this check on; -1 never
+		openErr   error
+		wantOpens int
+		wantErr   bool
+	}{
+		{"up at once", 0, nil, 1, false},
+		{"up after a few checks", 3, nil, 1, false},
+		{"first open lost, second works", launchChecks + 1, nil, 2, false},
+		{"never starts", -1, nil, 2, true},
+		{"open fails", -1, os.ErrPermission, 1, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			opens, checks := 0, 0
+			err := launch(
+				func() error { opens++; return tc.openErr },
+				func() bool { checks++; return tc.upAfter >= 0 && checks > tc.upAfter },
+				func(time.Duration) {},
+			)
+			if (err != nil) != tc.wantErr || opens != tc.wantOpens {
+				t.Errorf("err=%v opens=%d", err, opens)
+			}
+		})
+	}
+}
+
+// A quit waits for the process to be gone, so a reopen right after it is
+// not handed to the exiting instance; one that ignores the request is
+// stopped hard.
+func TestStopWaitsForTheAppToExit(t *testing.T) {
+	tests := []struct {
+		name      string
+		goneAfter int // checks until gone; -1 only after the hard stop
+		wantHard  bool
+	}{
+		{"exits at once", 0, false},
+		{"exits after a moment", 4, false},
+		{"ignores the request", -1, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			checks, hard := 0, false
+			stop(
+				func(force bool) { hard = hard || force },
+				func() bool {
+					checks++
+					if hard {
+						return false
+					}
+					return tc.goneAfter < 0 || checks <= tc.goneAfter
+				},
+				func(time.Duration) {},
+			)
+			if hard != tc.wantHard {
+				t.Errorf("hard stop = %v, want %v", hard, tc.wantHard)
+			}
+		})
 	}
 }

@@ -17,7 +17,8 @@ import (
 // The Homebrew cask unpacks it into a folder named for the version, so
 // running it from there would break its Launch at Login entry on every
 // upgrade. `tokenops menubar` copies it to ~/Applications instead, a path
-// that stays put, and the cask's upgrade hook refreshes that copy.
+// that stays put, and the daemon refreshes that copy when it starts on a
+// new binary (internal/daemon/menubar_refresh.go).
 
 // menubarApp is the bundle's name.
 const menubarApp = menubarapp.AppName
@@ -62,8 +63,9 @@ saying when it resets and, while it is still running, when it runs out at
 this pace; a window that alerted says so again when it resets. Right-click it for Launch at Login and Alerts.
 
 The app ships with the Homebrew install on macOS. Upgrades refresh the
-installed copy and restart it if it is running; --refresh does the same by
-hand and opens it only if it was running.`,
+installed copy and reopen it when it was running or you keep it in the menu
+bar (you did not quit it, or Launch at Login is on); --refresh does the same
+by hand. Without --refresh the command always ends with the app open.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if runtime.GOOS != "darwin" {
@@ -74,41 +76,27 @@ hand and opens it only if it was running.`,
 			if err != nil {
 				return err
 			}
-			return installMenubar(cmd.OutOrStdout(), src, dst, refresh)
+			return installMenubar(cmd.OutOrStdout(), src, dst, refresh, menubarapp.System())
 		},
 	}
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "replace the installed copy with this version's; reopen it only if it was running (the Homebrew upgrade hook)")
+	cmd.Flags().BoolVar(&refresh, "refresh", false, "replace the installed copy with this version's; reopen it only if it was running or is kept in the menu bar (what an upgrade does)")
 	return cmd
 }
 
-// installMenubar copies src over dst when src is there, and opens dst.
-// With refresh it changes nothing unless dst is installed, and reopens the
-// app only if it was running.
-func installMenubar(out io.Writer, src, dst string, refresh bool) error {
-	_, statErr := os.Stat(dst)
-	installed := statErr == nil
-	if refresh && !installed {
-		return nil // never installed: an upgrade does not install it
+// installMenubar puts the app at dst and opens it. With refresh it does
+// what an upgrade does: nothing unless dst is installed, and a reopen only
+// when the app was running or the person keeps it in the menu bar.
+func installMenubar(out io.Writer, src, dst string, refresh bool, ops menubarapp.Ops) error {
+	if refresh {
+		_, err := menubarapp.Refresh(src, dst, ops)
+		return err
 	}
-	if src == "" && !installed {
-		return errors.New("the menu bar app is not beside this binary: it ships with the Homebrew install (brew install --cask klarlabs-studio/tap/tokenops); from a source checkout, run `make menubar`")
+	res, err := menubarapp.Install(src, dst, ops)
+	if err != nil {
+		return err
 	}
-	ops := menubarapp.System()
-	running := ops.Running()
-	if src != "" {
-		if running {
-			ops.Quit()
-		}
-		if err := ops.Replace(src, dst); err != nil {
-			return fmt.Errorf("install %s: %w", dst, err)
-		}
+	if res.Refreshed {
 		fmt.Fprintf(out, "Installed %s\n", dst)
-	}
-	if refresh && !running {
-		return nil
-	}
-	if err := ops.Open(dst); err != nil {
-		return fmt.Errorf("open %s: %w", dst, err)
 	}
 	fmt.Fprintln(out, "TokenOps is in the menu bar: click the icon for the details, right-click it for Launch at Login and Alerts.")
 	return nil
