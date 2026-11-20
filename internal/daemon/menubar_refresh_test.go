@@ -80,3 +80,19 @@ func TestMenubarRefreshAtStartNeverInstalls(t *testing.T) {
 		t.Error("absent app exists after refresh")
 	}
 }
+
+// The incident: every upgrade logged relaunched=false and left the menu
+// bar empty, because the app was not running when the new daemon started.
+// An app the person keeps in the menu bar is reopened on the new version.
+func TestMenubarRefreshAtStartReopensAnAppThePersonKeeps(t *testing.T) {
+	root := t.TempDir()
+	shipped := writeApp(t, filepath.Join(root, "shipped"), "new build")
+	installed := writeApp(t, filepath.Join(root, "Applications"), "old build")
+	f := &menubarFake{running: false}
+	ops := f.ops()
+	ops.Wanted = func() bool { return true }
+	res := refreshMenubarAt(shipped, installed, ops, discardLogger())
+	if !res.Refreshed || !res.Relaunched || f.quits != 0 || f.opened != 1 {
+		t.Fatalf("kept app: %+v quits=%d opened=%d", res, f.quits, f.opened)
+	}
+}

@@ -11,6 +11,10 @@
 - **team:** `pkg/teamwire` exports `AcceptableLockoutsPerMonth` and `AcceptableBlockedMinutesPerMonth`, the rate of running out the plan advice accepts, so a team server judges a plan mix as the client does.
 - **team:** `teamwire.CatalogModels()` lists every model ID an upload can carry, in normal form and sorted, with `other` last, so a team server can show a model that has no spend yet.
 
+### Fixed
+
+- **menubar:** an upgrade no longer leaves the menu bar empty. The daemon reopened the app after refreshing it only when the app happened to be running at the moment the new daemon started; once it was not (it had exited, or macOS had not started it after a restart), every later upgrade logged `relaunched=false` and left it closed. The app now records in its preferences that it is open, and that you quit it when you use Quit, with its Launch at Login setting; an upgrade reopens it on the new version unless you quit it and Launch at Login is off. `tokenops menubar` always ends with the app open: it replaces the installed copy only when it differs, does not quit an app that is already current, waits for a quit app to exit before reopening it, and confirms the app is running after opening it (asking once more if not).
+
 ## 0.122.0 - 2026-11-17
 
 ### Added

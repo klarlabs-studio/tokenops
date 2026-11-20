@@ -324,6 +324,7 @@ func (m *menubar) register() error {
 // once, marked as reading; the first read can take as long as a busy
 // daemon does, and an app that shows nothing until then looks broken.
 func (m *menubar) Run(ctx context.Context) error {
+	m.recordOpen(true)
 	m.setTray(status{Title: "—", Tooltip: "TokenOps: reading the daemon…"})
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
@@ -654,6 +655,7 @@ func (m *menubar) onAction(id string) {
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "tokenops-menubar: launch at login:", err)
 		}
+		m.recordLogin()
 		m.refresh(ctx)
 	case actionAlerts:
 		m.toggleAlerts()
@@ -664,7 +666,50 @@ func (m *menubar) onAction(id string) {
 		}
 		m.refresh(ctx)
 	case actionQuit:
+		m.recordOpen(false)
 		m.app.Quit()
+	}
+}
+
+// recordOpen remembers whether the app is in the menu bar, with the
+// Launch at Login item: true at start, false when the person quits it. An
+// upgrade reopens the app the person keeps there; a kill, a crash or the
+// upgrade's own quit leaves it true.
+func (m *menubar) recordOpen(open bool) {
+	login := m.loginItem()
+	m.remember(func(s *settings) {
+		s.Open = &open
+		s.LaunchAtLogin = login
+	})
+}
+
+// recordLogin remembers the Launch at Login item after a change.
+func (m *menubar) recordLogin() {
+	login := m.loginItem()
+	m.remember(func(s *settings) { s.LaunchAtLogin = login })
+}
+
+// loginItem is whether Launch at Login is on; false where it cannot be
+// read.
+func (m *menubar) loginItem() bool {
+	if m.app == nil {
+		return false
+	}
+	on, err := m.app.LoginItemEnabled()
+	return err == nil && on
+}
+
+// remember applies change to the settings under m.mu and saves them.
+func (m *menubar) remember(change func(*settings)) {
+	m.mu.Lock()
+	change(&m.settings)
+	s := m.settings
+	m.mu.Unlock()
+	if m.prefs == "" {
+		return
+	}
+	if err := saveSettings(m.prefs, s); err != nil {
+		fmt.Fprintln(os.Stderr, "tokenops-menubar: settings:", err)
 	}
 }
 

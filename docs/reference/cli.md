@@ -290,7 +290,10 @@ this pace; a window that alerted says so again when it resets. Decisions a
 boundary is waiting on are listed in the panel: Deny answers at once, and
 with a presence key enrolled Approve shows the Touch ID dialog and answers
 inline (without one it opens a terminal running `tokenops approve`).
-Upgrades refresh the installed copy; `--refresh` stops only the app itself,
+Upgrades refresh the installed copy and reopen it when it was running or
+you keep it in the menu bar (you did not quit it from its menu, or Launch at
+Login is on). Without `--refresh` the command always ends with the app open,
+and it replaces the copy only when it differs. `--refresh` stops only the app itself,
 never the presence helper inside it, so a dialog you are answering is not
 cut off.
 
