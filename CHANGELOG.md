@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.123.0 - 2026-11-21
+
 ### Added
 
 - **coach:** a lower default reasoning effort is suggested where your own instructions show it did as well. Within one model in one client, a lower level than the one you use most is suggested when both have 30 or more instructions, its first-try, rejected and interrupted rates are within 5 points, and an instruction costs at least 25% less; of several, the cheapest. The monthly saving is an estimate, and every suggestion says that effort is raised for harder work, so this is an observation, not an experiment. It names the setting where the client has one (Claude Code's `modelSettings.<model>.effortLevel` or `/effort`, Codex's `model_reasoning_effort`). TokenOps never writes it. It shows as a coach finding while the `models` power is not `off`, beneath the `tokenops dx` table, and in `tokenops explain effort-suggestion`. `tokenops dx` effort rows now split by client as well as model and level.
