@@ -50,8 +50,8 @@ func (r *RecordedEvents) EachMatching(ctx context.Context, f Filter, fn func(*ev
 			if e.unixNano() >= until {
 				break
 			}
-			if e.env.Source == f.Source {
-				prompts = append(prompts, e.env)
+			if e.ev.source() == f.Source {
+				prompts = append(prompts, e.ev.envelope())
 			}
 		}
 	})
@@ -69,7 +69,7 @@ func (r *RecordedEvents) EachMatching(ctx context.Context, f Filter, fn func(*ev
 	i, j := 0, 0
 	for i < len(prompts) || j < len(others) {
 		var next *eventschema.Envelope
-		if j == len(others) || (i < len(prompts) && compareCached(cachedEvent{env: prompts[i]}, cachedEvent{env: others[j]}) < 0) {
+		if j == len(others) || (i < len(prompts) && compareEnvelopes(prompts[i], others[j]) < 0) {
 			next, i = prompts[i], i+1
 		} else {
 			next, j = others[j], j+1
@@ -120,8 +120,6 @@ func (s *Store) otherThan(ctx context.Context, t eventschema.EventType, f Filter
 			return nil, err
 		}
 	}
-	slices.SortFunc(out, func(a, b *eventschema.Envelope) int {
-		return compareCached(cachedEvent{env: a}, cachedEvent{env: b})
-	})
+	slices.SortFunc(out, compareEnvelopes)
 	return out, nil
 }

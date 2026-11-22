@@ -32,6 +32,8 @@ type interner struct {
 	sets map[uint64][]map[string]string
 	// keys holds the session keys handed out (SessionUsageCache).
 	keys map[sessionKey]*sessionKey
+	// prompts holds the prompt events' shared parts handed out (pack).
+	prompts map[promptKey]*promptShared
 	// held counts the strings and sets held.
 	held int
 }
@@ -50,6 +52,7 @@ func (in *interner) reset() {
 	in.strs = map[string]string{}
 	in.sets = map[uint64][]map[string]string{}
 	in.keys = map[sessionKey]*sessionKey{}
+	in.prompts = map[promptKey]*promptShared{}
 	in.held = 0
 }
 
@@ -101,7 +104,7 @@ func (in *interner) attributes(attrs map[string]string) map[string]string {
 	}
 	keep, sum := 0, uint64(0)
 	for k, v := range attrs {
-		if slices.Contains(uncachedAttributes, k) {
+		if in.leavesOut(k) {
 			continue
 		}
 		keep++
@@ -114,13 +117,18 @@ func (in *interner) attributes(attrs map[string]string) map[string]string {
 	}
 	out := make(map[string]string, keep)
 	for k, v := range attrs {
-		if !slices.Contains(uncachedAttributes, k) {
+		if !in.leavesOut(k) {
 			out[in.str(k)] = in.str(v)
 		}
 	}
 	in.room()
 	in.sets[sum] = append(in.sets[sum], out)
 	return out
+}
+
+// leavesOut reports whether the sets handed out leave attribute k out.
+func (in *interner) leavesOut(k string) bool {
+	return slices.Contains(uncachedAttributes, k)
 }
 
 // entryHash hashes one attribute. A set's hash is the sum of its entries',
