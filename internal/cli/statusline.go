@@ -16,6 +16,7 @@ import (
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/promptcache"
 	"go.klarlabs.de/tokenops/internal/capability/statusline"
+	"go.klarlabs.de/tokenops/internal/capability/statuslinepace"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
@@ -99,7 +100,10 @@ it on every turn with its session JSON on stdin. When under two minutes
 are left before the prompt cache expires it shows "cache cold in 1m", and
 "cache cold" once it has: the next prompt then writes the whole context
 to the cache again. In brackets is how much that is: "cache cold in 1m
-(182k)".
+(182k)". When a window runs out before it resets, it shows when, on the
+daemon's forecast (the glance's): "wk 26% left ↻Sat · out ~Wed 15:36".
+The daemon leaves that forecast in ~/.tokenops/statusline.json; the line
+uses it only while under ten minutes old and about the same window.
 
 It reads only what Claude Code hands it (for the cache, the timestamps
 and token counts at the end of the session's transcript, never its text)
@@ -114,7 +118,7 @@ working. ` + "`tokenops statusline install`" + ` sets this up.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			in, _ := io.ReadAll(io.LimitReader(cmd.InOrStdin(), 1<<20))
 			out := cmd.OutOrStdout()
-			for _, line := range statusLines(in) {
+			for _, line := range statusLinesAt(in, time.Now()) {
 				fmt.Fprintln(out, line)
 			}
 			if wrap != "" {
@@ -130,9 +134,12 @@ working. ` + "`tokenops statusline install`" + ` sets this up.`,
 	return cmd
 }
 
-// statusLines renders TokenOps' line from Claude Code's JSON. Anything
-// missing is left out rather than guessed.
-func statusLines(raw []byte) []string {
+// statusLines renders TokenOps' line from Claude Code's JSON for now.
+func statusLines(raw []byte) []string { return statusLinesAt(raw, time.Now()) }
+
+// statusLinesAt renders TokenOps' line from Claude Code's JSON at now.
+// Anything missing is left out rather than guessed.
+func statusLinesAt(raw []byte, now time.Time) []string {
 	var s claudeStatus
 	if json.Unmarshal(raw, &s) != nil {
 		return nil
@@ -140,7 +147,7 @@ func statusLines(raw []byte) []string {
 	// The windows are the vendor's own reading; the daemon stores them so
 	// headroom has them without a claude.ai login. Failing to keep them
 	// must not cost the operator their status line.
-	_ = claudelimits.Write("", s.limitsReading(time.Now()))
+	_ = claudelimits.Write("", s.limitsReading(now))
 	var cfg config.Config
 	if path, err := config.DefaultPath(); err == nil {
 		if loaded, err := config.Load(path); err == nil {
@@ -152,7 +159,7 @@ func statusLines(raw []byte) []string {
 		Effort:   s.Effort.Level,
 		CostUSD:  s.Cost.TotalCostUSD,
 		CacheHit: -1,
-		Now:      time.Now(),
+		Now:      now,
 		Color:    os.Getenv("NO_COLOR") == "",
 	}
 	if s.ContextWindow.UsedPercentage != nil {
@@ -169,16 +176,24 @@ func statusLines(raw []byte) []string {
 	if e, ok := promptcache.TranscriptExpiry(s.TranscriptPath); ok {
 		in.CacheExpiresAt, in.CacheTokens = e.At, e.Tokens
 	}
+	// The daemon's pace forecast, read from the file it keeps: only while
+	// fresh, and only for the window on the line (the same reset).
+	pace, paceOK := statuslinepace.Read(statuslinepace.DefaultPath())
 	for _, w := range []struct {
-		label string
-		win   *claudeWindow
-	}{{"5h", s.RateLimits.FiveHour}, {"wk", s.RateLimits.SevenDay}, {"limit", s.RateLimits.SpendLimit}} {
+		label, pace string
+		win         *claudeWindow
+	}{{"5h", "5h", s.RateLimits.FiveHour}, {"wk", "week", s.RateLimits.SevenDay}, {"limit", "", s.RateLimits.SpendLimit}} {
 		if w.win == nil {
 			continue
 		}
 		win := statusline.Window{Label: w.label, UsedPct: w.win.UsedPercentage}
 		if w.win.ResetsAt > 0 {
 			win.ResetsAt = time.Unix(w.win.ResetsAt, 0)
+		}
+		if paceOK && w.pace != "" {
+			if out, _, ok := pace.RunsOut("anthropic", w.pace, win.ResetsAt, now); ok {
+				win.RunsOutAt = out
+			}
 		}
 		in.Windows = append(in.Windows, win)
 	}
@@ -188,7 +203,7 @@ func statusLines(raw []byte) []string {
 	if r, ok := fxrate.Cached(cfg.Money); ok {
 		in.Rate = r
 	}
-	if tip, text, ok := statusTip(cfg, s.SessionID, in.Now); ok {
+	if tip, text, ok := statusTip(cfg, s.SessionID, now); ok {
 		in.Tip, in.TipUrgent = text, tip.Urgent()
 		recordTipSeen(s.SessionID, tip.ID, in.Now)
 	}
