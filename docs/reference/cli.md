@@ -1985,6 +1985,14 @@ Opus 5.5 high · ▰▰▰▰▱▱ 5h 62% ↻12:49 · wk 41% ↻Mon · ctx 71% 
 
 - the quota windows Claude Code reports (5-hour, weekly, or a gateway's
   spend limit), coloured green, amber and red as they fill;
+- when a window runs out before it resets, the daemon's forecast for it,
+  the one the glance shows (at the last hour's rate, else at this pace):
+  `wk 26% left ↻Sat · out ~Wed 15:36`, amber, red within two hours. Only
+  the soonest is shown. The daemon writes it to
+  `~/.tokenops/statusline.json` each time it computes the glance (the menu
+  bar asks every minute); the line uses it only while it is under ten
+  minutes old and names the same reset as the window on the line, and
+  shows nothing otherwise;
 - the context against **where the session compacts** (your coach's
   setting), so it warns before compaction rather than at 100%;
 - the prompt cache hit ratio, or, when under two minutes are left before
