@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **daemon:** the daemon's memory no longer grows with a month of your events. It kept every prompt event of the last month decoded in memory for the glance, about 640 bytes each, and the waste report kept every step of a fortnight's workflows, each with its own copy of the step's attributes, for two hours: on a busy machine (560,000 prompt events a month) that was about 700 MB live after the hourly team upload, 1 GB at its peak and a 1.4–1.6 GB footprint. Both now keep events packed, an event's own time and counts in a small record and what its session's turns repeat once, and build the events from it when they are read; reads that overlap share them. The waste report also no longer copies the month of turns it is handed. On a copy of that machine's store the daemon holds about 320 MB live after the team upload (230 MB before it) and peaks at about 570 MB. The glance, spend and waste figures are unchanged.
+
 ## 0.123.0 - 2026-11-21
 
 ### Added
