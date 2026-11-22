@@ -14,27 +14,41 @@ import (
 	"time"
 )
 
-// defaultMemoryLimit is the daemon's soft memory limit when GOMEMLIMIT is
-// not set. Without one the Go heap may double before a collection, and a
-// daemon that reads weeks of events held 1.5 to 2.3 GB on a busy machine
-// (#825). It is soft: the collector works harder near it, it never stops
-// the daemon.
-const defaultMemoryLimit = 1 << 30
+// memoryLimitFloor is the daemon's soft memory limit while the live heap
+// is small, when GOMEMLIMIT is not set. It is soft: the collector works
+// harder near it, it never stops the daemon.
+//
+// It was 1 GiB while the daemon held a month of decoded events (1.3 GB
+// live on a busy machine, #825, #888). With them packed the live heap is
+// a few hundred MB, and a 1 GiB limit let the heap grow to twice it
+// before each collection: most of the daemon's footprint.
+const memoryLimitFloor = 256 << 20
 
-// memoryLimitEnv and profilerEnv are the environment the daemon reads.
+// gcPercent is the heap growth before a collection, as GOGC: half again
+// the live heap, not Go's default of twice it. It is what bounds the heap
+// in steady work, and it follows a burst of live heap at once, where a
+// limit follows it only at its next tuning.
+const gcPercent = 50
+
+// memoryLimitEnv, gcPercentEnv and profilerEnv are the environment the
+// daemon reads.
 const (
 	memoryLimitEnv = "GOMEMLIMIT"
+	gcPercentEnv   = "GOGC"
 	profilerEnv    = "TOKENOPS_PPROF_ADDR"
 )
 
-// limitMemory sets the soft memory limit, leaving one set through
-// GOMEMLIMIT as it is.
+// limitMemory sets the collector's growth and the soft memory limit,
+// leaving one set through GOGC or GOMEMLIMIT as it is.
 func (s *startup) limitMemory(context.Context) error {
+	if os.Getenv(gcPercentEnv) == "" {
+		debug.SetGCPercent(gcPercent)
+	}
 	if os.Getenv(memoryLimitEnv) != "" {
 		s.logger.Info("memory limit from GOMEMLIMIT", "limit_bytes", debug.SetMemoryLimit(-1))
 		return nil
 	}
-	debug.SetMemoryLimit(defaultMemoryLimit)
+	debug.SetMemoryLimit(memoryLimitFloor)
 	stop := make(chan struct{})
 	go tuneMemoryLimit(stop, memoryTuneEvery, liveHeap, s.logger)
 	s.deferCleanup(func() { close(stop) })
@@ -42,16 +56,18 @@ func (s *startup) limitMemory(context.Context) error {
 }
 
 // memoryTuneEvery is how often the limit is matched to the live heap.
-const memoryTuneEvery = 30 * time.Second
+const memoryTuneEvery = 15 * time.Second
 
-// memoryLimitFor is the soft limit for a live heap: the default, or half
-// again the live heap when that is more. The limit trims the collector's
-// headroom (without one the heap doubles before a collection); below the
-// live heap it leaves none, and the collector runs back to back, capped
-// at half the CPU. A month of a busy machine's events outgrew the fixed
-// default (1.3 GB live), and that held the daemon at two cores.
+// memoryLimitFor is the soft limit for a live heap: twice it, or the
+// floor when that is more. The collector's own target (gcPercent) is half
+// again the live heap, so the limit stays clear of it and never binds in
+// steady work. Below the live heap a limit leaves no headroom and the
+// collector runs back to back, capped at half the CPU: a month of a busy
+// machine's events outgrew the old fixed limit and held the daemon at two
+// cores. Twice the live heap leaves a burst room to double between two
+// tunings.
 func memoryLimitFor(live uint64) int64 {
-	return max(int64(defaultMemoryLimit), int64(live+live/2))
+	return max(int64(memoryLimitFloor), int64(2*live))
 }
 
 // applyMemoryLimit sets the limit for live when it differs from the
