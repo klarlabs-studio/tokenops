@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -203,4 +204,85 @@ func BenchmarkTraceCache(b *testing.B) {
 			read(b, c.Reconstruct)
 		}
 	})
+}
+
+// liveHeapBytes is the heap still reachable after a full collection.
+func liveHeapBytes() uint64 {
+	runtime.GC()
+	runtime.GC()
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return m.HeapAlloc
+}
+
+// What the cache keeps of a workflow between reads is its events packed,
+// not its trace: a trace holds each step's decoded envelope and
+// attributes, which for a fortnight of a busy machine's workflows was
+// 210 MB of the daemon's heap for the two hours the cache keeps them.
+func TestTraceCacheKeepsWorkflowsPacked(t *testing.T) {
+	if testing.Short() {
+		t.Skip("appends 10,000 events")
+	}
+	const n, workflows = 10000, 50
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, t.TempDir()+"/e.db", sqlite.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	envs := make([]*eventschema.Envelope, 0, n)
+	for i := range n {
+		wf := fmt.Sprintf("codex:019a%04d-6b1c-7d2e-8f3a-4b5c6d7e8f90", i%workflows)
+		e := turnOf(fmt.Sprintf("cxj-%016x", i), wf, cacheNow.Add(-time.Duration(n-i)*time.Minute), int64(40000+i))
+		p := e.Payload.(*eventschema.PromptEvent)
+		p.PromptHash, p.SessionID, p.AgentID = "", wf, "codex:tokenops"
+		e.Attributes = map[string]string{
+			"session_id": wf, "plan_type": "pro", "primary_used_pct": fmt.Sprintf("%d.00", i/20%100),
+			"sequence": fmt.Sprint(i), "message_id": fmt.Sprintf("msg_%d", i),
+		}
+		envs = append(envs, e)
+	}
+	if err := store.AppendBatch(ctx, envs); err != nil {
+		t.Fatal(err)
+	}
+	c := NewTraceCache(store, spend.NewEngine(spend.DefaultTable()), time.Hour)
+
+	before := liveHeapBytes()
+	for i := range workflows {
+		if _, err := c.Reconstruct(ctx, fmt.Sprintf("codex:019a%04d-6b1c-7d2e-8f3a-4b5c6d7e8f90", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	perStep := (int64(liveHeapBytes()) - int64(before)) / n
+	runtime.KeepAlive(c)
+	t.Logf("the cache holds %d bytes per step", perStep)
+	if perStep > 300 {
+		t.Errorf("the cache holds %d bytes per step of the workflows it keeps; want at most 300", perStep)
+	}
+}
+
+// A step's envelope carries the attributes the event cache keeps, on the
+// read that reconstructs the workflow and on the reads after it alike.
+func TestTraceCacheStepsCarryTheCachedAttributes(t *testing.T) {
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, t.TempDir()+"/e.db", sqlite.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	e := turnOf("a", "wf", cacheNow.Add(-time.Minute), 100)
+	e.Attributes = map[string]string{"plan_type": "pro", "sequence": "3"}
+	if err := store.Append(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	c := NewTraceCache(store, spend.NewEngine(spend.DefaultTable()), time.Hour)
+	for _, read := range []string{"first read", "kept"} {
+		tr, err := c.Reconstruct(ctx, "wf")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := tr.Steps[0].Envelope.Attributes; !reflect.DeepEqual(got, map[string]string{"plan_type": "pro"}) {
+			t.Errorf("%s: attributes %v; want the plan type alone", read, got)
+		}
+	}
 }

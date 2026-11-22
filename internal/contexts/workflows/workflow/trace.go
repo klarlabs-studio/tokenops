@@ -60,6 +60,16 @@ var ErrNoTrace = errors.New("workflow: no prompts found for workflow_id")
 // computes step deltas + rollups. spendEng may be nil — costs then come
 // purely from the stored CostUSD field.
 func Reconstruct(ctx context.Context, store *sqlite.Store, spendEng *spend.Engine, workflowID string) (*Trace, error) {
+	envs, err := Events(ctx, store, workflowID)
+	if err != nil {
+		return nil, err
+	}
+	return FromEvents(workflowID, envs, spendEng)
+}
+
+// Events reads the prompt events Reconstruct builds workflowID's trace
+// from, oldest first.
+func Events(ctx context.Context, store *sqlite.Store, workflowID string) ([]*eventschema.Envelope, error) {
 	if store == nil {
 		return nil, errors.New("workflow: store is nil")
 	}
@@ -75,6 +85,14 @@ func Reconstruct(ctx context.Context, store *sqlite.Store, spendEng *spend.Engin
 	if err != nil {
 		return nil, fmt.Errorf("workflow: query: %w", err)
 	}
+	return envs, nil
+}
+
+// FromEvents is the trace of workflowID's prompt events envs, in the
+// order the store gives them (by time), priced by spendEng: what
+// Reconstruct returns once it has read them. ErrNoTrace when envs is
+// empty.
+func FromEvents(workflowID string, envs []*eventschema.Envelope, spendEng *spend.Engine) (*Trace, error) {
 	if len(envs) == 0 {
 		return nil, ErrNoTrace
 	}
