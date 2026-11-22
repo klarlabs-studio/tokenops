@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.124.0 - 2026-11-22
+
 ### Added
 
 - **statusline:** the line shows when a plan window runs out before its reset, on the forecast the glance shows: `wk 26% left ↻Sat · out ~Wed 15:36`, amber, or red within two hours; only the soonest. The daemon writes its forecast to `~/.tokenops/statusline.json` (0600: providers, windows, times and the rate's words, nothing else) each time it computes the glance, and the status line reads that file, never the daemon: it uses a forecast under ten minutes old for a window with the same reset, and shows nothing when the file is stale, missing or about another window, or the window lasts to its reset.
