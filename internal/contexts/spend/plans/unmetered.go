@@ -28,20 +28,10 @@ func LatestUnmeteredSeat(ctx context.Context, reader EventReader, provider event
 	if provider != eventschema.ProviderGitHub {
 		return nil
 	}
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-35*24*time.Hour))
-	if err != nil {
-		return nil
-	}
-	var best *eventschema.Envelope
-	for _, e := range events {
-		if e == nil || e.Attributes["seat"] == "" || readingProvider(e) != provider {
-			continue
-		}
-		if best == nil || e.Timestamp.After(best.Timestamp) {
-			best = e
-		}
-	}
-	if best == nil || best.Attributes["seat"] != "unmetered" {
+	best, err := newestWhere(ctx, reader, now.Add(-35*24*time.Hour), func(e *eventschema.Envelope) bool {
+		return e.Attributes["seat"] != "" && readingProvider(e) == provider
+	})
+	if err != nil || best == nil || best.Attributes["seat"] != "unmetered" {
 		return nil
 	}
 	seat := &UnmeteredSeat{Unit: best.Attributes["used_credits_unit"]}

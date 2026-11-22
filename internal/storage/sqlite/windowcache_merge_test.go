@@ -98,10 +98,10 @@ func BenchmarkMergeOneLateRow(b *testing.B) {
 	base := cacheNow.Add(-30 * 24 * time.Hour)
 	held := make([]cachedEvent, n)
 	for i := range held {
-		held[i] = cachedEvent{rowid: int64(i + 1), env: &eventschema.Envelope{
-			ID: fmt.Sprintf("e%06d", i), Timestamp: base.Add(time.Duration(i) * (30 * 24 * time.Hour / n))}}
+		held[i] = cachedEvent{rowid: int64(i + 1), ev: &packedEvent{
+			id: fmt.Sprintf("e%06d", i), ts: base.Add(time.Duration(i) * (30 * 24 * time.Hour / n)).UnixNano()}}
 	}
-	late := cachedEvent{rowid: n + 1, env: &eventschema.Envelope{ID: "late", Timestamp: base.Add(15 * 24 * time.Hour)}}
+	late := cachedEvent{rowid: n + 1, ev: &packedEvent{id: "late", ts: base.Add(15 * 24 * time.Hour).UnixNano()}}
 	b.Run("sort the window", func(b *testing.B) {
 		for b.Loop() {
 			b.StopTimer()

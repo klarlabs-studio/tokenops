@@ -374,7 +374,7 @@ func TestEventCacheWithConcurrentWriters(t *testing.T) {
 					t.Fatalf("round %d: %s answered twice", round, e.ID)
 				}
 				seen[e.ID] = true
-				if i > 0 && compareCached(cachedEvent{env: got[i-1]}, cachedEvent{env: e}) >= 0 {
+				if i > 0 && compareEnvelopes(got[i-1], e) >= 0 {
 					t.Fatalf("round %d: answer out of order at %d", round, i)
 				}
 			}

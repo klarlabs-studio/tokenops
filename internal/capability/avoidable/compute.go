@@ -2,6 +2,7 @@ package avoidable
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/commits"
@@ -113,6 +114,23 @@ func Days(ctx context.Context, d Deps, since, until time.Time) ([]Day, error) {
 	return out, nil
 }
 
+// turnsBefore is turns before until, in their order. Turns are read-only
+// here, so when every turn is before until (the report up to now, as the
+// team upload builds it) it is turns itself: a copy of a month of a busy
+// machine's turns is over 100 MB.
+func turnsBefore(turns []analytics.SessionTurn, until time.Time) []analytics.SessionTurn {
+	if !slices.ContainsFunc(turns, func(t analytics.SessionTurn) bool { return !t.At.Before(until) }) {
+		return turns
+	}
+	var out []analytics.SessionTurn
+	for _, t := range turns {
+		if t.At.Before(until) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 // gather reads everything the report for [since, until) is built from,
 // but the savings ledger and the graduations, which are read per period.
 func gather(ctx context.Context, d Deps, since, until time.Time) (Inputs, error) {
@@ -124,11 +142,7 @@ func gather(ctx context.Context, d Deps, since, until time.Time) (Inputs, error)
 	in := Inputs{Since: since, Until: until, Dirs: w.Dirs, RootOf: w.RootOf, CommitsOf: w.CommitsOf,
 		Waste: d.Waste, Price: d.Price, Lint: d.Lint, Traces: map[string]*workflow.Trace{}, Windows: map[string][]plans.QuotaWindow{},
 		Savings: savings.Report{RealizedUSD: measurement.Unknown("the savings ledger was not read")}}
-	for _, t := range w.Turns {
-		if t.At.Before(until) {
-			in.Turns = append(in.Turns, t)
-		}
-	}
+	in.Turns = turnsBefore(w.Turns, until)
 	if d.Events != nil {
 		if in.Outcomes, in.Windows, err = uniteconomics.ReadRecorded(ctx, d.Events, start, until); err != nil {
 			return Inputs{}, err

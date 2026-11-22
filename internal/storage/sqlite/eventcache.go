@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -27,21 +28,23 @@ import (
 // is windowCache's. Warm does the first read ahead of the first caller.
 //
 // The envelopes it returns are shared between reads and must not be
-// modified. It holds at most maxSpan of events per type (a month of a busy
-// machine's prompt events is ~180 MB decoded), and drops them all after
-// idle without a read, so a daemon nobody is polling holds none.
+// modified. Between reads it holds them packed (packedEvent): a month of
+// a busy machine's prompt events took 345 MB as envelopes. It holds at
+// most maxSpan of events per type, and drops them all after idle without
+// a read, so a daemon nobody is polling holds none.
 type EventCache struct {
 	windowCache[eventschema.EventType, cachedEvent]
 }
 
-// cachedEvent is one stored event and the row it was read from.
+// cachedEvent is one stored event, packed (packedEvent), and the row it
+// was read from.
 type cachedEvent struct {
 	rowid int64
-	env   *eventschema.Envelope
+	ev    *packedEvent
 }
 
 func (e cachedEvent) rowID() int64    { return e.rowid }
-func (e cachedEvent) unixNano() int64 { return e.env.Timestamp.UnixNano() }
+func (e cachedEvent) unixNano() int64 { return e.ev.ts }
 
 // Defaults for NewEventCache: a month and a little covers the glance's
 // furthest window (the start of the month or two weeks back), and the menu
@@ -105,7 +108,7 @@ func (c *EventCache) ReadEvents(ctx context.Context, t eventschema.EventType, si
 	ok, err := c.view(ctx, t, since.UTC().UnixNano(), func(rows []cachedEvent) {
 		out = make([]*eventschema.Envelope, len(rows))
 		for i, e := range rows {
-			out[i] = e.env
+			out[i] = e.ev.envelope()
 		}
 	})
 	if err != nil {
@@ -117,6 +120,68 @@ func (c *EventCache) ReadEvents(ctx context.Context, t eventschema.EventType, si
 	return out, nil
 }
 
+// ScanEvents calls fn with every event of type t at or after since, oldest
+// first or newest first, until fn returns false: what ReadEvents returns,
+// handed over one at a time (plans.EventScanner).
+//
+// A packed event is built into one envelope reused for every event, so a
+// scan of a month builds no month of envelopes: fn must not keep the
+// envelope or its payload, and may keep its strings and attributes. The
+// rows are taken under the cache's lock and walked outside it, so fn may
+// read the cache.
+func (c *EventCache) ScanEvents(ctx context.Context, t eventschema.EventType, since time.Time, newestFirst bool, fn func(*eventschema.Envelope) bool) error {
+	var rows []cachedEvent
+	ok, err := c.view(ctx, t, since.UTC().UnixNano(), func(held []cachedEvent) {
+		rows = slices.Clone(held)
+	})
+	if err != nil {
+		return err
+	}
+	if !ok {
+		envs, err := c.store.ReadEvents(ctx, t, since)
+		if err != nil {
+			return err
+		}
+		walkEnvelopes(envs, newestFirst, fn)
+		return nil
+	}
+	var scratch scratchEnvelope
+	visit := func(e cachedEvent) bool {
+		if full := e.ev.heldAsIs(); full != nil {
+			return fn(full)
+		}
+		return fn(scratch.of(e.ev))
+	}
+	if newestFirst {
+		for i := len(rows) - 1; i >= 0; i-- {
+			if !visit(rows[i]) {
+				return nil
+			}
+		}
+		return nil
+	}
+	for _, e := range rows {
+		if !visit(e) {
+			return nil
+		}
+	}
+	return nil
+}
+
+// walkEnvelopes calls fn with envs, skipping nil ones, oldest first as
+// given or newest first, until fn returns false.
+func walkEnvelopes(envs []*eventschema.Envelope, newestFirst bool, fn func(*eventschema.Envelope) bool) {
+	for i := range envs {
+		e := envs[i]
+		if newestFirst {
+			e = envs[len(envs)-1-i]
+		}
+		if e != nil && !fn(e) {
+			return
+		}
+	}
+}
+
 // cachedSelectSQL is selectSQL with each row's rowid first.
 var cachedSelectSQL = strings.Replace(selectSQL, "SELECT", "SELECT rowid,", 1)
 
@@ -125,13 +190,13 @@ var cachedSelectSQL = strings.Replace(selectSQL, "SELECT", "SELECT rowid,", 1)
 func readCachedEvents(ctx context.Context, q querier, in *interner, t eventschema.EventType, from int64) ([]cachedEvent, error) {
 	var out []cachedEvent
 	err := readEventPages(ctx, q, cachedSelectSQL, t, time.Unix(0, from), func(rs *sql.Rows) (*eventschema.Envelope, error) {
-		var e cachedEvent
-		var err error
-		if e.env, err = scanEnvelope(rs, &e.rowid); err == nil {
-			in.cached(e.env)
-			out = append(out, e)
+		var rowid int64
+		env, err := scanEnvelope(rs, &rowid)
+		if err == nil {
+			in.cached(env)
+			out = append(out, cachedEvent{rowid: rowid, ev: in.pack(env)})
 		}
-		return e.env, err
+		return env, err
 	})
 	if err != nil {
 		return nil, err
@@ -144,13 +209,13 @@ func readCachedEvents(ctx context.Context, q querier, in *interner, t eventschem
 func scanCachedEvents(rs *sql.Rows, in *interner) ([]cachedEvent, error) {
 	var out []cachedEvent
 	for rs.Next() {
-		var e cachedEvent
-		var err error
-		if e.env, err = scanEnvelope(rs, &e.rowid); err != nil {
+		var rowid int64
+		env, err := scanEnvelope(rs, &rowid)
+		if err != nil {
 			return nil, err
 		}
-		in.cached(e.env)
-		out = append(out, e)
+		in.cached(env)
+		out = append(out, cachedEvent{rowid: rowid, ev: in.pack(env)})
 	}
 	if err := rs.Err(); err != nil {
 		return nil, fmt.Errorf("sqlite: rows: %w", err)
@@ -189,14 +254,23 @@ func readChangedEvents(ctx context.Context, q querier, in *interner, t eventsche
 
 // compareCached is ReadEvents' order: timestamp, then id.
 func compareCached(a, b cachedEvent) int {
-	an, bn := a.env.Timestamp.UnixNano(), b.env.Timestamp.UnixNano()
+	return compareEvents(a.ev.ts, b.ev.ts, a.ev.id, b.ev.id)
+}
+
+// compareEnvelopes is compareCached for envelopes.
+func compareEnvelopes(a, b *eventschema.Envelope) int {
+	return compareEvents(a.Timestamp.UnixNano(), b.Timestamp.UnixNano(), a.ID, b.ID)
+}
+
+// compareEvents orders events by time, then id.
+func compareEvents(an, bn int64, aID, bID string) int {
 	switch {
 	case an < bn:
 		return -1
 	case an > bn:
 		return 1
 	default:
-		return strings.Compare(a.env.ID, b.env.ID)
+		return strings.Compare(aID, bID)
 	}
 }
 

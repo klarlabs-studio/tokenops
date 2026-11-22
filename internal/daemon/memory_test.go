@@ -13,12 +13,27 @@ func TestLimitMemorySetsADefaultAndKeepsGOMEMLIMIT(t *testing.T) {
 	defer debug.SetMemoryLimit(old)
 	s := &startup{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 
+	oldPct := debug.SetGCPercent(100)
+	defer debug.SetGCPercent(oldPct)
+
 	t.Setenv(memoryLimitEnv, "")
+	t.Setenv(gcPercentEnv, "")
 	if err := s.limitMemory(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if got := debug.SetMemoryLimit(-1); got != defaultMemoryLimit {
-		t.Errorf("limit = %d, want %d", got, defaultMemoryLimit)
+	if got := debug.SetMemoryLimit(-1); got != memoryLimitFloor {
+		t.Errorf("limit = %d, want %d", got, memoryLimitFloor)
+	}
+	if got := debug.SetGCPercent(100); got != gcPercent {
+		t.Errorf("GC percent = %d, want %d", got, gcPercent)
+	}
+	t.Setenv(gcPercentEnv, "200")
+	debug.SetGCPercent(200)
+	if err := s.limitMemory(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := debug.SetGCPercent(200); got != 200 {
+		t.Errorf("GOGC was overridden: %d", got)
 	}
 	debug.SetMemoryLimit(123 << 20)
 	t.Setenv(memoryLimitEnv, "123MiB")
@@ -57,25 +72,36 @@ func TestProfilerIsOptInAndLoopbackOnly(t *testing.T) {
 	}
 }
 
-// The soft limit never sits below the live heap: a limit the working set
-// has outgrown makes the collector run back to back (Go caps it at half
-// the CPU), which on a busy store held the daemon at two cores.
+// The heap grows half again the live heap before a collection (GOGC 50),
+// not twice it: with a month of events packed the live heap is a few
+// hundred MB, and doubling it was most of the daemon's footprint. The soft
+// limit stays twice the live heap, well above that target, so it never
+// binds in steady work; it never sits below the live heap either, where
+// the collector runs back to back (Go caps it at half the CPU), which on
+// a busy store held the daemon at two cores.
 func TestMemoryLimitFollowsTheLiveHeap(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		live uint64
 		want int64
 	}{
-		{"small heap keeps the default", 200 << 20, defaultMemoryLimit},
-		{"heap at two thirds of the default keeps it", 682 << 20, defaultMemoryLimit},
-		{"heap past two thirds gets half again of headroom", 1 << 30, 3 << 29},
-		{"large heap", 2 << 30, 3 << 30},
+		{"small heap keeps the floor", 100 << 20, memoryLimitFloor},
+		{"the packed month's heap", 320 << 20, 640 << 20},
+		{"large heap", 1300 << 20, 2600 << 20},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := memoryLimitFor(tc.live); got != tc.want {
 				t.Errorf("memoryLimitFor(%d) = %d, want %d", tc.live, got, tc.want)
 			}
 		})
+	}
+	if memoryLimitFloor > 300<<20 {
+		t.Errorf("the floor %d MiB is above the live heap the daemon holds on a busy store; it would let the heap double again", memoryLimitFloor>>20)
+	}
+	for live := uint64(1 << 20); live < 8<<30; live += 37 << 20 {
+		if target := live + live*gcPercent/100; uint64(memoryLimitFor(live)) < target+target/4 {
+			t.Fatalf("live %d MiB: limit %d MiB is within a quarter of the collector's target %d MiB", live>>20, memoryLimitFor(live)>>20, target>>20)
+		}
 	}
 }
 
@@ -86,16 +112,16 @@ func TestApplyMemoryLimitMovesOnlyOnARealChange(t *testing.T) {
 	defer debug.SetMemoryLimit(old)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	debug.SetMemoryLimit(defaultMemoryLimit)
-	if got := applyMemoryLimit(1300<<20, logger); got != 1950<<20 || debug.SetMemoryLimit(-1) != 1950<<20 {
-		t.Fatalf("live 1300 MiB: limit %d, want 1950 MiB", got)
+	debug.SetMemoryLimit(memoryLimitFloor)
+	if got := applyMemoryLimit(1300<<20, logger); got != 2600<<20 || debug.SetMemoryLimit(-1) != 2600<<20 {
+		t.Fatalf("live 1300 MiB: limit %d, want 2600 MiB", got)
 	}
 	// A few percent more live heap is not worth a change.
-	if got := applyMemoryLimit(1340<<20, logger); got != 1950<<20 {
+	if got := applyMemoryLimit(1340<<20, logger); got != 2600<<20 {
 		t.Errorf("small growth moved the limit to %d", got)
 	}
-	// The heap shrank: back to the default.
-	if got := applyMemoryLimit(300<<20, logger); got != defaultMemoryLimit {
+	// The heap shrank: back to the floor.
+	if got := applyMemoryLimit(100<<20, logger); got != memoryLimitFloor {
 		t.Errorf("shrunk heap left the limit at %d", got)
 	}
 }
