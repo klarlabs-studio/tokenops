@@ -28,6 +28,9 @@ type Window struct {
 	UsedPct float64
 	// ResetsAt is when the window resets; zero when unknown.
 	ResetsAt time.Time
+	// RunsOutAt is when the window runs out at the rate the daemon's
+	// forecast read, when that is before its reset; zero otherwise.
+	RunsOutAt time.Time
 }
 
 // Input is everything the line shows.
@@ -137,13 +140,23 @@ func Render(in Input) []string {
 	// client repeats it until its next response, so it is left out.
 	windows := running(in.Windows, in.Now)
 	if w, ok := tightest(windows); ok {
-		s := p.leftBar(w.UsedPct, 6) + " " + window(p, w, in.Now)
+		// Only the soonest run-out is said: one is what the operator acts
+		// on, and the line stays short.
+		out, outOK := soonestOut(windows, in.Now)
+		ordered := []Window{w}
 		for _, o := range windows {
 			if o.Label != w.Label {
-				s += sep + window(p, o, in.Now)
+				ordered = append(ordered, o)
 			}
 		}
-		parts = append(parts, s)
+		segs := make([]string, 0, len(ordered)+1)
+		for _, o := range ordered {
+			segs = append(segs, window(p, o, in.Now))
+			if outOK && out.Label == o.Label {
+				segs = append(segs, runsOut(p, out.RunsOutAt, in.Now))
+			}
+		}
+		parts = append(parts, p.leftBar(w.UsedPct, 6)+" "+strings.Join(segs, sep))
 	}
 	if in.ContextPct > 0 {
 		s := p.paint(muted, "ctx ") + p.paint(level(contextLevel(in)), fmt.Sprintf("%.0f%%", in.ContextPct))
@@ -257,6 +270,39 @@ func window(p painter, w Window, now time.Time) string {
 		s += p.paint(muted, " ↻"+resetIn(w.ResetsAt, now))
 	}
 	return s
+}
+
+// runsOutSoon is how near a run-out is shown as a danger rather than a
+// warning: within it the work in hand is what stops.
+const runsOutSoon = 2 * time.Hour
+
+// soonestOut is the window that runs out first before its reset.
+func soonestOut(ws []Window, now time.Time) (Window, bool) {
+	var best Window
+	found := false
+	for _, w := range ws {
+		if w.RunsOutAt.IsZero() || !w.RunsOutAt.After(now) || (!w.ResetsAt.IsZero() && !w.RunsOutAt.Before(w.ResetsAt)) {
+			continue
+		}
+		if !found || w.RunsOutAt.Before(best.RunsOutAt) {
+			best, found = w, true
+		}
+	}
+	return best, found
+}
+
+// runsOut is "out ~15:36" within a day, else "out ~Wed 15:36".
+func runsOut(p painter, at, now time.Time) string {
+	color := warnFg
+	if at.Sub(now) <= runsOutSoon {
+		color = dangerFg
+	}
+	at = at.In(now.Location())
+	clock := at.Format("15:04")
+	if at.Sub(now) >= 24*time.Hour {
+		clock = at.Format("Mon 15:04")
+	}
+	return p.paint(color, "out ~"+clock)
 }
 
 // resetIn says when a window resets: a clock time today, else a day.

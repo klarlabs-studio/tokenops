@@ -72,6 +72,9 @@ type Server struct {
 	// glanceCosts reads the providers' usage each glance carries; nil
 	// leaves it out.
 	glanceCosts spending.Summarizer
+	// pacePath is where each computed glance leaves its forecast for the
+	// status line (WithStatuslinePace), empty for nowhere.
+	pacePath, paceVersion string
 	// acted is when each finding was acted on, to leave it out of
 	// findings computed before (withoutActed).
 	actedMu sync.Mutex

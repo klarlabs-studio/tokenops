@@ -175,3 +175,42 @@ func TestRenderLeavesOutAWindowThatHasReset(t *testing.T) {
 		t.Errorf("%s", out)
 	}
 }
+
+// The daemon's forecast follows the window it is about, only while it runs
+// out before its reset, coloured by how soon.
+func TestRenderRunsOut(t *testing.T) {
+	week := now.Add(72 * time.Hour)
+	cases := []struct {
+		name   string
+		five   time.Time
+		wk     time.Time
+		color  bool
+		want   string
+		absent []string
+	}{
+		{name: "the week runs out", wk: now.Add(30 * time.Hour), want: "wk 59% left ↻Mon · out ~Sat 15:00"},
+		{name: "today, as a clock time", five: now.Add(3 * time.Hour), want: "5h 38% left ↻14:10 · out ~12:00 · wk 59% left"},
+		{name: "the sooner of two", five: now.Add(3 * time.Hour), wk: now.Add(30 * time.Hour), want: "out ~12:00", absent: []string{"out ~Sat"}},
+		{name: "lasts to its reset", absent: []string{"out ~"}},
+		{name: "after its reset", wk: week.Add(time.Hour), absent: []string{"out ~"}},
+		{name: "already past", wk: now.Add(-time.Minute), absent: []string{"out ~"}},
+		{name: "soon is a danger", five: now.Add(90 * time.Minute), color: true, want: dangerFg + "out ~10:30"},
+		{name: "later a warning", wk: now.Add(30 * time.Hour), color: true, want: warnFg + "out ~Sat 15:00"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			in := full()
+			in.Tip, in.Color = "", c.color
+			in.Windows[0].RunsOutAt, in.Windows[1].RunsOutAt = c.five, c.wk
+			line := Render(in)[0]
+			if c.want != "" && !strings.Contains(line, c.want) {
+				t.Errorf("line %q lacks %q", line, c.want)
+			}
+			for _, a := range c.absent {
+				if strings.Contains(line, a) {
+					t.Errorf("line %q has %q", line, a)
+				}
+			}
+		})
+	}
+}
