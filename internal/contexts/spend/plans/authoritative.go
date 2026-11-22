@@ -31,24 +31,11 @@ func LatestAuthoritativeWindow(ctx context.Context, reader EventReader, provider
 	if lookback < time.Hour {
 		lookback = time.Hour
 	}
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-lookback))
-	if err != nil {
-		return nil
-	}
-
-	var best *eventschema.Envelope
-	for _, e := range events {
-		if e == nil || e.Attributes == nil {
-			continue
-		}
-		if _, ok := e.Attributes[usedKey]; !ok {
-			continue
-		}
-		if best == nil || e.Timestamp.After(best.Timestamp) {
-			best = e
-		}
-	}
-	if best == nil || ReadingStale(best, now) {
+	best, err := newestWhere(ctx, reader, now.Add(-lookback), func(e *eventschema.Envelope) bool {
+		_, ok := e.Attributes[usedKey]
+		return ok
+	})
+	if err != nil || best == nil || ReadingStale(best, now) {
 		return nil
 	}
 	pct, err := strconv.ParseFloat(best.Attributes[usedKey], 64)
@@ -83,27 +70,17 @@ func latestCodexWindow(ctx context.Context, reader EventReader, p Plan, now time
 	if lookback < 14*24*time.Hour {
 		lookback = 14 * 24 * time.Hour
 	}
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-lookback))
-	if err != nil {
-		return nil
-	}
-	var best *eventschema.Envelope
-	for _, e := range events {
-		if e == nil || e.Attributes == nil || codexLimit(e) != "" {
+	best, err := newestWhere(ctx, reader, now.Add(-lookback), func(e *eventschema.Envelope) bool {
+		if e.Attributes == nil || codexLimit(e) != "" {
 			// A reading for another Codex limit is not the window the
 			// session draws on; the default limit's is.
-			continue
+			return false
 		}
-		if _, primary := e.Attributes["primary_used_pct"]; !primary {
-			if _, secondary := e.Attributes["secondary_used_pct"]; !secondary {
-				continue
-			}
-		}
-		if best == nil || e.Timestamp.After(best.Timestamp) {
-			best = e
-		}
-	}
-	if best == nil || ReadingStale(best, now) {
+		_, primary := e.Attributes["primary_used_pct"]
+		_, secondary := e.Attributes["secondary_used_pct"]
+		return primary || secondary
+	})
+	if err != nil || best == nil || ReadingStale(best, now) {
 		return nil
 	}
 
@@ -203,23 +180,11 @@ func LatestAuthoritativeMonthly(ctx context.Context, reader EventReader, provide
 }
 
 func latestCursorMonthly(ctx context.Context, reader EventReader, now time.Time) *AuthoritativeWindow {
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-35*24*time.Hour))
-	if err != nil {
-		return nil
-	}
-	var best *eventschema.Envelope
-	for _, e := range events {
-		if e == nil || e.Attributes == nil {
-			continue
-		}
-		if _, ok := e.Attributes["used_pct"]; !ok {
-			continue
-		}
-		if best == nil || e.Timestamp.After(best.Timestamp) {
-			best = e
-		}
-	}
-	if best == nil || ReadingStale(best, now) {
+	best, err := newestWhere(ctx, reader, now.Add(-35*24*time.Hour), func(e *eventschema.Envelope) bool {
+		_, ok := e.Attributes["used_pct"]
+		return ok
+	})
+	if err != nil || best == nil || ReadingStale(best, now) {
 		return nil
 	}
 	pct, err := strconv.ParseFloat(best.Attributes["used_pct"], 64)
@@ -243,37 +208,37 @@ func latestCursorMonthly(ctx context.Context, reader EventReader, now time.Time)
 // work. A poll with no capped bucket has no monthly share (see
 // LatestUnmeteredSeat), and neither has one whose reader has stopped.
 func latestCopilotMonthly(ctx context.Context, reader EventReader, now time.Time) *AuthoritativeWindow {
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-35*24*time.Hour))
-	if err != nil {
+	newestPoll, err := newestWhere(ctx, reader, now.Add(-35*24*time.Hour), func(e *eventschema.Envelope) bool {
+		return e.Attributes["percent_remaining"] != "" && e.Timestamp.After(time.Time{})
+	})
+	if err != nil || ReadingStale(newestPoll, now) {
 		return nil
 	}
-	var newest time.Time
-	var newestPoll *eventschema.Envelope
-	for _, e := range events {
-		if e != nil && e.Attributes["percent_remaining"] != "" && e.Timestamp.After(newest) {
-			newest, newestPoll = e.Timestamp, e
-		}
-	}
-	if ReadingStale(newestPoll, now) {
+	if newestPoll == nil {
 		return nil
 	}
+	// The poll's buckets are the events stored at its time.
+	newest := newestPoll.Timestamp
 	var best *AuthoritativeWindow
-	for _, e := range events {
-		if e == nil || !e.Timestamp.Equal(newest) || e.Attributes["percent_remaining"] == "" ||
+	err = scanEvents(ctx, reader, newest, func(e *eventschema.Envelope) {
+		if !e.Timestamp.Equal(newest) || e.Attributes["percent_remaining"] == "" ||
 			e.Attributes["unlimited"] == "true" || e.Attributes["entitlement"] == "0" {
-			continue
+			return
 		}
 		remaining, err := strconv.ParseFloat(e.Attributes["percent_remaining"], 64)
 		if err != nil {
-			continue
+			return
 		}
 		in, lapsed := resetIn(e.Attributes["quota_reset_date"], now)
 		if lapsed {
-			continue
+			return
 		}
 		if best == nil || 100-remaining > best.UsedPct {
 			best = &AuthoritativeWindow{UsedPct: 100 - remaining, ResetsIn: in, Source: "copilot:monthly"}
 		}
+	})
+	if err != nil {
+		return nil
 	}
 	return best
 }
@@ -432,24 +397,23 @@ func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventsc
 // bindings from this, and no evidence is not the same as no plan.
 func PerTokenReadingProviders(ctx context.Context, reader EventReader, now time.Time) ([]string, error) {
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, monthStart)
-	if err != nil {
-		return nil, err
-	}
 	seen := map[string]bool{}
 	var out []string
-	for _, e := range events {
-		if e == nil || e.Attributes["billing"] != "per_token" || e.Timestamp.Before(monthStart) {
-			continue
+	err := scanEvents(ctx, reader, monthStart, func(e *eventschema.Envelope) {
+		if e.Attributes["billing"] != "per_token" || e.Timestamp.Before(monthStart) {
+			return
 		}
 		if _, ok := e.Attributes["extra_usage_limit"]; !ok {
-			continue
+			return
 		}
 		p := string(readingProvider(e))
 		if p != "" && !seen[p] {
 			seen[p] = true
 			out = append(out, p)
 		}
+	})
+	if err != nil {
+		return nil, err
 	}
 	sort.Strings(out)
 	return out, nil
@@ -459,21 +423,15 @@ func PerTokenReadingProviders(ctx context.Context, reader EventReader, now time.
 // accepts.
 func latestSpendReading(ctx context.Context, reader EventReader, now time.Time, keep func(*eventschema.Envelope) bool) *eventschema.Envelope {
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, monthStart)
+	best, err := newestWhere(ctx, reader, monthStart, func(e *eventschema.Envelope) bool {
+		if e.Attributes == nil || e.Timestamp.Before(monthStart) {
+			return false
+		}
+		_, ok := e.Attributes["extra_usage_limit"]
+		return ok && keep(e)
+	})
 	if err != nil {
 		return nil
-	}
-	var best *eventschema.Envelope
-	for _, e := range events {
-		if e == nil || e.Attributes == nil || e.Timestamp.Before(monthStart) {
-			continue
-		}
-		if _, ok := e.Attributes["extra_usage_limit"]; !ok || !keep(e) {
-			continue
-		}
-		if best == nil || e.Timestamp.After(best.Timestamp) {
-			best = e
-		}
 	}
 	return best
 }

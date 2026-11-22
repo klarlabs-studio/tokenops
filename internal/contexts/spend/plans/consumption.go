@@ -53,23 +53,12 @@ func ConsumptionFor(ctx context.Context, r EventReader, provider string, now tim
 		since = w
 	}
 
-	envs, err := r.ReadEvents(ctx, eventschema.EventTypePrompt, since)
-	if err != nil {
-		return Consumption{}, err
-	}
-
 	weekCutoff := now.Add(-7 * 24 * time.Hour)
 	var out Consumption
-	for _, env := range envs {
+	err := scanEvents(ctx, r, since, func(env *eventschema.Envelope) {
 		p, ok := env.Payload.(*eventschema.PromptEvent)
-		if !ok {
-			continue
-		}
-		if p.CostSource != eventschema.CostSourcePlanIncluded {
-			continue
-		}
-		if string(p.Provider) != provider {
-			continue
+		if !ok || p.CostSource != eventschema.CostSourcePlanIncluded || string(p.Provider) != provider {
+			return
 		}
 		tokens := p.TotalTokens
 		if tokens == 0 {
@@ -81,6 +70,9 @@ func ConsumptionFor(ctx context.Context, r EventReader, provider string, now tim
 		if !env.Timestamp.Before(weekCutoff) {
 			out.Last7DayTokens += tokens
 		}
+	})
+	if err != nil {
+		return Consumption{}, err
 	}
 	return out, nil
 }
@@ -96,23 +88,11 @@ func ConsumptionInWindow(ctx context.Context, r EventReader, provider string, no
 		return out, nil
 	}
 	cutoff := now.Add(-window)
-	envs, err := r.ReadEvents(ctx, eventschema.EventTypePrompt, cutoff)
-	if err != nil {
-		return out, err
-	}
-	for _, env := range envs {
+	err := scanEvents(ctx, r, cutoff, func(env *eventschema.Envelope) {
 		p, ok := env.Payload.(*eventschema.PromptEvent)
-		if !ok {
-			continue
-		}
-		if p.CostSource != eventschema.CostSourcePlanIncluded {
-			continue
-		}
-		if string(p.Provider) != provider {
-			continue
-		}
-		if env.Timestamp.Before(cutoff) {
-			continue
+		if !ok || p.CostSource != eventschema.CostSourcePlanIncluded || string(p.Provider) != provider ||
+			env.Timestamp.Before(cutoff) {
+			return
 		}
 		if out.FirstActivityAt.IsZero() || env.Timestamp.Before(out.FirstActivityAt) {
 			out.FirstActivityAt = env.Timestamp
@@ -125,6 +105,9 @@ func ConsumptionInWindow(ctx context.Context, r EventReader, provider string, no
 			tokens = p.InputTokens + p.OutputTokens
 		}
 		out.TokensInWindow += tokens
+	})
+	if err != nil {
+		return WindowConsumption{}, err
 	}
 	return out, nil
 }
@@ -178,26 +161,25 @@ func countsAsMessage(env *eventschema.Envelope) bool {
 // bindings from this, and no evidence is not the same as no plan.
 func MeteredProviders(ctx context.Context, reader EventReader, now time.Time) ([]string, error) {
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, monthStart)
-	if err != nil {
-		return nil, err
-	}
 	seen := map[string]bool{}
 	var out []string
-	for _, env := range events {
-		if env == nil || !perRequest(env) {
-			continue
+	err := scanEvents(ctx, reader, monthStart, func(env *eventschema.Envelope) {
+		if !perRequest(env) {
+			return
 		}
 		p, ok := env.Payload.(*eventschema.PromptEvent)
 		if !ok || p.CostSource != eventschema.CostSourceMetered {
-			continue
+			return
 		}
 		name := string(p.Provider)
 		if name == "" || p.Provider == eventschema.ProviderUnknown || seen[name] {
-			continue
+			return
 		}
 		seen[name] = true
 		out = append(out, name)
+	})
+	if err != nil {
+		return nil, err
 	}
 	sort.Strings(out)
 	return out, nil
@@ -242,33 +224,29 @@ func BilledSpendInWindow(ctx context.Context, reader EventReader, provider strin
 }
 
 func spendInWindow(ctx context.Context, reader EventReader, provider string, now time.Time, window string, price Pricer, ownEndpointOnly bool) (float64, error) {
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, SpendWindowStart(now, window))
-	if err != nil {
-		return 0, err
-	}
 	var total float64
-	for _, env := range events {
-		if env == nil {
-			continue
-		}
+	err := scanEvents(ctx, reader, SpendWindowStart(now, window), func(env *eventschema.Envelope) {
 		p, ok := env.Payload.(*eventschema.PromptEvent)
 		if !ok || string(p.Provider) != provider {
-			continue
+			return
 		}
 		// The plan's limit counts only what went through the vendor's
 		// own endpoint; a gateway's turn ran on an API key (ADR 0009).
 		if ownEndpointOnly && !biller.PlanApplies(provider, env.Attributes["endpoint"], env.Source) {
-			continue
+			return
 		}
 		if p.CostUSD > 0 || price == nil || !perRequest(env) {
 			total += p.CostUSD
-			continue
+			return
 		}
 		billed := *p
 		billed.CostSource = eventschema.CostSourceMetered
 		if c, err := price(&billed, env.Timestamp); err == nil {
 			total += c
 		}
+	})
+	if err != nil {
+		return 0, err
 	}
 	return total, nil
 }

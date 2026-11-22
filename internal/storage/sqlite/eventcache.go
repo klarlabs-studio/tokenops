@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -117,6 +118,68 @@ func (c *EventCache) ReadEvents(ctx context.Context, t eventschema.EventType, si
 		return c.store.ReadEvents(ctx, t, since)
 	}
 	return out, nil
+}
+
+// ScanEvents calls fn with every event of type t at or after since, oldest
+// first or newest first, until fn returns false: what ReadEvents returns,
+// handed over one at a time (plans.EventScanner).
+//
+// A packed event is built into one envelope reused for every event, so a
+// scan of a month builds no month of envelopes: fn must not keep the
+// envelope or its payload, and may keep its strings and attributes. The
+// rows are taken under the cache's lock and walked outside it, so fn may
+// read the cache.
+func (c *EventCache) ScanEvents(ctx context.Context, t eventschema.EventType, since time.Time, newestFirst bool, fn func(*eventschema.Envelope) bool) error {
+	var rows []cachedEvent
+	ok, err := c.view(ctx, t, since.UTC().UnixNano(), func(held []cachedEvent) {
+		rows = slices.Clone(held)
+	})
+	if err != nil {
+		return err
+	}
+	if !ok {
+		envs, err := c.store.ReadEvents(ctx, t, since)
+		if err != nil {
+			return err
+		}
+		walkEnvelopes(envs, newestFirst, fn)
+		return nil
+	}
+	var scratch scratchEnvelope
+	visit := func(e cachedEvent) bool {
+		if full := e.ev.heldAsIs(); full != nil {
+			return fn(full)
+		}
+		return fn(scratch.of(e.ev))
+	}
+	if newestFirst {
+		for i := len(rows) - 1; i >= 0; i-- {
+			if !visit(rows[i]) {
+				return nil
+			}
+		}
+		return nil
+	}
+	for _, e := range rows {
+		if !visit(e) {
+			return nil
+		}
+	}
+	return nil
+}
+
+// walkEnvelopes calls fn with envs, skipping nil ones, oldest first as
+// given or newest first, until fn returns false.
+func walkEnvelopes(envs []*eventschema.Envelope, newestFirst bool, fn func(*eventschema.Envelope) bool) {
+	for i := range envs {
+		e := envs[i]
+		if newestFirst {
+			e = envs[len(envs)-1-i]
+		}
+		if e != nil && !fn(e) {
+			return
+		}
+	}
 }
 
 // cachedSelectSQL is selectSQL with each row's rowid first.

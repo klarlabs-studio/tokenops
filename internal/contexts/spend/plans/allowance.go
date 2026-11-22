@@ -119,20 +119,10 @@ const allowanceLookback = 24 * time.Hour
 // says is banked, with expired allowances left out. nil when no reader
 // reports allowances for provider.
 func VendorAllowances(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) *Allowances {
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-allowanceLookback))
-	if err != nil {
-		return nil
-	}
-	var best *eventschema.Envelope
-	for _, e := range events {
-		if e == nil || e.Attributes[allowancesKey] == "" || readingProvider(e) != provider {
-			continue
-		}
-		if best == nil || e.Timestamp.After(best.Timestamp) {
-			best = e
-		}
-	}
-	if best == nil {
+	best, err := newestWhere(ctx, reader, now.Add(-allowanceLookback), func(e *eventschema.Envelope) bool {
+		return e.Attributes[allowancesKey] != "" && readingProvider(e) == provider
+	})
+	if err != nil || best == nil {
 		return nil
 	}
 	a, ok := parseAllowances(best.Attributes)

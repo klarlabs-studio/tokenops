@@ -184,29 +184,51 @@ func (p *packedEvent) heldAsIs() *eventschema.Envelope {
 	return p.rare.full
 }
 
+// scratchEnvelope is one envelope and payload a scan builds every packed
+// event into in turn.
+type scratchEnvelope struct {
+	env    eventschema.Envelope
+	prompt eventschema.PromptEvent
+}
+
+// of builds p into s and returns it; valid until the next call.
+func (s *scratchEnvelope) of(p *packedEvent) *eventschema.Envelope {
+	p.unpackInto(&s.env, &s.prompt)
+	return &s.env
+}
+
 // unpack builds the envelope p was packed from.
 func (p *packedEvent) unpack() *eventschema.Envelope {
+	env, prompt := new(eventschema.Envelope), new(eventschema.PromptEvent)
+	p.unpackInto(env, prompt)
+	return env
+}
+
+// unpackInto builds the envelope p was packed from into env, its payload
+// into prompt.
+func (p *packedEvent) unpackInto(env *eventschema.Envelope, prompt *eventschema.PromptEvent) {
 	k := &p.shared.key
 	hash := ""
 	if p.rare != nil {
 		hash = p.rare.hash
 	}
-	return &eventschema.Envelope{
+	*prompt = eventschema.PromptEvent{
+		PromptHash: hash, Provider: k.provider, RequestModel: k.requestModel, ResponseModel: k.responseModel,
+		InputTokens: int64(p.n.input), OutputTokens: int64(p.n.output), TotalTokens: int64(p.n.total),
+		CachedInputTokens: int64(p.n.cachedInput), CacheWriteInputTokens: int64(p.n.cacheWrite),
+		CacheWrite1hInputTokens: int64(p.n.cacheWrite1h),
+		ContextSize:             int64(p.n.contextSize), MaxOutputTokens: int64(p.n.maxOutput),
+		Latency: p.n.latency, TimeToFirstToken: p.n.firstToken,
+		Streaming: k.streaming, Status: k.status, FinishReason: k.finishReason, ToolCallCount: int64(p.n.toolCalls),
+		ErrorCode: k.errorCode, CacheHit: k.cacheHit, CostUSD: p.n.cost, CostMeasured: k.costMeasured,
+		TokenSource: k.tokenSource, CostSource: k.costSource,
+		WorkflowID: k.workflowID, AgentID: k.agentID, SessionID: k.sessionID, UserID: k.userID,
+	}
+	*env = eventschema.Envelope{
 		ID: p.id, SchemaVersion: k.schemaVersion, Type: eventschema.EventTypePrompt,
 		Timestamp: timeFromNS(p.ts), Source: k.source, Attributes: p.attrs,
 		Association: k.association, Correlation: k.correlation,
-		Payload: &eventschema.PromptEvent{
-			PromptHash: hash, Provider: k.provider, RequestModel: k.requestModel, ResponseModel: k.responseModel,
-			InputTokens: int64(p.n.input), OutputTokens: int64(p.n.output), TotalTokens: int64(p.n.total),
-			CachedInputTokens: int64(p.n.cachedInput), CacheWriteInputTokens: int64(p.n.cacheWrite),
-			CacheWrite1hInputTokens: int64(p.n.cacheWrite1h),
-			ContextSize:             int64(p.n.contextSize), MaxOutputTokens: int64(p.n.maxOutput),
-			Latency: p.n.latency, TimeToFirstToken: p.n.firstToken,
-			Streaming: k.streaming, Status: k.status, FinishReason: k.finishReason, ToolCallCount: int64(p.n.toolCalls),
-			ErrorCode: k.errorCode, CacheHit: k.cacheHit, CostUSD: p.n.cost, CostMeasured: k.costMeasured,
-			TokenSource: k.tokenSource, CostSource: k.costSource,
-			WorkflowID: k.workflowID, AgentID: k.agentID, SessionID: k.sessionID, UserID: k.userID,
-		},
+		Payload: prompt,
 	}
 }
 

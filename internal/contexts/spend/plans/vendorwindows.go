@@ -135,13 +135,21 @@ func vendorWindows(ctx context.Context, reader EventReader, provider eventschema
 	if parse == nil {
 		return accountWindows(ctx, reader, provider, now)
 	}
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-14*24*time.Hour))
-	if err != nil {
-		return nil
+	usable := func(e *eventschema.Envelope) bool { return len(parse(e.Attributes, now)) > 0 }
+	since := now.Add(-14 * 24 * time.Hour)
+	var newest, prior map[string]*eventschema.Envelope
+	if s, ok := reader.(EventScanner); ok {
+		var err error
+		if newest, prior, err = newestTwoScanned(ctx, s, since, sources, usable); err != nil {
+			return nil
+		}
+	} else {
+		events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, since)
+		if err != nil {
+			return nil
+		}
+		newest, prior = newestTwo(events, sources, usable)
 	}
-	newest, prior := newestTwo(events, sources, func(e *eventschema.Envelope) bool {
-		return len(parse(e.Attributes, now)) > 0
-	})
 	if len(newest) == 0 {
 		return nil
 	}
@@ -189,6 +197,54 @@ func newestTwo(events []*eventschema.Envelope, sources []string, usable func(*ev
 	slices.SortStableFunc(sorted, func(a, b *eventschema.Envelope) int { return a.Timestamp.Compare(b.Timestamp) })
 	walkNewestFirst(sorted, visit)
 	return newest, prior
+}
+
+// newestTwoScanned is newestTwo over s's events from since, scanned newest
+// first: the events of one moment are visited in the order the store gives
+// them, as walkNewestFirst visits them, and the readings kept are copies.
+func newestTwoScanned(ctx context.Context, s EventScanner, since time.Time, sources []string, usable func(*eventschema.Envelope) bool) (newest, prior map[string]*eventschema.Envelope, err error) {
+	newest, prior = map[string]*eventschema.Envelope{}, map[string]*eventschema.Envelope{}
+	visit := func(e *eventschema.Envelope) {
+		key := readingKey(e)
+		if prior[key] != nil || !usable(e) {
+			return
+		}
+		kept := &heldEnvelope{}
+		kept.keep(e)
+		if newest[key] == nil {
+			newest[key] = kept.get()
+		} else {
+			prior[key] = kept.get()
+		}
+	}
+	// One moment's readings, newest first as scanned; reused.
+	var moment []heldEnvelope
+	n := 0
+	flush := func() {
+		for i := n - 1; i >= 0; i-- {
+			visit(moment[i].get())
+		}
+		n = 0
+	}
+	err = s.ScanEvents(ctx, eventschema.EventTypePrompt, since, true, func(e *eventschema.Envelope) bool {
+		if !slices.Contains(sources, e.Source) || e.Attributes == nil {
+			return true
+		}
+		if n > 0 && !e.Timestamp.Equal(moment[0].env.Timestamp) {
+			flush()
+		}
+		if n == len(moment) {
+			moment = append(moment, heldEnvelope{})
+		}
+		moment[n].keep(e)
+		n++
+		return true
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	flush()
+	return newest, prior, nil
 }
 
 // timeOrdered reports whether the non-nil events are oldest first.
@@ -439,20 +495,10 @@ func windowWords(d time.Duration) string {
 // window_<n>_{name,used_pct,duration_min,reset_at}: the newest such
 // reading for provider in the last two weeks, busiest first.
 func accountWindows(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) []VendorWindow {
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-14*24*time.Hour))
-	if err != nil {
-		return nil
-	}
-	var best *eventschema.Envelope
-	for _, e := range events {
-		if e == nil || e.Attributes["window_0_used_pct"] == "" || readingProvider(e) != provider {
-			continue
-		}
-		if best == nil || e.Timestamp.After(best.Timestamp) {
-			best = e
-		}
-	}
-	if best == nil {
+	best, err := newestWhere(ctx, reader, now.Add(-14*24*time.Hour), func(e *eventschema.Envelope) bool {
+		return e.Attributes["window_0_used_pct"] != "" && readingProvider(e) == provider
+	})
+	if err != nil || best == nil {
 		return nil
 	}
 	var out []VendorWindow
@@ -486,20 +532,19 @@ func accountWindows(ctx context.Context, reader EventReader, provider eventschem
 // A read failure is returned, not read as "none": callers infer plan
 // bindings from this, and no evidence is not the same as no plan.
 func SubscriptionReadingProviders(ctx context.Context, reader EventReader, now time.Time) ([]string, error) {
-	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-14*24*time.Hour))
-	if err != nil {
-		return nil, err
-	}
 	seen := map[string]bool{}
 	var out []string
-	for _, e := range events {
-		if e == nil || e.Attributes["billing"] != "subscription" || e.Attributes["window_0_used_pct"] == "" {
-			continue
+	err := scanEvents(ctx, reader, now.Add(-14*24*time.Hour), func(e *eventschema.Envelope) {
+		if e.Attributes["billing"] != "subscription" || e.Attributes["window_0_used_pct"] == "" {
+			return
 		}
 		if p := string(readingProvider(e)); p != "" && !seen[p] {
 			seen[p] = true
 			out = append(out, p)
 		}
+	})
+	if err != nil {
+		return nil, err
 	}
 	sort.Strings(out)
 	return out, nil

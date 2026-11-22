@@ -202,3 +202,47 @@ func cloneEnvelope(t *testing.T, e *eventschema.Envelope) *eventschema.Envelope 
 	}
 	return &c
 }
+
+// A scan hands over what ReadEvents returns, in its order or newest first,
+// stops when asked, and builds no envelope per event.
+func TestEventCacheScansWhatItReads(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	busyTurns(t, s, 3000)
+	c := newTestCache(t, s)
+	since := cacheNow.Add(-2000 * time.Minute)
+	want, err := c.ReadEvents(ctx, eventschema.EventTypePrompt, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, newestFirst := range []bool{false, true} {
+		var got []*eventschema.Envelope
+		err := c.ScanEvents(ctx, eventschema.EventTypePrompt, since, newestFirst, func(e *eventschema.Envelope) bool {
+			got = append(got, cloneEnvelope(t, e))
+			return true
+		})
+		if err != nil || len(got) != len(want) {
+			t.Fatalf("newest first %v: %d events, %v; want %d", newestFirst, len(got), err, len(want))
+		}
+		for i := range want {
+			w := want[i]
+			if newestFirst {
+				w = want[len(want)-1-i]
+			}
+			if !reflect.DeepEqual(got[i], w) {
+				t.Fatalf("newest first %v: event %d\n%+v\nwant\n%+v", newestFirst, i, got[i], w)
+			}
+		}
+	}
+	n := 0
+	if err := c.ScanEvents(ctx, eventschema.EventTypePrompt, since, true, func(*eventschema.Envelope) bool { n++; return n < 3 }); err != nil || n != 3 {
+		t.Errorf("a scan asked to stop after 3 saw %d, %v", n, err)
+	}
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	_ = c.ScanEvents(ctx, eventschema.EventTypePrompt, since, false, func(*eventschema.Envelope) bool { return true })
+	runtime.ReadMemStats(&after)
+	if per := int64(after.TotalAlloc-before.TotalAlloc) / int64(len(want)); per > 64 {
+		t.Errorf("a scan allocated %d bytes per event; it should build them into one envelope", per)
+	}
+}

@@ -77,10 +77,15 @@ func newMemoReader(r Reader, now time.Time) Reader {
 	if r == nil || !memoize {
 		return r
 	}
-	if _, already := r.(*memoReader); already {
+	switch r.(type) {
+	case *memoReader, scanningMemo:
 		return r
 	}
-	return &memoReader{r: r, floor: memoFloor(now), events: map[eventschema.EventType]*memoEvents{}, counts: map[[2]time.Time]map[string]int64{}}
+	m := &memoReader{r: r, floor: memoFloor(now), events: map[eventschema.EventType]*memoEvents{}, counts: map[[2]time.Time]map[string]int64{}}
+	if s, ok := r.(plans.EventScanner); ok {
+		return scanningMemo{memoReader: m, scan: s}
+	}
+	return m
 }
 
 // LatestAttributesBySource and AttributesBySourceBetween pass a meter's
@@ -98,6 +103,22 @@ func (m *memoReader) AttributesBySourceBetween(ctx context.Context, source, key 
 		return h.AttributesBySourceBetween(ctx, source, key, since, until)
 	}
 	return nil, time.Time{}, false, nil
+}
+
+// scanningMemo is the memo over a reader that scans (plans.EventScanner):
+// the questions that scan go to that reader, one at a time, and the memo
+// reads nothing for them. The boundary figures compute headroom every
+// minute, and their questions all scan, so the memo's month of envelopes
+// is never built for them. A memo over a reader that does not scan
+// offers no scan, and every question reads through it as before.
+type scanningMemo struct {
+	*memoReader
+	scan plans.EventScanner
+}
+
+// ScanEvents is the reader's ScanEvents.
+func (m scanningMemo) ScanEvents(ctx context.Context, t eventschema.EventType, since time.Time, newestFirst bool, fn func(*eventschema.Envelope) bool) error {
+	return m.scan.ScanEvents(ctx, t, since, newestFirst, fn)
 }
 
 // ReadEvents answers from the floor's read. The events a question gets
