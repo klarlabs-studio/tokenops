@@ -348,44 +348,57 @@ type ReplayInput struct {
 func QuotaReadingsFrom(envs []*eventschema.Envelope, provider string, since, until time.Time) []QuotaReading {
 	var out []QuotaReading
 	for _, e := range envs {
-		if e == nil || e.Attributes == nil || e.Timestamp.Before(since) || e.Timestamp.After(until) {
+		if e == nil || e.Timestamp.Before(since) || e.Timestamp.After(until) {
 			continue
 		}
-		p, ok := windowSourceProvider[e.Source]
-		if !ok || string(p) != provider || codexLimit(e) != "" {
-			// A Codex limit other than the default is its own bucket, not
-			// the plan's window the tiers are multiples of.
+		p, ok := windowReadingProvider(e)
+		if !ok || string(p) != provider || !planReading(e) {
 			continue
 		}
 		if ws := QuotaWindowsFromAttributes(p, e.Attributes); len(ws) > 0 {
 			out = append(out, QuotaReading{At: e.Timestamp, Windows: ws})
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
+	sortReadings(out)
 	return out
+}
+
+// planReading is whether window reading e is of the plan's windows: a
+// Codex limit other than the default is its own bucket, not the plan's
+// window the tiers are multiples of.
+func planReading(e *eventschema.Envelope) bool { return codexLimit(e) == "" }
+
+func sortReadings(rs []QuotaReading) {
+	sort.SliceStable(rs, func(i, j int) bool { return rs[i].At.Before(rs[j].At) })
 }
 
 // ListValue is provider's plan-covered usage in [since, until] at API list
 // price, and how many requests had no rate.
 func ListValue(envs []*eventschema.Envelope, provider string, since, until time.Time, price Pricer) (usd float64, unpriced int) {
 	for _, e := range envs {
-		if e == nil || e.Timestamp.Before(since) || e.Timestamp.After(until) || !perRequest(e) {
+		if e == nil || e.Timestamp.Before(since) || e.Timestamp.After(until) {
 			continue
 		}
-		p, ok := e.Payload.(*eventschema.PromptEvent)
-		if !ok || string(p.Provider) != provider || p.CostSource != eventschema.CostSourcePlanIncluded {
+		if t, ok := turnOf(e); !ok || t.provider != provider || t.source != eventschema.CostSourcePlanIncluded {
 			continue
 		}
-		billed := *p
-		billed.CostSource = eventschema.CostSourceMetered
-		c, err := price(&billed, e.Timestamp)
-		if err != nil {
+		c, ok := listPrice(e, price)
+		if !ok {
 			unpriced++
 			continue
 		}
 		usd += c
 	}
 	return usd, unpriced
+}
+
+// listPrice is plan-covered turn e at API list price, false when it has
+// no rate.
+func listPrice(e *eventschema.Envelope, price Pricer) (float64, bool) {
+	billed := *e.Payload.(*eventschema.PromptEvent)
+	billed.CostSource = eventschema.CostSourceMetered
+	c, err := price(&billed, e.Timestamp)
+	return c, err == nil
 }
 
 // windowPoint is one reading of a window instance, as demand in base-plan

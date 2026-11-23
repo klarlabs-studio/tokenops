@@ -101,32 +101,64 @@ func planUse(envs []*eventschema.Envelope, readFrom, since, now time.Time) PlanU
 		if e == nil || e.Timestamp.Before(readFrom) || e.Timestamp.After(now) {
 			continue
 		}
-		if p, ok := windowSourceProvider[e.Source]; ok && e.Attributes != nil {
+		if p, ok := windowReadingProvider(e); ok {
 			readings[string(p)] = append(readings[string(p)], QuotaWindowsFromAttributes(p, e.Attributes)...)
 		}
 		if e.Timestamp.Before(since) {
 			continue
 		}
-		pe, ok := e.Payload.(*eventschema.PromptEvent)
-		if !ok || !perRequest(e) {
-			continue
-		}
-		tokens := pe.TotalTokens
-		if tokens == 0 {
-			tokens = pe.InputTokens + pe.OutputTokens
-		}
-		if tokens <= 0 {
-			continue
-		}
-		switch pe.CostSource {
-		case eventschema.CostSourcePlanIncluded:
-			plan[string(pe.Provider)] += tokens
-		case eventschema.CostSourceTrial:
-			// Free credits are neither a plan nor a bill.
-		default:
-			billed[string(pe.Provider)] += tokens
+		if t, ok := turnOf(e); ok {
+			t.count(plan, billed)
 		}
 	}
+	return useOf(readings, plan, billed, since, now)
+}
+
+// windowReadingProvider is the provider whose plan windows e reads, when
+// it is a window reading.
+func windowReadingProvider(e *eventschema.Envelope) (eventschema.Provider, bool) {
+	p, ok := windowSourceProvider[e.Source]
+	return p, ok && e.Attributes != nil
+}
+
+// planTurn is what plan use and plan value read of a per-request turn.
+type planTurn struct {
+	provider string
+	source   eventschema.CostSource
+	tokens   int64
+}
+
+// turnOf is e as a per-request turn, when it is one.
+func turnOf(e *eventschema.Envelope) (planTurn, bool) {
+	pe, ok := e.Payload.(*eventschema.PromptEvent)
+	if !ok || pe == nil || !perRequest(e) {
+		return planTurn{}, false
+	}
+	tokens := pe.TotalTokens
+	if tokens == 0 {
+		tokens = pe.InputTokens + pe.OutputTokens
+	}
+	return planTurn{provider: string(pe.Provider), source: pe.CostSource, tokens: tokens}, true
+}
+
+// count adds the turn's tokens to its provider's plan or billed tokens.
+// Free credits are neither a plan nor a bill.
+func (t planTurn) count(plan, billed map[string]int64) {
+	if t.tokens <= 0 {
+		return
+	}
+	switch t.source {
+	case eventschema.CostSourcePlanIncluded:
+		plan[t.provider] += t.tokens
+	case eventschema.CostSourceTrial:
+	default:
+		billed[t.provider] += t.tokens
+	}
+}
+
+// useOf is plan use in [since, now] from each provider's window readings
+// and plan and billed tokens.
+func useOf(readings map[string][]QuotaWindow, plan, billed map[string]int64, since, now time.Time) PlanUseReport {
 	providers := map[string]bool{}
 	for p := range readings {
 		providers[p] = true
