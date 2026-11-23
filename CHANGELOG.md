@@ -5,6 +5,7 @@
 ### Fixed
 
 - **statusline:** the pace forecast is kept fresh while nothing asks the daemon for the glance. The daemon wrote `~/.tokenops/statusline.json` only when the glance was computed, so with no menu bar running the line showed no forecast for hours. The daemon now writes it at start and every five minutes, from the same plan headroom the glance forecasts from. A write that fails is logged once, not silently dropped.
+- **team:** the team upload no longer lifts the daemon's memory as high while it runs. An upload held, at the same time, every prompt event of the plan days' three weeks built out in full and the turns of the waste report's six weeks, each turn with its own copies of the strings its session repeats, and handed the waste report a further copy of those turns. It now reads the plan days first and keeps only what plan use, lockouts and plan value need of each event; the turns share their repeated strings and are read into one slice that every part reads without copying. On a copy of a busy machine's store (1.3 GB of events), one upload's peak above the daemon's caches fell from 515–550 MB to 335–380 MB, for the daily 14-day upload and the hourly 2-day one alike. What an upload leaves behind is unchanged and does not grow from one upload to the next. The uploaded figures are unchanged.
 
 ## 0.124.0 - 2026-11-22
 
