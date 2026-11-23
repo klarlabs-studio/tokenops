@@ -31,20 +31,19 @@ func AddPlanValue(rows []teamwire.PlanDay, envs []*eventschema.Envelope, price p
 	if price == nil || len(rows) == 0 {
 		return
 	}
-	byDay := map[string][]*eventschema.Envelope{}
-	for _, e := range envs {
-		if e != nil {
-			day := e.Timestamp.UTC().Format(teamwire.DayLayout)
-			byDay[day] = append(byDay[day], e)
-		}
-	}
+	addPlanValue(rows, plans.DigestOf(envs, price, time.Time{}), now)
+}
+
+// addPlanValue is AddPlanValue from the events' digest, built with the
+// price.
+func addPlanValue(rows []teamwire.PlanDay, use plans.UseDigest, now time.Time) {
 	for i := range rows {
 		start, err := time.Parse(teamwire.DayLayout, rows[i].Day)
 		if err != nil {
 			continue
 		}
 		end := dayEnd(start, now)
-		usd, unpriced := plans.ListValue(byDay[rows[i].Day], rows[i].Provider, start, end, price)
+		usd, unpriced := use.ListValue(rows[i].Provider, start, end)
 		rows[i].PlanValueUSD, rows[i].PlanUnpricedTurns = &usd, int64(unpriced)
 	}
 }

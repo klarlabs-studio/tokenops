@@ -162,6 +162,13 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 	days := CoveredDays(now, opts.Days)
 	since, _ := time.Parse(teamwire.DayLayout, days[0])
 	var notes Notes
+	// The plan sections read weeks of prompt events, and the turns are
+	// weeks of turns held to the end: read the plans first, so the two
+	// are never held at once.
+	var plan planSections
+	if opts.Schema >= teamwire.SchemaFinOps {
+		plan = readPlans(ctx, d.FinOps, opts.Took, days, now)
+	}
 	var units []sessions.Unit
 	if d.Units != nil {
 		var err error
@@ -201,7 +208,7 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 	u, kindOf := aggregate(units, turns, repoOf, days, opts.ClientVersion, now)
 	var ds []avoidable.Day
 	if opts.Schema >= teamwire.SchemaFinOps {
-		ds = addFinOps(ctx, d.FinOps, shared, opts.Took, &u, repoOf, kindOf, now, &notes)
+		ds = addFinOps(ctx, d.FinOps, plan, shared, opts.Took, &u, repoOf, kindOf, now, &notes)
 	}
 	if opts.Schema >= teamwire.SchemaSpend {
 		addSpend(ctx, d, opts, shared, &u, units, turns, repoOf, now, &notes)

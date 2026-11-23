@@ -66,13 +66,66 @@ func finOpsFor(cfg config.Config, store *sqlite.Store, eng *spend.Engine, waste 
 // over the week before.
 const windowLookback = 7 * 24 * time.Hour
 
-// addFinOps fills u's schema 2 sections and marks it schema 2. A reader
-// that fails leaves its sections empty and is noted as unread; a row that
-// would fail validation is dropped and noted, so the rest is still sent.
+// planSections are a schema 2 upload's plan sections, read before the
+// rest of the upload, with what failed to read.
+type planSections struct {
+	days     []teamwire.PlanDay
+	advice   []teamwire.PlanAdvice
+	bindings []teamwire.PlanBinding
+	windows  []teamwire.PlanWindow
+	notes    Notes
+}
+
+// readPlans reads the plan sections of an upload covering days. A reader
+// that fails leaves its section empty and is noted as unread.
+func readPlans(ctx context.Context, f FinOps, took func(string, time.Duration), days []string, now time.Time) planSections {
+	var p planSections
+	if f.Plans == nil {
+		return p
+	}
+	first, err := time.Parse(teamwire.DayLayout, days[0])
+	if err != nil {
+		return p
+	}
+	d := f.Plans()
+	if d.Config == nil || len(d.Config.Plans) == 0 || d.Reader == nil {
+		return p
+	}
+	done := lap(took, "plan days")
+	planDays, err := planDays(ctx, d, first, days, now)
+	done()
+	if err != nil {
+		p.notes.unread("plan days", err)
+	} else {
+		p.days = planDays
+	}
+	done = lap(took, "plan advice")
+	advice, err := headroom.CachedAdvice(ctx, d, now)
+	done()
+	if err != nil {
+		p.notes.unread("plan advice", err)
+	} else {
+		p.advice = AdviceRows(advice)
+	}
+	// Schema 6's snapshots; Build leaves them out of an older schema.
+	p.bindings, err = planBindings(d, now)
+	if err != nil {
+		p.notes.unread("plan bindings", err)
+	}
+	done = lap(took, "plan windows")
+	p.windows = PlanWindows(ctx, d.Reader, d.Config.Plans, now)
+	done()
+	return p
+}
+
+// addFinOps fills u's schema 2 sections, from plan read before and the
+// waste report, and marks it schema 2. A reader that fails leaves its
+// sections empty and is noted as unread; a row that would fail validation
+// is dropped and noted, so the rest is still sent.
 //
 // It returns the day reports the waste was read from, nil when it was not
 // read, for the prevented figures.
-func addFinOps(ctx context.Context, f FinOps, turns TurnReader, took func(string, time.Duration), u *teamwire.Upload, repoOf map[string]string, kindOf kinds, now time.Time, notes *Notes) []avoidable.Day {
+func addFinOps(ctx context.Context, f FinOps, plan planSections, turns TurnReader, took func(string, time.Duration), u *teamwire.Upload, repoOf map[string]string, kindOf kinds, now time.Time, notes *Notes) []avoidable.Day {
 	u.Schema = teamwire.SchemaFinOps
 	first, err := time.Parse(teamwire.DayLayout, u.Days[0])
 	if err != nil {
@@ -83,36 +136,8 @@ func addFinOps(ctx context.Context, f FinOps, turns TurnReader, took func(string
 	for _, d := range u.Days {
 		covered[d] = true
 	}
-	if f.Plans != nil {
-		d := f.Plans()
-		if d.Config != nil && len(d.Config.Plans) > 0 && d.Reader != nil {
-			done := lap(took, "plan days")
-			planDays, err := planDays(ctx, d, first, u.Days, now)
-			done()
-			if err != nil {
-				notes.unread("plan days", err)
-			} else {
-				u.PlanDays = planDays
-			}
-			done = lap(took, "plan advice")
-			advice, err := headroom.CachedAdvice(ctx, d, now)
-			done()
-			if err != nil {
-				notes.unread("plan advice", err)
-			} else {
-				u.PlanAdvice = AdviceRows(advice)
-			}
-			// Schema 6's snapshots; Build leaves them out of an older
-			// schema.
-			u.PlanBindings, err = planBindings(d, now)
-			if err != nil {
-				notes.unread("plan bindings", err)
-			}
-			done = lap(took, "plan windows")
-			u.PlanWindows = PlanWindows(ctx, d.Reader, d.Config.Plans, now)
-			done()
-		}
-	}
+	u.PlanDays, u.PlanAdvice, u.PlanBindings, u.PlanWindows = plan.days, plan.advice, plan.bindings, plan.windows
+	notes.Unread = append(notes.Unread, plan.notes.Unread...)
 	var ds []avoidable.Day
 	if f.Waste != nil {
 		done := lap(took, "waste")
@@ -145,12 +170,17 @@ func planDays(ctx context.Context, d headroom.Deps, first time.Time, days []stri
 		}
 		history = h
 	}
-	envs, err := d.Reader.ReadEvents(ctx, eventschema.EventTypePrompt, first.Add(-windowLookback))
+	// Scanned into a digest, not read as envelopes: three weeks of a busy
+	// machine's prompt events built as envelopes were the largest thing an
+	// upload held.
+	use, err := plans.DigestUse(ctx, d.Reader, first.Add(-windowLookback), d.Price, first)
 	if err != nil {
 		return nil, err
 	}
-	rows := PlanDays(envs, d.Config.Plans, history, days, now)
-	AddPlanValue(rows, envs, d.Price, now)
+	rows := planDaysOf(use, d.Config.Plans, history, days, now)
+	if d.Price != nil {
+		addPlanValue(rows, use, now)
+	}
 	return rows, nil
 }
 
@@ -210,6 +240,11 @@ func keepValid[T any](rows []T, valid func(T) error) ([]T, int) {
 // in force at its end, from the plan history. A day with nothing measured
 // for a plan has no row.
 func PlanDays(envs []*eventschema.Envelope, bound map[string]string, history plans.History, days []string, now time.Time) []teamwire.PlanDay {
+	return planDaysOf(plans.DigestOf(envs, nil, time.Time{}), bound, history, days, now)
+}
+
+// planDaysOf is PlanDays from the events' digest.
+func planDaysOf(use plans.UseDigest, bound map[string]string, history plans.History, days []string, now time.Time) []teamwire.PlanDay {
 	provs := make([]string, 0, len(bound))
 	for p := range bound {
 		provs = append(provs, p)
@@ -217,7 +252,7 @@ func PlanDays(envs []*eventschema.Envelope, bound map[string]string, history pla
 	sort.Strings(provs)
 	locks := map[string]map[string]plans.DayLockouts{}
 	for _, p := range provs {
-		locks[p] = plans.LockoutsByDay(plans.QuotaReadingsFrom(envs, p, time.Time{}, now), now)
+		locks[p] = plans.LockoutsByDay(use.QuotaReadings(p, time.Time{}, now), now)
 	}
 	var out []teamwire.PlanDay
 	for _, day := range days {
@@ -229,14 +264,14 @@ func PlanDays(envs []*eventschema.Envelope, bound map[string]string, history pla
 		if end.After(now) {
 			end = now
 		}
-		use := plans.PlanUseOn(envs, start, end)
+		on := use.PlanUseOn(start, end)
 		for _, p := range provs {
 			current, _ := plans.ResolveAlias(bound[p])
 			plan, _ := plans.ResolveAlias(history.At(p, end, current))
 			if !teamwire.ValidPlan(p, plan) {
 				continue
 			}
-			u, _ := use.For(p)
+			u, _ := on.For(p)
 			l := locks[p][day]
 			if u.UtilizationPct == nil && u.CoveragePct == nil && l.Lockouts == 0 && l.BlockedMinutes == 0 {
 				continue

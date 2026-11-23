@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -289,5 +290,57 @@ func TestValuedSeatCrosses(t *testing.T) {
 		if got := teamwire.SeatAction(row, 1, companyPaid); got != teamwire.SeatKeep {
 			t.Errorf("seat action (company paid %v) = %s, want keep", companyPaid, got)
 		}
+	}
+}
+
+// scanningEvents scans its events, one reused envelope for all of them as
+// the daemon's event cache does, and fails a read of them as a slice.
+type scanningEvents struct {
+	t    *testing.T
+	envs []*eventschema.Envelope
+}
+
+func (r scanningEvents) ReadEvents(context.Context, eventschema.EventType, time.Time) ([]*eventschema.Envelope, error) {
+	r.t.Error("the plan days read weeks of events as a slice from a reader that scans")
+	return nil, nil
+}
+
+func (scanningEvents) CountBySource(context.Context, time.Time, time.Time) (map[string]int64, error) {
+	return nil, nil
+}
+
+func (r scanningEvents) ScanEvents(_ context.Context, _ eventschema.EventType, since time.Time, _ bool, fn func(*eventschema.Envelope) bool) error {
+	var reused eventschema.Envelope
+	var prompt eventschema.PromptEvent
+	for _, e := range r.envs {
+		if e.Timestamp.Before(since) {
+			continue
+		}
+		reused, prompt = *e, *e.Payload.(*eventschema.PromptEvent)
+		reused.Payload = &prompt
+		if !fn(&reused) {
+			return nil
+		}
+	}
+	return nil
+}
+
+// The plan days are read by scanning the events where the reader scans:
+// three weeks of a busy machine's prompt events, built as envelopes, were
+// the largest thing an upload held. The rows are those the events give.
+func TestPlanDaysScanTheEvents(t *testing.T) {
+	envs := seatEvents()
+	days := CoveredDays(now, 4)
+	bound := map[string]string{"anthropic": "claude-max"}
+	want := PlanDays(envs, bound, nil, days, now)
+	AddPlanValue(want, envs, tokenPrice, now)
+	first, _ := time.Parse(teamwire.DayLayout, days[0])
+	d := headroom.Deps{Config: &config.Config{Plans: bound}, Reader: scanningEvents{t, envs}, Price: tokenPrice}
+	got, err := planDays(context.Background(), d, first, days, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(want) == 0 || !reflect.DeepEqual(got, want) {
+		t.Errorf("plan days = %+v\nwant %+v", got, want)
 	}
 }

@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
+	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 	"go.klarlabs.de/tokenops/pkg/teamwire"
 )
 
@@ -92,8 +94,78 @@ func TestUploadTimesEachPart(t *testing.T) {
 	if _, notes := Build(context.Background(), spendDeps(), opts, now); len(notes.All()) > 0 {
 		t.Fatalf("notes: %v", notes.All())
 	}
-	want := []string{"transcripts", "turns", "repositories", "plan days", "plan advice", "plan windows", "waste", "units of work", "vendor cost"}
+	want := []string{"plan days", "plan advice", "plan windows", "transcripts", "turns", "repositories", "waste", "units of work", "vendor cost"}
 	if !slices.Equal(parts, want) {
 		t.Errorf("parts timed = %q, want %q", parts, want)
+	}
+}
+
+// The turns an upload holds are handed to each section as they are: the
+// sections only read them, and a copy of the waste report's six weeks of
+// a busy machine's turns was a few hundred megabytes more at the
+// upload's peak. A section that appends gets its own slice.
+func TestSharedTurnsHandsOverTheHeldTurns(t *testing.T) {
+	held := make([]analytics.SessionTurn, 1000)
+	for i := range held {
+		held[i] = analytics.SessionTurn{SessionID: "s", At: now.Add(time.Duration(i) * time.Minute), Tokens: 1}
+	}
+	s := &sharedTurns{read: func(context.Context, time.Time) ([]analytics.SessionTurn, error) {
+		return slices.Clone(held), nil
+	}}
+	ctx := context.Background()
+	if _, err := s.prime(ctx, now); err != nil {
+		t.Fatal(err)
+	}
+	from := held[500].At
+	if allocs := testing.AllocsPerRun(10, func() { _, _ = s.Read(ctx, from) }); allocs != 0 {
+		t.Errorf("a read of the held turns allocated %v times, want none", allocs)
+	}
+	got, _ := s.Read(ctx, from)
+	if len(got) != 500 || !got[0].At.Equal(from) {
+		t.Fatalf("read from the 500th turn: %d turns from %s", len(got), got[0].At)
+	}
+	_ = append(got, analytics.SessionTurn{SessionID: "appended"})
+	if again, _ := s.Read(ctx, from); len(again) != 500 || len(s.turns) != 1000 {
+		t.Errorf("an append to a section's turns changed the held ones: %d, %d", len(again), len(s.turns))
+	}
+}
+
+// readsWatched is a plan reader that calls read before each of its reads.
+type readsWatched struct {
+	eventsReader
+	read func()
+}
+
+func (r readsWatched) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
+	r.read()
+	return r.eventsReader.ReadEvents(ctx, t, since)
+}
+
+// An upload reads the plan events before the turns: the two largest
+// reads of an upload, weeks of prompt events and weeks of turns, are not
+// held at once.
+func TestUploadReadsThePlansBeforeTheTurns(t *testing.T) {
+	d := spendDeps()
+	var turnsRead, plansAfter bool
+	turns := d.Turns
+	d.Turns = func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
+		turnsRead = true
+		return turns(ctx, since)
+	}
+	plansOf := d.FinOps.Plans
+	d.FinOps.Plans = func() headroom.Deps {
+		p := plansOf()
+		p.Reader = readsWatched{p.Reader.(eventsReader), func() { plansAfter = plansAfter || turnsRead }}
+		return p
+	}
+	u, notes := Build(context.Background(), d, Options{Days: 14, RepoNames: RepoRemote, Schema: teamwire.SchemaVersion}, now)
+	if len(notes.All()) > 0 {
+		t.Fatalf("notes: %v", notes.All())
+	}
+	if len(u.PlanDays) == 0 || !turnsRead {
+		t.Fatalf("the upload read no plans or no turns: %+v", u.PlanDays)
+	}
+	if plansAfter {
+		t.Error("the plan events were read while the turns were held")
 	}
 }
