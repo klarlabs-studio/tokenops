@@ -43,12 +43,16 @@ func (s *sharedTurns) prime(ctx context.Context, since time.Time) ([]analytics.S
 }
 
 // Read is the turns since since: from those held when they reach back
-// that far, else read. Each caller gets its own copy.
+// that far, else read. The held turns are shared, not copied: the
+// sections only read them, and a copy of the waste report's six weeks of
+// a busy machine's turns added a few hundred megabytes to the upload's
+// peak. The slice's capacity is its length, so a caller that appends gets
+// its own.
 func (s *sharedTurns) Read(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
 	if !s.held || since.Before(s.since) {
 		return s.read(ctx, since)
 	}
-	return slices.Clone(turnsSince(s.turns, since)), nil
+	return slices.Clip(turnsSince(s.turns, since)), nil
 }
 
 // turnsSince is the tail of turns, oldest first, at or after since.

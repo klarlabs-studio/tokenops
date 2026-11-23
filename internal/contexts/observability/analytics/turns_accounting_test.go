@@ -43,3 +43,29 @@ func TestSessionTurnsCarrySourceAndAccounting(t *testing.T) {
 		t.Errorf("metered turn = %+v", m)
 	}
 }
+
+// usageOnly is a store that answers SessionUsage with rows, and nothing
+// else.
+type usageOnly struct {
+	analytics.Store
+	rows []analytics.SessionUsage
+}
+
+func (s usageOnly) SessionUsage(context.Context, analytics.Filter) ([]analytics.SessionUsage, error) {
+	return s.rows, nil
+}
+
+// The turns are built into one slice of their number: grown by appending,
+// six weeks of a busy machine's turns (the team upload's read) held up to
+// twice their 125 MB while the slice was copied into larger ones.
+func TestSessionTurnsAllocateOneSlice(t *testing.T) {
+	rows := make([]analytics.SessionUsage, 10_000)
+	for i := range rows {
+		rows[i] = analytics.SessionUsage{SessionID: "s", Provider: "openai", Model: "gpt-5", TotalTokens: 10, CostUSD: 0.01}
+	}
+	agg := analytics.New(usageOnly{rows: rows}, nil)
+	ctx, f := context.Background(), analytics.Filter{Since: time.Now().Add(-time.Hour)}
+	if allocs := testing.AllocsPerRun(5, func() { _, _ = agg.SessionTurns(ctx, f) }); allocs != 1 {
+		t.Errorf("reading %d turns allocated %v times, want one slice", len(rows), allocs)
+	}
+}

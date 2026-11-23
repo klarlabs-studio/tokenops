@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 	"time"
+	"unsafe"
 
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
@@ -511,6 +512,45 @@ func TestSessionUsageCacheSharesSessionStrings(t *testing.T) {
 	rows := c.windows[struct{}{}].rows
 	if len(rows) != 2 || rows[0].key != rows[1].key {
 		t.Fatalf("two turns of one session hold %d keys", len(rows))
+	}
+}
+
+// The store's own read of session usage, which answers the reads past a
+// cache's span (the team upload's six weeks), shares the strings that
+// repeat between rows: each its own allocation, a busy machine's six weeks
+// of turns held about 100 MB of copies of a few session IDs, providers
+// and models until the reader was done.
+func TestStoreSessionUsageSharesRepeatedStrings(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	rng := rand.New(rand.NewSource(1))
+	at := cacheNow.Add(-time.Hour)
+	a, b := sessionTurn("a", at, "s1", rng), sessionTurn("b", at.Add(time.Second), "s1", rng)
+	b.Payload = a.Payload
+	b.Attributes = a.Attributes
+	b.Association = a.Association
+	if err := s.AppendBatch(ctx, []*eventschema.Envelope{a, b}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.SessionUsage(ctx, analytics.Filter{Since: cacheNow.Add(-2 * time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+	for name, pair := range map[string][2]string{
+		"session":  {rows[0].SessionID, rows[1].SessionID},
+		"provider": {rows[0].Provider, rows[1].Provider},
+		"model":    {rows[0].Model, rows[1].Model},
+		"source":   {rows[0].Source, rows[1].Source},
+	} {
+		if pair[0] == "" || pair[0] != pair[1] {
+			t.Fatalf("%s: %q and %q, want the same", name, pair[0], pair[1])
+		}
+		if unsafe.StringData(pair[0]) != unsafe.StringData(pair[1]) {
+			t.Errorf("the two turns hold their own copies of the %s %q", name, pair[0])
+		}
 	}
 }
 
