@@ -1,10 +1,14 @@
 package statuslinepace
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -190,5 +194,94 @@ func TestReadFailsClosed(t *testing.T) {
 				t.Errorf("read %+v", f)
 			}
 		})
+	}
+}
+
+// clock is a test clock safe to move while a keeper runs.
+type clock struct {
+	mu sync.Mutex
+	t  time.Time
+}
+
+func (c *clock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.t
+}
+
+func (c *clock) Set(t time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.t = t
+}
+
+// A keeper writes the forecast at start and at each tick, with no request
+// behind it, so the status line finds it fresh while nothing asks the
+// daemon for the glance.
+func TestKeeperWritesWithoutRequests(t *testing.T) {
+	path := filepath.Join(t.TempDir(), FileName)
+	now := &clock{t: at}
+	var calls int
+	k := Keeper{
+		Path: path, Version: "v",
+		Now: now.Now,
+		Source: func(context.Context, time.Time) ([]plans.HeadroomReport, error) {
+			calls++
+			return []plans.HeadroomReport{{Provider: "anthropic", Windows: []plans.VendorWindow{week(90)}}}, nil
+		},
+		Warn: func(err error) { t.Errorf("warned %v", err) },
+	}
+	tick := make(chan time.Time)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { k.Run(ctx, tick); close(done) }()
+	last := at
+	for range 3 {
+		last = last.Add(Every)
+		now.Set(last)
+		tick <- last
+	}
+	cancel()
+	<-done
+	if calls != 4 {
+		t.Fatalf("computed %d times, want the start and each of 3 ticks", calls)
+	}
+	got, ok := Read(path)
+	if !ok || !got.ComputedAt.Equal(last) || len(got.Windows) != 1 {
+		t.Fatalf("file %+v ok=%v, want computed at %v", got, ok, last)
+	}
+}
+
+// A failing write is reported once per failure, not once per tick, and
+// a cancelled run is not a failure.
+func TestKeeperReportsAFailureOnce(t *testing.T) {
+	var fail atomic.Bool
+	fail.Store(true)
+	var warnings []error
+	k := Keeper{
+		Path: filepath.Join(t.TempDir(), FileName), Version: "v",
+		Now: func() time.Time { return at },
+		Source: func(context.Context, time.Time) ([]plans.HeadroomReport, error) {
+			if fail.Load() {
+				return nil, errors.New("events unreadable")
+			}
+			return nil, nil
+		},
+		Warn: func(err error) { warnings = append(warnings, err) },
+	}
+	tick := make(chan time.Time)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { k.Run(ctx, tick); close(done) }()
+	tick <- at // failing: start and this tick
+	tick <- at
+	fail.Store(false)
+	tick <- at // recovers
+	fail.Store(true)
+	tick <- at // fails again: reported again
+	cancel()
+	<-done
+	if len(warnings) != 2 {
+		t.Fatalf("warned %d times, want once per failure episode: %v", len(warnings), warnings)
 	}
 }

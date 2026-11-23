@@ -14,7 +14,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
-	"go.klarlabs.de/tokenops/internal/capability/statuslinepace"
 	"go.klarlabs.de/tokenops/internal/tempfile"
 )
 
@@ -204,13 +203,6 @@ func WithGlanceSnapshot(path, key string) Option {
 	return func(s *Server) { s.glancePath, s.glanceKey = path, key }
 }
 
-// WithStatuslinePace has each computed glance write its plan windows' forecast
-// at path for the status line, which must not ask the daemon
-// (statuslinepace). version names the daemon that wrote it.
-func WithStatuslinePace(path, version string) Option {
-	return func(s *Server) { s.pacePath, s.paceVersion = path, version }
-}
-
 // WithGlanceCosts has each computed glance carry its plans' providers'
 // usage today and over 30 days, read through s: the cards show them, and
 // a client that asks for the glance would otherwise read 30 days of
@@ -245,12 +237,6 @@ func (s *Server) computeView(ctx context.Context, now time.Time) (glanceView, er
 		return glanceView{}, err
 	}
 	g := fig.Glance
-	if s.pacePath != "" {
-		// The status line reads the forecast from this file, never the
-		// daemon. A failure costs only the line's forecast, which it
-		// leaves out once the file goes stale.
-		_ = statuslinepace.Write(s.pacePath, statuslinepace.Build(g.Headroom.Reports, fig.At, s.paceVersion))
-	}
 	// Signing in as someone else shows at once, whatever the figures.
 	if d.Accounts != nil {
 		g.Accounts = d.Accounts()

@@ -21,7 +21,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/promptcache"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/state"
-	"go.klarlabs.de/tokenops/internal/capability/statuslinepace"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/events"
@@ -34,7 +33,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/otlp"
 	"go.klarlabs.de/tokenops/internal/proxy"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
-	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -154,6 +152,7 @@ func initializeEventRuntime(
 	rt.Bills = newVendorBills(deps).Bill
 	figureInputs := derivedInputs(rt.Store, configKey(cfg), planFiles()...)
 	startBoundaryFiguresRuntime(cfg, deps, rt.Bills, budgetSource, figureInputs, sup, logger)
+	startStatuslinePaceRuntime(deps, sup, logger)
 
 	// Plan stamping ensures all sources inherit the plan_included contract.
 	rt.Bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{
@@ -172,7 +171,6 @@ func initializeEventRuntime(
 		proxy.WithGlanceSnapshot(filepath.Join(findings.DefaultDir(), "glance.json"), configKey(cfg)),
 		proxy.WithGlanceFollows(figureInputs, cfg.Storage.EffectiveDerivedMaxAge()),
 		proxy.WithGlanceCosts(glanceCostReader(components.Aggregator)),
-		proxy.WithStatuslinePace(statuslinepace.DefaultPath(), version.Version),
 		proxy.WithActions(actionDeps(cfg, rt.Store, logger)),
 		proxy.WithSessions(func() proxy.SessionRoots { return proxy.SessionRoots{} }),
 		proxy.WithState(stateDeps(cfg, rt.Store, sources, rt.Bus.DroppedCount)),

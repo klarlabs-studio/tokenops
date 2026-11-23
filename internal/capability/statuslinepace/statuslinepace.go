@@ -11,6 +11,7 @@
 package statuslinepace
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,11 +27,9 @@ import (
 const FileName = "statusline.json"
 
 // FreshFor is how old a forecast the status line still shows. The daemon
-// recomputes the glance at most every 30 seconds while anything reads it
-// (the menu bar asks every minute), so ten minutes rides out a few missed
-// refreshes; beyond it the daemon is likely stopped or idle, and a
-// run-out time from the last hour's rate would describe an hour that is
-// no longer the last.
+// writes one every Every (five minutes), so ten minutes rides out a missed
+// write; beyond it the daemon is likely stopped, and a run-out time from
+// the last hour's rate would describe an hour that is no longer the last.
 const FreshFor = 10 * time.Minute
 
 // MaxWindows bounds the windows in the file, and MaxSize its bytes: a file
@@ -193,4 +192,55 @@ func (f File) RunsOut(provider, name string, resetsAt, now time.Time) (time.Time
 		return w.RunsOutAt, w.Rate, true
 	}
 	return time.Time{}, "", false
+}
+
+// Every is how often a Keeper writes the forecast: half of FreshFor, so one
+// missed write still leaves the file fresh for the status line.
+const Every = FreshFor / 2
+
+// Source reads the plan headroom reports for now: the figures glance
+// forecasts from.
+type Source func(ctx context.Context, now time.Time) ([]plans.HeadroomReport, error)
+
+// Keeper writes the forecast on its own schedule, so the status line has
+// one while no client asks the daemon for the glance.
+type Keeper struct {
+	Path, Version string
+	Source        Source
+	Now           func() time.Time
+	// Warn is told once when writes start failing, and again after they
+	// recover and fail anew. A cancelled run is not a failure.
+	Warn func(error)
+}
+
+// Run writes the forecast now and then at each tick, until ctx is done.
+func (k Keeper) Run(ctx context.Context, tick <-chan time.Time) {
+	failing := false
+	for {
+		err := k.Once(ctx)
+		switch {
+		case ctx.Err() != nil:
+			return
+		case err != nil && !failing:
+			failing = true
+			k.Warn(err)
+		case err == nil:
+			failing = false
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick:
+		}
+	}
+}
+
+// Once reads the forecast for now and writes it to Path.
+func (k Keeper) Once(ctx context.Context) error {
+	now := k.Now().UTC()
+	reports, err := k.Source(ctx, now)
+	if err != nil {
+		return fmt.Errorf("statusline forecast: %w", err)
+	}
+	return Write(k.Path, Build(reports, now, k.Version))
 }
