@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -255,14 +254,20 @@ func TestKeeperWritesWithoutRequests(t *testing.T) {
 // A failing write is reported once per failure, not once per tick, and
 // a cancelled run is not a failure.
 func TestKeeperReportsAFailureOnce(t *testing.T) {
-	var fail atomic.Bool
-	fail.Store(true)
+	// Each pass fails or succeeds by this script: a failing start and
+	// tick, a recovery, then a second failing episode.
+	script := []bool{false, false, true, false, false}
+	passes := make(chan struct{}, len(script))
+	var n int
 	var warnings []error
 	k := Keeper{
 		Path: filepath.Join(t.TempDir(), FileName), Version: "v",
 		Now: func() time.Time { return at },
 		Source: func(context.Context, time.Time) ([]plans.HeadroomReport, error) {
-			if fail.Load() {
+			ok := script[n]
+			n++
+			defer func() { passes <- struct{}{} }()
+			if !ok {
 				return nil, errors.New("events unreadable")
 			}
 			return nil, nil
@@ -273,12 +278,13 @@ func TestKeeperReportsAFailureOnce(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { k.Run(ctx, tick); close(done) }()
-	tick <- at // failing: start and this tick
-	tick <- at
-	fail.Store(false)
-	tick <- at // recovers
-	fail.Store(true)
-	tick <- at // fails again: reported again
+	<-passes // the pass at start
+	for range script[1:] {
+		tick <- at
+		<-passes
+	}
+	// The last pass only repeats a failure already reported; once its
+	// tick is taken, the pass before it has been handled in full.
 	cancel()
 	<-done
 	if len(warnings) != 2 {
