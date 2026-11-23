@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **statusline:** the pace forecast is kept fresh while nothing asks the daemon for the glance. The daemon wrote `~/.tokenops/statusline.json` only when the glance was computed, so with no menu bar running the line showed no forecast for hours. The daemon now writes it at start and every five minutes, from the same plan headroom the glance forecasts from. A write that fails is logged once, not silently dropped.
+
 ## 0.124.0 - 2026-11-22
 
 ### Added

@@ -1,10 +1,13 @@
 package statuslinepace
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -190,5 +193,101 @@ func TestReadFailsClosed(t *testing.T) {
 				t.Errorf("read %+v", f)
 			}
 		})
+	}
+}
+
+// clock is a test clock safe to move while a keeper runs.
+type clock struct {
+	mu sync.Mutex
+	t  time.Time
+}
+
+func (c *clock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.t
+}
+
+func (c *clock) Set(t time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.t = t
+}
+
+// A keeper writes the forecast at start and at each tick, with no request
+// behind it, so the status line finds it fresh while nothing asks the
+// daemon for the glance.
+func TestKeeperWritesWithoutRequests(t *testing.T) {
+	path := filepath.Join(t.TempDir(), FileName)
+	now := &clock{t: at}
+	var calls int
+	k := Keeper{
+		Path: path, Version: "v",
+		Now: now.Now,
+		Source: func(context.Context, time.Time) ([]plans.HeadroomReport, error) {
+			calls++
+			return []plans.HeadroomReport{{Provider: "anthropic", Windows: []plans.VendorWindow{week(90)}}}, nil
+		},
+		Warn: func(err error) { t.Errorf("warned %v", err) },
+	}
+	tick := make(chan time.Time)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { k.Run(ctx, tick); close(done) }()
+	last := at
+	for range 3 {
+		last = last.Add(Every)
+		now.Set(last)
+		tick <- last
+	}
+	cancel()
+	<-done
+	if calls != 4 {
+		t.Fatalf("computed %d times, want the start and each of 3 ticks", calls)
+	}
+	got, ok := Read(path)
+	if !ok || !got.ComputedAt.Equal(last) || len(got.Windows) != 1 {
+		t.Fatalf("file %+v ok=%v, want computed at %v", got, ok, last)
+	}
+}
+
+// A failing write is reported once per failure, not once per tick, and
+// a cancelled run is not a failure.
+func TestKeeperReportsAFailureOnce(t *testing.T) {
+	// Each pass fails or succeeds by this script: a failing start and
+	// tick, a recovery, then a second failing episode.
+	script := []bool{false, false, true, false, false}
+	passes := make(chan struct{}, len(script))
+	var n int
+	var warnings []error
+	k := Keeper{
+		Path: filepath.Join(t.TempDir(), FileName), Version: "v",
+		Now: func() time.Time { return at },
+		Source: func(context.Context, time.Time) ([]plans.HeadroomReport, error) {
+			ok := script[n]
+			n++
+			defer func() { passes <- struct{}{} }()
+			if !ok {
+				return nil, errors.New("events unreadable")
+			}
+			return nil, nil
+		},
+		Warn: func(err error) { warnings = append(warnings, err) },
+	}
+	tick := make(chan time.Time)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { k.Run(ctx, tick); close(done) }()
+	<-passes // the pass at start
+	for range script[1:] {
+		tick <- at
+		<-passes
+	}
+	// The last pass only repeats a failure already reported; once its
+	// tick is taken, the pass before it has been handled in full.
+	cancel()
+	<-done
+	if len(warnings) != 2 {
+		t.Fatalf("warned %d times, want once per failure episode: %v", len(warnings), warnings)
 	}
 }
