@@ -468,12 +468,20 @@ func (s *Store) SessionUsage(ctx context.Context, f analytics.Filter) ([]analyti
 		return nil, fmt.Errorf("analytics: session turns: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
+	// The rows share the strings that repeat: a session's turns its ID,
+	// and most turns a handful of providers, models and sources. Each its
+	// own copy, six weeks of a busy machine's turns (the team upload's
+	// read, past the cache's span) held about 100 MB of them.
+	in := newInterner()
 	var out []analytics.SessionUsage
 	for rows.Next() {
 		u, err := scanSessionUsage(rows)
 		if err != nil {
 			return nil, err
 		}
+		u.SessionID, u.Provider, u.Model = in.str(u.SessionID), in.str(u.Provider), in.str(u.Model)
+		u.WorkflowID, u.ExecutionID = in.str(u.WorkflowID), in.str(u.ExecutionID)
+		u.Source, u.Endpoint = in.str(u.Source), in.str(u.Endpoint)
 		out = append(out, u)
 	}
 	return out, rows.Err()
