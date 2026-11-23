@@ -183,3 +183,48 @@ func TestWeekFiguresReadsTheWeeksRecords(t *testing.T) {
 		t.Errorf("figures = %+v; want an empty week", f)
 	}
 }
+
+// A change the log counts only as Older (an update or delete of an event
+// past the change log's horizon, such as the retention prune) can touch
+// only the weeks that reach back past that horizon: the recent weeks stay
+// as stored. The daemon recomputed every week after each prune.
+func TestRefreshWeeksAfterAnOldChangeRecomputesOnlyOldWeeks(t *testing.T) {
+	dir := t.TempDir()
+	log := &fakeLog{pos: sqlite.Position{Rowid: 10, Seq: 1}, placeable: true}
+	c := &counter{}
+	setAt := weeksNow.AddDate(0, 0, -70)
+	refresh := func() Weeks {
+		t.Helper()
+		w, err := RefreshWeeks(context.Background(), log, c.figures, dir, 0, setAt, weeksNow)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return w
+	}
+	w := refresh()
+	horizon := weeksNow.Add(-sqlite.ChangeLogHorizon)
+	var old int
+	for _, f := range w.Weeks {
+		if f.Start.Before(horizon) {
+			old++
+		}
+	}
+	if old == 0 || old == len(w.Weeks) {
+		t.Fatalf("%d of %d weeks reach past the horizon; the test needs some of each", old, len(w.Weeks))
+	}
+	first := len(c.asked)
+	log.pos.Older = 3
+	refresh()
+	recomputed := 0
+	for start, n := range c.asked {
+		if n > 1 {
+			recomputed++
+			if !start.Before(horizon) {
+				t.Errorf("week %s, inside the change log's horizon, was recomputed", start.Format(time.DateOnly))
+			}
+		}
+	}
+	if recomputed != old || len(c.asked) != first {
+		t.Errorf("recomputed %d weeks, want the %d reaching past the horizon", recomputed, old)
+	}
+}
