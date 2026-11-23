@@ -2,6 +2,10 @@ package avoidable
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -104,5 +108,39 @@ func TestComputeReadsThroughDeps(t *testing.T) {
 func TestDepsForKeepsItsGitLookups(t *testing.T) {
 	if DepsFor(config.Config{}, nil, nil, nil).Repos == nil {
 		t.Fatal("DepsFor resolves repositories afresh on every report")
+	}
+}
+
+// A past period's transcript records are that period's: a week's figures
+// computed weeks later hold its own records, not every one written since.
+// The daemon's weekly figures held months of records for the oldest week.
+func TestTranscriptRecordsAreThePeriods(t *testing.T) {
+	root := t.TempDir()
+	start := time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)
+	var b strings.Builder
+	// One session, an instruction a day for three weeks.
+	for d := range 21 {
+		at := start.AddDate(0, 0, d).Add(9 * time.Hour).Format(time.RFC3339Nano)
+		fmt.Fprintf(&b, `{"type":"user","timestamp":%q,"sessionId":"s","message":{"content":"task %d"}}`+"\n", at, d)
+	}
+	path := filepath.Join(root, "p", "s.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	since, until := start, start.AddDate(0, 0, 7)
+	recs, err := transcriptRecords(root, nil)(context.Background(), since, until)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 7 {
+		t.Errorf("read %d records for the week, want its 7", len(recs))
+	}
+	for _, r := range recs {
+		if r.At.Before(since) || !r.At.Before(until) {
+			t.Errorf("record at %s outside the week", r.At)
+		}
 	}
 }

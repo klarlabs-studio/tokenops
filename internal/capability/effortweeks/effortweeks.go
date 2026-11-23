@@ -186,12 +186,12 @@ func Refresh(ctx context.Context, log Log, figures func(ctx context.Context, sta
 		for _, w := range old.Weeks {
 			held[w.Start.UTC()] = w
 		}
-		dirty, all, err := touched(ctx, log, old.Position, pos)
+		dirty, err := touched(ctx, log, old.Position, pos, now)
 		if err != nil {
 			return Rollup{}, err
 		}
 		for w := range held {
-			if all || dirty[w] {
+			if dirty(w) {
 				delete(held, w)
 			}
 		}
@@ -211,28 +211,36 @@ func Refresh(ctx context.Context, log Log, figures func(ctx context.Context, sta
 	return out, write(dir, out)
 }
 
-// touched is the weeks a change in the log between from and to touched;
-// all is true when a change cannot be placed in time, or there is no
-// position to compare with.
-func touched(ctx context.Context, log Log, from, to sqlite.Position) (map[time.Time]bool, bool, error) {
-	if from == (sqlite.Position{}) || from.Older != to.Older {
-		return nil, true, nil
+// touched reports, for each week start, whether a change in the log
+// between from and to touched that week. Every week is touched when a
+// change cannot be placed in time, or there is no position to compare
+// with. A change past the change log's horizon (the retention prune, a
+// reprice of old events) is not placed one by one, but it can touch only
+// the weeks reaching back past that horizon (sqlite.OlderChangedBefore).
+func touched(ctx context.Context, log Log, from, to sqlite.Position, now time.Time) (func(time.Time) bool, error) {
+	every := func(time.Time) bool { return true }
+	if from == (sqlite.Position{}) {
+		return every, nil
 	}
 	if from == to {
-		return nil, false, nil
+		return func(time.Time) bool { return false }, nil
+	}
+	older, ok := sqlite.OlderChangedBefore(from, to, now)
+	if !ok {
+		return every, nil
 	}
 	times, attributable, err := log.ChangedTimes(ctx, eventschema.EventTypePrompt, from, to)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	if !attributable {
-		return nil, true, nil
+		return every, nil
 	}
-	out := map[time.Time]bool{}
+	placed := map[time.Time]bool{}
 	for _, t := range times {
-		out[weekStart(t)] = true
+		placed[weekStart(t)] = true
 	}
-	return out, false, nil
+	return func(w time.Time) bool { return placed[w] || w.Before(older) }, nil
 }
 
 // OutcomeMargin is how far an outcome rate may worsen after a change, in

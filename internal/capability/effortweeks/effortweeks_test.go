@@ -158,3 +158,33 @@ func TestWatchesNeedAChange(t *testing.T) {
 		t.Fatalf("watches = %+v", ws)
 	}
 }
+
+// A change the log counts only as Older can touch only the weeks reaching
+// back past the change log's horizon; the recent weeks stay as stored.
+func TestRefreshAfterAnOldChangeRecomputesOnlyOldWeeks(t *testing.T) {
+	dir := t.TempDir()
+	log := &fakeLog{pos: sqlite.Position{Rowid: 1, Seq: 1}}
+	calls := map[time.Time]int{}
+	figures := func(_ context.Context, start time.Time) (Week, error) {
+		calls[start]++
+		return Week{Start: start}, nil
+	}
+	now := monday.AddDate(0, 0, 7*Kept).Add(time.Hour)
+	if _, err := Refresh(context.Background(), log, figures, dir, now); err != nil {
+		t.Fatal(err)
+	}
+	log.pos.Older = 1
+	if _, err := Refresh(context.Background(), log, figures, dir, now); err != nil {
+		t.Fatal(err)
+	}
+	horizon := now.Add(-sqlite.ChangeLogHorizon)
+	for start, n := range calls {
+		want := 1
+		if start.Before(horizon) {
+			want = 2
+		}
+		if n != want {
+			t.Errorf("week %s computed %d times, want %d", start.Format(time.DateOnly), n, want)
+		}
+	}
+}

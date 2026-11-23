@@ -41,6 +41,9 @@ type ExtractOptions struct {
 	Root string
 	// Since drops entries older than this. Zero reads everything.
 	Since time.Time
+	// Until drops entries at or after this, and skips the transcripts
+	// that began after it. Zero reads up to now.
+	Until time.Time
 	// WithPromptText carries each instruction's text into Record.Text.
 	// Off by default: the metrics never needed the words, and a scan
 	// that does not carry them cannot leak them. The narrative surfaces
@@ -70,6 +73,21 @@ func (o ExtractOptions) cache() *TranscriptCache {
 		return nil
 	}
 	return o.Cache
+}
+
+// scanCache is the cache a Claude Code or Codex scan reads through, and
+// the facts a scan that reads the files itself derives. A shared cache
+// that does not keep the scan's window is not read through: it would
+// read every file again and then hold the longer window for every reader
+// (the daemon's oldest weekly figures pulled months of transcripts into
+// it). Such a scan reads the files and still derives the cache's facts,
+// so it yields what a read through the cache would.
+func (o ExtractOptions) scanCache() (*TranscriptCache, PromptFactsFunc) {
+	c := o.cache()
+	if c == nil || c.keeps(o.Since) {
+		return c, nil
+	}
+	return nil, c.facts
 }
 
 // DefaultRoot returns the conventional Claude Code projects directory.
@@ -106,13 +124,13 @@ func Extract(opts ExtractOptions) ([]Record, error) {
 		files = scanscope.Keep(files)
 	}
 	var out []Record
-	cache := opts.cache()
+	cache, facts := opts.scanCache()
 	kept := make(map[string]bool, len(files))
 	for _, path := range files {
 		info, fresh := writtenSince(path, opts.Since)
-		if !fresh {
-			// Too old for this scan but within what the cache keeps for
-			// a longer one: it stays cached.
+		if !fresh || begunAfter(path, opts.Until, false) {
+			// Outside this scan's window but within what the cache keeps
+			// for another: it stays cached.
 			if cache.holds(path, opts.Since) {
 				kept[path] = true
 			}
@@ -120,14 +138,14 @@ func Extract(opts ExtractOptions) ([]Record, error) {
 		}
 		if cache != nil {
 			kept[path] = true
-			out = append(out, asSubagent(path, cache.claudeCode(path, info, opts.Since))...)
+			out = append(out, before(asSubagent(path, cache.claudeCode(path, info, opts.Since)), opts.Until)...)
 			continue
 		}
 		f, err := os.Open(path) //nolint:gosec // operator's own transcript dir
 		if err != nil {
 			continue
 		}
-		out = append(out, asSubagent(path, readTranscript(f, opts.Since, opts.WithPromptText))...)
+		out = append(out, before(asSubagent(path, readTranscriptWith(f, opts.Since, opts.WithPromptText, facts)), opts.Until)...)
 		_ = f.Close()
 	}
 	if cache != nil {
@@ -239,11 +257,17 @@ const interruptMarker = "[request interrupted"
 const maxTranscriptLine = 8 << 20
 
 func readTranscript(r io.Reader, since time.Time, withText bool) []Record {
+	return readTranscriptWith(r, since, withText, nil)
+}
+
+// readTranscriptWith reads a whole transcript, deriving each instruction's
+// facts with facts when it is set.
+func readTranscriptWith(r io.Reader, since time.Time, withText bool, facts PromptFactsFunc) []Record {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 1<<20), maxTranscriptLine)
 	var out []Record
 	for sc.Scan() {
-		out = appendTranscriptLine(out, sc.Bytes(), since, withText, nil)
+		out = appendTranscriptLine(out, sc.Bytes(), since, withText, facts)
 	}
 	return out
 }
@@ -509,10 +533,14 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 // scan's cache keeps prompt facts, the source is read with the words, each
 // instruction's facts are derived from them, and the words are dropped, so
 // every source answers a facts scan alike.
+//
+// These readers know no Until; the records at or after it are dropped
+// here.
 func withFacts(opts ExtractOptions, read func(ExtractOptions) ([]Record, error)) ([]Record, error) {
 	c := opts.cache()
 	if !c.HasPromptFacts() {
-		return read(opts)
+		recs, err := read(opts)
+		return before(recs, opts.Until), err
 	}
 	o := opts
 	o.WithPromptText = true
@@ -522,7 +550,7 @@ func withFacts(opts ExtractOptions, read func(ExtractOptions) ([]Record, error))
 			recs[i].Facts, recs[i].Text = c.facts(recs[i].Text), ""
 		}
 	}
-	return recs, err
+	return before(recs, opts.Until), err
 }
 
 // stamped marks every record a reader returned with the harness that

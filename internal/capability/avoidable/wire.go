@@ -95,10 +95,12 @@ func storedWeeks() *Weeks {
 // [since, until): the stops and the context curve. The window is the
 // period's days, read through the same reader the dx surfaces use, from
 // root (the clients' defaults when empty), through cache when one is given.
+// It ends at until, so a past week's read holds that week's records and
+// opens only the transcripts begun before it ended.
 func transcriptRecords(root string, cache *sessions.TranscriptCache) func(context.Context, time.Time, time.Time) ([]agentdx.Record, error) {
 	return func(_ context.Context, since, until time.Time) ([]agentdx.Record, error) {
 		days := max(1, int(math.Ceil(until.Sub(since).Hours()/24)))
-		return sessions.Records(sessions.Window{Root: root, Days: days, Cache: cache}, until)
+		return sessions.Records(sessions.Window{Root: root, Days: days, Cache: cache, Until: until}, until)
 	}
 }
 

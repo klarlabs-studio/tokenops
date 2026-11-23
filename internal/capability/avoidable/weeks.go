@@ -30,8 +30,10 @@ import (
 // setting.
 
 // WeeksVersion is the rollup's layout and computation version. A rollup of
-// another version is rebuilt.
-const WeeksVersion = 1
+// another version is rebuilt. Version 2 measures each week's reject rate
+// over that week's instructions; version 1 pooled every instruction from
+// the week's start to the day it was computed.
+const WeeksVersion = 2
 
 const weeksFile = "compact-weeks.json"
 
@@ -157,12 +159,12 @@ func RefreshWeeks(ctx context.Context, log WeekLog, figures func(ctx context.Con
 		for _, w := range old.Weeks {
 			held[w.Start.UTC()] = w
 		}
-		dirty, all, err := touchedWeeks(ctx, log, old.Position, pos)
+		dirty, err := touchedWeeks(ctx, log, old.Position, pos, now)
 		if err != nil {
 			return Weeks{}, err
 		}
 		for w := range held {
-			if all || dirty[w] {
+			if dirty(w) {
 				delete(held, w)
 			}
 		}
@@ -183,28 +185,36 @@ func RefreshWeeks(ctx context.Context, log WeekLog, figures func(ctx context.Con
 	return out, writeWeeks(dir, out)
 }
 
-// touchedWeeks is the weeks a change in the log between from and to
-// touched; all is true when a change cannot be placed in time, or there is
-// no position to compare with.
-func touchedWeeks(ctx context.Context, log WeekLog, from, to sqlite.Position) (map[time.Time]bool, bool, error) {
-	if from == (sqlite.Position{}) || from.Older != to.Older {
-		return nil, true, nil
+// touchedWeeks reports, for each week start, whether a change in the log
+// between from and to touched that week. Every week is touched when a
+// change cannot be placed in time, or there is no position to compare
+// with. A change past the change log's horizon (the retention prune, a
+// reprice of old events) is not placed one by one, but it can touch only
+// the weeks reaching back past that horizon (sqlite.OlderChangedBefore).
+func touchedWeeks(ctx context.Context, log WeekLog, from, to sqlite.Position, now time.Time) (func(time.Time) bool, error) {
+	every := func(time.Time) bool { return true }
+	if from == (sqlite.Position{}) {
+		return every, nil
 	}
 	if from == to {
-		return nil, false, nil
+		return func(time.Time) bool { return false }, nil
+	}
+	older, ok := sqlite.OlderChangedBefore(from, to, now)
+	if !ok {
+		return every, nil
 	}
 	times, attributable, err := log.ChangedTimes(ctx, eventschema.EventTypePrompt, from, to)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	if !attributable {
-		return nil, true, nil
+		return every, nil
 	}
-	out := map[time.Time]bool{}
+	placed := map[time.Time]bool{}
 	for _, t := range times {
-		out[weekStart(t)] = true
+		placed[weekStart(t)] = true
 	}
-	return out, false, nil
+	return func(w time.Time) bool { return placed[w] || w.Before(older) }, nil
 }
 
 // Judge is the compaction setting's verdict over the rollup, with the

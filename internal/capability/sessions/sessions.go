@@ -23,6 +23,10 @@ type Window struct {
 	Days int
 	// All reads every transcript and overrides Days.
 	All bool
+	// Until, when set, ends the window there instead of at now: a past
+	// period's read holds that period's records and reads only the
+	// transcripts begun before it ended.
+	Until time.Time
 	// Source names one client to read (claude-code, codex, cursor,
 	// opencode); empty reads every client present.
 	Source string
@@ -116,7 +120,7 @@ func (w Window) options(now time.Time, withPromptText bool) (agentdx.ExtractOpti
 	opts := agentdx.ExtractOptions{
 		Root: w.Root, Source: agentdx.Source(w.Source),
 		WithPromptText: withPromptText, IncludeScratch: w.IncludeScratch,
-		Cache: w.Cache,
+		Cache: w.Cache, Until: w.Until,
 	}
 	days := w.days()
 	if days <= 0 {
@@ -197,9 +201,18 @@ func DegradationNote(bands []ContextBand) string { return agentdx.DegradationNot
 // Records reads the transcript entries in w, the raw material the units,
 // the context curve and the interrupt record are built from, without the
 // operator's words.
+//
+// It does not count what the window held before the cohort filter, as
+// the measuring surfaces do: that is a second pass over every record, and
+// the daemon reads records for each of many weeks.
 func Records(w Window, now time.Time) ([]agentdx.Record, error) {
-	records, _, _, err := w.read(now, false)
-	return records, err
+	opts, _ := w.options(now, false)
+	cohort, err := w.Cohort()
+	if err != nil {
+		return nil, err
+	}
+	records, err := agentdx.ExtractAll(opts)
+	return agentdx.FilterRecords(records, cohort), err
 }
 
 // Units reads the instructions in w, with the operator's own words, for

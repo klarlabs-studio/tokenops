@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -65,3 +66,19 @@ func (s *Store) Position(ctx context.Context) (Position, error) {
 // it to be logged in events_changes; an older one is counted by Position's
 // Older instead (olderChangesMigration).
 const ChangeLogHorizon = changeLogHorizon
+
+// OlderChangedBefore is how far back the changes Older counted between
+// from and to, made by now, can reach: each changed an event already past
+// ChangeLogHorizon, so one older than now less the horizon. A figure over
+// a span starting at or after it is untouched by them. Zero when Older did
+// not move; ok is false when it moved back, as it does only in another
+// store, so no change can be placed.
+func OlderChangedBefore(from, to Position, now time.Time) (before time.Time, ok bool) {
+	switch {
+	case to.Older == from.Older:
+		return time.Time{}, true
+	case to.Older < from.Older:
+		return time.Time{}, false
+	}
+	return now.Add(-ChangeLogHorizon), true
+}

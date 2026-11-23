@@ -51,13 +51,13 @@ func ExtractCodex(opts ExtractOptions) ([]Record, error) {
 	})
 
 	var out []Record
-	cache := opts.cache()
+	cache, facts := opts.scanCache()
 	kept := make(map[string]bool, len(files))
 	for _, path := range files {
 		info, fresh := writtenSince(path, opts.Since)
-		if !fresh {
-			// Too old for this scan but within what the cache keeps for
-			// a longer one: it stays cached.
+		if !fresh || begunAfter(path, opts.Until, true) {
+			// Outside this scan's window but within what the cache keeps
+			// for another: it stays cached.
 			if cache.holds(path, opts.Since) {
 				kept[path] = true
 			}
@@ -65,14 +65,14 @@ func ExtractCodex(opts ExtractOptions) ([]Record, error) {
 		}
 		if cache != nil {
 			kept[path] = true
-			out = append(out, cache.codex(path, info, opts.Since)...)
+			out = append(out, before(cache.codex(path, info, opts.Since), opts.Until)...)
 			continue
 		}
 		f, err := codexrollout.Open(path)
 		if err != nil {
 			continue
 		}
-		out = append(out, readCodexTranscript(f, sessionIDFromPath(path), opts.Since, opts.WithPromptText)...)
+		out = append(out, before(readCodexTranscriptWith(f, sessionIDFromPath(path), opts.Since, opts.WithPromptText, facts), opts.Until)...)
 		_ = f.Close()
 	}
 	if cache != nil {
@@ -140,7 +140,13 @@ type codexLine struct {
 // both counts the response_item, which is also the only one with the
 // instruction's text on it.
 func readCodexTranscript(r io.Reader, sessionID string, since time.Time, withText bool) []Record {
-	cr := newCodexReader(sessionID, since, withText, nil)
+	return readCodexTranscriptWith(r, sessionID, since, withText, nil)
+}
+
+// readCodexTranscriptWith reads a whole rollout, deriving each
+// instruction's facts with facts when it is set.
+func readCodexTranscriptWith(r io.Reader, sessionID string, since time.Time, withText bool, facts PromptFactsFunc) []Record {
+	cr := newCodexReader(sessionID, since, withText, facts)
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 1<<20), maxTranscriptLine)
 	for sc.Scan() {
