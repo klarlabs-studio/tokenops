@@ -63,7 +63,12 @@ func (a *Aggregator) SessionTurns(ctx context.Context, f Filter) ([]SessionTurn,
 	if err != nil {
 		return nil, err
 	}
+	// One slice of their number: appended into, six weeks of a busy
+	// machine's turns held up to twice their size while it grew.
 	var out []SessionTurn
+	if len(usage) > 0 {
+		out = make([]SessionTurn, 0, len(usage))
+	}
 	for _, u := range usage {
 		t := SessionTurn{SessionID: u.SessionID, At: u.At, Provider: u.Provider, Model: u.Model,
 			WorkflowID: u.WorkflowID, ExecutionID: u.ExecutionID,
