@@ -30,8 +30,10 @@ import (
 // setting.
 
 // WeeksVersion is the rollup's layout and computation version. A rollup of
-// another version is rebuilt.
-const WeeksVersion = 1
+// another version is rebuilt. Version 2 measures each week's reject rate
+// over that week's instructions; version 1 pooled every instruction from
+// the week's start to the day it was computed.
+const WeeksVersion = 2
 
 const weeksFile = "compact-weeks.json"
 

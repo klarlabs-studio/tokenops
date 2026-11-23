@@ -82,6 +82,16 @@ func (c *TranscriptCache) floor(since time.Time) time.Time {
 	return since
 }
 
+// keeps reports whether the cache keeps a scan with cut-off since: always
+// for a cache without an owner's floor, which keeps each scan's window;
+// for one with a floor, when since is at or after it.
+func (c *TranscriptCache) keeps(since time.Time) bool {
+	if c.keep == nil {
+		return true
+	}
+	return !since.IsZero() && !since.Before(c.keep())
+}
+
 // holds reports whether the cache keeps path for a scan with cut-off
 // since: whether the file was written since the cache's floor, which is
 // earlier than since when the cache keeps a longer window for another
