@@ -131,3 +131,32 @@ func TestOllamaAPIMalformedBalanceFailsSafely(t *testing.T) {
 		}
 	}
 }
+
+// The older /api/balance answer gives the 5-hour and weekly windows as the
+// share left; they are read, and win over a dollar allowance beside them
+// (CodexBar 382913b25b).
+func TestOllamaAPIReadsTheShareLeftWindows(t *testing.T) {
+	for _, tc := range []struct {
+		body string
+		ok   bool
+	}{
+		{`{"included":{"session":{"remaining_percent":100,"resets_at":"2026-11-06T18:00:00Z"},"weekly":{"remaining_percent":84.96,"resets_at":"2026-11-09T00:00:00Z"}},"purchased":{"balance_usd":0}}`, true},
+		{`{"included":{"allowance_usd":20,"balance_usd":5,"session":{"remaining_percent":100,"resets_at":"2026-11-06T18:00:00Z"},"weekly":{"remaining_percent":84.96,"resets_at":"2026-11-09T00:00:00Z"}}}`, true},
+		{`{"included":{"session":{"remaining_percent":120}}}`, false},
+	} {
+		srv := serve(t, "/api/balance", "ok-key", tc.body)
+		got, err := OllamaAPI{BaseURL: srv.URL}.Read(context.Background(), "ok-key")
+		srv.Close()
+		if !tc.ok {
+			if err == nil {
+				t.Errorf("%s: read %+v", tc.body, got)
+			}
+			continue
+		}
+		if err != nil || len(got.Windows) != 2 || got.Windows[0].Name != "5h" || got.Windows[0].UsedPct != 0 ||
+			got.Windows[1].Name != "week" || !approx(got.Windows[1].UsedPct, 15.04) ||
+			!got.Windows[1].ResetsAt.Equal(time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("%s: %+v %v", tc.body, got, err)
+		}
+	}
+}
