@@ -27,7 +27,7 @@ var connectionsNow = time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
 // cursorTurns are two of Cursor's turns from its stop hook in the last
 // hour, as the event log holds them.
 func cursorTurns(now time.Time) []*eventschema.Envelope {
-	var out []*eventschema.Envelope
+	out := make([]*eventschema.Envelope, 0, 2)
 	for _, ago := range []time.Duration{time.Hour, 2 * time.Hour} {
 		out = append(out, &eventschema.Envelope{Source: "cursor-hook", Timestamp: now.Add(-ago), Type: eventschema.EventTypePrompt,
 			Attributes: map[string]string{"granularity": "assistant_turn"},

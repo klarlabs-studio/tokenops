@@ -230,7 +230,7 @@ func TestClassifyOrder(t *testing.T) {
 		Installed: map[string][]string{"factory": {"droid on PATH"}},
 		Sources:   []Source{{Tag: "github-copilot", Switched: true, Health: "failing", LastError: "refused"}},
 	})
-	var order []string
+	order := make([]string, 0, len(got))
 	for _, c := range got {
 		order = append(order, c.Provider+":"+string(c.State))
 	}
