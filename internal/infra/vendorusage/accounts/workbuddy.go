@@ -119,8 +119,10 @@ func (wb WorkBuddy) Read(ctx context.Context, cookie string) (usage.Reading, err
 	return r, nil
 }
 
-// cycleEnd is the soonest future end of a credit package's cycle, from
-// the paid and free listings; a listing that fails is skipped.
+// cycleEnd is the soonest future end of a paid credit package's cycle.
+// The free listing (trials, rewards) is read only when no paid package has
+// one, so a grant ending sooner does not cut the subscription's reset
+// short (CodexBar 7141477080). A listing that fails is skipped.
 func (wb WorkBuddy) cycleEnd(ctx context.Context, root, agent, cookie string) time.Time {
 	now := time.Now
 	if wb.Now != nil {
@@ -162,6 +164,9 @@ func (wb WorkBuddy) cycleEnd(ctx context.Context, root, agent, cookie string) ti
 			if end.After(now()) && (soonest.IsZero() || end.Before(soonest)) {
 				soonest = end
 			}
+		}
+		if !soonest.IsZero() {
+			return soonest
 		}
 	}
 	return soonest

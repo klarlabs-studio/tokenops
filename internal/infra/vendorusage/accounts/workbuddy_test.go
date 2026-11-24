@@ -83,3 +83,20 @@ func TestWorkBuddyRefusedOrUnknown(t *testing.T) {
 		}
 	}
 }
+
+// The reset follows the paid subscription's cycle; a trial or reward
+// grant in the free listing that ends sooner does not cut it short, and
+// is used only when no paid package has a future end (CodexBar
+// 7141477080).
+func TestWorkBuddyResetFollowsThePaidCycle(t *testing.T) {
+	routes := routesOf(t, "workbuddy")
+	routes["/billing/meter/get-user-resource-paid-packages"] = `{"code":0,"data":{"Accounts":[{"CapacityUnit":"credits","CycleEndTime":"2026-11-07 23:59:59"}]}}`
+	srv := newWebServer(t, "session=wb", http.StatusUnauthorized, routes)
+	got, err := WorkBuddy{BaseURL: srv.URL, Now: workBuddyNow, Chrome: 141}.Read(context.Background(), workBuddyCookie)
+	if err != nil || len(got.Windows) != 1 {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	if want := time.Date(2026, 11, 8, 0, 0, 0, 0, time.FixedZone("CST", 8*3600)); !got.Windows[0].ResetsAt.Equal(want) {
+		t.Errorf("reset %v, want the paid cycle's end %v", got.Windows[0].ResetsAt, want)
+	}
+}
