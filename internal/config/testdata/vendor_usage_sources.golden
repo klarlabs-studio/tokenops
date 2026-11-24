@@ -38,8 +38,10 @@ devpass_account	devpass-account
 doubao_cli	doubao-cli
 doubao_account	doubao-account
 elevenlabs_account	elevenlabs-account
+exa_key	exa-key
 factory_account	factory-account
 factory_web	factory-web
+fal_account	fal-account
 fireworks	fireworks-usage
 gemini_cli	gemini-cli
 github_copilot	github-copilot
@@ -60,6 +62,7 @@ kimi_account	kimi-account
 kiro_cli	kiro-cli
 kiro_overage	kiro-overage
 langdock_web	langdock-web
+linkup_account	linkup-account
 litellm_gateway	litellm-account
 lithosai_web	lithosai-web
 llm_proxy_gateway	llm-proxy-account
@@ -83,6 +86,7 @@ openai_admin	openai-admin
 opencode	opencode
 opencode_go_account	opencode-go-account
 openrouter_account	openrouter-account
+parallel_web	parallel-web
 perplexity_account	perplexity-account
 pi_sessions	pi-sessions
 poe_account	poe-account
@@ -94,10 +98,14 @@ sailresearch_account	sailresearch-account
 sakana_web	sakana-web
 siliconflow_account	siliconflow-account
 siliconflow_web	siliconflow-web
+soniox_organization	soniox-organization
 stepfun_account	stepfun-account
 sub2api_gateway	sub2api-account
 synthetic_account	synthetic-account
 t3chat_account	t3chat-account
+tavily_account	tavily-account
+tinyapi_web	tinyapi-web
+tripo_account	tripo-account
 trustedrouter_account	trustedrouter-account
 typesafe_account	typesafe-account
 v0_account	v0-account
