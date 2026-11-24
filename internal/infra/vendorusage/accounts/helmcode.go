@@ -89,7 +89,7 @@ func (h Helmcode) Read(ctx context.Context, key string) (usage.Reading, error) {
 		r := usage.Reading{Scope: "account", Subscription: true, Windows: []usage.Window{w}}
 		helmcodeBalance(get, &r)
 		return r, nil
-	case err != nil && !(errors.As(err, &se) && se.status == http.StatusNotFound):
+	case err != nil && (!errors.As(err, &se) || se.status != http.StatusNotFound):
 		return usage.Reading{}, err
 	}
 	var quota struct {
