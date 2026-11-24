@@ -36,6 +36,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // UsageClient reads claude.ai's organizations and their usage. The HTTP
@@ -122,12 +123,28 @@ type LimitScopeValue struct {
 // without silently discarding an otherwise readable vendor measurement.
 func (u *UsageResponse) UnmarshalJSON(data []byte) error {
 	type responseAlias UsageResponse
-	var named responseAlias
+	// limits is decoded entry by entry: one malformed entry must not hide
+	// the readable ones (CodexBar e1325bfd66).
+	var named struct {
+		responseAlias
+		Limits []json.RawMessage `json:"limits"`
+	}
 	if err := json.Unmarshal(data, &named); err != nil {
 		return err
 	}
-	*u = UsageResponse(named)
+	*u = UsageResponse(named.responseAlias)
 	u.Windows = make(map[string]*Window)
+	u.Limits = nil
+	var limitIndex []int
+	for index, raw := range named.Limits {
+		limit, ok := decodeLimit(raw)
+		if !ok {
+			u.Unrecognised = append(u.Unrecognised, "limits["+strconv.Itoa(index)+"]")
+			continue
+		}
+		u.Limits = append(u.Limits, limit)
+		limitIndex = append(limitIndex, index)
+	}
 
 	var blocks map[string]json.RawMessage
 	if err := json.Unmarshal(data, &blocks); err != nil {
@@ -161,13 +178,9 @@ func (u *UsageResponse) UnmarshalJSON(data []byte) error {
 		}
 		u.Windows[name] = &window
 	}
-	for index := range u.Limits {
-		limit := &u.Limits[index]
-		if limit.Kind == "" || limit.Percent == nil {
-			u.Unrecognised = append(u.Unrecognised, "limits["+strconv.Itoa(index)+"]")
-			continue
-		}
-		name := u.limitWindowName(*limit, index)
+	for i := range u.Limits {
+		limit := &u.Limits[i]
+		name := u.limitWindowName(*limit, limitIndex[i])
 		u.Windows[name] = &Window{
 			Utilization:  limit.Percent,
 			ResetsAt:     limit.ResetsAt,
@@ -178,6 +191,38 @@ func (u *UsageResponse) UnmarshalJSON(data []byte) error {
 	}
 	u.syncNamedWindows()
 	return nil
+}
+
+// decodeLimit reads one limits entry: a kind, a percent that is a JSON
+// number (a string or a boolean is not one), and a reset given as a time
+// or as epoch seconds. ok is false for anything else, a null entry too.
+func decodeLimit(raw json.RawMessage) (Limit, bool) {
+	var wire struct {
+		Kind     string          `json:"kind"`
+		Percent  json.RawMessage `json:"percent"`
+		ResetsAt json.RawMessage `json:"resets_at"`
+		Scope    *LimitScope     `json:"scope"`
+	}
+	if json.Unmarshal(raw, &wire) != nil || wire.Kind == "" {
+		return Limit{}, false
+	}
+	var percent float64
+	if len(wire.Percent) == 0 || wire.Percent[0] == '"' || json.Unmarshal(wire.Percent, &percent) != nil {
+		return Limit{}, false
+	}
+	l := Limit{Kind: wire.Kind, Percent: &percent}
+	if wire.Scope != nil {
+		l.Scope = *wire.Scope
+	}
+	var reset string
+	var seconds float64
+	switch {
+	case json.Unmarshal(wire.ResetsAt, &reset) == nil:
+		l.ResetsAt = reset
+	case json.Unmarshal(wire.ResetsAt, &seconds) == nil && seconds > 0:
+		l.ResetsAt = time.Unix(int64(seconds), 0).UTC().Format(time.RFC3339)
+	}
+	return l, true
 }
 
 func scopeDisplayName(scope *LimitScopeValue) string {
