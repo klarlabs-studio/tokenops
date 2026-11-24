@@ -1,0 +1,3 @@
+{"code":20000,"message":"OK","status":true,"data":{"id":"user","name":"hidden",
+"email":"hidden@example.com","balance":"0.88","status":"normal",
+"chargeBalance":"88.00","totalBalance":"88.88"}}

@@ -53,11 +53,22 @@ func providerAnthropic() Descriptor {
 				Package: "internal/contexts/spend/vendorusage/anthropic",
 				Fixture: "internal/contexts/spend/vendorusage/anthropic/fetch_test.go",
 				Shows:   "the organisation's token usage from the Admin API"},
+			// CodexBar: Sources/CodexBarCore/Resources/Plugins/claudeplatform.ts,
+			// Providers/ClaudePlatform, docs/claudeplatform.md (a26ca57b). The
+			// Console's prepaid API credit, read with its browser session:
+			// inference keys cannot read billing, and an individual Console
+			// account has no admin key. Not verified against a live account.
+			{Name: "claude_platform", Tag: "claude-platform", Kind: Balance, Credential: BrowserCookie,
+				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
+				Reference: "CodexBar Sources/CodexBarCore/Resources/Plugins/claudeplatform.ts (docs/claudeplatform.md)",
+				Cookie:    &Cookie{Host: "platform.claude.com", Names: []string{"sessionKey"}},
+				Endpoint:  "`GET /api/organizations/{id}/prepaid/credits`, `/current_spend` (platform.claude.com)",
+				Shows:     "the Claude Console API organisation's prepaid credit and its spend this month"},
 		},
 		Endpoints: []Endpoint{{Host: "api.anthropic.com", Billing: Direct}},
 		Opencode:  []OpencodeID{{ID: "anthropic"}},
 		Docs: Docs{
-			Setup: "`tokenops init` installs the status line; `tokenops vendor-usage setup claude-subscription` connects the claude.ai meter",
+			Setup: "`tokenops init` installs the status line; `tokenops vendor-usage setup claude-subscription` connects the claude.ai meter; `tokenops vendor-usage setup anthropic` reads the Claude Console's prepaid API credit with its browser session",
 		},
 		Plans: []Plan{
 			// Anthropic renamed Max 5x to Max and Max 20x to Ultra on
