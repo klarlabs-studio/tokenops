@@ -26,6 +26,29 @@ Each profile runs isolated against a local fake upstream; the target exits
 non-zero if a valid profile fails to start, proxy, gate `/api/*`, or stop
 cleanly, or if an invalid one is accepted.
 
+## Before a release
+
+The upgrade gate proves that an installed, supervised daemon moves onto the
+new version by itself. The release workflow runs it before goreleaser, and
+goreleaser does not start until it passes. It runs the latest published release
+and a candidate built from the tag: the launchd variant on a macOS runner, then
+the Homebrew variant, which installs the published cask and upgrades it to the
+candidate. Each variant asserts that the old daemon logs the replacement, the
+supervisor starts the new binary, and the API reports the new version within
+two minutes.
+
+To run the launchd variant on your Mac:
+
+```bash
+make upgrade-check
+```
+
+It runs an isolated test job, with its own label, HOME, XDG directories, port
+and log. It never touches the real daemon, `~/.tokenops`, `~/.config/tokenops`
+or Homebrew. A published release can be supervised under the test label only
+once it honours `TOKENOPS_SUPERVISOR_LABEL`; until then, pass the old binary:
+`make upgrade-check OLD_BINARY=/path/to/tokenops OLD_VERSION=0.126.0`.
+
 Publish with the repository guard:
 
 ```bash

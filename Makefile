@@ -16,7 +16,7 @@ LDFLAGS := -s -w \
   -X go.klarlabs.de/tokenops/internal/version.Commit=$(COMMIT) \
   -X go.klarlabs.de/tokenops/internal/version.Date=$(DATE)
 
-.PHONY: FORCE menubar menubar-test all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-review sec-remediate policy-guard install-hooks cover-debt cover-debt-gate config-matrix tidy-check fmt-check integrations integrations-vscode integrations-python
+.PHONY: FORCE menubar menubar-test all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-review sec-remediate policy-guard install-hooks cover-debt cover-debt-gate config-matrix upgrade-check tidy-check fmt-check integrations integrations-vscode integrations-python
 
 all: build
 
@@ -71,6 +71,13 @@ cover-debt:
 # against a local fake upstream; add ARGS=--long for the retention pass.
 config-matrix: $(BIN_DIR)/tokenops
 	python3 scripts/config-matrix.py --bin $(BIN_DIR)/tokenops $(ARGS)
+
+# upgrade-check runs the upgrade gate's launchd variant on this Mac, isolated
+# from the real daemon (its own test job, HOME, XDG dirs, port and log). Until a
+# published release honours TOKENOPS_SUPERVISOR_LABEL, pass the old binary:
+#   make upgrade-check OLD_BINARY=/path/to/tokenops OLD_VERSION=0.126.0
+upgrade-check:
+	OLD_BINARY="$(OLD_BINARY)" OLD_VERSION="$(OLD_VERSION)" scripts/upgrade-gate.sh launchd
 
 # verify runs what CI runs, so a green verify means a green CI: it checks
 # formatting and go.mod rather than rewriting them, and covers the menu
