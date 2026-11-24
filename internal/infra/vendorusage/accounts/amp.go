@@ -116,6 +116,7 @@ var (
 	ampLegacySub   = lazyRegexp(`(?im)^\s*(?:Subscription\s+(?:.+?):|Amp\s+(?:.+?)\s+Subscription:)\s*` + ampNum + `\s*%\s+other\s+usage\s+and\s+` + ampNum + `\s*%\s+orb\s+usage\s+remaining\s*-\s*resets\s+upon\s+renewal\s+in\s+([0-9][0-9,]*)\s+(days?|months?)(?:\s+-\s+https?://\S+)?\s*$`)
 	ampIndividual  = lazyRegexp(`(?im)^\s*Individual credits:\s*\$?` + ampNum + `\s+remaining`)
 	ampWorkspace   = lazyRegexp(`(?im)^\s*Workspace\s+(.+?):\s*\$?` + ampNum + `\s+remaining`)
+	ampEnterprise  = lazyRegexp(`(?im)^\s*Workspace\s+(.+?):\s*usage\s+paid\s+by\s+your\s+enterprise\b`)
 )
 
 func ampSignedOut(text string) bool {
@@ -162,6 +163,11 @@ func parseAmpDisplay(text string, now time.Time) (usage.Reading, error) {
 	}
 	if m := ampIndividual().FindStringSubmatch(text); m != nil {
 		r.BalanceUSD, r.HasBalance = ampFloat(m[1]), true
+	}
+	if len(r.Windows) == 0 && !r.HasBalance && ampEnterprise().MatchString(text) {
+		// Nothing is metered per user (CodexBar 311c5045b2): said so, not
+		// read as an answer this version cannot read.
+		return usage.Reading{}, errors.New("accounts: Amp usage is paid by your enterprise; Amp meters nothing per user")
 	}
 	if len(r.Windows) == 0 && !r.HasBalance && !ampWorkspace().MatchString(text) {
 		return usage.Reading{}, fmt.Errorf("accounts: Amp usage in a shape this version cannot read")
