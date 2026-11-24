@@ -66,6 +66,7 @@ var readers = []func() usage.Reader{
 	readerLongCat,
 	readerManus,
 	readerMiMo,
+	readerMiMoTokenPlan,
 	readerMiniMax,
 	readerMistral,
 	readerMoonshot,

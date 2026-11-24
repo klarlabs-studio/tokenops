@@ -75,6 +75,7 @@ llm_proxy_gateway	llm-proxy-account
 longcat_account	longcat-account
 manus_account	manus-account
 mimo_web	mimo-web
+mimo_token_plan	mimo-token-plan
 minimax_account	minimax-account
 mistral_web	mistral-web
 moonshot_account	moonshot-account
