@@ -87,3 +87,48 @@ func TestNotionShapes(t *testing.T) {
 		}
 	}
 }
+
+// A migrated Business workspace answers not_applicable but carries its
+// members' allowances: the auto bucket (Standard) and flex (Select), in
+// credits, over the billing period (CodexBar 2c3defa05a,
+// Tests/CodexBarTests/Fixtures/Providers/Notion/get-credit-rate-limit-status-migrated.json).
+func TestNotionReadsMigratedAllowances(t *testing.T) {
+	var asked string
+	srv := notionServer(t, fixture(t, "notion-migrated"), &asked)
+	got, err := Notion{BaseURL: srv.URL}.Read(context.Background(), "tv2")
+	if err != nil || !got.Subscription || len(got.Windows) != 2 {
+		t.Fatalf("%+v, %v", got, err)
+	}
+	end := time.UnixMilli(1795874400000).UTC()
+	if w := got.Windows[0]; w.Name != "month (Standard)" || !approx(w.UsedPct, 134.66869/1500*100) || !w.ResetsAt.Equal(end) || w.Duration != 31*24*time.Hour {
+		t.Errorf("standard %+v", w)
+	}
+	if w := got.Windows[1]; w.Name != "month (Select)" || w.UsedPct != 0 || !w.ResetsAt.Equal(end) {
+		t.Errorf("select %+v", w)
+	}
+}
+
+// Allowances that are not resolved, have no limit or repeat a bucket are
+// skipped; with none usable the legacy windows decide.
+func TestNotionAllowanceShapes(t *testing.T) {
+	var asked string
+	for _, tc := range []struct {
+		body    string
+		ok      bool
+		windows int
+	}{
+		{`{"status":"not_applicable","allowances":[{"bucketId":"auto","cadence":"billing_period","state":"not_exposed"}]}`, false, 0},
+		{`{"status":"not_applicable","allowances":[{"bucketId":"auto","cadence":"billing_period","state":"resolved","used":1,"limit":0,"periodStartMs":1,"periodEndMs":2}]}`, false, 0},
+		// Without credits, used/limit are the share.
+		{`{"status":"not_applicable","allowances":[{"bucketId":"auto","cadence":"billing_period","state":"resolved","used":25,"limit":100,"periodStartMs":1793196000000,"periodEndMs":1795874400000}]}`, true, 1},
+		{`{"status":"not_applicable","allowances":[` +
+			`{"bucketId":"auto","cadence":"billing_period","state":"resolved","used":1,"limit":10,"periodStartMs":1793196000000,"periodEndMs":1795874400000},` +
+			`{"bucketId":"auto","cadence":"billing_period","state":"resolved","used":2,"limit":10,"periodStartMs":1793196000000,"periodEndMs":1795874400000}]}`, true, 1},
+	} {
+		srv := notionServer(t, tc.body, &asked)
+		got, err := Notion{BaseURL: srv.URL}.Read(context.Background(), "tv2")
+		if (err == nil) != tc.ok || (tc.ok && len(got.Windows) != tc.windows) {
+			t.Errorf("%s = %+v, %v", tc.body, got, err)
+		}
+	}
+}
