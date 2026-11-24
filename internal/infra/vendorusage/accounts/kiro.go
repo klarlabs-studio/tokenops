@@ -59,7 +59,13 @@ func (k Kiro) Read(ctx context.Context, _ string) (usage.Reading, error) {
 	if err != nil && !errors.Is(err, errCLIFailed) {
 		return usage.Reading{}, err
 	}
-	out, err := runCLI(ctx, 0, bin, kiroEnv, "chat", "--no-interactive", "/usage")
+	// Kiro CLI V3 sends a headless slash command to the model as a prompt;
+	// --v2 selects the harness that prints the report. A CLI that does not
+	// know the flag is asked again without it (CodexBar f20961a912).
+	out, err := runCLI(ctx, 0, bin, kiroEnv, "chat", "--no-interactive", "/usage", "--v2")
+	if err != nil && kiroUnknownV2().MatchString(out) {
+		out, err = runCLI(ctx, 0, bin, kiroEnv, "chat", "--no-interactive", "/usage")
+	}
 	if mentions(out, kiroSignedOut...) {
 		return usage.Reading{}, cliAuthError("kiro-cli")
 	}
@@ -74,6 +80,7 @@ func (k Kiro) Read(ctx context.Context, _ string) (usage.Reading, error) {
 }
 
 var (
+	kiroUnknownV2   = lazyRegexp(`(?m)^error: (?:unexpected argument|unrecognized option|unknown option) ['"]?--v2(?:['"\s]|$)`)
 	kiroSummaryPlan = lazyRegexp(`(?m)^[ \t]*Plan:[ \t]*([^|\r\n]+?)[ \t]*\|[ \t]*[0-9]+[ \t]+usage breakdowns?[ \t]*$`)
 	kiroPlanLine    = lazyRegexp(`Plan:[ \t]*(.+)`)
 	kiroPercent     = lazyRegexp(`█+\s*(\d+)%`)

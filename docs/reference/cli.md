@@ -1708,7 +1708,7 @@ vendor's windows, busiest first:
 | JetBrains AI | the IDE's `options/AIAssistantQuotaManager2.xml` and `idea.log` | monthly AI credits used, from the most recently used IDE |
 | Kilo | `GET /api/trpc/user.getCreditBlocks,kiloPass.getState` | Kilo Pass credits used this billing period, and prepaid credit left |
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
-| Kiro | `kiro-cli chat --no-interactive /usage` | monthly plan credits used, and bonus credits |
+| Kiro | `kiro-cli chat --no-interactive /usage --v2` (without --v2 on an older CLI) | monthly plan credits used, and bonus credits |
 | Kiro | `POST GetUsageLimits` (CodeWhisperer) | plan credits used this month, and overage credits against their cap |
 | Langdock | `GET /api/trpc/usageSettings.getPersonalUsage` (app.langdock.com) | the included 5-hour session and weekly limits used |
 | LongCat | `POST /api/pay/quota/metering/token-packs/summary` | the token pack's share used, and the tokens left with pending fuel packs |
