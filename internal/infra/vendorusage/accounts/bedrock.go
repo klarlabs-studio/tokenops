@@ -216,8 +216,9 @@ func (b Bedrock) costPage(ctx context.Context, c awsCredentials, start, end time
 	if resp.StatusCode != http.StatusOK {
 		switch awsErrorType(raw) {
 		case "DataUnavailableException":
-			// No cost data yet this month: nothing spent, as CodexBar reads it.
-			return costExplorerPage{}, nil
+			// Cost Explorer has no data for the period: the spend is
+			// unknown, not $0 (CodexBar ebc3cb8c98).
+			return costExplorerPage{}, fmt.Errorf("accounts: POST %s: Cost Explorer has no data for this month yet", url)
 		case "UnrecognizedClientException", "InvalidSignatureException", "ExpiredTokenException",
 			"AccessDeniedException", "InvalidClientTokenId", "SignatureDoesNotMatch":
 			return costExplorerPage{}, fmt.Errorf("%w (%d on %s)", usage.ErrAuth, resp.StatusCode, url)

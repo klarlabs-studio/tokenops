@@ -3,6 +3,8 @@ package accounts
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +30,7 @@ func TestKiroReadsTheUsageReport(t *testing.T) {
 	if w := got.Windows[1]; w.Name != "bonus credits" || !approx(w.UsedPct, 2.2765) || !w.ResetsAt.Equal(kiroNow.Add(19*24*time.Hour)) {
 		t.Errorf("bonus %+v", w)
 	}
-	if calls := invocations(t, log); len(calls) != 2 || calls[1] != "chat --no-interactive /usage" {
+	if calls := invocations(t, log); len(calls) != 2 || calls[1] != "chat --no-interactive /usage --v2" {
 		t.Errorf("ran %q", calls)
 	}
 }
@@ -91,5 +93,31 @@ func TestKiroReportShapes(t *testing.T) {
 	}
 	if strings.Contains(stripANSI(ansi), "\x1b") {
 		t.Error("escape left")
+	}
+}
+
+// A kiro-cli older than the --v2 flag is asked again without it.
+func TestKiroRetriesWithoutV2(t *testing.T) {
+	dir := t.TempDir()
+	report := filepath.Join(dir, "usage.txt")
+	if err := os.WriteFile(report, []byte(readFixture(t, "kiro.txt")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	log := filepath.Join(dir, "args.log")
+	script := "#!/bin/sh\necho \"$@\" >> '" + log + "'\n" +
+		"case \"$*\" in\n" +
+		"  whoami) echo 'Logged in with Google'; exit 0 ;;\n" +
+		"  *--v2*) echo \"error: unexpected argument '--v2' found\"; exit 2 ;;\n" +
+		"  *) cat '" + report + "'; exit 0 ;;\nesac\n"
+	bin := filepath.Join(dir, "kiro-cli")
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil { //nolint:gosec // a test executable
+		t.Fatal(err)
+	}
+	got, err := Kiro{Bin: bin, Now: func() time.Time { return kiroNow }}.Read(context.Background(), "")
+	if err != nil || len(got.Windows) != 2 {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	if calls := invocations(t, log); len(calls) != 3 || calls[2] != "chat --no-interactive /usage" {
+		t.Errorf("ran %q", calls)
 	}
 }

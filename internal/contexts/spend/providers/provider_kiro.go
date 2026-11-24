@@ -10,7 +10,7 @@ func providerKiro() Descriptor {
 			{Name: "kiro_cli", Tag: "kiro-cli", Kind: Subscription, Credential: CLI,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
 				Reference: "CodexBar Sources/CodexBarCore/Providers/Kiro/KiroStatusProbe.swift (docs/kiro.md)",
-				Endpoint:  "`kiro-cli chat --no-interactive /usage`",
+				Endpoint:  "`kiro-cli chat --no-interactive /usage --v2` (without --v2 on an older CLI)",
 				Shows:     "monthly plan credits used, and bonus credits"},
 			// Overage needs kiro-cli's own sign-in and profile, read from its
 			// database only once granted (ADR 0013); kiro-cli renews the

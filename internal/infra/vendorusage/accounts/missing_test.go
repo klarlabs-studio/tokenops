@@ -257,7 +257,8 @@ func TestAFigureLeftOutIsNotAReading(t *testing.T) {
 		{reader: "kimi", drop: []string{"usage.used"}},
 		{reader: "kimi", drop: []string{"usage.used", "usage.remaining"}, loses: 1},
 		{reader: "kimi", drop: []string{"limits.0.detail.used", "limits.0.detail.remaining"}, loses: 1},
-		{reader: "synthetic", drop: []string{"subscription.requests"}, loses: 1},
+		// An answer with no quota left is refused, never an empty reading.
+		{reader: "synthetic", drop: []string{"subscription.requests"}, wantErr: true},
 		{reader: "chutes", drop: []string{"four_hour.usage"}, loses: 1},
 		{reader: "xkiro", drop: []string{"windows.0.spent_usd"}, loses: 1},
 		{reader: "kilo", drop: []string{"1.result.data.json.subscription.currentPeriodUsageUsd"}, loses: 1},

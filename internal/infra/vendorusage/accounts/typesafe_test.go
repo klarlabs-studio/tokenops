@@ -3,116 +3,91 @@ package accounts
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
-	"sync/atomic"
 	"testing"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 )
 
-// typeSafeConsole is the console for the cookie "ts=ok": the billing page
-// names one script chunk, the chunk holds the current action ID (*current),
-// and the action answers with result.
-type typeSafeConsole struct {
-	current    atomic.Value
-	pageLoads  atomic.Int32
-	result     string
-	loginLand  bool
-	sawSession atomic.Bool
-}
-
-func (c *typeSafeConsole) server(t *testing.T) *httptest.Server {
+// typeSafeConsole answers GET /api/billing/overview for the cookie "ts=ok"
+// sent with same-origin headers, with status and body (CodexBar
+// b22cdc2fd7, d1f1f2b3d0, TestsPlugin/TypeSafePluginTests.swift).
+func typeSafeConsole(t *testing.T, status int, location, body string) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/_next/static/chunks/billing.js" {
-			if r.Header.Get("Cookie") != "" {
-				c.sawSession.Store(true)
-			}
-			_, _ = w.Write([]byte(`createServerReference("` + c.current.Load().(string) + `",callServer,void 0,findSourceMapURL,"getBillingOverviewResult")`))
-			return
-		}
-		if r.URL.Path != "/settings/billing" {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/billing/overview" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		if r.Header.Get("Cookie") != "ts=ok" {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if r.Method == http.MethodGet {
-			c.pageLoads.Add(1)
-			if c.loginLand {
-				_, _ = w.Write([]byte(`<html><script>self.__next_f.push([1,"[\"(auth)\",{\"children\":[\"login\""])</script></html>`))
-				return
-			}
-			_, _ = w.Write([]byte(`<html><script src="/_next/static/chunks/billing.js" async></script><script src="https://cdn.example/x.js"></script></html>`))
+		if r.Header.Get("Accept") != "application/json" || r.Header.Get("Origin") == "" || r.Header.Get("Referer") == "" ||
+			r.Header.Get("Sec-Fetch-Site") != "same-origin" || r.Header.Get("Sec-Fetch-Mode") != "cors" ||
+			r.Header.Get("Sec-Fetch-Dest") != "empty" || r.Header.Get("User-Agent") != browserUA {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"detail":"Cross-origin request refused"}`))
 			return
 		}
-		body, _ := io.ReadAll(r.Body)
-		if r.Header.Get("Next-Action") != c.current.Load().(string) {
-			w.Header().Set("X-Nextjs-Action-Not-Found", "1")
-			w.WriteHeader(http.StatusNotFound)
-			return
+		if location != "" {
+			w.Header().Set("Location", location)
 		}
-		if string(body) != "[]" || r.Header.Get("Accept") != "text/x-component" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		_, _ = w.Write([]byte("0:{\"a\":\"$@1\",\"f\":\"\",\"b\":\"x\"}\n1:" + c.result + "\n"))
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(srv.Close)
 	return srv
 }
 
-const typeSafeID1 = "7f00aa11bb22cc33dd44ee55ff66778899aabbcc01"
-
-func TestTypeSafeReadsTheBilling(t *testing.T) {
-	c := &typeSafeConsole{result: strings.TrimSpace(fixture(t, "typesafe"))}
-	c.current.Store(typeSafeID1)
-	srv := c.server(t)
+func TestTypeSafeReadsTheBillingOverview(t *testing.T) {
+	srv := typeSafeConsole(t, http.StatusOK, "", fixture(t, "typesafe"))
 	got, err := TypeSafe{BaseURL: srv.URL}.Read(context.Background(), "Cookie: ts=ok")
-	if err != nil || !got.HasUsed || !approx(got.UsedUSD, 18.42) || !got.HasBalance || !approx(got.BalanceUSD, 31.58) || got.Subscription {
+	if err != nil || !got.HasUsed || !approx(got.UsedUSD, 0.01) || !got.HasBalance || !approx(got.BalanceUSD, 4.98) || got.Scope != "account" {
 		t.Fatalf("%+v, %v", got, err)
-	}
-	// The action ID is kept: a second read loads no page.
-	if _, err := (TypeSafe{BaseURL: srv.URL}).Read(context.Background(), "ts=ok"); err != nil || c.pageLoads.Load() != 1 {
-		t.Errorf("second read %v after %d page loads", err, c.pageLoads.Load())
-	}
-	if c.sawSession.Load() {
-		t.Error("the session was sent with a static chunk")
-	}
-	// A new deploy: the stale ID is found again, once.
-	c.current.Store("aa00aa11bb22cc33dd44ee55ff66778899aabbcc02")
-	if got, err := (TypeSafe{BaseURL: srv.URL}).Read(context.Background(), "ts=ok"); err != nil || !approx(got.BalanceUSD, 31.58) || c.pageLoads.Load() != 2 {
-		t.Errorf("after a deploy %+v, %v, %d page loads", got, err, c.pageLoads.Load())
 	}
 }
 
 func TestTypeSafeRefusals(t *testing.T) {
-	c := &typeSafeConsole{result: strings.TrimSpace(fixture(t, "typesafe"))}
-	c.current.Store(typeSafeID1)
-	srv := c.server(t)
+	srv := typeSafeConsole(t, http.StatusOK, "", fixture(t, "typesafe"))
 	for _, cred := range []string{"ts=expired", "token"} {
 		if _, err := (TypeSafe{BaseURL: srv.URL}).Read(context.Background(), cred); !errors.Is(err, usage.ErrAuth) {
 			t.Errorf("%q = %v, want ErrAuth", cred, err)
 		}
 	}
-	login := &typeSafeConsole{loginLand: true}
-	login.current.Store(typeSafeID1)
-	if _, err := (TypeSafe{BaseURL: login.server(t).URL}).Read(context.Background(), "ts=ok"); !errors.Is(err, usage.ErrAuth) {
-		t.Errorf("sign-in page = %v, want ErrAuth", err)
+	for name, tc := range map[string]struct {
+		status         int
+		location, body string
+	}{
+		"sign-in page":   {http.StatusOK, "", `<!doctype html><html><a href="/login">Sign in</a></html>`},
+		"login redirect": {http.StatusSeeOther, "/login?next=/billing", ""},
+		"sso elsewhere":  {http.StatusFound, "https://sso.example.com/authorize", ""},
+	} {
+		srv := typeSafeConsole(t, tc.status, tc.location, tc.body)
+		if _, err := (TypeSafe{BaseURL: srv.URL}).Read(context.Background(), "ts=ok"); !errors.Is(err, usage.ErrAuth) {
+			t.Errorf("%s = %v, want ErrAuth", name, err)
+		}
 	}
 }
 
+// A shape TypeSafe changed, a benign redirect or another HTML page is an
+// error, never zero and never a signed-out session.
 func TestTypeSafeUnknownShape(t *testing.T) {
-	for _, result := range []string{`{"ok":false}`, `{"ok":true,"data":{"billing":{"plan":"free_plan"}}}`, `{"x":1}`} {
-		c := &typeSafeConsole{result: result}
-		c.current.Store(typeSafeID1)
-		if got, err := (TypeSafe{BaseURL: c.server(t).URL}).Read(context.Background(), "ts=ok"); err == nil || errors.Is(err, usage.ErrAuth) {
-			t.Errorf("%s = %+v, %v", result, got, err)
+	for name, tc := range map[string]struct {
+		status         int
+		location, body string
+	}{
+		"no billing":   {http.StatusOK, "", `{"x":1}`},
+		"no balance":   {http.StatusOK, "", `{"billing":{"spent":1}}`},
+		"string spent": {http.StatusOK, "", `{"billing":{"spent":"1","balance":2}}`},
+		"route moved":  {http.StatusMovedPermanently, "/api/v2/billing/overview", ""},
+		"other html":   {http.StatusOK, "", `<html><body>maintenance</body></html>`},
+		"not found":    {http.StatusNotFound, "", ``},
+	} {
+		srv := typeSafeConsole(t, tc.status, tc.location, tc.body)
+		if got, err := (TypeSafe{BaseURL: srv.URL}).Read(context.Background(), "ts=ok"); err == nil || errors.Is(err, usage.ErrAuth) {
+			t.Errorf("%s = %+v, %v", name, got, err)
 		}
 	}
 }

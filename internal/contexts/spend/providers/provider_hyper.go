@@ -14,7 +14,7 @@ func providerHyper() Descriptor {
 			{Name: "hyper_web", Tag: "hyper-web", Kind: Balance, Credential: BrowserCookie,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
 				Cookie:   &Cookie{Host: "hyper.charm.land", AllForHost: true},
-				Endpoint: "the same, with hyper.charm.land's session",
+				Endpoint: "`GET hyper.charm.land/` (the team dashboard), with its session",
 				Shows:    "Hypercredits left"},
 		},
 		EnvVars: []string{"HYPER_API_KEY"},

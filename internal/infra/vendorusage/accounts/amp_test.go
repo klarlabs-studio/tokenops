@@ -126,3 +126,12 @@ func TestAmpDisplayShapes(t *testing.T) {
 		t.Errorf("signed out: %v", err)
 	}
 }
+
+// A workspace paid by an enterprise meters nothing per user: it says so
+// (CodexBar 311c5045b2), never an unreadable answer.
+func TestAmpEnterprisePaidWorkspace(t *testing.T) {
+	_, err := parseAmpDisplay("Signed in as someone@example.com\nWorkspace Acme: usage paid by your enterprise\n", time.Now())
+	if err == nil || err.Error() != "accounts: Amp usage is paid by your enterprise; Amp meters nothing per user" {
+		t.Errorf("err %v", err)
+	}
+}

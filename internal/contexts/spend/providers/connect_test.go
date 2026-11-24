@@ -26,12 +26,13 @@ func TestConnectAction(t *testing.T) {
 		{provider: "bedrock", source: "bedrock-cost-explorer", command: "tokenops vendor-usage setup bedrock", needs: "credentials already on this machine"},
 		{provider: "litellm", source: "litellm-account", command: "tokenops vendor-usage setup litellm", needs: "gateway's address"},
 		// Amp's CLI reads by itself; the key is what the operator can add.
+		// The Gemini app's limits are the plan Google AI Pro has.
+		{provider: "gemini", source: "gemini-web", command: "tokenops vendor-usage setup gemini", needs: "gemini.google.com"},
 		{provider: "amp", source: "amp-account", command: "tokenops vendor-usage setup amp", needs: "an API key from Amp"},
 		// Codex's plan is read by the app server and the rollouts by
 		// themselves; the API organisation's admin key is no plan.
 		{provider: "openai", none: true},
 		{provider: "coderabbit", none: true},
-		{provider: "gemini", none: true},
 		{provider: "cerebras", none: true},
 	}
 	for _, tt := range tests {

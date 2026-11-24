@@ -523,3 +523,23 @@ func TestPollerStartsFromTheBrowserWithNoStoredKey(t *testing.T) {
 		t.Errorf("published %d readings without a stored key", bus.PublishedCount())
 	}
 }
+
+// One malformed limits entry must not hide the readable ones (CodexBar
+// e1325bfd66, Tests/CodexBarTests/ClaudeOAuthTests.swift): a null entry, a
+// percent sent as a string, and a reset sent as epoch seconds.
+func TestUsageKeepsReadableLimitsBesideMalformedOnes(t *testing.T) {
+	u := usageFrom(t, `{"limits":[null,
+	  {"kind":"session","percent":"11","resets_at":null,"scope":null},
+	  {"kind":"weekly_scoped","percent":5,"resets_at":1791800000,"scope":{"model":{"id":null,"display_name":"Fable"},"surface":null},"is_active":false},
+	  {"kind":"weekly_all","percent":true,"resets_at":"2026-10-02T01:00:00Z"}]}`)
+	w, ok := u.Windows["weekly_scoped_fable"]
+	if !ok || w.Utilization == nil || *w.Utilization != 5 || w.ResetsAt != "2026-10-12T10:13:20Z" || w.ModelScope != "Fable" {
+		t.Fatalf("windows %+v", u.Windows)
+	}
+	if u.FiveHour != nil || u.SevenDay != nil || len(u.Windows) != 1 {
+		t.Errorf("a malformed entry was read: %+v", u.Windows)
+	}
+	if len(u.Unrecognised) != 3 {
+		t.Errorf("unrecognised %v, want the null, string and boolean entries", u.Unrecognised)
+	}
+}

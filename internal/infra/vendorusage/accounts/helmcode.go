@@ -62,6 +62,36 @@ func (h Helmcode) Read(ctx context.Context, key string) (usage.Reading, error) {
 		}
 		return nil
 	}
+	// A tenant moved to credits (NaN Builders, 2026-11-10) keeps its quota
+	// endpoint frozen at the last token figures: its credit plan is read
+	// instead. A 404 or a disabled plan keeps the token quotas (CodexBar
+	// 677f9437f8).
+	var plan struct {
+		Enabled     *bool    `json:"enabled"`
+		Allowance   *float64 `json:"allowanceCredits"`
+		Used        *float64 `json:"usedCredits"`
+		PeriodStart string   `json:"periodStart"`
+		PeriodEnd   string   `json:"periodEnd"`
+	}
+	err := get("/api/usage/credits", &plan)
+	var se *statusError
+	switch {
+	case err == nil && plan.Enabled == nil:
+		return usage.Reading{}, errors.New("accounts: helmcode credits: unrecognised answer")
+	case err == nil && *plan.Enabled:
+		if plan.Allowance == nil || plan.Used == nil || *plan.Allowance <= 0 || *plan.Used < 0 {
+			return usage.Reading{}, errors.New("accounts: helmcode credits: unrecognised answer")
+		}
+		w := usage.Window{Name: "credits", UsedPct: clampPct(pct(*plan.Used, *plan.Allowance)), ResetsAt: parseTime(plan.PeriodEnd)}
+		if start := parseTime(plan.PeriodStart); !start.IsZero() && w.ResetsAt.After(start) {
+			w.Duration = w.ResetsAt.Sub(start)
+		}
+		r := usage.Reading{Scope: "account", Subscription: true, Windows: []usage.Window{w}}
+		helmcodeBalance(get, &r)
+		return r, nil
+	case err != nil && (!errors.As(err, &se) || se.status != http.StatusNotFound):
+		return usage.Reading{}, err
+	}
 	var quota struct {
 		PeriodStart *string `json:"periodStart"`
 		Models      *[]struct {
@@ -108,6 +138,13 @@ func (h Helmcode) Read(ctx context.Context, key string) (usage.Reading, error) {
 	}
 	sort.SliceStable(r.Windows, func(i, j int) bool { return r.Windows[i].UsedPct > r.Windows[j].UsedPct })
 	r.Subscription = len(r.Windows) > 0
+	helmcodeBalance(get, &r)
+	return r, nil
+}
+
+// helmcodeBalance adds the prepaid credit balance, when the dashboard
+// answers it.
+func helmcodeBalance(get func(string, any) error, r *usage.Reading) {
 	var credits struct {
 		Balance  *number `json:"balanceMicros"`
 		Currency string  `json:"currency"`
@@ -124,5 +161,4 @@ func (h Helmcode) Read(ctx context.Context, key string) (usage.Reading, error) {
 			r.Credits, r.CreditsUnit, r.HasCredits = bal, cur, true
 		}
 	}
-	return r, nil
 }

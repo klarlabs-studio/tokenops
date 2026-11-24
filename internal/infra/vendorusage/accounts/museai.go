@@ -22,7 +22,9 @@ func readerMuseAI() usage.Reader { return MuseAI{} }
 // MuseAI reads the weekly token allowance of a muse.ai plan (Free, Power,
 // Maximum) with muse.ai's browser session, as CodexBar's MuseAI provider
 // does (Sources/CodexBarCore/Resources/Plugins/museai.js, docs/museai.md).
-// muse.ai has no usage API: the page's own server action,
+// muse.ai has no usage API: the page's own server action (posted as
+// text/plain, CodexBar 8b5ab13383; chunks under static/chunks/ or
+// static/immutable/chunks/, 2331f1149e),
 // fetchSubscriptionAction, answers it. Its ID changes with every deploy,
 // so it is found in the page's script chunks and kept until muse.ai says
 // it is gone. Only the share used is published, not the tokens.
@@ -43,7 +45,7 @@ var museAIAction = struct {
 
 var (
 	museAIFlightRow  = lazyRegexp(`^[0-9a-f]+:(\{.*\})\s*$`)
-	museAIChunk      = lazyRegexp(`static/chunks/[\w~.-]+\.js`)
+	museAIChunk      = lazyRegexp(`static/(?:immutable/)?chunks/[\w~.-]+\.js`)
 	museAISettings   = lazyRegexp(`\.A\((\d+)\)\.then\(\(\{[^}]*Settings`)
 	museAIActionID   = lazyRegexp(`"([0-9a-f]{40,})",[^"]{0,200}"fetchSubscriptionAction"`)
 	errMuseAIStale   = errors.New("server action not found")
@@ -87,13 +89,16 @@ func (m MuseAI) Read(ctx context.Context, cookie string) (usage.Reading, error) 
 
 func (m MuseAI) fetch(ctx context.Context, root, cookie, id string) (usage.Reading, error) {
 	body, err := doWeb(ctx, m.HTTP, http.MethodPost, root+"/", http.Header{
-		"Cookie": {cookie}, "Accept": {"text/x-component"}, "Content-Type": {"application/json"},
+		"Cookie": {cookie}, "Accept": {"text/x-component"}, "Content-Type": {"text/plain;charset=UTF-8"},
 		"Next-Action": {id}, "Origin": {"https://muse.ai"},
 		"Sec-Fetch-Site": {"same-origin"}, "Sec-Fetch-Mode": {"cors"}, "Sec-Fetch-Dest": {"empty"},
 	}, []byte(`[{"includeAgreement":true}]`))
 	if err != nil {
+		// A stale action ID is any 400, 404 or 409 after a redeploy, not
+		// only Next.js's "Server action not found" (CodexBar 8b5ab13383);
+		// 408, 429 and 5xx keep the ID. A redirect or 403 is ErrAuth.
 		var se *statusError
-		if errors.As(err, &se) && se.status == http.StatusNotFound && strings.Contains(strings.ToLower(string(se.body)), "server action not found") {
+		if errors.As(err, &se) && (se.status == http.StatusBadRequest || se.status == http.StatusNotFound || se.status == http.StatusConflict) {
 			return usage.Reading{}, errMuseAIStale
 		}
 		return usage.Reading{}, err
@@ -134,7 +139,7 @@ func (m MuseAI) discover(ctx context.Context, root, cookie string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	if !strings.Contains(string(page), "static/chunks/") && looksLikeSignIn(page) {
+	if museAIChunk().Find(page) == nil && looksLikeSignIn(page) {
 		return "", fmt.Errorf("%w (muse.ai shows the sign-in page)", usage.ErrAuth)
 	}
 	scripts, err := m.scripts(ctx, root, museAIChunk().FindAllString(string(page), -1), 96)

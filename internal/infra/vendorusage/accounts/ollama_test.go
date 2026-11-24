@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,6 +129,70 @@ func TestOllamaAPIMalformedBalanceFailsSafely(t *testing.T) {
 		srv.Close()
 		if err == nil || !got.Empty() {
 			t.Errorf("body %s: got %+v, %v; want an error", body, got, err)
+		}
+	}
+}
+
+// The older /api/balance answer gives the 5-hour and weekly windows as the
+// share left; they are read, and win over a dollar allowance beside them
+// (CodexBar 382913b25b).
+func TestOllamaAPIReadsTheShareLeftWindows(t *testing.T) {
+	for _, tc := range []struct {
+		body string
+		ok   bool
+	}{
+		{`{"included":{"session":{"remaining_percent":100,"resets_at":"2026-11-06T18:00:00Z"},"weekly":{"remaining_percent":84.96,"resets_at":"2026-11-09T00:00:00Z"}},"purchased":{"balance_usd":0}}`, true},
+		{`{"included":{"allowance_usd":20,"balance_usd":5,"session":{"remaining_percent":100,"resets_at":"2026-11-06T18:00:00Z"},"weekly":{"remaining_percent":84.96,"resets_at":"2026-11-09T00:00:00Z"}}}`, true},
+		{`{"included":{"session":{"remaining_percent":120}}}`, false},
+	} {
+		srv := serve(t, "/api/balance", "ok-key", tc.body)
+		got, err := OllamaAPI{BaseURL: srv.URL}.Read(context.Background(), "ok-key")
+		srv.Close()
+		if !tc.ok {
+			if err == nil {
+				t.Errorf("%s: read %+v", tc.body, got)
+			}
+			continue
+		}
+		if err != nil || len(got.Windows) != 2 || got.Windows[0].Name != "5h" || got.Windows[0].UsedPct != 0 ||
+			got.Windows[1].Name != "week" || !approx(got.Windows[1].UsedPct, 15.04) ||
+			!got.Windows[1].ResetsAt.Equal(time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("%s: %+v %v", tc.body, got, err)
+		}
+	}
+}
+
+// The settings page's credit wallet, with no meter (CodexBar #4370,
+// Tests/CodexBarTests/OllamaCreditWalletTests.swift): a balance and the
+// month's credits used, no percentage.
+const ollamaWalletPage = `<section>
+  <div>
+    <h2>Usage credits<span>pro</span></h2>
+    <span>$18.25</span>
+    <p>Refills to $30 in 3 weeks.</p>
+  </div>
+  <div>
+    <span>Monthly credits used</span>
+    <span>$4.50</span>
+  </div>
+</section>`
+
+func TestOllamaReadsTheCreditWallet(t *testing.T) {
+	for _, tc := range []struct {
+		name, page          string
+		balance, used       bool
+		balanceUSD, usedUSD float64
+	}{
+		{"wallet", ollamaWalletPage, true, true, 18.25, 4.5},
+		// The month's spend never becomes a missing balance.
+		{"no balance", strings.Replace(ollamaWalletPage, "<span>$18.25</span>", "", 1), false, true, 0, 4.5},
+		{"other label", strings.Replace(ollamaWalletPage, "Monthly credits used", "Previous Monthly credits used", 1), true, false, 18.25, 0},
+	} {
+		srv := ollamaServer(t, tc.page)
+		got, err := Ollama{BaseURL: srv.URL}.Read(context.Background(), ollamaCookie)
+		if err != nil || got.HasBalance != tc.balance || got.HasUsed != tc.used || got.BalanceUSD != tc.balanceUSD || got.UsedUSD != tc.usedUSD ||
+			len(got.Windows) != 0 || got.Subscription {
+			t.Errorf("%s: %+v %v", tc.name, got, err)
 		}
 	}
 }

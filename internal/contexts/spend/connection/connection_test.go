@@ -202,7 +202,7 @@ func TestClassifyCoversTheRegistry(t *testing.T) {
 	got := Classify(Inputs{Now: now, Use: map[string]Use{
 		"openrouter": used, // account reader with a key: setup
 		"coderabbit": used, // its CLI reads by itself: nothing to do
-		"gemini":     used, // no plan reader: nothing to connect
+		"cerebras":   used, // in the catalog only: nothing to connect
 		"anthropic":  used, // the status line
 	}})
 	states := map[string]State{}

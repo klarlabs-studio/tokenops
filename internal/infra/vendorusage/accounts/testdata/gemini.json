@@ -1,0 +1,6 @@
+[{"data":{"viewer":{"rpcs":{"getUsageInfo":{"subscriptionTier":"TIER1","pools":[
+  {"poolType":"GXU_FIVE_HOURLY","percentageUsed":0.24,
+   "gxu":{"windowRefreshesAt":"2026-10-15T05:43:53.558200Z"}},
+  {"poolType":"GXU_WEEKLY","percentageUsed":0.01786011,
+   "gxu":{"windowRefreshesAt":"2026-10-21T04:43:53.558273Z"}}
+]}}}},"errors":[{"message":"Unrelated upsell unavailable"}]}]

@@ -1640,7 +1640,7 @@ vendor's own figures every 15 minutes:
 | GroqCloud | `GET api.groq.com/platform/v1/organizations/{org}/activity` | the organisation's GroqCloud spend this UTC month |
 | Hugging Face | `GET /api/settings/billing/usage-v2` | Inference Providers charges this month, against the spending limit when set |
 | Charm Hyper | `GET hyper.charm.land/v1/credits` | Hypercredits left |
-| Charm Hyper | the same, with hyper.charm.land's session | Hypercredits left |
+| Charm Hyper | `GET hyper.charm.land/` (the team dashboard), with its session | Hypercredits left |
 | Linkup | `GET /v1/credits/balance` | the prepaid USD credit left |
 | LithosAI | `GET /api/me`, `/api/billing`, `/api/billing/spend` (console.lithosai.cloud) | the organisation's prepaid balance and its spend this UTC month |
 | Xiaomi MiMo | `GET /api/v1/balance`, `/api/v1/tokenPlan/detail`, `/api/v1/tokenPlan/usage` | the balance (in its currency) and the Token Plan's monthly credits used |
@@ -1660,7 +1660,7 @@ vendor's own figures every 15 minutes:
 | TinyApi | `GET /api/user/credits` (tinyapi.rest) | the credits available, in credits |
 | Tripo | `GET /v3/account/balance` | the credits available, in credits |
 | TrustedRouter | `GET /v1/key` | the key's spend against its limit, or this month's spend without one |
-| TypeSafe | `POST /settings/billing` (getBillingOverview action) | spend this billing cycle and the credit balance left |
+| TypeSafe | `GET /api/billing/overview` | spend this billing cycle and the credit balance left |
 | Venice | `GET /api/v1/billing/balance` | USD balance left, and the DIEM epoch allocation used when staking |
 | Vercel AI Gateway | `GET /v1/credits` | the team's credit balance |
 | xAI | `GET /v1/billing/teams/{team_id}/prepaid/balance`, `POST /v1/billing/teams/{team_id}/usage` | the team's posted prepaid USD credit, and its spend over the last 30 days |
@@ -1700,6 +1700,7 @@ vendor's windows, busiest first:
 | Factory (Droid) | `GET /api/billing/limits`, `/api/organization/subscription/usage` (api.factory.ai) | 5-hour, weekly and monthly windows (and the Core fallback's), or the Standard and Premium token allowances; the extra-usage balance |
 | Factory (Droid) | the same, with app.factory.ai's session | the same windows and balance |
 | Future AGI | `GET /usage/v2/usage-overview/` | AI credits and gateway requests against the billing period's free allowances |
+| Gemini | `GET /_/BardChatUi/graphql/schemas/GEMINI_WEB_GRAPHQL/executeQuery` (UsagePageQuery, gemini.google.com) | the Gemini app's 5-hour and weekly limits (Google AI Pro, Ultra) |
 | GitKraken AI | `GET api.gitkraken.dev/v1/ai-tasks/usage` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID |
 | Grok (SuperGrok) | `GET cli-chat-proxy.grok.com/v1/billing?format=credits` | the SuperGrok credit window used, and the prepaid balance |
 | Grok (SuperGrok) | `POST grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig` (gRPC-web) | the credit window used |
@@ -1708,11 +1709,12 @@ vendor's windows, busiest first:
 | JetBrains AI | the IDE's `options/AIAssistantQuotaManager2.xml` and `idea.log` | monthly AI credits used, from the most recently used IDE |
 | Kilo | `GET /api/trpc/user.getCreditBlocks,kiloPass.getState` | Kilo Pass credits used this billing period, and prepaid credit left |
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
-| Kiro | `kiro-cli chat --no-interactive /usage` | monthly plan credits used, and bonus credits |
+| Kiro | `kiro-cli chat --no-interactive /usage --v2` (without --v2 on an older CLI) | monthly plan credits used, and bonus credits |
 | Kiro | `POST GetUsageLimits` (CodeWhisperer) | plan credits used this month, and overage credits against their cap |
 | Langdock | `GET /api/trpc/usageSettings.getPersonalUsage` (app.langdock.com) | the included 5-hour session and weekly limits used |
 | LongCat | `POST /api/pay/quota/metering/token-packs/summary` | the token pack's share used, and the tokens left with pending fuel packs |
 | Manus | `POST /user.v1.UserService/GetAvailableCredits` | monthly and daily-refresh credits used, and the credit balance |
+| Xiaomi MiMo | `GET /v1/platform/token_plan` (token-plan-cn or token-plan-sgp.xiaomimimo.com) | the Token Plan's credits used over its period |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
 | Mistral | `GET /api/billing/v2/usage`, `/subscription`, `/api/billing/credits` (admin.mistral.ai) | the included-API and Vibe allowances' shares used this month, and the credit balance in its currency |
 | Muse Code | `POST api.meta.ai/muse-code/key` | the 5-hour and weekly quota used |
@@ -1729,7 +1731,7 @@ vendor's windows, busiest first:
 | Raycast | `GET /frontend_api/current_user/ai_credits` | the month's AI credit allowance used, and the credits left |
 | Sakana AI | `GET /billing` and `/billing?tab=payAsYouGo` (server-rendered pages) | 5-hour and weekly quota windows, and the pay-as-you-go credit balance |
 | StepFun Step Plan | `POST /api/step.openapi.devcenter.Dashboard/QueryStepPlanRateLimit` (platform.stepfun.com) | a Coding Plan's 5-hour and weekly windows, or a Token Plan's credit pool |
-| Synthetic | `GET /v2/quotas` | the subscription's request quota |
+| Synthetic | `GET /v2/quotas` | the weekly plan limit (or a legacy subscription's request quota) |
 | T3 Chat | `GET /api/trpc/getCustomerData` | the 4-hour Base window and the monthly Overage budget used |
 | Tavily | `GET /usage` | the plan's monthly API credits used (no reset time: Tavily does not give its time zone) |
 | Trae CN | `POST /cloudide/api/v3/common/GetUserToken`, `POST /trae/api/v2/pay/user_current_entitlement_list` (api.trae.cn) | the credits used across the account's packs (packs expire on their own: no reset) |
@@ -1801,7 +1803,7 @@ use read its own spend.
   ```
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `ABLITERATION_API_KEY`, `ABLIT_KEY`, `AEROSTACK_TOKEN`, `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHATBOX_LICENSE_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `COMMAND_CODE_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FACTORY_API_KEY`, `FAL_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `GROK_OAUTH_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `HYPER_API_KEY`, `KILO_API_KEY`, `LINKUP_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `LONGCAT_MANUAL_COOKIE`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `MUNITO_ADMIN_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OLLAMA_API_KEY`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAIL_API_KEY`, `SAKANA_COOKIE`, `SILICONFLOW_API_KEY`, `SOFYA_API_KEY`, `SONIOX_ORG_API_KEY`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `TAVILY_API_KEY`, `TRIPO_API_KEY`, `TRUSTEDROUTER_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`, `ZENMUX_MANAGEMENT_API_KEY`.
+The environment variables read for a key: `ABLITERATION_API_KEY`, `ABLIT_KEY`, `AEROSTACK_TOKEN`, `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHATBOX_LICENSE_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `COMMAND_CODE_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FACTORY_API_KEY`, `FAL_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `GROK_OAUTH_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `HYPER_API_KEY`, `KILO_API_KEY`, `LINKUP_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `LONGCAT_MANUAL_COOKIE`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MIMO_API_KEY`, `MOONSHOT_API_KEY`, `MUNITO_ADMIN_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OLLAMA_API_KEY`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAIL_API_KEY`, `SAKANA_COOKIE`, `SILICONFLOW_API_KEY`, `SOFYA_API_KEY`, `SONIOX_ORG_API_KEY`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `TAVILY_API_KEY`, `TRIPO_API_KEY`, `TRUSTEDROUTER_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`, `ZENMUX_MANAGEMENT_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -1862,6 +1864,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | FLORA | `flora-workspace` | the workspace's (or your own) available balance, and this month's spend | API key | CodexBar's source, the vendor's docs and fixtures |
 | Future AGI | `futureagi-account` | AI credits and gateway requests against the billing period's free allowances | API key | CodexBar's source, the vendor's docs and fixtures |
 | Gemini | `gemini-cli` | per-turn tokens per model from Gemini CLI's chat recordings (Gemini Code Assist Standard or Enterprise, or an API key) | local files | public docs and fixtures |
+|  | `gemini-web` | the Gemini app's 5-hour and weekly limits (Google AI Pro, Ultra) | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Copilot | `github-copilot` | the month's AI Credits (premium requests on annual plans) against the allowance; an org seat with none says so | another app's sign-in | the vendor's client source and fixtures |
 |  | `copilot-cli` | each Copilot CLI session's tokens per model from its session log, when the session ends | local files | the vendor's client source and fixtures |
 | GitKraken AI | `gitkraken-account` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID | API key | CodexBar's source, the vendor's docs and fixtures |
@@ -1888,6 +1891,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | LongCat | `longcat-account` | the token pack's share used, and the tokens left with pending fuel packs | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Manus | `manus-account` | monthly and daily-refresh credits used, and the credit balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Xiaomi MiMo | `mimo-web` | the balance (in its currency) and the Token Plan's monthly credits used | browser session | CodexBar's source, the vendor's docs and fixtures |
+|  | `mimo-token-plan` | the Token Plan's credits used over its period | API key | CodexBar's source, the vendor's docs and fixtures |
 | MiniMax | `minimax-account` | the interval and weekly windows | API key | the vendor's client source and fixtures |
 | Mistral | `mistral-web` | the included-API and Vibe allowances' shares used this month, and the credit balance in its currency | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Moonshot | `moonshot-account` | prepaid USD balance left | API key | public docs and fixtures |
@@ -1922,7 +1926,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Soniox | `soniox-organization` | the prepaid USD balance and this month's spend against the organisation's budget | admin key | CodexBar's source, the vendor's docs and fixtures |
 | StepFun | `stepfun-account` | a Coding Plan's 5-hour and weekly windows, or a Token Plan's credit pool | session from a password sign-in | CodexBar's source, the vendor's docs and fixtures |
 | sub2api | `sub2api-account` | the key's quota and 5-hour, daily and 7-day limits, a subscription group's daily, weekly and monthly limits, or the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
-| Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
+| Synthetic | `synthetic-account` | the weekly plan limit (or a legacy subscription's request quota) | API key | public docs and fixtures |
 | T3 Chat | `t3chat-account` | the 4-hour Base window and the monthly Overage budget used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Tavily | `tavily-account` | the plan's monthly API credits used (no reset time: Tavily does not give its time zone) | API key | CodexBar's source, the vendor's docs and fixtures |
 | TinyApi | `tinyapi-web` | the credits available, in credits | browser session | CodexBar's source, the vendor's docs and fixtures |

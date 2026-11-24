@@ -39,7 +39,8 @@ type mimoAnswer struct {
 
 func (m MiMo) Read(ctx context.Context, cookie string) (usage.Reading, error) {
 	if !isSession(cookie) {
-		return usage.Reading{}, fmt.Errorf("%w (MiMo is read with the platform's Cookie header)", usage.ErrAuth)
+		// A Token Plan API key is the MiMoTokenPlan reader's.
+		return usage.Reading{}, usage.ErrSkip
 	}
 	root := base(m.BaseURL, "https://platform.xiaomimimo.com") + "/api/v1/"
 	get := func(path string) (json.RawMessage, error) {

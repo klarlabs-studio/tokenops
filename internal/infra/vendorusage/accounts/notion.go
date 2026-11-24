@@ -77,9 +77,16 @@ func (n Notion) Read(ctx context.Context, key string) (usage.Reading, error) {
 		Resets  *number       `json:"resetsInSeconds"`
 		Rolling *notionWindow `json:"window"`
 		Billing *notionWindow `json:"billingPeriodWindow"`
+		// Allowances are a migrated Business workspace's per-member
+		// buckets (CodexBar 2c3defa05a): it answers not_applicable but
+		// carries them.
+		Allowances []notionAllowance `json:"allowances"`
 	}
 	if err := postJSON(ctx, n.HTTP, api+"getCreditRateLimitStatus", header, map[string]any{"spaceId": space}, &status); err != nil {
 		return usage.Reading{}, err
+	}
+	if w := notionAllowanceWindows(status.Allowances); len(w) > 0 {
+		return usage.Reading{Scope: "account", Subscription: true, Windows: w}, nil
 	}
 	if strings.EqualFold(status.Status, "not_applicable") {
 		return usage.Reading{}, errors.New("accounts: notion: this workspace has no Notion AI allowance (Business and Enterprise only)")
@@ -108,6 +115,54 @@ func (n Notion) Read(ctx context.Context, key string) (usage.Reading, error) {
 	}
 	r.Subscription = len(r.Windows) > 0
 	return r, nil
+}
+
+// notionAllowance is one member allowance bucket of a migrated workspace.
+type notionAllowance struct {
+	Bucket  string  `json:"bucketId"`
+	Cadence string  `json:"cadence"`
+	State   string  `json:"state"`
+	Used    *number `json:"used"`
+	Limit   *number `json:"limit"`
+	Start   *number `json:"periodStartMs"`
+	End     *number `json:"periodEndMs"`
+	Credits *struct {
+		Used  *number `json:"used"`
+		Limit *number `json:"limit"`
+	} `json:"credits"`
+}
+
+// notionBuckets are the allowance buckets read, in order, by the name
+// Notion's settings give them.
+var notionBuckets = []struct{ id, name string }{{"auto", "Standard"}, {"flex", "Select"}}
+
+// notionAllowanceWindows reads the resolved billing-period auto and flex
+// buckets as windows over their period, credits used against the limit
+// (used against limit without credits). A bucket that repeats, has no
+// limit, or is not resolved is skipped.
+func notionAllowanceWindows(list []notionAllowance) []usage.Window {
+	var out []usage.Window
+	for _, b := range notionBuckets {
+		seen := false
+		for _, a := range list {
+			if a.Bucket != b.id || a.Cadence != "billing_period" || a.State != "resolved" || seen {
+				continue
+			}
+			used, limit := a.Used, a.Limit
+			if a.Credits != nil && a.Credits.Used != nil && a.Credits.Limit != nil {
+				used, limit = a.Credits.Used, a.Credits.Limit
+			}
+			if used == nil || limit == nil || !used.ok || !limit.ok || limit.v <= 0 || used.v < 0 ||
+				a.Start == nil || a.End == nil || !a.Start.ok || !a.End.ok || a.End.v <= a.Start.v {
+				continue
+			}
+			seen = true
+			d := time.Duration(a.End.v-a.Start.v) * time.Millisecond
+			out = append(out, usage.Window{Name: windowName(d) + " (" + b.name + ")", UsedPct: clampPct(pct(used.v, limit.v)),
+				Duration: d, ResetsAt: time.UnixMilli(int64(a.End.v)).UTC()})
+		}
+	}
+	return out
 }
 
 var notionWindowToken = lazyRegexp(`^([1-9][0-9]*)([mhdw])$`)

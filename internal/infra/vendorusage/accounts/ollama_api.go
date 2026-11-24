@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -58,11 +59,22 @@ func (u *ollamaUSD) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// ollamaRemaining is a window given as the percentage left.
+type ollamaRemaining struct {
+	Remaining *float64 `json:"remaining_percent"`
+	ResetsAt  stamp    `json:"resets_at"`
+}
+
 // ollamaBalance is the /api/balance answer.
 type ollamaBalance struct {
 	Included *struct {
-		Allowance *ollamaUSD `json:"allowance_usd"`
-		Balance   *ollamaUSD `json:"balance_usd"`
+		// Session and Weekly are the windows an older answer gives as the
+		// share left (CodexBar 382913b25b); when present they are read
+		// instead of the dollar allowance.
+		Session   *ollamaRemaining `json:"session"`
+		Weekly    *ollamaRemaining `json:"weekly"`
+		Allowance *ollamaUSD       `json:"allowance_usd"`
+		Balance   *ollamaUSD       `json:"balance_usd"`
 		Period    *struct {
 			Until stamp `json:"until"`
 		} `json:"period"`
@@ -90,6 +102,22 @@ func ollamaAPIReading(bal ollamaBalance) (usage.Reading, error) {
 	inc, pur := bal.Included, bal.Purchased
 	if inc == nil && pur == nil {
 		return usage.Reading{}, fmt.Errorf("accounts: Ollama balance in a shape this version cannot read")
+	}
+	if inc != nil && (inc.Session != nil || inc.Weekly != nil) {
+		for _, w := range []struct {
+			rem *ollamaRemaining
+			d   time.Duration
+		}{{inc.Session, 5 * time.Hour}, {inc.Weekly, 7 * 24 * time.Hour}} {
+			if w.rem == nil {
+				continue
+			}
+			if w.rem.Remaining == nil || *w.rem.Remaining < 0 || *w.rem.Remaining > 100 {
+				return usage.Reading{}, fmt.Errorf("accounts: Ollama balance in a shape this version cannot read")
+			}
+			r.Windows = append(r.Windows, usage.Window{Name: windowName(w.d), UsedPct: 100 - *w.rem.Remaining,
+				Duration: w.d, ResetsAt: w.rem.ResetsAt.t})
+		}
+		inc = nil
 	}
 	if inc != nil {
 		if inc.Allowance == nil || inc.Balance == nil || inc.Allowance.v < 0 {
