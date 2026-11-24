@@ -202,3 +202,15 @@ func TestSnapshotWithoutAShareStoresNone(t *testing.T) {
 		}
 	}
 }
+
+// An ended subscription says so instead of reading as a changed response
+// (CodexBar 9ea096edac); an unknown SKU without buckets stays unrecognised.
+func TestAnEndedSubscriptionSaysSo(t *testing.T) {
+	_, err := decode(t, `{"login":"fixture-user","access_type_sku":"subscription_ended","copilot_plan":"individual","chat_enabled":false}`).Reading()
+	if !errors.Is(err, ErrSubscriptionEnded) || errors.Is(err, ErrUnrecognisedShape) {
+		t.Errorf("ended: %v", err)
+	}
+	if _, err := decode(t, `{"login":"x","access_type_sku":"something_new"}`).Reading(); !errors.Is(err, ErrUnrecognisedShape) {
+		t.Errorf("unknown SKU: %v", err)
+	}
+}

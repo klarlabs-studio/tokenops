@@ -15,6 +15,11 @@ import (
 // reading.
 var ErrUnrecognisedShape = errors.New("copilot user: response shape not recognised")
 
+// ErrSubscriptionEnded is a record whose Copilot subscription has ended
+// (access_type_sku "subscription_ended"): there is no plan to read until
+// it is renewed (CodexBar 9ea096edac).
+var ErrSubscriptionEnded = errors.New("copilot user: the Copilot subscription has ended")
+
 // CreditsUnit names GitHub AI Credits (1 credit = 0.01 USD).
 const CreditsUnit = "AI credits"
 
@@ -54,6 +59,9 @@ type Reading struct {
 // with a capped bucket that reports no share used, is ErrUnrecognisedShape
 // with the reason, so the poll fails visibly instead of reporting nothing.
 func (u *UserResponse) Reading() (Reading, error) {
+	if u.AccessTypeSKU == "subscription_ended" {
+		return Reading{}, ErrSubscriptionEnded
+	}
 	if len(u.QuotaSnapshots) == 0 {
 		return Reading{}, fmt.Errorf("%w: no quota_snapshots in the response", ErrUnrecognisedShape)
 	}
