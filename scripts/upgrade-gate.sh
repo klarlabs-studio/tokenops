@@ -96,14 +96,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# gh_get fetches a GitHub API URL, with the token when CI provides one.
-gh_get() {
-	if [ -n "${GITHUB_TOKEN:-}" ]; then
-		curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" "$@"
-	else
-		curl -fsSL "$@"
-	fi
-}
 
 # version_of asks a running daemon which version it serves; empty if it does not answer.
 version_of() {
@@ -218,7 +210,11 @@ fetch_old() {
 		log "old binary: $OLD from OLD_BINARY"
 		return 0
 	fi
-	tag="$(gh_get "https://api.github.com/repos/$REPO_SLUG/releases/latest" | jq -r '.tag_name')"
+	if [ -n "${GITHUB_TOKEN:-}" ]; then
+		tag="$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/$REPO_SLUG/releases/latest" | jq -r '.tag_name')"
+	else
+		tag="$(curl -fsSL "https://api.github.com/repos/$REPO_SLUG/releases/latest" | jq -r '.tag_name')"
+	fi
 	[ -n "$tag" ] && [ "$tag" != null ] || die "could not name the latest release"
 	OLD="${tag#v}"
 	base="https://github.com/$REPO_SLUG/releases/download/$tag"
