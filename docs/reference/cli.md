@@ -1729,7 +1729,7 @@ vendor's windows, busiest first:
 | Raycast | `GET /frontend_api/current_user/ai_credits` | the month's AI credit allowance used, and the credits left |
 | Sakana AI | `GET /billing` and `/billing?tab=payAsYouGo` (server-rendered pages) | 5-hour and weekly quota windows, and the pay-as-you-go credit balance |
 | StepFun Step Plan | `POST /api/step.openapi.devcenter.Dashboard/QueryStepPlanRateLimit` (platform.stepfun.com) | a Coding Plan's 5-hour and weekly windows, or a Token Plan's credit pool |
-| Synthetic | `GET /v2/quotas` | the subscription's request quota |
+| Synthetic | `GET /v2/quotas` | the weekly plan limit (or a legacy subscription's request quota) |
 | T3 Chat | `GET /api/trpc/getCustomerData` | the 4-hour Base window and the monthly Overage budget used |
 | Tavily | `GET /usage` | the plan's monthly API credits used (no reset time: Tavily does not give its time zone) |
 | Trae CN | `POST /cloudide/api/v3/common/GetUserToken`, `POST /trae/api/v2/pay/user_current_entitlement_list` (api.trae.cn) | the credits used across the account's packs (packs expire on their own: no reset) |
@@ -1922,7 +1922,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Soniox | `soniox-organization` | the prepaid USD balance and this month's spend against the organisation's budget | admin key | CodexBar's source, the vendor's docs and fixtures |
 | StepFun | `stepfun-account` | a Coding Plan's 5-hour and weekly windows, or a Token Plan's credit pool | session from a password sign-in | CodexBar's source, the vendor's docs and fixtures |
 | sub2api | `sub2api-account` | the key's quota and 5-hour, daily and 7-day limits, a subscription group's daily, weekly and monthly limits, or the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
-| Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
+| Synthetic | `synthetic-account` | the weekly plan limit (or a legacy subscription's request quota) | API key | public docs and fixtures |
 | T3 Chat | `t3chat-account` | the 4-hour Base window and the monthly Overage budget used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Tavily | `tavily-account` | the plan's monthly API credits used (no reset time: Tavily does not give its time zone) | API key | CodexBar's source, the vendor's docs and fixtures |
 | TinyApi | `tinyapi-web` | the credits available, in credits | browser session | CodexBar's source, the vendor's docs and fixtures |

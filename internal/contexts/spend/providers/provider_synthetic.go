@@ -9,7 +9,7 @@ func providerSynthetic() Descriptor {
 		Sources: []Source{
 			{Name: "synthetic_account", Tag: "synthetic-account", Kind: Subscription, Credential: APIKey,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromDocs,
-				Endpoint: "`GET /v2/quotas`", Shows: "the subscription's request quota"},
+				Endpoint: "`GET /v2/quotas`", Shows: "the weekly plan limit (or a legacy subscription's request quota)"},
 		},
 		Endpoints: []Endpoint{{Host: "api.synthetic.new", Billing: Reseller}},
 		Opencode:  []OpencodeID{{ID: "synthetic", Endpoint: "synthetic"}},
