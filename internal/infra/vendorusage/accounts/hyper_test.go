@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
@@ -23,19 +24,73 @@ func TestHyperReadsHypercreditsWithAKey(t *testing.T) {
 	}
 }
 
-func TestHyperReadsWithTheSession(t *testing.T) {
-	srv := newWebServer(t, "session=hs", http.StatusUnauthorized, map[string]string{"/v1/credits": `{"balance":0}`})
+// hyperDashboardHTML mirrors the signed-in team dashboard (CodexBar
+// 28ded89ecb, TestsPlugin/HyperPluginTests.swift).
+const hyperDashboardHTML = `<html><head><title>Dashboard — Charm™ Hyper</title></head><body>
+<div class="rounded-xl bg-card p-5">
+  <p class="text-sm">Hypercredits Available</p>
+  <div class="mt-1 flex items-center gap-1">
+    <img src="/static/hexy.webp" alt="" width="34" height="34" />
+    <p class="text-5xl font-bold">1,100.5</p>
+  </div>
+</div>
+<div class="rounded-xl bg-card p-5">
+  <p class="text-sm">API Keys</p>
+  <p class="mt-1 text-5xl font-bold">0</p>
+</div>
+</body></html>`
+
+// hyperSite is hyper.charm.land for the session "session=hs": / redirects
+// to the team's dashboard; landing is what / serves otherwise.
+func hyperSite(t *testing.T, landing string, dashboard string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if r.Header.Get("Cookie") != "session=hs" {
+			_, _ = w.Write([]byte(`<html><title>Charm™ Hyper — Built for Coding Agents</title><p>Hypercredits per month.</p></html>`))
+			return
+		}
+		switch r.URL.Path {
+		case "/":
+			if landing != "" {
+				_, _ = w.Write([]byte(landing))
+				return
+			}
+			http.Redirect(w, r, "/teams/11111111-2222-3333-4444-555555555555/dashboard", http.StatusFound)
+		case "/teams/11111111-2222-3333-4444-555555555555/dashboard":
+			_, _ = w.Write([]byte(dashboard))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// /v1/credits takes bearer keys only; a session reads the team dashboard
+// it lands on (CodexBar 28ded89ecb).
+func TestHyperReadsTheDashboardWithTheSession(t *testing.T) {
+	srv := hyperSite(t, "", hyperDashboardHTML)
 	got, err := HyperWeb{BaseURL: srv.URL}.Read(context.Background(), "session=hs")
-	if err != nil || !got.HasCredits || got.Credits != 0 {
+	if err != nil || !got.HasCredits || got.Credits != 1100.5 || got.CreditsUnit != "Hypercredits" {
 		t.Fatalf("got %+v, %v", got, err)
 	}
+	// The dashboard served at / itself, naming the team in a link.
+	inline := hyperSite(t, strings.Replace(hyperDashboardHTML, "</body>", `<a href="/teams/11111111-2222-3333-4444-555555555555/billing">Upgrade</a></body>`, 1), "")
+	if got, err := (HyperWeb{BaseURL: inline.URL}).Read(context.Background(), "session=hs"); err != nil || got.Credits != 1100.5 {
+		t.Errorf("inline = %+v, %v", got, err)
+	}
+	// A signed-out session gets the marketing page, with no team.
 	if _, err := (HyperWeb{BaseURL: srv.URL}).Read(context.Background(), "session=old"); !errors.Is(err, usage.ErrAuth) {
 		t.Errorf("expired = %v", err)
 	}
-	// A signed-out session gets the site's page, not the balance.
-	page := newWebServer(t, "", 0, map[string]string{"/v1/credits": `<!doctype html><html><a href="/login">Sign in</a></html>`})
-	if _, err := (HyperWeb{BaseURL: page.URL}).Read(context.Background(), "session=hs"); !errors.Is(err, usage.ErrAuth) {
-		t.Errorf("web page = %v", err)
+	// A team page without the balance card is a changed page, not zero.
+	empty := hyperSite(t, "", `<html><a href="/teams/11111111-2222-3333-4444-555555555555/x">x</a></html>`)
+	if _, err := (HyperWeb{BaseURL: empty.URL}).Read(context.Background(), "session=hs"); err == nil || errors.Is(err, usage.ErrAuth) {
+		t.Errorf("no balance = %v", err)
 	}
 }
 
