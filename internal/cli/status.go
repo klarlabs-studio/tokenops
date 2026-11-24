@@ -71,7 +71,8 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 				// a sandboxed client is not told to restart a healthy
 				// daemon. The offline path can't open the store, so it
 				// omits warnings.
-				return writeOfflineStatus(cmd.OutOrStdout(), base, cfg, cfgErr, jsonOut, classifyProbe(res))
+				return writeOfflineStatus(cmd.OutOrStdout(), base, cfg, cfgErr, jsonOut, classifyProbe(res),
+					brewStuckWarnings(cmd.Context(), listProcesses))
 			}
 			res.Reachability = &reachability{Reachable: true, Class: daemonreach.Reachable}
 			// Runtime ingestion staleness mirrors the MCP tokenops_status
@@ -87,6 +88,7 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 			if w := dropWarningFrom(res.Health); w != "" {
 				res.Warnings = append(res.Warnings, w)
 			}
+			res.Warnings = append(res.Warnings, brewStuckWarnings(cmd.Context(), listProcesses)...)
 			res.Insight = presentation.ForStatus(statusState(res))
 			if jsonOut {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(res)
@@ -243,7 +245,8 @@ func (s *supervisorEvidence) String() string {
 // connection is reported as "not running"; every other failure leaves the
 // daemon's state unknown from here, because the client's own access — a
 // sandbox denying loopback, a wrong address — may be what failed.
-func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr error, jsonOut bool, reach reachability) error {
+func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr error, jsonOut bool, reach reachability,
+	warnings []string) error {
 	supervised := daemonSupervised()
 	down := reach.Class.ImpliesDown()
 	stateName, health := "unknown", "unknown"
@@ -271,6 +274,9 @@ func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr erro
 	if sup != nil {
 		payload["supervisor"] = sup
 	}
+	if len(warnings) > 0 {
+		payload["warnings"] = warnings
+	}
 	if cfgErr == nil {
 		blockers := cfg.Blockers()
 		payload["blockers"] = blockers
@@ -282,6 +288,9 @@ func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr erro
 		return json.NewEncoder(w).Encode(payload)
 	}
 	writeOfflineText(w, base, insight, reach, sup, cfg, cfgErr)
+	for _, warn := range warnings {
+		fmt.Fprintln(w, "  ! "+warn)
+	}
 	return nil
 }
 
