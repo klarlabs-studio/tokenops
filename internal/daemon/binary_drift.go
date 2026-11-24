@@ -29,6 +29,20 @@ const driftSettle = 2
 // installed binary.
 var ErrBinaryReplaced = errors.New("binary replaced by an install")
 
+// SupervisorLabelEnv names the launchd label a supervised daemon runs under
+// when it is not LaunchdLabel. The upgrade gate (scripts/upgrade-gate.sh)
+// supervises its own test job this way, so it never touches the operator's job.
+const SupervisorLabelEnv = "TOKENOPS_SUPERVISOR_LABEL"
+
+// supervisorLabel is the launchd label that counts as this daemon's
+// supervisor: the override when one is set, LaunchdLabel otherwise.
+func supervisorLabel(getenv func(string) string) string {
+	if v := getenv(SupervisorLabelEnv); v != "" {
+		return v
+	}
+	return LaunchdLabel
+}
+
 // supervisedIn reports whether this process was started by the tokenops
 // supervisor unit rather than a terminal. launchd gives every job its label
 // as XPC_SERVICE_NAME. systemd sets INVOCATION_ID for every unit it starts,
@@ -37,7 +51,7 @@ var ErrBinaryReplaced = errors.New("binary replaced by an install")
 // cgroup (cgroup is /proc/self/cgroup's content; empty elsewhere). The unit
 // template needs no marker and existing unit files stay as they are.
 func supervisedIn(getenv func(string) string, cgroup string) bool {
-	if getenv("XPC_SERVICE_NAME") == LaunchdLabel {
+	if getenv("XPC_SERVICE_NAME") == supervisorLabel(getenv) {
 		return true
 	}
 	return getenv("INVOCATION_ID") != "" && inSystemdUnit(cgroup, SystemdName)
