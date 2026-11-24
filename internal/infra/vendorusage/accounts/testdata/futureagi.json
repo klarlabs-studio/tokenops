@@ -1,0 +1,6 @@
+{"status":true,"result":{"plan_display_name":"Free","billing_period_start":"2026-10-01",
+"billing_period_end":"2026-11-01","total_estimated_cost":1.25,"dimensions":[
+{"key":"ai_credits","display_name":"AI credits","display_unit":"credits","current_usage":500,"free_allowance":2000},
+{"key":"gateway_requests","display_name":"Gateway requests","display_unit":"requests",
+"current_usage":150000,"free_allowance":100000},
+{"key":"storage","display_name":"Storage","display_unit":"GB","current_usage":0.5,"free_allowance":1}]}}
