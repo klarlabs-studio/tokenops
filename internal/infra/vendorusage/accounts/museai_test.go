@@ -34,6 +34,13 @@ func newMuseAIServer(t *testing.T, answer string) *museAIServer {
 	if answer != "" {
 		routes["POST /"] = answer
 	}
+	return newMuseAIServerWith(t, routes, http.StatusNotFound)
+}
+
+// newMuseAIServerWith serves routes, answering a stale action ID with
+// staleStatus.
+func newMuseAIServerWith(t *testing.T, routes map[string]string, staleStatus int) *museAIServer {
+	t.Helper()
 	s := &museAIServer{}
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
@@ -49,9 +56,16 @@ func newMuseAIServer(t *testing.T, answer string) *museAIServer {
 			s.pageLoads++
 		}
 		if r.Method == http.MethodPost {
+			// The action is posted as text/plain (CodexBar 8b5ab13383).
+			if r.Header.Get("Content-Type") != "text/plain;charset=UTF-8" {
+				w.WriteHeader(http.StatusUnsupportedMediaType)
+				return
+			}
 			if r.Header.Get("Next-Action") != museAIID || r.Header.Get("Sec-Fetch-Mode") != "cors" {
-				w.WriteHeader(http.StatusNotFound)
-				_, _ = w.Write([]byte("Server action not found."))
+				w.WriteHeader(staleStatus)
+				if staleStatus == http.StatusNotFound {
+					_, _ = w.Write([]byte("Server action not found."))
+				}
 				return
 			}
 		}
@@ -129,5 +143,36 @@ func TestMuseAIUnknownAnswer(t *testing.T) {
 	srv := newMuseAIServer(t, `1:{"success":true,"subscription":{"usage":{"percentUsed":"3"}}}`)
 	if _, err := (MuseAI{BaseURL: srv.URL}).Read(context.Background(), museAICookie); err == nil || errors.Is(err, usage.ErrAuth) {
 		t.Errorf("unknown answer = %v", err)
+	}
+}
+
+// Chunks under static/immutable/chunks/ are found as well (CodexBar
+// 2331f1149e).
+func TestMuseAIImmutableChunks(t *testing.T) {
+	forgetMuseAIAction()
+	routes := map[string]string{}
+	for k, v := range routesOf(t, "museai") {
+		routes[strings.ReplaceAll(k, "static/chunks/", "static/immutable/chunks/")] = strings.ReplaceAll(v, "static/chunks/", "static/immutable/chunks/")
+	}
+	srv := newMuseAIServerWith(t, routes, http.StatusNotFound)
+	got, err := MuseAI{BaseURL: srv.URL}.Read(context.Background(), museAICookie)
+	if err != nil || len(got.Windows) != 1 || got.Windows[0].UsedPct != 3 {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+}
+
+// A stale action answered 400, 404 or 409, with any body, is found again
+// (CodexBar 8b5ab13383).
+func TestMuseAIRediscoversOnStaleStatuses(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict} {
+		forgetMuseAIAction()
+		srv := newMuseAIServerWith(t, routesOf(t, "museai"), status)
+		museAIAction.Lock()
+		museAIAction.id[srv.URL] = "0000000000000000000000000000000000000000aa"
+		museAIAction.Unlock()
+		got, err := MuseAI{BaseURL: srv.URL}.Read(context.Background(), museAICookie)
+		if err != nil || len(got.Windows) != 1 || srv.pageLoads != 1 {
+			t.Errorf("%d: got %+v, %v after %d page loads", status, got, err, srv.pageLoads)
+		}
 	}
 }
