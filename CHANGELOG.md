@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **status:** `tokenops status` warns when a Homebrew download has been stuck unpacking for more than two minutes (a macOS 27.0 bug, Homebrew/brew#24235). It only reads the process table and says that updating macOS or restarting the Mac clears it.
+
 ## 0.125.0 - 2026-11-23
 
 ### Fixed

@@ -755,6 +755,14 @@ don't hit a dead end. The self-report says why the connection failed
 connection was refused; see
 [Health and readiness](https://team.klarlabs.de/runbook/health#when-tokenops-status-cannot-reach-the-daemon).
 
+`status` also warns when a Homebrew `sandbox_operation.rb extract` process has
+run for more than two minutes. It only reads the process table and never
+stops anything. On macOS 27.0 this is a known Homebrew bug
+([Homebrew/brew#24235](https://github.com/Homebrew/brew/issues/24235)):
+Homebrew is stuck unpacking a download. Updating macOS or restarting the Mac
+clears it. Do not kill the process to get past it; the warning clears once
+the extract finishes or the Mac restarts.
+
 ## Spend + plan headroom
 
 ### `tokenops spend`
