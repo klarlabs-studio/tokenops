@@ -49,6 +49,7 @@ fireworks	fireworks-usage
 flora_workspace	flora-workspace
 futureagi_account	futureagi-account
 gemini_cli	gemini-cli
+gemini_web	gemini-web
 github_copilot	github-copilot
 copilot_cli	copilot-cli
 gitkraken_account	gitkraken-account
