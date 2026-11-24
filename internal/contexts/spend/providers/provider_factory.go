@@ -11,6 +11,7 @@ func providerFactory() Descriptor {
 		// --use-app-login`, ADR 0013). Its WorkOS tokens in browser
 		// localStorage are not read: refreshing one would sign the
 		// browser out.
+		Presence: []Presence{{Binary: "droid"}, {Dir: "~/.factory"}},
 		Sources: []Source{
 			{Name: "factory_account", Tag: "factory-account", Kind: Subscription, Credential: APIKey,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,

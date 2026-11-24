@@ -126,6 +126,10 @@ type Glance struct {
 	// PromptCache is the countdown to the current Claude Code session's
 	// prompt cache going cold; nil when there is none (promptcache.Current).
 	PromptCache *waste.CacheCountdown
+	// Turns is each provider's per-request turns over the last
+	// plans.PlanUseDays: the evidence of use the connections rest on. Not
+	// on the wire; nil when the events could not be read.
+	Turns map[string]plans.ProviderTurns
 }
 
 // ComputeGlance composes the session budgets and plan headroom.
@@ -144,26 +148,26 @@ func ComputeGlance(ctx context.Context, d Deps, now time.Time) (Glance, error) {
 	if d.Accounts != nil {
 		g.Accounts = d.Accounts()
 	}
-	g.PlanUse = planUse(ctx, d.Reader, now)
+	g.PlanUse, g.Turns = planUse(ctx, d.Reader, now)
 	g.PlanAdvice = glanceAdvice(ctx, d, now)
 	g.EarlyResets = earlyResets(ctx, d, now)
 	g.PromptCache = promptcache.Current(ctx, d.Reader, now)
 	return g, nil
 }
 
-// planUse measures plan use over the last plans.PlanUseDays from the same
-// events the rest of the glance reads.
-func planUse(ctx context.Context, r Reader, now time.Time) *plans.PlanUseReport {
+// planUse measures plan use and each provider's turns over the last
+// plans.PlanUseDays from the same events the rest of the glance reads.
+func planUse(ctx context.Context, r Reader, now time.Time) (*plans.PlanUseReport, map[string]plans.ProviderTurns) {
 	if r == nil {
-		return nil
+		return nil, nil
 	}
 	since := now.Add(-plans.PlanUseDays * 24 * time.Hour)
 	envs, err := r.ReadEvents(ctx, eventschema.EventTypePrompt, since)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	u := plans.PlanUseFrom(envs, since, now)
-	return &u
+	return &u, plans.TurnsFrom(envs, since, now)
 }
 
 // Insight ranks the signals in budgets and headroom into one orientation.

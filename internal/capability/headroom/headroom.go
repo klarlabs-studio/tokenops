@@ -271,6 +271,19 @@ func sortedProviders(bindings map[string]string) []string {
 	return out
 }
 
+// VendorRead names the providers whose report shows something the vendor
+// reported (its windows, its spend figure, a balance), not an estimate
+// from turns: the plans TokenOps reads.
+func (r Result) VendorRead() []string {
+	var out []string
+	for _, rep := range r.Reports {
+		if len(rep.Windows) > 0 || rep.SpendSource == "vendor" || rep.BalanceUSD != nil {
+			out = append(out, rep.Provider)
+		}
+	}
+	return out
+}
+
 // Providers are the providers of r's plans, in report order.
 func (r Result) Providers() []string {
 	out := make([]string, 0, len(r.Reports))

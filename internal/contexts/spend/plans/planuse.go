@@ -297,3 +297,34 @@ func headlineWindow(uses []WindowUse, ws []QuotaWindow) (WindowUse, bool) {
 // instanceResetGranularity absorbs the drift between two readings of the
 // same window's reset time.
 const instanceResetGranularity = 10 * time.Minute
+
+// ProviderTurns is a provider's per-request turns in a period and when the
+// last one was made.
+type ProviderTurns struct {
+	Turns  int
+	LastAt time.Time
+}
+
+// TurnsFrom counts each provider's per-request turns in envs made in
+// [since, now]: the evidence that the operator uses it. Snapshots (a
+// window reading, a quota) and coarser records (a day's totals) are no
+// turns.
+func TurnsFrom(envs []*eventschema.Envelope, since, now time.Time) map[string]ProviderTurns {
+	out := map[string]ProviderTurns{}
+	for _, e := range envs {
+		if e == nil || e.Timestamp.Before(since) || e.Timestamp.After(now) {
+			continue
+		}
+		t, ok := turnOf(e)
+		if !ok || t.provider == "" {
+			continue
+		}
+		p := out[t.provider]
+		p.Turns++
+		if e.Timestamp.After(p.LastAt) {
+			p.LastAt = e.Timestamp
+		}
+		out[t.provider] = p
+	}
+	return out
+}

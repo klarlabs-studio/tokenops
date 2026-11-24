@@ -5,6 +5,7 @@ func providerKilo() Descriptor {
 		ID:          "kilo",
 		DisplayName: "Kilo",
 		Logo:        true,
+		Presence:    []Presence{{Binary: "kilo"}, {Dir: "$XDG_DATA_HOME/kilo"}},
 		Sources: []Source{
 			// CodexBar: Sources/CodexBarCore/Providers/Kilo (KiloUsageFetcher.swift),
 			// docs/kilo.md. The kilo CLI's own sign-in is read only once

@@ -171,6 +171,7 @@ func initializeEventRuntime(
 		proxy.WithGlanceSnapshot(filepath.Join(findings.DefaultDir(), "glance.json"), configKey(cfg)),
 		proxy.WithGlanceFollows(figureInputs, cfg.Storage.EffectiveDerivedMaxAge()),
 		proxy.WithGlanceCosts(glanceCostReader(components.Aggregator)),
+		proxy.WithConnections(connectionsFn(cfg, sourceprobe.ThisMachine)),
 		proxy.WithActions(actionDeps(cfg, rt.Store, logger)),
 		proxy.WithSessions(func() proxy.SessionRoots { return proxy.SessionRoots{} }),
 		proxy.WithState(stateDeps(cfg, rt.Store, sources, rt.Bus.DroppedCount)),
@@ -351,12 +352,7 @@ func stateDeps(cfg config.Config, store *sqlite.Store, health func() []state.Sou
 // daemon was started with; the daemon then restarts itself to read it,
 // after the answer has been sent, when a supervisor will bring it back.
 func actionDeps(cfg config.Config, store *sqlite.Store, logger *slog.Logger) func() proxy.ActionDeps {
-	path := cfg.SourcePath
-	if path == "" {
-		if p, err := config.DefaultPath(); err == nil {
-			path = p
-		}
-	}
+	path := configPath(cfg)
 	return func() proxy.ActionDeps {
 		d := proxy.ActionDeps{
 			ConfigPath: path,

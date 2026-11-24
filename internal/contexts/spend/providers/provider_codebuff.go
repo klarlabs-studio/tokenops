@@ -4,6 +4,7 @@ func providerCodebuff() Descriptor {
 	return Descriptor{
 		ID:          "codebuff",
 		DisplayName: "Codebuff",
+		Presence:    []Presence{{Binary: "codebuff"}, {Dir: "$XDG_CONFIG_HOME/manicode"}},
 		Sources: []Source{
 			// CodexBar: Sources/CodexBarCore/Providers/Codebuff
 			// (CodebuffUsageFetcher.swift), docs/codebuff.md. The codebuff CLI's

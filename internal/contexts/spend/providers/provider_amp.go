@@ -5,6 +5,7 @@ func providerAmp() Descriptor {
 		ID:          "amp",
 		DisplayName: "Amp",
 		Logo:        true,
+		Presence:    []Presence{{Binary: "amp"}},
 		Sources: []Source{
 			{Name: "amp_cli", Tag: "amp-cli", Kind: Subscription, Credential: CLI,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,

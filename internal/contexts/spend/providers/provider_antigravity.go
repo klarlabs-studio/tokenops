@@ -5,6 +5,7 @@ func providerAntigravity() Descriptor {
 		ID:          "antigravity",
 		DisplayName: "Antigravity",
 		Logo:        true,
+		Presence:    []Presence{{App: "Antigravity.app"}},
 		Sources: []Source{
 			// The language server's CSRF token is the app's own credential,
 			// on its command line: read only once granted (ADR 0013), and

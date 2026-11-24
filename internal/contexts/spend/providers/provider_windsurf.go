@@ -5,6 +5,7 @@ func providerWindsurf() Descriptor {
 		ID:          "windsurf",
 		DisplayName: "Windsurf",
 		Logo:        true,
+		Presence:    []Presence{{App: "Windsurf.app"}, {Dir: "~/.codeium/windsurf"}},
 		Sources: []Source{
 			{Name: "windsurf_local", Tag: "windsurf-local", Kind: Subscription, Credential: LocalFile,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,

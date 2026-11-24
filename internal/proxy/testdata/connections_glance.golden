@@ -1,0 +1,31 @@
+{
+  "connections": [
+    {
+      "provider": "cursor",
+      "display": "Cursor",
+      "state": "not_connected",
+      "summary": "Cursor — in use, plan not read",
+      "evidence": [
+        {
+          "kind": "turns",
+          "detail": "2 turns in the last 7 days",
+          "turns": 2,
+          "at": "2026-11-24T11:00:00Z"
+        },
+        {
+          "kind": "installed",
+          "detail": "/Applications/Cursor.app"
+        }
+      ],
+      "source": "cursor-web",
+      "action": {
+        "source": "cursor-web",
+        "command": "TOKENOPS_CURSOR_COOKIE=… tokenops vendor-usage enable cursor",
+        "needs": "your cursor.com browser session (the WorkosCursorSessionToken cookie)",
+        "where": "signed in at cursor.com: developer tools → Application → Cookies → WorkosCursorSessionToken",
+        "docs": "https://github.com/klarlabs-studio/tokenops/blob/main/docs/reference/cli.md#connect-a-tool-tokenops-found",
+        "dismiss": "tokenops vendor-usage dismiss cursor"
+      }
+    }
+  ]
+}

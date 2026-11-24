@@ -4,6 +4,7 @@ func providerAugment() Descriptor {
 	return Descriptor{
 		ID:          "augment",
 		DisplayName: "Augment",
+		Presence:    []Presence{{Binary: "auggie"}, {Dir: "~/.augment"}},
 		Sources: []Source{
 			{Name: "augment_cli", Tag: "augment-cli", Kind: Subscription, Credential: CLI,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,

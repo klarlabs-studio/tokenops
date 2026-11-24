@@ -5,6 +5,7 @@ func providerKiro() Descriptor {
 		ID:          "kiro",
 		DisplayName: "Kiro",
 		Logo:        true,
+		Presence:    []Presence{{App: "Kiro.app"}, {Binary: "kiro-cli"}},
 		Sources: []Source{
 			{Name: "kiro_cli", Tag: "kiro-cli", Kind: Subscription, Credential: CLI,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,

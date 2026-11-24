@@ -3065,6 +3065,171 @@
         "summary": "The active configuration, secrets redacted"
       }
     },
+    "/api/connections": {
+      "get": {
+        "operationId": "getConnections",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "computed_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "connections": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "action": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "command": {
+                                "type": "string"
+                              },
+                              "dismiss": {
+                                "type": "string"
+                              },
+                              "docs": {
+                                "type": "string"
+                              },
+                              "needs": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "where": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "display": {
+                            "type": "string"
+                          },
+                          "evidence": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "at": {
+                                  "format": "date-time",
+                                  "type": "string"
+                                },
+                                "detail": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "turns": {
+                                  "type": "integer"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "problem": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Per provider in use or installed: whether its plan is read and, where it is not, the one thing to do to connect it"
+      }
+    },
+    "/api/connections/dismiss": {
+      "post": {
+        "operationId": "postConnectionsDismiss",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "provider": {
+                    "type": "string"
+                  },
+                  "undo": {
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "all": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "config": {
+                      "type": "string"
+                    },
+                    "dismissed": {
+                      "type": "boolean"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Stop suggesting to connect a provider's plan, or with undo suggest it again (vendor_usage.dismissed)"
+      }
+    },
     "/api/data-sources": {
       "get": {
         "operationId": "getDataSources",
@@ -4233,6 +4398,79 @@
                     "computed_at": {
                       "format": "date-time",
                       "type": "string"
+                    },
+                    "connections": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "action": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "command": {
+                                "type": "string"
+                              },
+                              "dismiss": {
+                                "type": "string"
+                              },
+                              "docs": {
+                                "type": "string"
+                              },
+                              "needs": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "where": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "display": {
+                            "type": "string"
+                          },
+                          "evidence": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "at": {
+                                  "format": "date-time",
+                                  "type": "string"
+                                },
+                                "detail": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "turns": {
+                                  "type": "integer"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "problem": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "early_resets": {
                       "items": {

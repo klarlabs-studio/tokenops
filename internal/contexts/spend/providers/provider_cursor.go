@@ -24,9 +24,18 @@ func providerCursor() Descriptor {
 				Reference: "CodexBar docs/cursor.md and Sources/CodexBarCore/Providers/Cursor (usage-summary, get-sand-usage-status)",
 				Package:   "internal/contexts/spend/vendorusage/cursor",
 				Fixture:   "internal/contexts/spend/vendorusage/cursor/cursor_test.go",
-				Shows:     "the weekly pool, or the billing cycle's included usage (legacy: requests), from cursor.com"},
+				Shows:     "the weekly pool, or the billing cycle's included usage (legacy: requests), from cursor.com",
+				// The session cookie is the one way in today. Reading the
+				// Cursor app's own sign-in instead is a later source; it
+				// will come before this one and carry its own Connect.
+				Connect: &Connect{
+					Command: "TOKENOPS_CURSOR_COOKIE=… tokenops vendor-usage enable cursor",
+					Needs:   "your cursor.com browser session (the WorkosCursorSessionToken cookie)",
+					Where:   "signed in at cursor.com: developer tools → Application → Cookies → WorkosCursorSessionToken",
+				}},
 		},
-		Docs: Docs{Setup: "`tokenops hooks install --client cursor --coach` records turns; `vendor_usage.cursor` takes the cursor.com session"},
+		Presence: []Presence{{App: "Cursor.app"}, {Dir: "~/.cursor"}, {Binary: "cursor-agent"}},
+		Docs:     Docs{Setup: "`tokenops hooks install --client cursor --coach` records turns; `vendor_usage.cursor` takes the cursor.com session"},
 		// The plans Cursor sells, read on cursor.com/pricing and
 		// cursor.com/docs/account/pricing on 2026-10-27: a weekly pool
 		// shared across Cursor and Grok, given as multiples of Plus, with

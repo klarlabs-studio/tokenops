@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/connections"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
@@ -26,6 +27,7 @@ func fullyWired() *Server {
 		WithSourceFreshness(func() []freshness.Report { return nil }),
 		WithSourcesRefresh(func(time.Time) (int, bool, time.Time) { return 0, true, time.Time{} }),
 		WithPlans(func() headroom.Deps { return headroom.Deps{} }),
+		WithConnections(func(headroom.Glance, []state.SourceReport, time.Time) []connections.Connection { return nil }),
 		WithState(func() state.Deps { return state.Deps{} }),
 		WithSessions(func() SessionRoots { return SessionRoots{} }),
 		WithActions(func() ActionDeps { return ActionDeps{} }))

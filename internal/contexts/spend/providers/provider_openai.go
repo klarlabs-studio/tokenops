@@ -12,6 +12,7 @@ func providerOpenAI() Descriptor {
 		DisplayName: "Codex",
 		PlanPrefix:  "ChatGPT ",
 		Logo:        true,
+		Presence:    []Presence{{Dir: "~/.codex"}, {Binary: "codex"}, {App: "Codex.app"}},
 		Sources: []Source{
 			{Name: "codex_app_server", Tag: "codex-app-server", Kind: Subscription, Credential: CLI,
 				Switch: SwitchConfig, Reader: BespokeReader, Verified: VerifiedLive,
@@ -20,9 +21,10 @@ func providerOpenAI() Descriptor {
 				Shows:   "the windows `codex app-server` reports (5-hour and weekly on Plus, weekly only on Pro), Codex signing its own request"},
 			{Name: "codex_jsonl", Tag: "codex-jsonl", Kind: LocalLog, Credential: LocalFile,
 				Switch: SwitchConfig, Reader: BespokeReader, Verified: VerifiedLive,
-				Package: "internal/contexts/spend/vendorusage/codexjsonl",
-				Fixture: "internal/contexts/spend/vendorusage/codexjsonl/reader_test.go",
-				Shows:   "per-turn tokens and the rate_limits in Codex's rollouts"},
+				Package:          "internal/contexts/spend/vendorusage/codexjsonl",
+				Fixture:          "internal/contexts/spend/vendorusage/codexjsonl/reader_test.go",
+				Shows:            "per-turn tokens and the rate_limits in Codex's rollouts",
+				WindowsInRecords: true},
 			// The API Platform organisation's spend, with an admin key the
 			// operator mints; API keys the harnesses use are never sent here.
 			{Name: "openai_admin", Tag: "openai-admin", Kind: Spend, Credential: AdminKey,

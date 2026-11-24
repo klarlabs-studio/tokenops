@@ -14,6 +14,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/tempfile"
 )
 
@@ -246,6 +247,13 @@ func (s *Server) computeView(ctx context.Context, now time.Time) (glanceView, er
 	p.SpendBudgets = budgets.Current("", now)
 	p.ComputedAt = fig.At
 	p.ProviderCosts, p.ProviderCostsLate = fig.Costs, fig.CostsLate
+	if s.connections != nil {
+		var health []state.SourceReport
+		if s.sourceFreshness != nil {
+			health = s.sourceFreshness()
+		}
+		p.Connections = s.connections(g, health, now)
+	}
 	var c *coachcap.Report
 	if s.state != nil {
 		if st := s.state(); st.Coach != nil {

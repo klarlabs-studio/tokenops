@@ -72,6 +72,9 @@ type Server struct {
 	// glanceCosts reads the providers' usage each glance carries; nil
 	// leaves it out.
 	glanceCosts spending.Summarizer
+	// connections computes each glance's connections; nil leaves them
+	// out, and GET /api/connections unmounted.
+	connections ConnectionsFunc
 	// acted is when each finding was acted on, to leave it out of
 	// findings computed before (withoutActed).
 	actedMu sync.Mutex
@@ -465,6 +468,7 @@ func (s *Server) buildAPIMux() *recordingMux {
 	s.registerEventCountsRoute(protected)
 	s.registerSourcesRoute(protected)
 	s.registerPlanRoutes(protected)
+	s.registerConnectionRoutes(protected)
 	s.registerFindingRoutes(protected)
 	s.registerStateRoutes(protected)
 	s.registerSessionRoutes(protected)

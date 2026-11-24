@@ -13,6 +13,7 @@ func providerGrok() Descriptor {
 		// the sign-in entry's; its refresh token never. Not read: `grok
 		// agent stdio`'s x.ai/billing, which the current CLI answers
 		// "method not found" outside its own TUI.
+		Presence: []Presence{{Dir: "~/.grok"}},
 		Sources: []Source{
 			{Name: "grok_account", Tag: "grok-account", Kind: Subscription, Credential: APIKey,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
