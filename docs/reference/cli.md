@@ -1625,12 +1625,15 @@ vendor's own figures every 15 minutes:
 <!-- begin generated: provider-accounts -->
 | Vendor | Endpoint | Shows |
 |---|---|---|
+| abliteration.ai | `GET /v1/credits` | the USD credit left (credits bought less used) |
 | ai& | `GET /logs?range=30days` | the organisation's USD spend in the last 30 days, summed from its request logs |
+| Claude | `GET /api/organizations/{id}/prepaid/credits`, `/current_spend` (platform.claude.com) | the Claude Console API organisation's prepaid credit and its spend this month |
 | Atlas Cloud | `GET /public/v1/balance` | the account's available USD balance |
 | Amazon Bedrock | Cost Explorer `GetCostAndUsage` | this month's Bedrock spend, every 8 hours (Cost Explorer bills $0.01 a request) |
 | Deepgram | `GET /v1/projects/{id}/balances` | prepaid USD balance left, across the key's projects |
 | DeepInfra | `GET /payment/checklist` | spend since the last invoice, the limit, prepaid credit |
 | DeepSeek | `GET /user/balance` | prepaid USD balance left |
+| Google Developer Program | `GET /benefits`, `POST /_/GoogleDeveloperProfile/data/batchexecute` (rpcid Ro0AYc) | what is left of this month's Gen AI & Cloud credit (Google AI Pro, Ultra) |
 | GroqCloud | `GET api.groq.com/platform/v1/organizations/{org}/activity` | the organisation's GroqCloud spend this UTC month |
 | Hugging Face | `GET /api/settings/billing/usage-v2` | Inference Providers charges this month, against the spending limit when set |
 | Charm Hyper | `GET hyper.charm.land/v1/credits` | Hypercredits left |
@@ -1638,11 +1641,16 @@ vendor's own figures every 15 minutes:
 | LithosAI | `GET /api/me`, `/api/billing`, `/api/billing/spend` (console.lithosai.cloud) | the organisation's prepaid balance and its spend this UTC month |
 | Xiaomi MiMo | `GET /api/v1/balance`, `/api/v1/tokenPlan/detail`, `/api/v1/tokenPlan/usage` | the balance (in its currency) and the Token Plan's monthly credits used |
 | Moonshot (Kimi API) | `GET /v1/users/me/balance` | prepaid USD balance left |
+| Munito | `GET /admin/v1/limits` | the organisation's spend this month against its limit, and the day's against its own |
 | Neuralwatt | `GET /v1/quota` | prepaid USD credit left, and the subscription's kWh allowance used this period |
 | OpenAI | `GET /v1/organization/costs` | the API organisation's spend this month (Administration API) |
 | OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
 | Poe | `GET /usage/current_balance`, `GET /usage/points_history` | the point balance left and the points spent over the last 30 days (points, not dollars) |
 | Replicate | `GET /api/{users|organizations}/{name}/invoices` | spend this month, and the prepaid credit left |
+| Sail Research | `GET /v2/usage/summary?range=30d` | the organisation's credit balance and its spend over the last 30 days (7 on a free organisation) |
+| SiliconFlow | `GET /v1/user/info` (api.siliconflow.com) | an international account's USD balance |
+| SiliconFlow | `GET /walletd-server/api/v1/subject/profile/peek` (cloud.siliconflow.cn console) | a China account's console balance, in CNY |
+| TrustedRouter | `GET /v1/key` | the key's spend against its limit, or this month's spend without one |
 | TypeSafe | `POST /settings/billing` (getBillingOverview action) | spend this billing cycle and the credit balance left |
 | Venice | `GET /api/v1/billing/balance` | USD balance left, and the DIEM epoch allocation used when staking |
 | Vercel AI Gateway | `GET /v1/credits` | the team's credit balance |
@@ -1777,7 +1785,7 @@ use read its own spend.
   ```
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `COMMAND_CODE_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FACTORY_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `GROK_OAUTH_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `HYPER_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `LONGCAT_MANUAL_COOKIE`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OLLAMA_API_KEY`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAKANA_COOKIE`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`, `ZENMUX_MANAGEMENT_API_KEY`.
+The environment variables read for a key: `ABLITERATION_API_KEY`, `ABLIT_KEY`, `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `COMMAND_CODE_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FACTORY_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `GROK_OAUTH_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `HYPER_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `LONGCAT_MANUAL_COOKIE`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `MUNITO_ADMIN_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OLLAMA_API_KEY`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAIL_API_KEY`, `SAKANA_COOKIE`, `SILICONFLOW_API_KEY`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `TRUSTEDROUTER_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`, `ZENMUX_MANAGEMENT_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -1788,6 +1796,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Provider | Source | Reads | Credential | Checked |
 |---|---|---|---|---|
 | Abacus AI | `abacus-web` | compute credits used this billing month, resetting at the next billing date | browser session | CodexBar's source, the vendor's docs and fixtures |
+| abliteration.ai | `abliteration-account` | the USD credit left (credits bought less used) | API key | CodexBar's source, the vendor's docs and fixtures |
 | ai& | `aiand-account` | the organisation's USD spend in the last 30 days, summed from its request logs | API key | CodexBar's source, the vendor's docs and fixtures |
 | Aixy | `aixy-account` | each budget that applies to the key, spent and reserved against its limit | API key | CodexBar's source, the vendor's docs and fixtures |
 | Alibaba Cloud | `alibaba-account` | Coding Plan 5-hour, weekly and monthly quotas (where the console accepts the plan's API key) | API key | CodexBar's source, the vendor's docs and fixtures |
@@ -1801,6 +1810,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 |  | `claude-usage-meter` | Anthropic's own 5-hour and 7-day utilisation | browser session | against a real account |
 |  | `claude-code-oauth` | the plan windows, with Claude Code's own sign-in (opt-in) | another app's sign-in | public docs and fixtures |
 |  | `vendor-usage-anthropic` | the organisation's token usage from the Admin API | admin key | public docs and fixtures |
+|  | `claude-platform` | the Claude Console API organisation's prepaid credit and its spend this month | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Antigravity | `antigravity-local` | 5-hour and weekly quota for Gemini models and for Claude and GPT models, while the app runs | another app's sign-in, once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 | Atlas Cloud | `atlascloud-account` | the account's available USD balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | Augment | `augment-cli` | credits used of the month's allowance | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
@@ -1832,6 +1842,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Copilot | `github-copilot` | the month's AI Credits (premium requests on annual plans) against the allowance; an org seat with none says so | another app's sign-in | the vendor's client source and fixtures |
 |  | `copilot-cli` | each Copilot CLI session's tokens per model from its session log, when the session ends | local files | the vendor's client source and fixtures |
 | GitKraken AI | `gitkraken-account` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID | API key | CodexBar's source, the vendor's docs and fixtures |
+| Google Developer Program | `google-developer` | what is left of this month's Gen AI & Cloud credit (Google AI Pro, Ultra) | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Grok | `grok-account` | the SuperGrok credit window used, and the prepaid balance | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 |  | `grok-web` | the credit window used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Groq | `groq-web` | the organisation's GroqCloud spend this UTC month | browser session | CodexBar's source, the vendor's docs and fixtures |
@@ -1849,12 +1860,14 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | LiteLLM | `litellm-account` | the key's spend against its budget, and when it resets | API key | the vendor's client source and fixtures |
 | LithosAI | `lithosai-web` | the organisation's prepaid balance and its spend this UTC month | browser session | CodexBar's source, the vendor's docs and fixtures |
 | LLM Proxy | `llm-proxy-account` | the tightest quota group left on the credentials it pools, and when it resets | API key | CodexBar's source, the vendor's docs and fixtures |
+| llmman | — | in the catalog only: runs models locally (llmman serve): its node report is the memory loaded models occupy, not usage, spend or a plan, and the hosted providers it routes to bill their own turns | — | — |
 | LongCat | `longcat-account` | the token pack's share used, and the tokens left with pending fuel packs | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Manus | `manus-account` | monthly and daily-refresh credits used, and the credit balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Xiaomi MiMo | `mimo-web` | the balance (in its currency) and the Token Plan's monthly credits used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | MiniMax | `minimax-account` | the interval and weekly windows | API key | the vendor's client source and fixtures |
 | Mistral | `mistral-web` | the included-API and Vibe allowances' shares used this month, and the credit balance in its currency | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Moonshot | `moonshot-account` | prepaid USD balance left | API key | public docs and fixtures |
+| Munito | `munito-admin` | the organisation's spend this month against its limit, and the day's against its own | admin key | CodexBar's source, the vendor's docs and fixtures |
 | Muse Code | `muse-account` | the 5-hour and weekly quota used | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 | Muse | `museai-web` | the weekly token allowance used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Neuralwatt | `neuralwatt-account` | prepaid USD credit left, and the subscription's kWh allowance used this period | API key | CodexBar's source, the vendor's docs and fixtures |
@@ -1875,17 +1888,22 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Qwen Cloud | `qwencloud-web` | the Individual Token Plan's 5-hour, weekly and monthly windows | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Raycast | `raycast-account` | the month's AI credit allowance used, and the credits left | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Replicate | `replicate-account` | spend this month, and the prepaid credit left | browser session | CodexBar's source, the vendor's docs and fixtures |
+| Sail Research | `sailresearch-account` | the organisation's credit balance and its spend over the last 30 days (7 on a free organisation) | API key | CodexBar's source, the vendor's docs and fixtures |
 | Sakana AI | `sakana-web` | 5-hour and weekly quota windows, and the pay-as-you-go credit balance | browser session | CodexBar's source, the vendor's docs and fixtures |
+| SiliconFlow | `siliconflow-account` | an international account's USD balance | API key | CodexBar's source, the vendor's docs and fixtures |
+|  | `siliconflow-web` | a China account's console balance, in CNY | browser session | CodexBar's source, the vendor's docs and fixtures |
 | StepFun | `stepfun-account` | a Coding Plan's 5-hour and weekly windows, or a Token Plan's credit pool | session from a password sign-in | CodexBar's source, the vendor's docs and fixtures |
 | sub2api | `sub2api-account` | the key's quota and 5-hour, daily and 7-day limits, a subscription group's daily, weekly and monthly limits, or the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
 | T3 Chat | `t3chat-account` | the 4-hour Base window and the monthly Overage budget used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Together AI | — | in the catalog only: billed per token; its endpoint and models.dev prices are known, its account is not read | — | — |
+| TrustedRouter | `trustedrouter-account` | the key's spend against its limit, or this month's spend without one | API key | CodexBar's source, the vendor's docs and fixtures |
 | TypeSafe | `typesafe-account` | spend this billing cycle and the credit balance left | browser session | CodexBar's source, the vendor's docs and fixtures |
 | v0 | `v0-account` | the billing cycle's balance used and the request quota used | API key | CodexBar's source, the vendor's docs and fixtures |
 | Venice | `venice-account` | USD balance left, and the DIEM epoch allocation used when staking | API key | CodexBar's source, the vendor's docs and fixtures |
 | Vercel | `vercel-account` | the team's credit balance | API key | public docs and fixtures |
 | Warp | `warp-account` | credits used since the last refresh against the plan's limit, and the add-on credits left | API key | CodexBar's source, the vendor's docs and fixtures |
+| Wayfinder | — | in the catalog only: a self-hosted router (wayfinder-router): the providers it routes to bill its turns, and its savings are its own estimate from the prices in its config, not a bill, so there is no account to read | — | — |
 | Windsurf | `windsurf-local` | daily and weekly quota (or messages and flow actions) as Windsurf last cached them | local files | CodexBar's source, the vendor's docs and fixtures |
 |  | `windsurf-web` | daily and weekly quota, live | API key | CodexBar's source, the vendor's docs and fixtures |
 | WorkBuddy | `workbuddy-web` | the share of the credit packages' cycle used, and when it ends | browser session | CodexBar's source, the vendor's docs and fixtures |

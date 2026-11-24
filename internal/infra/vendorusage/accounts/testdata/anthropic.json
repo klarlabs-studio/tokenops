@@ -1,0 +1,11 @@
+{"amount":18725,"currency":"USD","balance":{"money":null,"credits":{"amount_minor":18725,"exponent":2}},
+ "balance_credits":187,"amount_without_scoped_credits":6250,"auto_reload_settings":null,
+ "last_paid_purchase_cents":10000,
+ "tranches":[{"remaining_amount_minor_units":6250,"currency":"USD","expires_at":"2027-05-01T00:00:00Z",
+   "granted_amount_minor_units":10000,"granted_at":"2026-05-01T00:00:00Z","program_id":"api_credits",
+   "name":null,"id":"fixture-purchase","scope":{"kind":"unscoped","applies_to":[]}}],
+ "promo_tranches":[{"remaining_amount_minor_units":12475,"currency":"USD","expires_at":"2026-10-28T00:00:00Z",
+   "granted_amount_minor_units":20000,"granted_at":"2026-10-01T00:00:00Z",
+   "program_id":"subscription_api_credit","name":"API credit (Max 20x)","id":"fixture-promo",
+   "scope":{"kind":"scoped","applies_to":[{"product":"api"},{"product":"agent_sdk"}]}}],
+ "next_expires_at":"2026-10-28T00:00:00Z"}

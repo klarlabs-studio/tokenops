@@ -1,0 +1,5 @@
+{"object":"usage.summary","available":true,"has_metronome_customer":true,"empty":false,
+"balance_unavailable":false,"balance":12345.67,"period_spend":1234,"effective_range":"30d",
+"plan_limited":false,"days_remaining":21,
+"rolling_window":{"start":"2026-09-01T12:37:00Z","end":"2026-10-01T12:37:00Z"},
+"billing_window":{"start":"2026-09-01T12:00:00Z","end":"2026-10-01T13:00:00Z"}}

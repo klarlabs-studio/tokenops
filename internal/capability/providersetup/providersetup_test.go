@@ -33,7 +33,7 @@ func TestLookupCoversKeyProvidersOnly(t *testing.T) {
 	if !ok || p.ID != "openrouter" || p.Browser || len(p.EnvVars) == 0 {
 		t.Errorf("openrouter = %+v %v", p, ok)
 	}
-	for _, id := range []string{"anthropic", "cerebras", "nope"} {
+	for _, id := range []string{"cerebras", "nope"} {
 		if _, ok := Lookup(id); ok {
 			t.Errorf("%s: setup does not connect it generically", id)
 		}

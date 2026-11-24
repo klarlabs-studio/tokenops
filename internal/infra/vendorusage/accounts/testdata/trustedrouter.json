@@ -1,0 +1,6 @@
+{"data":{"hash":"<key-hash>","name":"example","label":"sk-tr-v1-a...wxyz","disabled":false,
+"limit":10,"limit_microdollars":10000000,"limit_remaining":6.6,"limit_remaining_microdollars":6600000,
+"limit_reset":"monthly","include_byok_in_limit":true,"usage":3.25,"usage_microdollars":3250000,
+"usage_daily":0.4,"usage_daily_microdollars":400000,"usage_weekly":1.1,"usage_weekly_microdollars":1100000,
+"usage_monthly":3.25,"usage_monthly_microdollars":3250000,"byok_usage":0.0,"byok_usage_microdollars":0,
+"reserved_microdollars":150000,"expires_at":null,"management":false}}
