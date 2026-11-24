@@ -80,8 +80,10 @@ func TestBedrockRefusalsAndNoData(t *testing.T) {
 			t.Errorf("%s: %v", refused, err)
 		}
 	}
+	// Cost Explorer without the month's data is spend unavailable, not $0
+	// (CodexBar ebc3cb8c98).
 	answer = `{"__type":"DataUnavailableException"}`
-	if got, err := b.Read(context.Background(), bedrockKey(t)); err != nil || !got.HasUsed || got.UsedUSD != 0 {
+	if got, err := b.Read(context.Background(), bedrockKey(t)); err == nil || errors.Is(err, usage.ErrAuth) || got.HasUsed {
 		t.Errorf("no data yet: %+v, %v", got, err)
 	}
 	answer = `{"__type":"ThrottlingException"}`
