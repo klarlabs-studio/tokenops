@@ -45,6 +45,7 @@ var readers = []func() usage.Reader{
 	readerFal,
 	readerFlora,
 	readerFutureAGI,
+	readerGeminiWeb,
 	readerGitKraken,
 	readerGoogleDeveloper,
 	readerGrok,
