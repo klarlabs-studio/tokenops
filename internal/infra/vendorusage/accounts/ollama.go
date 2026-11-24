@@ -42,6 +42,12 @@ var (
 	ollamaDollars  = lazyRegexp(`\$` + ollamaAmount + `\s+of\s+\$` + ollamaAmount + `\s+used`)
 	ollamaWidth    = lazyRegexp(`width:\s*([0-9]+(?:\.[0-9]+)?)%`)
 	ollamaDataTime = lazyRegexp(`data-time="([^"]+)"`)
+	// The credit wallet the settings page shows instead of a meter
+	// (CodexBar 162ad6c806, f38ba0e5e7): its heading, the balance after it,
+	// and the month's credits used, each a whole element.
+	ollamaWallet      = lazyRegexp(`>\s*Usage credits\s*<`)
+	ollamaWalletUsed  = lazyRegexp(`>\s*Monthly credits used\s*<`)
+	ollamaWalletMoney = lazyRegexp(`>\s*\$([0-9][0-9,]*(?:\.[0-9]+)?)\s*<`)
 )
 
 func (o Ollama) Read(ctx context.Context, cookie string) (usage.Reading, error) {
@@ -88,7 +94,9 @@ func ollamaReading(html string) (usage.Reading, error) {
 		}
 	}
 	add([]string{"Weekly usage"}, "week", 7*24*time.Hour)
-	if len(r.Windows) > 0 {
+	ollamaWalletReading(html, &r)
+	if len(r.Windows) > 0 || r.HasBalance || r.HasUsed {
+		r.Subscription = len(r.Windows) > 0
 		return r, nil
 	}
 	if ollamaSignedOut(html) {
@@ -148,4 +156,29 @@ func ollamaSignedOut(html string) bool {
 		strings.Contains(t, `href="/login"`) || strings.Contains(t, `href="/signin"`)
 	fields := strings.Contains(t, `type="password"`) && strings.Contains(t, `type="email"`)
 	return authRoute || fields
+}
+
+// ollamaWalletReading adds the credit wallet: the balance that follows the
+// "Usage credits" heading (never a figure past the month's line), and the
+// dollars of credit used this month. No percentage is invented from them.
+func ollamaWalletReading(html string, r *usage.Reading) {
+	used := ollamaWalletUsed().FindStringIndex(html)
+	if at := ollamaWallet().FindStringIndex(html); at != nil {
+		end := min(len(html), at[1]+600)
+		if used != nil && used[0] > at[1] && used[0] < end {
+			end = used[0]
+		}
+		if m := ollamaWalletMoney().FindStringSubmatch(html[at[1]-1 : end]); m != nil {
+			if v, err := strconv.ParseFloat(strings.ReplaceAll(m[1], ",", ""), 64); err == nil {
+				r.BalanceUSD, r.HasBalance = v, true
+			}
+		}
+	}
+	if used != nil {
+		if m := ollamaWalletMoney().FindStringSubmatch(html[used[1]-1 : min(len(html), used[1]+300)]); m != nil {
+			if v, err := strconv.ParseFloat(strings.ReplaceAll(m[1], ",", ""), 64); err == nil {
+				r.UsedUSD, r.HasUsed = v, true
+			}
+		}
+	}
 }
