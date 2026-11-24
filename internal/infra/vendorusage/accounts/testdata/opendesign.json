@@ -1,0 +1,3 @@
+{"workspaceId":"ws_fixture","eligible":true,"tier":"pro","windows":[
+{"durationSeconds":604800,"usedCredits":"10451","limitCredits":"150000","remainingCredits":"139549","resetsAt":"2026-10-28T18:29:30Z"},
+{"durationSeconds":18000,"usedCredits":"500","limitCredits":"50000","remainingCredits":"49500","resetsAt":"2026-10-22T04:29:30Z"}]}

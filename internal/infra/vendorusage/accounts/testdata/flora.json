@@ -1,0 +1,4 @@
+{"workspace_id":"ws_fixture123","currency":"USD","balance_scope":"workspace","available_cost":128.4,
+ "spend":{"status":"available","scope":"workspace","period":{"start_date":"2026-03-01","end_date":"2026-03-17"},
+ "total_cost":12.5,"classified_runs":1234,
+ "runs_by_category":{"text":1,"image":1000,"video":200,"audio":3,"technique":30}}}

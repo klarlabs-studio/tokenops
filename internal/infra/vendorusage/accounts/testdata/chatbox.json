@@ -1,0 +1,7 @@
+{"data":{"name":"Chatbox AI Pro","status":"active",
+"unified_token_usage_details":[{"type":"plan","token_usage":200,"token_limit":1000},
+{"type":"invitation_reward","token_usage":100,"token_limit":500}],
+"aggregated_reward_details":{"token_usage":100,"token_limit":500},
+"expansion_pack_usage":50,"expansion_pack_limit":400,"image_used_count":3,"image_total_quota":20,
+"token_refreshed_time":"2026-10-01T00:00:00Z","token_next_refresh_time":"2026-11-01T00:00:00Z",
+"token_expire_time":"2027-01-01T00:00:00Z"}}

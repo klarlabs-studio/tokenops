@@ -2,6 +2,7 @@
 # name<TAB>source tag, in VendorUsageSources order.
 abacus_web	abacus-web
 abliteration_account	abliteration-account
+aerostack_account	aerostack-account
 aiand_account	aiand-account
 aixy_gateway	aixy-account
 alibaba_account	alibaba-account
@@ -22,12 +23,14 @@ augment_cli	augment-cli
 augment_web	augment-web
 bedrock_cost_explorer	bedrock-cost-explorer
 bifrost_gateway	bifrost-account
+chatbox_license	chatbox-license
 chutes_account	chutes-account
 clawrouter_gateway	clawrouter-account
 clinepass_account	clinepass-account
 codebuff_account	codebuff-account
 coderabbit_cli	coderabbit-cli
 commandcode_web	commandcode-web
+cosmic_project	cosmic-project
 cursor_turns (hook ledger)	cursor-hook
 cursor_web	cursor-web
 deepgram_account	deepgram-account
@@ -43,6 +46,8 @@ factory_account	factory-account
 factory_web	factory-web
 fal_account	fal-account
 fireworks	fireworks-usage
+flora_workspace	flora-workspace
+futureagi_account	futureagi-account
 gemini_cli	gemini-cli
 github_copilot	github-copilot
 copilot_cli	copilot-cli
@@ -85,6 +90,7 @@ codex_jsonl	codex-jsonl
 openai_admin	openai-admin
 opencode	opencode
 opencode_go_account	opencode-go-account
+opendesign_web	opendesign-web
 openrouter_account	openrouter-account
 parallel_web	parallel-web
 perplexity_account	perplexity-account
@@ -98,6 +104,7 @@ sailresearch_account	sailresearch-account
 sakana_web	sakana-web
 siliconflow_account	siliconflow-account
 siliconflow_web	siliconflow-web
+sofya_account	sofya-account
 soniox_organization	soniox-organization
 stepfun_account	stepfun-account
 sub2api_gateway	sub2api-account
@@ -105,6 +112,7 @@ synthetic_account	synthetic-account
 t3chat_account	t3chat-account
 tavily_account	tavily-account
 tinyapi_web	tinyapi-web
+trae_cn_web	trae-cn-web
 tripo_account	tripo-account
 trustedrouter_account	trustedrouter-account
 typesafe_account	typesafe-account
