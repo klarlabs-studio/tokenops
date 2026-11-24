@@ -126,6 +126,32 @@ func TestSupervisedDetectsLaunchdAndSystemdOnly(t *testing.T) {
 	}
 }
 
+// A supervisor may run the daemon under its own label. TOKENOPS_SUPERVISOR_LABEL
+// names that label, so the upgrade gate can supervise a daemon under a test job
+// without touching the operator's de.klarlabs.tokenops job. Unset, the default
+// label is the only one that counts.
+func TestSupervisedHonorsSupervisorLabelOverride(t *testing.T) {
+	const testLabel = "dev.tokenops.gate-test.1"
+	env := func(m map[string]string) func(string) string {
+		return func(k string) string { return m[k] }
+	}
+	cases := []struct {
+		name string
+		env  map[string]string
+		want bool
+	}{
+		{"override job", map[string]string{"TOKENOPS_SUPERVISOR_LABEL": testLabel, "XPC_SERVICE_NAME": testLabel}, true},
+		{"default label under an override", map[string]string{"TOKENOPS_SUPERVISOR_LABEL": testLabel, "XPC_SERVICE_NAME": LaunchdLabel}, false},
+		{"override job without its label", map[string]string{"TOKENOPS_SUPERVISOR_LABEL": testLabel, "XPC_SERVICE_NAME": "0"}, false},
+		{"default label without override", map[string]string{"XPC_SERVICE_NAME": LaunchdLabel}, true},
+	}
+	for _, c := range cases {
+		if got := supervisedIn(env(c.env), ""); got != c.want {
+			t.Errorf("%s: supervised = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 // The runner is driven by the test's own ticks: no real clock, no sleeps.
 func TestWatchBinaryDriftRestartsOnceAndReturns(t *testing.T) {
 	checks := []selfexe.Drift{
