@@ -35,6 +35,7 @@ func TestSiliconFlowShapes(t *testing.T) {
 		{`{"code":20000,"status":true,"data":{"totalBalance":12.5}}`, true, false, 12.5},
 		{`{"code":20000,"status":true,"data":{"totalBalance":"88.88.1"}}`, false, false, 0},
 		{`{"code":20000,"status":true,"data":{}}`, false, false, 0},
+		{`{"code":20000,"status":true,"data":{"totalBalance":null}}`, false, false, 0},
 		{`{"code":30014,"message":"invalid key"}`, false, true, 0},
 		{`{"code":20092,"message":"retired"}`, false, false, 0},
 		{`{"message":"OK"}`, false, false, 0},

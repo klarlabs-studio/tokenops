@@ -77,6 +77,9 @@ func (s SiliconFlow) Read(ctx context.Context, key string) (usage.Reading, error
 
 // siliconFlowMoney reads a decimal string or a number.
 func siliconFlowMoney(raw json.RawMessage) (float64, bool) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, false
+	}
 	var f float64
 	if json.Unmarshal(raw, &f) == nil {
 		return f, true
