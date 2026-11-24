@@ -306,18 +306,34 @@ fetch_published_cask() {
 	grep -qF "version \"$OLD\"" "$cask" || die "the published cask is not at $OLD"
 }
 
-# candidate_cask makes the candidate's cask from the published one: same text,
-# with the version, the arm64 checksum and the download pointed at the
-# candidate archive that build_candidate packs.
+# candidate_cask makes the candidate's cask from the published one: the same
+# text, with the version, the arm64 checksum and the arm64 download pointed at
+# the candidate archive that build_candidate packs. Done in Python, not sed:
+# BSD sed has no 0,/re/ range, and a silent no-op here once shipped a stale
+# checksum.
 candidate_cask() {
-	local archive="$WORK/candidate/tokenops_${CAND}_darwin_arm64.tar.gz" sum
+	local archive="$WORK/candidate/tokenops_${CAND}_darwin_arm64.tar.gz"
 	tar -czf "$archive" -C "$WORK/candidate" tokenops tokenopsd
-	sum="$(shasum -a 256 "$archive" | awk '{print $1}')"
-	sed -e "s|version \"$OLD\"|version \"$CAND\"|" \
-		-e "0,/sha256 \"[0-9a-f]*\"/s|sha256 \"[0-9a-f]*\"|sha256 \"$sum\"|" \
-		-e "s|https://github.com/$REPO_SLUG/releases/download/v#{version}|file://$WORK/candidate|" \
-		"$WORK/tap/Casks/tokenops.rb" >"$WORK/candidate.rb"
-	grep -qF "file://$WORK/candidate" "$WORK/candidate.rb" || die "could not point the candidate cask at its archive"
+	python3 - "$WORK/tap/Casks/tokenops.rb" "$WORK/candidate.rb" "$OLD" "$CAND" "$archive" "$WORK/candidate" "$REPO_SLUG" <<'PY' \
+		|| die "could not write the candidate cask"
+import hashlib, re, sys
+src, dst, old, new, archive, candidate_dir, slug = sys.argv[1:8]
+text = open(src).read()
+digest = hashlib.sha256(open(archive, "rb").read()).hexdigest()
+text, n_version = re.subn(r'version "%s"' % re.escape(old), 'version "%s"' % new, text, count=1)
+arm = re.search(r'on_arm do\n\s+sha256 "[0-9a-f]+"\n\s+url "[^"]*"', text)
+if not (n_version == 1 and arm):
+    raise SystemExit("published cask does not have the expected version or arm64 block")
+block = arm.group(0)
+block = re.sub(r'sha256 "[0-9a-f]+"', 'sha256 "%s"' % digest, block, count=1)
+block = re.sub(r'url "[^"]*"', 'url "file://%s/tokenops_#{version}_darwin_arm64.tar.gz"' % candidate_dir, block, count=1)
+text = text[:arm.start()] + block + text[arm.end():]
+open(dst, "w").write(text)
+PY
+	grep -qF "file://$WORK/candidate/tokenops_#{version}_darwin_arm64.tar.gz" "$WORK/candidate.rb" \
+		|| die "the candidate cask does not point at its archive"
+	grep -qF "$(shasum -a 256 "$archive" | awk '{print $1}')" "$WORK/candidate.rb" \
+		|| die "the candidate cask does not carry the archive's checksum"
 }
 
 commit_tap() {
