@@ -10,7 +10,9 @@ import (
 
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/budgets"
+	"go.klarlabs.de/tokenops/internal/capability/connections"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 	"go.klarlabs.de/tokenops/internal/presentation"
 )
 
@@ -36,7 +38,7 @@ func registerResourceGlanceTool(s *Server, d PlanDeps) {
 				return mcpgo.StructuredResult{}, err
 			}
 			return mcpgo.StructuredResult{
-				Content:           []mcpgo.Content{mcpgo.NewTextContent(markdownPayload(renderResourceGlance(result.Insight)+renderRouting(result.Routing)+renderBoundaryAdvice(result.Boundaries)+renderSpendBudgets(result.SpendBudgets), result))},
+				Content:           []mcpgo.Content{mcpgo.NewTextContent(markdownPayload(renderResourceGlance(result.Insight)+renderRouting(result.Routing)+renderBoundaryAdvice(result.Boundaries)+renderSpendBudgets(result.SpendBudgets)+renderNotConnected(result.Connections), result))},
 				StructuredContent: structured,
 			}, nil
 		})
@@ -95,7 +97,29 @@ func resourceGlance(ctx context.Context, d PlanDeps) (*resourceGlanceResult, err
 	p := g.Payload()
 	p.Boundaries = bcap.GlanceAdvice(deps.Config, g.Headroom.Reports)
 	p.SpendBudgets = budgets.Current("", now)
+	// Without the daemon the readers' health is unknown: a source switched
+	// on reads as connected, never as failing.
+	p.Connections = connections.Compute(connections.Inputs{Config: deps.Config, Turns: g.Turns,
+		Reported: g.Headroom.VendorRead(), Installed: sourceprobe.InstalledTools(d.machine()), Now: now})
 	return p, nil
+}
+
+// renderNotConnected tells the agent which tools the operator uses whose
+// plan is not read, so it can tell them, with the command for them to
+// run; nothing when there is none.
+func renderNotConnected(cs []connections.Connection) string {
+	detected := connections.Detected(cs)
+	if len(detected) == 0 {
+		return ""
+	}
+	out := "\n\n### In use, plan not read\n\nTell the operator; the command needs their credential or their yes, so never run it yourself.\n"
+	for _, c := range detected {
+		out += "\n- " + c.Summary
+		if a := c.Action; a != nil {
+			out += fmt.Sprintf(": `%s` (needs %s). Not wanted: `%s`.", a.Command, a.Needs, a.Dismiss)
+		}
+	}
+	return out
 }
 
 // renderSpendBudgets lists the operator's budget windows: how much of

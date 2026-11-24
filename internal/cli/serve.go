@@ -374,6 +374,7 @@ func serveControlDeps(current func() *config.Config, ready func() bool, stale fu
 			ds, err := mcp.FetchDaemonSources(url)
 			return ds.Sources, err
 		},
+		Connections:        mcp.FetchDaemonConnections,
 		DaemonProbe:        probe,
 		DaemonVersion:      mcp.FetchDaemonVersion,
 		DaemonDomainEvents: mcp.FetchDaemonDomainEvents,

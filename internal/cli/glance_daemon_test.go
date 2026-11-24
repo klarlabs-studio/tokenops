@@ -158,3 +158,22 @@ func TestGlanceComputesHereWithoutTheDaemon(t *testing.T) {
 		t.Errorf("no daemon answering made glance fail: %v", err)
 	}
 }
+
+// Under the cards, one line names each tool in use whose plan is not read,
+// with the command that connects it; --findings and --json add no line.
+func TestGlanceFooterNamesWhatIsNotConnected(t *testing.T) {
+	p := daemonGlance(time.Now(), nil)
+	p.Connections = cursorNotConnected()
+	d := newFakeDaemon(t, p, findings.Report{})
+	out, err := executeRoot(t, "--listen", d.listen(t), "glance", "--color", "never")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = "Also in use: Cursor (not connected — TOKENOPS_CURSOR_COOKIE=… tokenops vendor-usage enable cursor)\n"
+	if !strings.HasSuffix(out, "\n"+want) {
+		t.Errorf("glance does not end with the footer %q:\n%s", want, out)
+	}
+	if out, _ := executeRoot(t, "--listen", d.listen(t), "glance", "--findings", "--color", "never"); strings.Contains(out, "Also in use") {
+		t.Errorf("--findings carries the footer:\n%s", out)
+	}
+}

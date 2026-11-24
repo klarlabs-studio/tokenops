@@ -6,6 +6,7 @@ import (
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/connection"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/presentation"
@@ -91,6 +92,12 @@ type GlancePayload struct {
 	ProviderCosts map[string]spending.ProviderCost `json:"provider_costs,omitempty"`
 	// ProviderCostsLate is set when the costs were not all read in time.
 	ProviderCostsLate bool `json:"provider_costs_late,omitempty"`
+	// Connections say, per provider the operator uses or has installed,
+	// whether TokenOps reads its plan and, where it does not, the one
+	// thing to do to connect it (state not_connected). Derived from the
+	// event log, this machine's tools and the readers' health; nothing
+	// secret. The caller sets them; Payload leaves them empty.
+	Connections []connection.Connection `json:"connections,omitempty"`
 }
 
 // Payload is r on the wire.

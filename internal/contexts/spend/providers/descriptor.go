@@ -78,6 +78,12 @@ type Descriptor struct {
 	// Logo is true when apps/menubar/frontend/logos/<id>.svg is the
 	// vendor's own mark; false shows two letters of DisplayName.
 	Logo bool
+	// Presence are the signs that the provider's tool is installed on this
+	// machine, any one enough. With recent turns in the event log, they
+	// are the evidence that the operator uses a tool whose plan TokenOps
+	// may not read yet (see ConnectAction). Only where install implies
+	// use: an editor whose AI is an add-on is not listed.
+	Presence []Presence
 	// Docs is what the generated docs say about the provider.
 	Docs Docs
 }
@@ -272,6 +278,15 @@ type Source struct {
 	Endpoint     string
 	Shows        string
 	RecognisedBy string
+	// Connect is what the operator does to connect a bespoke source, or a
+	// source whose data only arrives once they install something (the
+	// status line). Account and gateway readers derive theirs from the
+	// credential (Descriptor.ConnectAction).
+	Connect *Connect
+	// WindowsInRecords marks a LocalLog source whose records carry the
+	// plan's windows as well (Codex's rollouts and their rate_limits), so
+	// its readings count as reading the plan.
+	WindowsInRecords bool
 }
 
 // Cookie is the session cookies a web source reads: the cookies the

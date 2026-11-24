@@ -64,12 +64,22 @@ make menubar-test   # tests, no window needed
 - It reads only the local daemon's API (ADR 0010), with the token the
   daemon writes to `~/.tokenops/daemon.url`. The token stays in the Go
   process; the panel never sees it.
-- The panel's grant names seven permissions: `glance.read`
+- The panel's grant names nine permissions: `glance.read`
   (`glance.follow`), `glance.refresh` (`sources.refresh`), `coach.change`
   (`coach.preset`, which the daemon writes to its audit log),
   `boundaries.deny` (`boundary.deny`), `boundaries.approve`
   (`boundary.approve`), `findings.answer` (`finding.act` and
-  `finding.dismiss`) and `panel.close`.
+  `finding.dismiss`), `connections.answer` (`connection.copy`,
+  `connection.docs` and `connection.dismiss`), `ring.choose` (`ring.pin`)
+  and `panel.close`.
+- Under the plans, muted, a row names each tool you use (or have
+  installed) whose plan TokenOps cannot read yet, such as **Cursor — in
+  use, plan not read**. It is no alert: no badge, no colour, no
+  notification. **Connect…** shows the one command that connects it, what
+  it needs and where to find that, with **Copy command** (the command Go
+  holds for the row, never text from the panel) and **Docs**; **Don't
+  show** asks the daemon to stop suggesting it, like `tokenops vendor-usage
+  dismiss <id>`.
 - Decisions a boundary is waiting on (ADR 0014) are listed under *Waiting on
   you*. Deny answers through the daemon in one click and never signs.
   Approve needs a person, because the agent a boundary stopped can reach the

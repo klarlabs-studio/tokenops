@@ -5,6 +5,7 @@ func providerNous() Descriptor {
 		ID:          "nous",
 		DisplayName: "Nous Portal",
 		Logo:        true,
+		Presence:    []Presence{{Dir: "~/.hermes"}},
 		Sources: []Source{
 			// CodexBar: Sources/CodexBarCore/Providers/Nous,
 			// Resources/Plugins/nous.ts, docs/nous.md. The token is a Portal

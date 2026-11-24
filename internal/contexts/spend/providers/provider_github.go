@@ -15,12 +15,17 @@ func providerGitHub() Descriptor {
 		DisplayName: "Copilot",
 		PlanPrefix:  "GitHub Copilot ",
 		Logo:        true,
+		Presence:    []Presence{{Dir: "~/.copilot"}, {Dir: "$XDG_CONFIG_HOME/github-copilot"}},
 		Sources: []Source{
 			{Name: "github_copilot", Tag: "github-copilot", Kind: Subscription, Credential: OAuthFile,
 				Switch: SwitchConfig, Reader: BespokeReader, Verified: FromClientSource,
 				Package: "internal/contexts/spend/vendorusage/copilot",
 				Fixture: "internal/contexts/spend/vendorusage/copilot/copilot_test.go",
-				Shows:   "the month's AI Credits (premium requests on annual plans) against the allowance; an org seat with none says so"},
+				Shows:   "the month's AI Credits (premium requests on annual plans) against the allowance; an org seat with none says so",
+				Connect: &Connect{
+					Command: "tokenops vendor-usage enable github-copilot",
+					Needs:   "nothing to paste: it reads the sign-in your Copilot IDE plugin or CLI already keeps",
+				}},
 			// Copilot CLI writes tokens to its session log only when a
 			// session ends: the per-call usage event is ephemeral
 			// (github/copilot-sdk, session-events.schema.json).

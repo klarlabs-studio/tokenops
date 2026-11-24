@@ -1222,6 +1222,27 @@ setting at start: restart it (`tokenops daemon restart`) after changing it.
 The glance's own event cache is not affected by this setting; off, the
 waste report no longer reads through it.
 
+## Tools you said not to read (`vendor_usage.dismissed`)
+
+When TokenOps sees you use a tool, or finds it installed, whose plan it
+cannot read yet, glance, status, the menu bar and the agent tools name it
+with the one command that connects it ([Connect a tool TokenOps
+found](cli.md#connect-a-tool-tokenops-found)). The providers you said not
+to read are listed here, by ID, and are not suggested again:
+
+```yaml
+vendor_usage:
+  dismissed: [cursor]
+```
+
+`tokenops vendor-usage dismiss <id>` and the menu bar's **Don't show** add
+one; `--undo` takes it off.
+`tokenops vendor-usage enable <source> --disable` on a plan source
+(`claude-subscription`, `cursor`, `github-copilot`, `fireworks`,
+`anthropic-admin`) adds its provider too, and enabling it again takes it
+off. The daemon reads the list from the file
+each time it computes the glance, so no restart is needed.
+
 ## Environment variables
 
 | Variable                             | Maps to                     |

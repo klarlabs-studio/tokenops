@@ -30,6 +30,12 @@ type VendorUsageConfig struct {
 	// --use-app-login`, ADR 0013). Nothing another application owns is
 	// read without one; `--revoke-app-login` removes it.
 	Grants map[string]AppLoginGrant `yaml:"grants,omitempty"`
+	// Dismissed are the providers, by ID, the operator said not to read:
+	// TokenOps no longer suggests connecting their plan when it sees them
+	// in use (`tokenops vendor-usage dismiss <id>`, the menu bar's "Don't
+	// show", or `vendor-usage enable <source> --disable`). Connecting one
+	// takes it off the list.
+	Dismissed []string `yaml:"dismissed,omitempty"`
 }
 
 // AppLoginGrant is the operator's consent to read one other application's

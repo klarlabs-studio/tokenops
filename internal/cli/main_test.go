@@ -9,6 +9,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/claudehome"
 	"go.klarlabs.de/tokenops/internal/infra/presence/presencetest"
+	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 )
 
 // TestMain pins $HOME to a throwaway directory for every test in this
@@ -46,6 +47,10 @@ func TestMain(m *testing.M) {
 			os.Unsetenv(k)
 		}
 	}
+
+	// A glance computed here looks for installed tools in the sandbox
+	// only: never the machine's own /Applications or PATH.
+	glanceMachine = func() sourceprobe.Machine { return sourceprobe.Machine{Home: sandbox} }
 
 	// Currency detection reads the machine's region; tests see USD unless
 	// they say otherwise.

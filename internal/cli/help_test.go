@@ -170,7 +170,7 @@ var changesThings = map[string]bool{
 	"tokenops coach reinstate": true,
 	"tokenops budget set":      true, "tokenops budget unset": true,
 	"tokenops provider set": true, "tokenops provider unset": true,
-	"tokenops vendor-usage enable": true, "tokenops vendor-usage setup": true,
+	"tokenops vendor-usage enable": true, "tokenops vendor-usage setup": true, "tokenops vendor-usage dismiss": true,
 	"tokenops pricing refresh": true,
 	"tokenops coach autonomy":  true, "tokenops coach verbosity": true, "tokenops coach set": true,
 	"tokenops coach off": true, "tokenops coach migrate": true, "tokenops coach delivery": true,

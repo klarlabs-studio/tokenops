@@ -10,6 +10,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -35,6 +36,21 @@ type PlanDeps struct {
 	// Daemon reads the daemon's answers to the plan views, which are
 	// preferred to computing them here; nil computes them here.
 	Daemon DaemonJSON
+	// Machine is where a glance computed here looks for installed tools;
+	// nil is this machine.
+	Machine func() sourceprobe.Machine
+}
+
+// thisMachine is the machine a glance computed here probes by default;
+// tests give a sandbox.
+var thisMachine = sourceprobe.ThisMachine
+
+// machine is where a glance computed here looks for installed tools.
+func (d PlanDeps) machine() sourceprobe.Machine {
+	if d.Machine != nil {
+		return d.Machine()
+	}
+	return thisMachine()
 }
 
 // activeConfig returns the live Config snapshot: prefers ConfigGetter

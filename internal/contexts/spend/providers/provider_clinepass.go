@@ -5,6 +5,7 @@ func providerClinePass() Descriptor {
 		ID:          "clinepass",
 		DisplayName: "ClinePass",
 		Logo:        true,
+		Presence:    []Presence{{Dir: "~/.cline"}},
 		Sources: []Source{
 			// CodexBar: Sources/CodexBarCore/Providers/ClinePass,
 			// Resources/Plugins/clinepass.ts, docs/clinepass.md. Cline's own

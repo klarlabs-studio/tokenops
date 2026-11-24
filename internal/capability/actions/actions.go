@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
 // InputError is a request the caller got wrong: a bad value, a missing
@@ -191,4 +192,29 @@ func SetRoutingRule(path string, req RoutingRuleRequest) (RoutingRuleChange, err
 		return RoutingRuleChange{}, err
 	}
 	return RoutingRuleChange{RoutingRules: cfg.Optimizer.RoutingRules, Mode: cfg.Mode, Config: path}, nil
+}
+
+// ConnectionDismissal is vendor_usage.dismissed after a change.
+type ConnectionDismissal struct {
+	Provider  string   `json:"provider"`
+	Dismissed bool     `json:"dismissed"`
+	All       []string `json:"all,omitempty"`
+	Config    string   `json:"config"`
+}
+
+// DismissConnection records that the operator does not want provider's
+// plan read: TokenOps stops suggesting to connect it. undo suggests it
+// again. Only a provider in the registry can be named.
+func DismissConnection(path, provider string, undo bool) (ConnectionDismissal, error) {
+	if _, ok := providers.Lookup(provider); !ok {
+		return ConnectionDismissal{}, inputErr(fmt.Errorf("unknown provider %q", provider))
+	}
+	cfg, err := edit(path, func(c *config.Config) error {
+		c.DismissProvider(provider, !undo)
+		return nil
+	})
+	if err != nil {
+		return ConnectionDismissal{}, err
+	}
+	return ConnectionDismissal{Provider: provider, Dismissed: !undo, All: cfg.VendorUsage.Dismissed, Config: path}, nil
 }

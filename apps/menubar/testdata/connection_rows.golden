@@ -1,0 +1,17 @@
+[
+  {
+    "provider": "cursor",
+    "label": "Cursor — in use, plan not read",
+    "seen": "41 turns in the last 7 days · /Applications/Cursor.app",
+    "command": "TOKENOPS_CURSOR_COOKIE=… tokenops vendor-usage enable cursor",
+    "needs": "your cursor.com browser session (the WorkosCursorSessionToken cookie)",
+    "where": "signed in at cursor.com: developer tools → Application → Cookies → WorkosCursorSessionToken",
+    "docs": "https://github.com/klarlabs-studio/tokenops/blob/main/docs/reference/cli.md#connect-a-tool-tokenops-found"
+  },
+  {
+    "provider": "amp",
+    "label": "Amp — installed, plan not read",
+    "command": "tokenops vendor-usage setup amp",
+    "needs": "an Amp API key"
+  }
+]

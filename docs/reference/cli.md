@@ -39,6 +39,13 @@ Each window shows the **share left**, and its bar shrinks as the window
 fills, coloured by how much is used — the menu bar and the statusline
 read the same way.
 
+A tool you use whose plan TokenOps cannot read yet has no card. One line
+under the cards names each, with the command that connects it:
+
+```
+Also in use: Cursor (not connected — TOKENOPS_CURSOR_COOKIE=… tokenops vendor-usage enable cursor)
+```
+
 **Pace** compares the share used with the share of the window gone by:
 behind lasts to the reset; ahead says when the window runs out at the
 rate so far. The daemon API, the menu bar and MCP report the same pace.
@@ -754,6 +761,21 @@ don't hit a dead end. The self-report says why the connection failed
 `discovery`) and only calls the daemon "not running" when the
 connection was refused; see
 [Health and readiness](https://team.klarlabs.de/runbook/health#when-tokenops-status-cannot-reach-the-daemon).
+
+Below the warnings, `status` lists each tool you use, or have installed,
+whose plan TokenOps cannot read yet, with the command that connects it,
+what that needs and where to find it ([Connect a tool TokenOps
+found](#connect-a-tool-tokenops-found)); `--json` has them as
+`not_connected`:
+
+```
+not connected (in use here, plan not read):
+  Cursor — 41 turns in the last 7 days; /Applications/Cursor.app
+    → TOKENOPS_CURSOR_COOKIE=… tokenops vendor-usage enable cursor
+      needs your cursor.com browser session (the WorkosCursorSessionToken cookie) — signed in at cursor.com: developer tools → Application → Cookies → WorkosCursorSessionToken
+      docs https://github.com/klarlabs-studio/tokenops/blob/main/docs/reference/cli.md#connect-a-tool-tokenops-found
+      not wanted: tokenops vendor-usage dismiss cursor
+```
 
 `status` also warns when a Homebrew `sandbox_operation.rb extract` process has
 run for more than two minutes. It only reads the process table and never
@@ -1906,6 +1928,10 @@ tokenops vendor-usage enable codex-jsonl
 TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY=sk-… \
   tokenops vendor-usage enable claude-subscription
 
+# Cursor: the WorkosCursorSessionToken cookie alone; the user ID is read
+# from its start (pass --user-id when it is not there)
+TOKENOPS_CURSOR_COOKIE=… tokenops vendor-usage enable cursor
+
 # Flip a source off without clearing the persisted secret
 tokenops vendor-usage enable claude-subscription --disable
 ```
@@ -1915,6 +1941,54 @@ Available env vars:
 `TOKENOPS_CURSOR_COOKIE`,
 `TOKENOPS_COPILOT_OAUTH_TOKEN`,
 `TOKENOPS_ANTHROPIC_ADMIN_KEY`.
+
+### Connect a tool TokenOps found
+
+A plan card exists only for a plan TokenOps reads. When it sees you use a
+tool whose plan it cannot read yet, or finds the tool installed, it says
+so where you already look: a line under `tokenops glance`, a section in
+`tokenops status`, a muted row under the plans in the menu bar, and the
+`connections` of the glance an agent reads (`tokenops_glance`,
+`tokenops_status`, `GET /api/connections`). It is said in place, never as
+an alert or a notification.
+
+What counts as use: requests in the event log for that provider in the
+last 7 days, then the tool on this machine: its app in `/Applications` or
+`~/Applications`, the directory it keeps, or its CLI on `PATH`. The check
+only asks whether those paths exist; it opens no file, reads no
+credential, and touches nothing macOS asks about. A source that needs no
+secret and no question (a transcript reader, Codex's app server) is
+turned on without asking; what is listed needs you.
+
+| Tool | Found by | Command | Needs |
+|---|---|---|---|
+| Cursor | `Cursor.app`, `~/.cursor`, `cursor-agent` | `TOKENOPS_CURSOR_COOKIE=… tokenops vendor-usage enable cursor` | your cursor.com session: signed in at cursor.com, developer tools → Application → Cookies → `WorkosCursorSessionToken`; the user ID is read from its start |
+| Claude | `~/.claude`, `claude`, `Claude.app` | `tokenops statusline install` | nothing secret: Claude Code hands its status line the plan's windows |
+| Copilot | `~/.copilot`, `$XDG_CONFIG_HOME/github-copilot` | `tokenops vendor-usage enable github-copilot` | nothing to paste: the sign-in the Copilot IDE plugin or CLI keeps |
+| Fireworks | `~/.nexus` | `tokenops vendor-usage enable fireworks` | Nexus CLI's sign-in, or `FIREWORKS_API_KEY` for the daemon |
+| Antigravity, Kiro | their apps, `kiro-cli` | `tokenops vendor-usage setup <id> --use-app-login` | your yes to read the app's own sign-in; setup shows exactly what first |
+| Windsurf, Augment, Amp, Factory, Codebuff, Kilo, ClinePass, Grok, Muse Code, Nous Portal | their apps, directories or CLIs | `tokenops vendor-usage setup <id>` | the key or browser session `setup` asks for |
+| Every other provider in [the registry](../providers.md) | requests in the event log | `tokenops vendor-usage setup <id>` | an API key, a browser session or your cloud credentials, as `setup` says |
+
+Codex and CodeRabbit read their plan through their own CLI, with nothing
+from you, so they are never listed as not connected. A source you switched
+on that is refused or has gone quiet is listed as `failing`, with the same
+command to connect it again.
+
+Not wanted? `tokenops vendor-usage dismiss <id>`, or **Don't show** in the
+menu bar, and it is not suggested again
+([`vendor_usage.dismissed`](configuration.md#tools-you-said-not-to-read-vendor_usagedismissed)).
+
+### `tokenops vendor-usage dismiss <provider>`
+
+Stops suggesting to connect a provider's plan: `--undo` suggests it again.
+`tokenops vendor-usage enable <source> --disable` on a plan source does the
+same for its provider, and enabling it again takes it back.
+
+```bash
+tokenops vendor-usage dismiss cursor
+tokenops vendor-usage dismiss cursor --undo
+```
 
 ## Pricing
 

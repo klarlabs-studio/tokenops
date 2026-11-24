@@ -4,6 +4,7 @@ func providerMuse() Descriptor {
 	return Descriptor{
 		ID:          "muse",
 		DisplayName: "Muse Code",
+		Presence:    []Presence{{Dir: "$XDG_CONFIG_HOME/muse"}},
 		Sources: []Source{
 			// CodexBar: Sources/CodexBarCore/Providers/Muse
 			// (MuseCredentials.swift) and Resources/Plugins/muse.ts,
