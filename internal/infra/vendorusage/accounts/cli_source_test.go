@@ -2,10 +2,12 @@ package accounts
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -88,7 +90,7 @@ func TestAlibabaTokenPlanEnvironmentAndFallback(t *testing.T) {
 	}
 	t.Setenv("OPENAI_API_KEY", "sk-must-not-leak")
 	t.Setenv("LANG", "en_US.UTF-8")
-	r := readerAlibabaTokenPlanCLI().(cliSource)
+	r := readerAlibabaTokenPlanCLI().(alibabaTokenPlanCLI)
 	r.bin = bin
 	got, err := r.Read(context.Background(), "")
 	if err != nil || len(got.Windows) != 2 {
@@ -104,7 +106,7 @@ func TestAlibabaTokenPlanEnvironmentAndFallback(t *testing.T) {
 	if strings.Contains(string(env), "sk-must-not-leak") || !strings.Contains(string(env), "LANG=en_US.UTF-8") {
 		t.Errorf("environment:\n%s", env)
 	}
-	if calls := invocations(t, argLog); len(calls) != 2 || !strings.Contains(calls[1], "cn-beijing --console-site domestic --output json") {
+	if calls := invocations(t, argLog); len(calls) != 2 || !strings.Contains(calls[1], "console call --api zeldaHttp.apikeyMgr./tokenplan/personal/api/v2/usage --data {} --console-region cn-beijing --console-site domestic --output json") {
 		t.Errorf("ran %q", calls)
 	}
 }
@@ -119,6 +121,78 @@ func TestTokenPlanCLIShapes(t *testing.T) {
 		got, err := parseTokenPlanCLI(body)
 		if len(got.Windows) != windows || (windows == 0) != (err != nil) {
 			t.Errorf("%s: %+v %v", body, got, err)
+		}
+	}
+}
+
+// A Team plan answers no personal windows: its seats are listed page by
+// page, with the region in BAILIAN_BASE_URL, and the credits of the seats
+// in service added up (CodexBar 53f9e1e24d). A suspended seat, one out of
+// its term and resource packs are not added.
+func TestAlibabaTokenPlanTeamSeats(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake CLI is a shell script")
+	}
+	dir := t.TempDir()
+	seat := func(id, status string, total, left int) string {
+		return `{"SeatId":"` + id + `","Status":"` + status + `","StartTime":1780000000000,"EndTime":1790000000000,"EquityList":[` +
+			`{"EquityType":"CREDITS","CycleStartTime":1785000000000,"CycleEndTime":1787000000000,"CycleTotalValue":` + strconv.Itoa(total) + `,"CycleSurplusValue":` + strconv.Itoa(left) + `},` +
+			`{"EquityType":"RESOURCE_PACK","CycleTotalValue":999,"CycleSurplusValue":999}]}`
+	}
+	first := make([]string, 0, 10)
+	for i := range 10 {
+		first = append(first, seat("s"+strconv.Itoa(i), "NORMAL", 100, 75))
+	}
+	pages := map[string]string{
+		"1": `{"Success":true,"Data":{"Total":12,"PageNo":1,"PageSize":10,"Items":[` + strings.Join(first, ",") + `]}}`,
+		"2": `{"Success":true,"Data":{"Total":12,"PageNo":2,"PageSize":10,"Items":[` + seat("s10", "NORMAL", 200, 0) + `,` + seat("s11", "SUSPENDED", 500, 0) + `]}}`,
+	}
+	for n, body := range pages {
+		if err := os.WriteFile(filepath.Join(dir, "page"+n+".json"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	envLog := filepath.Join(dir, "env.log")
+	script := "#!/bin/sh\n" +
+		"case \"$1\" in console) echo '{\"code\":\"NoPermission\"}'; exit 1 ;; esac\n" +
+		"echo \"$BAILIAN_BASE_URL\" >> '" + envLog + "'\n" +
+		"case \"$BAILIAN_BASE_URL\" in *intl*) exit 1 ;; esac\n" +
+		"cat '" + dir + "'/page\"$4\".json\n"
+	bin := filepath.Join(dir, "bl")
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil { //nolint:gosec // a test executable
+		t.Fatal(err)
+	}
+	r := readerAlibabaTokenPlanCLI().(alibabaTokenPlanCLI)
+	r.bin = bin
+	r.now = func() time.Time { return time.UnixMilli(1786000000000) }
+	got, err := r.Read(context.Background(), "")
+	// 10 seats of 100 with 75 left, and one of 200 with none: 450 used of 1200.
+	if err != nil || len(got.Windows) != 1 || got.Windows[0].Name != "credits" || !approx(got.Windows[0].UsedPct, 37.5) ||
+		!got.Windows[0].ResetsAt.Equal(time.UnixMilli(1787000000000).UTC()) || got.Scope != "team" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if env, _ := os.ReadFile(envLog); !strings.Contains(string(env), "https://dashscope-intl.aliyuncs.com\nhttps://dashscope.aliyuncs.com") {
+		t.Errorf("regions asked:\n%s", env)
+	}
+}
+
+func TestAlibabaTokenPlanTeamSeatShapes(t *testing.T) {
+	now := time.UnixMilli(1786000000000)
+	page := func(items string) []tokenPlanSeatsPage {
+		var p tokenPlanSeatsPage
+		if err := json.Unmarshal([]byte(`{"Success":true,"Data":{"Total":1,"PageNo":1,"PageSize":10,"Items":[`+items+`]}}`), &p); err != nil {
+			t.Fatal(err)
+		}
+		return []tokenPlanSeatsPage{p}
+	}
+	for name, items := range map[string]string{
+		"two credits":     `{"SeatId":"a","Status":"NORMAL","StartTime":1,"EndTime":1790000000000,"EquityList":[{"EquityType":"CREDITS","CycleStartTime":1,"CycleEndTime":1790000000000,"CycleTotalValue":1,"CycleSurplusValue":1},{"EquityType":"CREDITS","CycleStartTime":1,"CycleEndTime":1790000000000,"CycleTotalValue":1,"CycleSurplusValue":1}]}`,
+		"left > total":    `{"SeatId":"a","Status":"NORMAL","StartTime":1,"EndTime":1790000000000,"EquityList":[{"EquityType":"CREDITS","CycleStartTime":1,"CycleEndTime":1790000000000,"CycleTotalValue":1,"CycleSurplusValue":2}]}`,
+		"no seat id":      `{"SeatId":"","Status":"NORMAL"}`,
+		"none in service": `{"SeatId":"a","Status":"EXPIRED"}`,
+	} {
+		if _, err := tokenPlanTeamReading(page(items), now); err == nil {
+			t.Errorf("%s: read", name)
 		}
 	}
 }
