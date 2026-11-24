@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"go.klarlabs.de/tokenops/internal/capability/connections"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/daemonreach"
@@ -78,6 +79,10 @@ type ControlDeps struct {
 	// a count of zero reads the same for both. Asked only of a daemon the
 	// probe found alive; an error falls back to StaleSources.
 	SourceHealth func(url string) ([]state.SourceReport, error)
+	// Connections, when set, asks the daemon the probe found alive for
+	// its connections: the tools in use whose plan is not read, with the
+	// one thing to do. Only the daemon computes them.
+	Connections func(url string) ([]connections.Connection, error)
 	// DaemonProbe, when set, asks the ingestion daemon how it is doing:
 	// whether it is reachable, and how much telemetry it has failed to
 	// persist. Nil means the check is unavailable and status stays
@@ -145,6 +150,11 @@ type statusResult struct {
 	// DaemonReachability is whether this server reached the ingestion
 	// daemon, kept apart from the warnings so a client can branch on it.
 	DaemonReachability *daemonReachability `json:"daemon_reachability,omitempty" jsonschema:"description=whether this MCP server reached the ingestion daemon and, if not, why"`
+	// NotConnected are the tools the operator uses, or has installed,
+	// whose plan TokenOps does not read, each with the one command that
+	// connects it. Tell the operator; never run the command yourself: it
+	// needs their credential or their yes.
+	NotConnected []connections.Connection `json:"not_connected,omitempty" jsonschema:"description=tools in use whose plan TokenOps does not read; each action is for the operator to run, never the agent"`
 }
 
 // domainEventsResult is the typed payload for tokenops_records (view=events).
@@ -269,7 +279,21 @@ func statusInfo(d ControlDeps) statusResult {
 		DaemonVersion:      daemonVersion(d, report),
 		ServerOutOfDate:    drift.OutOfDate,
 		DaemonReachability: reachabilityOf(report, probed),
+		NotConnected:       notConnectedOf(d, report),
 	}
+}
+
+// notConnectedOf asks a live daemon what is in use and not read. A daemon
+// not reached, or too old to answer, says nothing here.
+func notConnectedOf(d ControlDeps, r DaemonReport) []connections.Connection {
+	if d.Connections == nil || !r.Alive || r.URL == "" {
+		return nil
+	}
+	cs, err := d.Connections(r.URL)
+	if err != nil {
+		return nil
+	}
+	return connections.Detected(cs)
 }
 
 // daemonReachability is whether this MCP server reached the ingestion

@@ -1,0 +1,12 @@
+daemon: http://127.0.0.1:7878
+status: attention — TokenOps is running with reduced coverage; inspect blockers, warnings, and next_actions.
+  daemon   running, version dev
+  ready    yes
+warnings:
+  ! retention.keep_by_source["no-such-source"] matches no source that has produced events — the rule is doing nothing; check the tag with `tokenops vendor-usage status`
+not connected (in use here, plan not read):
+  Cursor — 41 turns in the last 7 days; /Applications/Cursor.app
+    → TOKENOPS_CURSOR_COOKIE=… tokenops vendor-usage enable cursor
+      needs your cursor.com browser session (the WorkosCursorSessionToken cookie) — signed in at cursor.com: developer tools → Application → Cookies → WorkosCursorSessionToken
+      docs https://github.com/klarlabs-studio/tokenops/blob/main/docs/reference/cli.md#connect-a-tool-tokenops-found
+      not wanted: tokenops vendor-usage dismiss cursor

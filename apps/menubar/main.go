@@ -81,6 +81,9 @@ type view struct {
 	Boundaries json.RawMessage `json:"boundaries,omitempty"`
 	// Costs is each provider's usage today and over the last 30 days.
 	Costs map[string]costs `json:"costs,omitempty"`
+	// Connections are the tools in use whose plan is not read, shown
+	// muted under the plans (connections.go).
+	Connections []connectionRow `json:"connections,omitempty"`
 	// Error says why there is nothing new to show, in the operator's terms.
 	Error string `json:"error,omitempty"`
 	// Waiting marks Error as a read that took too long: nothing is broken,
@@ -210,12 +213,13 @@ func newMenubar(host app.DesktopHost, d *daemon, sink audit.Sink) (*menubar, err
 // register grants the panel what it needs and registers its commands.
 func (m *menubar) register() error {
 	grant, err := domain.NewCapabilityGrant(
-		"panel", "read the glance, ask the daemon to poll now, change the coach preset, answer boundaries, act on and hide findings, choose the plan the menu bar ring shows, close the panel",
+		"panel", "read the glance, ask the daemon to poll now, change the coach preset, answer boundaries, act on and hide findings, copy, read about or stop suggesting a tool to connect, choose the plan the menu bar ring shows, close the panel",
 		[]domain.WindowID{panelWindow},
 		[]domain.Origin{domain.OriginPackagedLocal},
 		[]domain.PermissionSpec{
 			{Name: "glance.read"}, {Name: "glance.refresh"}, {Name: "coach.change"},
-			{Name: "boundaries.deny"}, {Name: "boundaries.approve"}, {Name: "findings.answer"}, {Name: "ring.choose"}, {Name: "panel.close"},
+			{Name: "boundaries.deny"}, {Name: "boundaries.approve"}, {Name: "findings.answer"}, {Name: "connections.answer"},
+			{Name: "ring.choose"}, {Name: "panel.close"},
 		},
 	)
 	if err != nil {
@@ -296,6 +300,36 @@ func (m *menubar) register() error {
 			Permission:  "findings.answer",
 			Handler: func(ctx context.Context, _ domain.Invocation, in findingDismissInput) (view, error) {
 				if err := m.dismissFinding(ctx, in); err != nil {
+					return view{}, err
+				}
+				return m.refresh(ctx), nil
+			},
+		}),
+		vitra.Register(m.rt, vitra.Command[connectionInput, view]{
+			Name:        "connection.copy",
+			Description: "Copy the command that connects a tool's plan, as the panel lists it",
+			Permission:  "connections.answer",
+			Handler: func(ctx context.Context, _ domain.Invocation, in connectionInput) (view, error) {
+				if err := m.copyConnect(in); err != nil {
+					return view{}, err
+				}
+				return m.refresh(ctx), nil
+			},
+		}),
+		vitra.Register(m.rt, vitra.Command[connectionInput, vitra.Void]{
+			Name:        "connection.docs",
+			Description: "Open the page on connecting a tool's plan",
+			Permission:  "connections.answer",
+			Handler: func(_ context.Context, _ domain.Invocation, in connectionInput) (vitra.Void, error) {
+				return vitra.Void{}, m.openConnectDocs(in)
+			},
+		}),
+		vitra.Register(m.rt, vitra.Command[connectionInput, view]{
+			Name:        "connection.dismiss",
+			Description: "Stop suggesting to connect a tool's plan, through the daemon, which audits it",
+			Permission:  "connections.answer",
+			Handler: func(ctx context.Context, _ domain.Invocation, in connectionInput) (view, error) {
+				if err := m.dismissConnection(ctx, in); err != nil {
 					return view{}, err
 				}
 				return m.refresh(ctx), nil
@@ -499,6 +533,7 @@ func (m *menubar) read(ctx context.Context) view {
 		return v
 	}
 	v.Glance = g
+	v.Connections = connectionRows(g)
 	// The daemon answers from its last computation, which can be a minute
 	// old, and after a start from the one it saved: show its age, not
 	// when this asked.

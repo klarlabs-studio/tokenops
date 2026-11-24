@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/connections"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/daemon"
@@ -80,8 +81,9 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 			// (like `vendor-usage status`); any failure degrades to "no
 			// warnings" rather than failing the status command.
 			if cfgErr == nil {
-				res.Warnings = statusStaleWarnings(cmd.Context(), rf, cfg, base, mcp.FetchDaemonSources)
+				res.Warnings = statusStaleWarnings(cmd.Context(), rf, cfg, base, statusSourcesFetch)
 			}
+			res.NotConnected = notConnected(base, statusConnectionsFetch)
 			// Dropped rows come from the daemon itself rather than the
 			// store — the store is precisely where they failed to land,
 			// so it cannot be asked how many are missing.
@@ -114,6 +116,30 @@ type daemonProbe struct {
 	// Reachability is whether this client got an answer, kept apart from
 	// what the answer said about the daemon.
 	Reachability *reachability `json:"reachability,omitempty"`
+	// NotConnected are the tools in use or installed whose plan TokenOps
+	// does not read, each with the one thing to do (the daemon's
+	// connections in state not_connected).
+	NotConnected []connections.Connection `json:"not_connected,omitempty"`
+}
+
+// statusSourcesFetch and statusConnectionsFetch ask the daemon for its
+// readers' health and its connections; tests answer for it.
+var (
+	statusSourcesFetch     = mcp.FetchDaemonSources
+	statusConnectionsFetch = mcp.FetchDaemonConnections
+)
+
+// notConnected is what the daemon says is in use and not read. A daemon
+// that does not answer the route (an older one) has nothing to say here.
+func notConnected(base string, fetch func(string) ([]connections.Connection, error)) []connections.Connection {
+	if fetch == nil {
+		return nil
+	}
+	cs, err := fetch(base)
+	if err != nil {
+		return nil
+	}
+	return connections.Detected(cs)
 }
 
 // reachability is whether this client could reach the daemon and, when it
@@ -409,6 +435,7 @@ func writeStatusText(w io.Writer, base string, r daemonProbe) error {
 			lines = append(lines, "  ! "+warn)
 		}
 	}
+	lines = append(lines, notConnectedLines(r.NotConnected)...)
 	_, err := fmt.Fprintln(w, strings.Join(lines, "\n"))
 	return err
 }

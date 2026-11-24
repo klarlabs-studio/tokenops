@@ -11,7 +11,8 @@
   var PROVIDERS = window.TOKENOPS_PROVIDERS || {};
   // open is the finding whose confirm row or hide choices are showing:
   // { key, action } or { key, hide: true }. busy is a finding being acted on.
-  var state = { view: null, selected: null, refreshing: false, open: null, busy: null };
+  // connect is the tool whose Connect… details are showing.
+  var state = { view: null, selected: null, refreshing: false, open: null, busy: null, connect: null };
   // more is whether the coach's information findings are unfolded.
   state.more = false;
   try {
@@ -630,6 +631,73 @@
     }
   }
 
+  // Tools in use whose plan TokenOps does not read, muted, under the
+  // plans. Not an alert: no badge, no colour, said in place. Connect…
+  // shows the command, what it needs and where to find it; Copy command
+  // and Docs act on the row Go holds, never on text from here; Don't show
+  // asks the daemon to stop suggesting it.
+  function connectionsSection(main, v) {
+    var rows = v.connections || [];
+    if (!rows.length) return;
+    var box = el("section", "connections");
+    box.setAttribute("aria-label", "In use, plan not read");
+    rows.forEach(function (r) {
+      var open = state.connect === r.provider;
+      var item = el("div", "connection");
+      var line = el("div", "connection-line");
+      line.appendChild(mark(r.provider, "connection-mark"));
+      line.appendChild(el("span", "connection-label", r.label));
+      var connect = button("quiet", open ? "Close" : "Connect…", "Connect " + name(r.provider));
+      connect.setAttribute("aria-expanded", open ? "true" : "false");
+      connect.addEventListener("click", function () {
+        state.connect = open ? null : r.provider;
+        render();
+      });
+      line.appendChild(connect);
+      item.appendChild(line);
+      if (open) {
+        var how = el("div", "connection-how");
+        if (r.seen) how.appendChild(el("div", "note", "Seen: " + r.seen));
+        how.appendChild(el("code", "connection-command", r.command));
+        how.appendChild(el("div", "note", "Needs " + r.needs + (r.where ? ". " + r.where : "") + "."));
+        var controls = el("div", "finding-controls");
+        var copy = button("quiet", "Copy command");
+        copy.addEventListener("click", function () { connectionAct("connection.copy", r.provider); });
+        controls.appendChild(copy);
+        if (r.docs) {
+          var docs = button("quiet", "Docs");
+          docs.addEventListener("click", function () {
+            invoke("connection.docs", { provider: r.provider }).then(null, function (err) { failed("connection.docs", err); });
+          });
+          controls.appendChild(docs);
+        }
+        var hide = button("quiet", "Don't show", "Don't suggest " + name(r.provider) + " again");
+        hide.addEventListener("click", function () { connectionAct("connection.dismiss", r.provider); });
+        controls.appendChild(hide);
+        how.appendChild(controls);
+        item.appendChild(how);
+      }
+      box.appendChild(item);
+    });
+    main.appendChild(box);
+  }
+
+  // connectionAct copies a command or dismisses a tool; Go leaves what
+  // happened in the note.
+  function connectionAct(command, provider) {
+    invoke(command, { provider: provider }).then(function (v) {
+      if (command === "connection.dismiss") state.connect = null;
+      show(v);
+    }, function (err) {
+      failed(command, err);
+      state.view = state.view || {};
+      state.view.error = command === "connection.dismiss"
+        ? "That didn't go through, and nothing was changed. Try again in a moment."
+        : "Couldn't copy it. Select the command and copy it yourself.";
+      render();
+    });
+  }
+
   function focus(selector) {
     var e = document.querySelector(selector);
     if (e) e.focus();
@@ -756,6 +824,7 @@
     tabs(reports, v);
     var sel = reports.filter(function (r) { return r.provider === state.selected; })[0];
     if (sel) detail(sel, v); else document.getElementById("detail").textContent = "";
+    connectionsSection(document.getElementById("detail"), v);
     coachFindings(document.getElementById("detail"), v);
     boundaryWaits(document.getElementById("detail"), v);
     var select = document.getElementById("preset");

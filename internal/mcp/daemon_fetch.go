@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/connections"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/infra/daemonhint"
 )
@@ -124,4 +125,17 @@ func FetchDaemonSources(baseURL string) (DaemonSources, error) {
 		return DaemonSources{}, fmt.Errorf("%w: %w", errDaemonUnreachable, err)
 	}
 	return out, nil
+}
+
+// FetchDaemonConnections reads the daemon's connections: per provider in
+// use or installed, whether its plan is read and, where it is not, the one
+// thing to do. A daemon too old to serve the route answers 404, an error.
+func FetchDaemonConnections(baseURL string) ([]connections.Connection, error) {
+	var out struct {
+		Connections []connections.Connection `json:"connections"`
+	}
+	if err := getDaemonJSON(baseURL, "/api/connections", &out); err != nil {
+		return nil, err
+	}
+	return out.Connections, nil
 }

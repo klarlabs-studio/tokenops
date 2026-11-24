@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 )
 
 // TestMain pins $HOME and the XDG directories to a throwaway sandbox for
@@ -25,6 +27,9 @@ func TestMain(m *testing.M) {
 	for _, k := range []string{"HOME", "USERPROFILE", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME"} {
 		os.Setenv(k, sandbox)
 	}
+	// A glance computed here probes the sandbox for installed tools,
+	// never this machine's /Applications or PATH.
+	thisMachine = func() sourceprobe.Machine { return sourceprobe.Machine{Home: sandbox} }
 
 	code := m.Run()
 	_ = os.RemoveAll(sandbox)

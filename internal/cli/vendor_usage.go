@@ -29,6 +29,7 @@ func newVendorUsageCmd() *cobra.Command {
 	cmd.AddCommand(newVendorUsageBackfillCmd())
 	cmd.AddCommand(newVendorUsageEnableCmd())
 	cmd.AddCommand(newVendorUsageSetupCmd())
+	cmd.AddCommand(newVendorUsageDismissCmd())
 	return cmd
 }
 
@@ -145,15 +146,20 @@ func newVendorUsageEnableCmd() *cobra.Command {
 file, then restarts the supervised daemon so the change is live (--no-restart
 skips that). For a local transcript reader, --disable is remembered: TokenOps
 turns a reader on by itself when its sessions appear on this machine, unless
-you switched it off.
+you switched it off. --disable on a plan source (claude-subscription, cursor,
+github-copilot, fireworks, anthropic-admin) also stops TokenOps suggesting to
+connect that provider's plan (vendor_usage.dismissed); enabling it takes that
+back.
 
 Sources:
 
   claude-subscription claude.ai subscription quota — surfaces Claude Pro/Max,
                       Team/Business, and Enterprise usage windows. Required: --session-key
                       (or env TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY).
-  cursor              cursor.com /api/usage cookie scraper. Required: --cookie
-                      (or env TOKENOPS_CURSOR_COOKIE) and --user-id.
+  cursor              cursor.com usage, read with your session. Required: the
+                      WorkosCursorSessionToken cookie, --cookie (or env
+                      TOKENOPS_CURSOR_COOKIE); the user ID is read from its
+                      start, else --user-id.
   github-copilot      api.github.com/copilot_internal/user quota poller.
                       Finds the OAuth token of the Copilot IDE plugins
                       (~/.config/github-copilot) or the Copilot CLI
@@ -186,7 +192,7 @@ history.
 Examples:
 
   tokenops vendor-usage enable claude-subscription --session-key -
-  pbpaste | tokenops vendor-usage enable cursor --cookie - --user-id 123abc
+  pbpaste | tokenops vendor-usage enable cursor --cookie -
   TOKENOPS_ANTHROPIC_ADMIN_KEY=... tokenops vendor-usage enable anthropic-admin
   tokenops vendor-usage enable github-copilot
   tokenops vendor-usage enable codex-jsonl --interval 1m
@@ -260,16 +266,20 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 			cfg.VendorUsage.ClaudeUsageMeter.Interval = f.interval
 		}
 	case "cursor":
-		cookie := envSecret(f.cookie, "TOKENOPS_CURSOR_COOKIE")
-		if enabled && (cookie == "" || f.userID == "") {
-			return fmt.Errorf("cursor requires --cookie (or TOKENOPS_CURSOR_COOKIE) AND --user-id (paste both from cursor.com devtools)")
+		cookie := cursorCookieValue(envSecret(f.cookie, "TOKENOPS_CURSOR_COOKIE"))
+		userID := f.userID
+		if userID == "" {
+			userID = cursorUserFromCookie(cookie)
+		}
+		if enabled && (cookie == "" || userID == "") {
+			return fmt.Errorf("cursor requires the WorkosCursorSessionToken cookie: TOKENOPS_CURSOR_COOKIE=… or --cookie - (signed in at cursor.com: developer tools → Application → Cookies); --user-id when the cookie does not start with your user ID")
 		}
 		cfg.VendorUsage.Cursor.Enabled = enabled
 		if cookie != "" {
 			cfg.VendorUsage.Cursor.Cookie = cookie
 		}
-		if f.userID != "" {
-			cfg.VendorUsage.Cursor.UserID = f.userID
+		if userID != "" {
+			cfg.VendorUsage.Cursor.UserID = userID
 		}
 		if f.interval > 0 {
 			cfg.VendorUsage.Cursor.Interval = f.interval
@@ -382,6 +392,11 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		return fmt.Errorf("unknown source %q; valid: %v", source, vendorUsageSources)
 	}
 
+	// Switching a plan source off says not to read that plan: TokenOps
+	// stops suggesting to connect it. Switching it on takes that back.
+	if provider := planSourceProvider[source]; provider != "" {
+		cfg.DismissProvider(provider, !enabled)
+	}
 	if err := writeMutableConfig(path, cfg); err != nil {
 		return err
 	}

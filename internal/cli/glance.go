@@ -15,9 +15,13 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/cards"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/connections"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/capability/state"
+	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -105,13 +109,16 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView
 	out := cmd.OutOrStdout()
 	report := coachcap.Status(cfg, coachLedger(), contextLevers(), now)
 	found := findings.Compute(findings.Gather(&g, &report, &cfg, findings.DefaultDir()))
+	conns := localConnections(ctx, cfg, store, g, now)
 	if view.json {
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")
 		if view.findings {
 			return enc.Encode(found)
 		}
-		return enc.Encode(g.Payload())
+		p := g.Payload()
+		p.Connections = conns
+		return enc.Encode(p)
 	}
 	opt := cards.Options{Width: terminalWidth(out), Color: terminalColor(out, color), Brief: view.brief, Now: now,
 		Findings: &found, OnlyFindings: view.findings}
@@ -123,12 +130,42 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView
 		opt.CostsLate = costCtx.Err() != nil
 		cancelCost()
 	}
-	if _, err = io.WriteString(out, cards.Render(g, opt)); err != nil || !view.findings {
+	if _, err = io.WriteString(out, cards.Render(g, opt)+footer(conns, view)); err != nil || !view.findings {
 		return err
 	}
 	ds, _ := findings.DefaultDismissals().Load(now)
 	_, err = io.WriteString(out, hiddenNote(found, ds, now))
 	return err
+}
+
+// footer is the line under the cards naming the tools in use whose plan is
+// not read; none under --findings, which lists only the findings.
+func footer(cs []connections.Connection, view glanceView) string {
+	if view.findings {
+		return ""
+	}
+	if line := alsoInUse(cs); line != "" {
+		return "\n" + line
+	}
+	return ""
+}
+
+// glanceMachine is where a glance computed here looks for installed tools;
+// tests give a sandbox.
+var glanceMachine = sourceprobe.ThisMachine
+
+// localConnections computes the connections here, as the daemon does, for
+// a glance computed without it: the readers' health is read from the
+// store, with no poll records (only the daemon has those).
+func localConnections(ctx context.Context, cfg config.Config, store *sqlite.Store, g headroom.Glance, now time.Time) []connections.Connection {
+	return connections.Compute(connections.Inputs{
+		Config:    &cfg,
+		Turns:     g.Turns,
+		Health:    state.AssessSources(ctx, cfg, store, nil, nil, now),
+		Reported:  g.Headroom.VendorRead(),
+		Installed: sourceprobe.InstalledTools(glanceMachine()),
+		Now:       now,
+	})
 }
 
 // glanceDaemonWait bounds asking the daemon. It answers the glance from
@@ -175,7 +212,7 @@ func glanceFromDaemon(cmd *cobra.Command, ask mcp.DaemonJSON, view glanceView, c
 		// are shown as not read rather than read here.
 		opt.Costs, opt.CostsLate = p.ProviderCosts, p.ProviderCostsLate || p.ProviderCosts == nil
 	}
-	if _, err := io.WriteString(out, cards.Render(p.Glance(), opt)); err != nil || !view.findings {
+	if _, err := io.WriteString(out, cards.Render(p.Glance(), opt)+footer(p.Connections, view)); err != nil || !view.findings {
 		return true, err
 	}
 	ds, _ := findings.DefaultDismissals().Load(now)

@@ -97,6 +97,7 @@ var subCLIOnly = map[string]string{
 	"task list":                 "GAP: tokenops_story reads tasks back, but not this recorded list",
 	"vendor-usage enable":       "GAP: sources other than the Claude usage meter cannot be enabled from an agent",
 	"vendor-usage backfill":     "GAP: backfill has no tool",
+	"vendor-usage dismiss":      "saying a plan is not to be read is the operator's answer to a suggestion made to them; the agent only relays it (tokenops_glance, tokenops_status)",
 }
 
 func TestCLISubcommandParity(t *testing.T) {
