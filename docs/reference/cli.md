@@ -1678,7 +1678,7 @@ vendor's windows, busiest first:
 | Aerostack | `GET /api/billing/usage` | this month's AI tokens against the plan's allowance (no reset time in the answer) |
 | Alibaba Cloud Coding Plan | `POST /data/api.json` (queryCodingPlanInstanceInfoV2, Model Studio or Bailian console) | Coding Plan 5-hour, weekly and monthly quotas (where the console accepts the plan's API key) |
 | Alibaba Cloud Coding Plan | `POST /data/api.json` (console gateway, with the console's sec_token) | Coding Plan 5-hour, weekly and monthly quotas |
-| Alibaba Cloud Token Plan | `bl usage token-plan --output json` | the 5-hour, weekly and monthly windows, from the signed-in Bailian CLI |
+| Alibaba Cloud Token Plan | `bl console call --api zeldaHttp.apikeyMgr./tokenplan/personal/api/v2/usage`; a Team plan `bl token-plan list-seats` (paged) | Personal/Solo 5-hour, weekly and monthly windows, or a Team plan's seats' credits, from the signed-in Bailian CLI |
 | Alibaba Cloud Token Plan | `POST /data/api.json` (tokenplan/personal/api/v2/usage, or GetSubscriptionSummary for a Team plan) | Personal/Solo 5-hour, weekly and monthly windows, or a Team plan's credit pool |
 | Amp | `amp usage` | subscription agent usage and orb hours, Amp Free's daily allowance, individual credits |
 | Amp | `POST ampcode.com/api/internal?userDisplayBalanceInfo` | the same figures, with an access token |
@@ -1820,7 +1820,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Aixy | `aixy-account` | each budget that applies to the key, spent and reserved against its limit | API key | CodexBar's source, the vendor's docs and fixtures |
 | Alibaba Cloud | `alibaba-account` | Coding Plan 5-hour, weekly and monthly quotas (where the console accepts the plan's API key) | API key | CodexBar's source, the vendor's docs and fixtures |
 |  | `alibaba-web` | Coding Plan 5-hour, weekly and monthly quotas | browser session | CodexBar's source, the vendor's docs and fixtures |
-| Alibaba Token Plan | `alibabatokenplan-cli` | the 5-hour, weekly and monthly windows, from the signed-in Bailian CLI | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
+| Alibaba Token Plan | `alibabatokenplan-cli` | Personal/Solo 5-hour, weekly and monthly windows, or a Team plan's seats' credits, from the signed-in Bailian CLI | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 |  | `alibabatokenplan-web` | Personal/Solo 5-hour, weekly and monthly windows, or a Team plan's credit pool | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Amp | `amp-cli` | subscription agent usage and orb hours, Amp Free's daily allowance, individual credits | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 |  | `amp-account` | the same figures, with an access token | API key | CodexBar's source, the vendor's docs and fixtures |

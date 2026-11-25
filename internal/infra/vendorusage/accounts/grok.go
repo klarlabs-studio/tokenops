@@ -29,8 +29,11 @@ func readerGrokWeb() usage.Reader { return GrokWeb{} }
 // or one given in setup; xAI management keys (xai-…) are not it.
 type Grok struct {
 	BaseURL string
-	HTTP    *http.Client
-	Now     func() time.Time
+	// WebURL overrides grok.com, asked for the share when the proxy
+	// omits it; for tests.
+	WebURL string
+	HTTP   *http.Client
+	Now    func() time.Time
 }
 
 func (Grok) Endpoint() string               { return "grok" }
@@ -93,6 +96,16 @@ func (g Grok) Read(ctx context.Context, key string) (usage.Reading, error) {
 	case c.Cap != nil && c.Used != nil && c.Cap.v > 0:
 		used, hasPct = pct(c.Used.v, c.Cap.v), true
 	}
+	if !hasPct && !start.IsZero() && !start.After(now()) && end.After(now()) {
+		// At the start of a week with no use the proxy omits the share.
+		// grok.com's billing call is asked with the same token, and only
+		// a share on its wire, or a zero it validates for an open period,
+		// is taken; the proxy's period, reset and balance stay (CodexBar
+		// ad0c5679b7). A failure leaves the share unknown.
+		if pctWeb, ok := g.webShare(ctx, token, now()); ok {
+			used, hasPct = pctWeb, true
+		}
+	}
 	if hasPct {
 		w := usage.Window{UsedPct: clampPct(used), ResetsAt: end}
 		if !start.IsZero() && !start.After(now()) && end.After(start) {
@@ -108,6 +121,24 @@ func (g Grok) Read(ctx context.Context, key string) (usage.Reading, error) {
 		return usage.Reading{}, errors.New("accounts: GET cli-chat-proxy.grok.com/v1/billing: no usage in the answer")
 	}
 	return r, nil
+}
+
+// webShare asks grok.com's billing call with the CLI token for the share
+// used; ok is false when it gives none.
+func (g Grok) webShare(ctx context.Context, token string, now time.Time) (float64, bool) {
+	u := base(g.WebURL, "https://grok.com") + "/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig"
+	body, trailer, err := grokPost(ctx, g.HTTP, u, http.Header{"Authorization": {"Bearer " + token}})
+	if err != nil {
+		return 0, false
+	}
+	if status := trailer.Get("grpc-status"); status != "" && status != "0" {
+		return 0, false
+	}
+	r, err := grokWebReading(body, now)
+	if err != nil || len(r.Windows) != 1 {
+		return 0, false
+	}
+	return r.Windows[0].UsedPct, true
 }
 
 // grokCents is {"val": n}; {} is zero, as Grok writes an amount of none.
@@ -187,7 +218,7 @@ func (g GrokWeb) Read(ctx context.Context, cookie string) (usage.Reading, error)
 		return usage.Reading{}, fmt.Errorf("%w (grok.com is read with its sso cookie)", usage.ErrAuth)
 	}
 	u := base(g.BaseURL, "https://grok.com") + "/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig"
-	body, trailer, err := grokPost(ctx, g.HTTP, u, cookie)
+	body, trailer, err := grokPost(ctx, g.HTTP, u, http.Header{"Cookie": {cookie}})
 	if err != nil {
 		return usage.Reading{}, err
 	}
@@ -207,15 +238,20 @@ func (g GrokWeb) Read(ctx context.Context, cookie string) (usage.Reading, error)
 	return grokWebReading(body, now())
 }
 
-// grokPost sends the gRPC-web request and returns the data frames' bytes
-// and the status from the headers and the trailer frame.
-func grokPost(ctx context.Context, hc *http.Client, u, cookie string) ([]byte, http.Header, error) {
+// grokPost sends the gRPC-web request with auth (a session's Cookie, or a
+// bearer token) and returns the data frames' bytes and the status from the
+// headers and the trailer frame.
+func grokPost(ctx context.Context, hc *http.Client, u string, auth http.Header) ([]byte, http.Header, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	resp, err := doWebResponse(ctx, hc, http.MethodPost, u, http.Header{
-		"Cookie": {cookie}, "Origin": {"https://grok.com"}, "Referer": {"https://grok.com/?_s=usage"}, "Accept": {"*/*"},
+	header := http.Header{
+		"Origin": {"https://grok.com"}, "Referer": {"https://grok.com/?_s=usage"}, "Accept": {"*/*"},
 		"Content-Type": {"application/grpc-web+proto"}, "X-Grpc-Web": {"1"}, "X-User-Agent": {"connect-es/2.1.1"},
-	}, grokCreditsRequest)
+	}
+	for k, v := range auth {
+		header[k] = v
+	}
+	resp, err := doWebResponse(ctx, hc, http.MethodPost, u, header, grokCreditsRequest)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -162,3 +162,34 @@ func TestGrokWebRefusalsAndUnknown(t *testing.T) {
 		t.Error("an HTML payload was read")
 	}
 }
+
+// At the start of a week with no use the proxy omits the share; grok.com's
+// billing call, asked with the same token, gives the zero it validates,
+// and the proxy's period and balance stay (CodexBar ad0c5679b7). When
+// grok.com gives nothing the share stays unknown and the balance is kept.
+func TestGrokZeroUsageWeekAsksGrokCom(t *testing.T) {
+	now := func() time.Time { return time.Unix(1779000000, 0).UTC() }
+	proxy := grokProxy(t, `{"config":{"currentPeriod":{"start":"2026-05-11T00:00:00Z","end":"2026-05-18T00:00:00Z"},"prepaidBalance":{"val":500}}}`)
+	unused := grokFixtureBytes(t, "grpc-web-unused")
+	var auth string
+	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
+		if auth != "Bearer gt" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write(unused)
+	}))
+	defer web.Close()
+	got, err := Grok{BaseURL: proxy.URL, WebURL: web.URL, Now: now}.Read(context.Background(), "gt")
+	if err != nil || len(got.Windows) != 1 || got.Windows[0].UsedPct != 0 || got.Windows[0].Name != "week" ||
+		!got.Windows[0].ResetsAt.Equal(time.Date(2026, 5, 18, 0, 0, 0, 0, time.UTC)) || !got.HasBalance || auth != "Bearer gt" {
+		t.Fatalf("got %+v, %v (auth %q)", got, err, auth)
+	}
+	refused := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusForbidden) }))
+	defer refused.Close()
+	got, err = Grok{BaseURL: proxy.URL, WebURL: refused.URL, Now: now}.Read(context.Background(), "gt")
+	if err != nil || len(got.Windows) != 0 || !got.HasBalance {
+		t.Errorf("grok.com refused: %+v, %v", got, err)
+	}
+}
