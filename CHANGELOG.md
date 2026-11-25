@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.126.0 - 2026-11-25
+
 ### Added
 
 - **providers:** the Gemini app's own 5-hour and weekly limits for Google AI Pro and Ultra (`tokenops vendor-usage setup gemini`, with your Google browser session), and Xiaomi MiMo's Token Plan with its API key (`MIMO_API_KEY`), both following CodexBar. Neither is verified against a live account yet.
@@ -16,8 +18,6 @@
 ### Fixed
 
 - **providers:** Grok keeps its weekly window at the start of a week with no use (the CLI proxy omits the share; grok.com is asked with the same sign-in), and the Alibaba Token Plan's Bailian CLI reads a Team plan's seats' credits page by page and a Personal plan through `bl console call`, as `bl usage token-plan` no longer matches, following CodexBar.
-
-### Fixed
 
 - **providers:** readers follow what changed at the vendors since October, as CodexBar found it: one malformed entry in claude.ai's limits no longer hides every window; Notion's migrated Business workspaces, Synthetic's weekly plan limit, TypeSafe's new billing endpoint, Charm Hyper's team dashboard, MuseAI's new chunks, Helmcode tenants on credits, the Ollama settings page's credit wallet and its older 5-hour and weekly balance answer are read; kiro-cli is asked for its report with `--v2`; WorkBuddy's reset follows the paid cycle, not a trial's; an ended Copilot subscription and an Amp seat paid by its enterprise say so; and Bedrock and Synthetic answers with no data are errors rather than $0 or an empty reading.
 
