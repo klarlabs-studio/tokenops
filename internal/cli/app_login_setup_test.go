@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,8 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/applogin"
 	"go.klarlabs.de/tokenops/internal/infra/keychain"
+
+	_ "modernc.org/sqlite"
 )
 
 const cliAppToken = "tok-CLI-APP-SECRET"
@@ -156,6 +159,72 @@ func TestStatusRendersGrants(t *testing.T) {
 	for _, want := range []string{"kilo", "the kilo CLI", "auth.json", "kilo.access", "app.kilo.ai"} {
 		if !strings.Contains(b.String(), want) {
 			t.Errorf("omits %q:\n%s", want, b.String())
+		}
+	}
+}
+
+// Cursor's sign-in is read from a copy of its state database, one column
+// the descriptor's query names. Setup shows that, asks, and records a grant
+// that holds the database and the host, never the token.
+func TestAppLoginSetupCursorShowsTheDatabaseAndGrants(t *testing.T) {
+	home := t.TempDir()
+	const token = "eyJ-CURSOR-APP-SECRET"
+	path := filepath.Join(home, "Library/Application Support/Cursor/User/globalStorage/state.vscdb")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeCursorStateDB(t, path, token)
+	prevEnv, prevVerify := appLoginEnv, verifyAppLogin
+	appLoginEnv = func(disabled bool) applogin.Env {
+		return applogin.Env{Home: home, Getenv: func(string) string { return "" }, KeychainDisabled: disabled}
+	}
+	verifyAppLogin = func(_ context.Context, id string, _ providersetup.AppLogin, _ applogin.Env) ([]string, error) {
+		return []string{"weekly pool: 37% used"}, nil
+	}
+	t.Cleanup(func() { appLoginEnv, verifyAppLogin = prevEnv, prevVerify })
+
+	cfgPath := seedConfig(t)
+	out, err := runCookieSetupCmd(t, "y\n", "cursor", "--use-app-login", "--config", cfgPath, "--no-restart")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	for _, want := range []string{path, "column value", "cursorAuth/accessToken", "cursor.com", "Cursor's own sign-in", "[y/N]", "weekly pool: 37% used"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output omits %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, token) {
+		t.Errorf("the token is shown:\n%s", out)
+	}
+	cfg, err := config.ReadMutable(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := cfg.VendorUsage.Grants["cursor"]
+	if g.App != "Cursor" || g.Item != path || g.Kind != "sqlite" || g.Host != "cursor.com" || len(g.Fields) != 1 || g.Fields[0] != "value" {
+		t.Errorf("grant %+v", g)
+	}
+	raw, _ := os.ReadFile(cfgPath)
+	if strings.Contains(string(raw), token) {
+		t.Error("the config holds the token")
+	}
+}
+
+// writeCursorStateDB writes Cursor's state database with its access token
+// in the ItemTable row the descriptor reads.
+func writeCursorStateDB(t *testing.T, path, token string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	for _, q := range []string{
+		`CREATE TABLE ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)`,
+		`INSERT INTO ItemTable VALUES ('cursorAuth/accessToken', '` + token + `')`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

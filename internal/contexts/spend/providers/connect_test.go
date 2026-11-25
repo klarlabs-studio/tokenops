@@ -14,7 +14,7 @@ func TestConnectAction(t *testing.T) {
 		provider, source, command, needs string
 		none                             bool
 	}{
-		{provider: "cursor", source: "cursor-web", command: "TOKENOPS_CURSOR_COOKIE=… tokenops vendor-usage enable cursor", needs: "WorkosCursorSessionToken"},
+		{provider: "cursor", source: "cursor-app", command: "tokenops vendor-usage setup cursor --use-app-login", needs: "Cursor's own sign-in"},
 		{provider: "anthropic", source: "claude-code-statusline", command: "tokenops statusline install", needs: "nothing secret"},
 		{provider: "github", source: "github-copilot", command: "tokenops vendor-usage enable github-copilot", needs: "nothing to paste"},
 		{provider: "fireworks", source: "fireworks-usage", command: "tokenops vendor-usage enable fireworks", needs: "Fireworks key"},

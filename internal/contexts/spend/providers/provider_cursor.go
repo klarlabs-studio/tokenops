@@ -19,15 +19,33 @@ func providerCursor() Descriptor {
 				Package: "internal/contexts/spend/vendorusage/cursorturns",
 				Fixture: "internal/contexts/spend/vendorusage/cursorturns/poller_test.go",
 				Shows:   "per-turn consumption Cursor's stop hook records"},
+			// Cursor's desktop app keeps its own sign-in in a local database
+			// (CodexBar's CursorAppAuth, Verified FromCodexBar): read only
+			// once granted (ADR 0013), from a copy of the database, and
+			// never refreshed. Cursor 3.27 and later keep the token encrypted;
+			// the reader says so and does not decrypt it.
+			{Name: "cursor_app", Tag: "cursor-app", Kind: Subscription, Credential: AppLogin,
+				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
+				Reference: "CodexBar Sources/CodexBarCore/Providers/Cursor/CursorAppAuth.swift (CursorAppAuthStore, CursorStatusProbe+AppAuth)",
+				AppLogins: []AppLoginItem{{App: "Cursor", Kind: AppLoginSQLite,
+					Paths:  []string{"~/Library/Application Support/Cursor/User/globalStorage/state.vscdb", "~/.config/Cursor/User/globalStorage/state.vscdb"},
+					Query:  "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken' LIMIT 1",
+					Fields: []string{"value"},
+					Host:   "cursor.com"}},
+				Endpoint: "`GET /api/usage-summary`, `POST /api/dashboard/get-sand-usage-status`",
+				Shows:    "the weekly pool shared across Cursor and Grok, or the billing cycle's included usage, from cursor.com",
+				Connect: &Connect{
+					Command: "tokenops vendor-usage setup cursor --use-app-login",
+					Needs:   "Cursor's own sign-in on this Mac; asks first",
+				}},
 			{Name: "cursor_web", Tag: "cursor-web", Kind: Subscription, Credential: BrowserCookie,
 				Switch: SwitchConfig, Reader: BespokeReader, Verified: FromCodexBar,
 				Reference: "CodexBar docs/cursor.md and Sources/CodexBarCore/Providers/Cursor (usage-summary, get-sand-usage-status)",
 				Package:   "internal/contexts/spend/vendorusage/cursor",
 				Fixture:   "internal/contexts/spend/vendorusage/cursor/cursor_test.go",
 				Shows:     "the weekly pool, or the billing cycle's included usage (legacy: requests), from cursor.com",
-				// The session cookie is the one way in today. Reading the
-				// Cursor app's own sign-in instead is a later source; it
-				// will come before this one and carry its own Connect.
+				// The session cookie is the way in when Cursor's app sign-in
+				// is not granted (cursor_app comes before this one).
 				Connect: &Connect{
 					Command: "TOKENOPS_CURSOR_COOKIE=… tokenops vendor-usage enable cursor",
 					Needs:   "your cursor.com browser session (the WorkosCursorSessionToken cookie)",
