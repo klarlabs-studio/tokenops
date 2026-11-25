@@ -1,6 +1,7 @@
 package sourceprobe
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
+	"go.klarlabs.de/tokenops/internal/infra/applogin"
 )
 
 // Machine is where the presence probes look: the home directory, the
@@ -116,4 +118,30 @@ func (m Machine) tilde(path string) string {
 func isDir(path string) bool {
 	fi, err := os.Stat(path)
 	return err == nil && fi.IsDir()
+}
+
+// SignIns is, per provider, whether one of the other applications' sign-ins
+// its descriptor reads is on m. It asks only whether a file the descriptor
+// names exists, the same check setup makes before it asks: nothing is read,
+// no process is listed, and a Keychain item (whose presence cannot be told
+// without reading it) counts as present, as setup offers it.
+func SignIns(m Machine) map[string]bool {
+	out := map[string]bool{}
+	env := applogin.Env{Home: m.Home, Getenv: m.Getenv}
+	for _, d := range providers.All() {
+		s, ok := d.AppLoginSource()
+		if !ok {
+			continue
+		}
+		var files []providers.AppLoginItem
+		for _, a := range s.AppLogins {
+			if a.Kind != providers.AppLoginProcess {
+				files = append(files, a)
+			}
+		}
+		if _, err := applogin.Locate(context.Background(), files, env); err == nil {
+			out[string(d.ID)] = true
+		}
+	}
+	return out
 }

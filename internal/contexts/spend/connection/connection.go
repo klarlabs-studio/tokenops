@@ -83,6 +83,11 @@ type Inputs struct {
 	// Installed is, per provider, what was found of its tool: an app
 	// bundle's path, a directory, "<binary> on PATH".
 	Installed map[string][]string
+	// SignIns is, per provider, whether another application's sign-in its
+	// descriptor reads is on this machine, found without reading it. An
+	// app-login source is offered only when it is; otherwise the next way
+	// in is.
+	SignIns map[string]bool
 	// Sources are the plan sources' states, by tag; a source absent is
 	// off with nothing known.
 	Sources []Source
@@ -238,7 +243,13 @@ func classifyOne(d providers.Descriptor, in Inputs, sources map[string]Source) (
 		c.State, c.Source = Connected, ps.switched.Tag
 		c.Summary = d.DisplayName + " — connected, waiting for the first reading"
 	default:
-		a, ok := d.ConnectAction()
+		a, ok := d.ConnectActionIf(func(src providers.Source) bool {
+			return src.Credential != providers.AppLogin || in.SignIns[id]
+		})
+		if !ok {
+			// Nothing else connects it: say the app login, as before.
+			a, ok = d.ConnectAction()
+		}
 		if !ok || len(c.Evidence) == 0 {
 			return Connection{}, false
 		}

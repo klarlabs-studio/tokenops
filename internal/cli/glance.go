@@ -164,6 +164,7 @@ func localConnections(ctx context.Context, cfg config.Config, store *sqlite.Stor
 		Health:    state.AssessSources(ctx, cfg, store, nil, nil, now),
 		Reported:  g.Headroom.VendorRead(),
 		Installed: sourceprobe.InstalledTools(glanceMachine()),
+		SignIns:   sourceprobe.SignIns(glanceMachine()),
 		Now:       now,
 	})
 }

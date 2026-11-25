@@ -100,7 +100,8 @@ func resourceGlance(ctx context.Context, d PlanDeps) (*resourceGlanceResult, err
 	// Without the daemon the readers' health is unknown: a source switched
 	// on reads as connected, never as failing.
 	p.Connections = connections.Compute(connections.Inputs{Config: deps.Config, Turns: g.Turns,
-		Reported: g.Headroom.VendorRead(), Installed: sourceprobe.InstalledTools(d.machine()), Now: now})
+		Reported: g.Headroom.VendorRead(), Installed: sourceprobe.InstalledTools(d.machine()),
+		SignIns: sourceprobe.SignIns(d.machine()), Now: now})
 	return p, nil
 }
 

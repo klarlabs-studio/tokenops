@@ -47,7 +47,10 @@ type Inputs struct {
 	Reported []string
 	// Installed is, per provider, what of its tool is on this machine.
 	Installed map[string][]string
-	Now       time.Time
+	// SignIns is, per provider, whether another application's sign-in is
+	// on this machine (sourceprobe.SignIns).
+	SignIns map[string]bool
+	Now     time.Time
 }
 
 // Compute is every provider's connection.
@@ -68,6 +71,7 @@ func Compute(in Inputs) []Connection {
 		Now:       in.Now,
 		Use:       use,
 		Installed: in.Installed,
+		SignIns:   in.SignIns,
 		Sources:   sourcesOf(cfg, in.Health),
 		Reported:  reported,
 		Dismissed: cfg.DismissedProviders(),
