@@ -223,6 +223,16 @@ func checkAppLogin(t *testing.T, id string, s Source, a AppLoginItem) {
 		if a.Kind == AppLoginSQLite && !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(a.Query)), "SELECT ") {
 			t.Errorf("%s/%s: a SQLite app login reads with one SELECT", id, s.Tag)
 		}
+		if u := a.Unlock; u != nil {
+			switch {
+			case a.Kind != AppLoginSQLite:
+				t.Errorf("%s/%s: only a SQLite sign-in is opened with a Keychain item", id, s.Tag)
+			case a.Sealed == "":
+				t.Errorf("%s/%s: an unlock names the prefix of the sealed value", id, s.Tag)
+			case u.Kind != AppLoginKeychain || u.Service == "" || u.Account == "":
+				t.Errorf("%s/%s: an unlock is a Keychain item with its service and account", id, s.Tag)
+			}
+		}
 	case AppLoginKeychain:
 		if a.Service == "" {
 			t.Errorf("%s/%s: a Keychain app login names its service", id, s.Tag)

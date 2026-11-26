@@ -1692,6 +1692,7 @@ vendor's windows, busiest first:
 | CodeRabbit | `coderabbit usage` | reviews this billing period, a count with no allowance (no percentage) |
 | Command Code | `GET /internal/billing/credits`, `/internal/billing/subscriptions` (api.commandcode.ai); with an API key, the same under `/alpha` | 5-hour and weekly limits, the monthly credit grant used, and purchased credits |
 | Cosmic AI | `GET /v3/projects/usage` (dapi.cosmicjs.com) | a project's AI input and output tokens against the plan's allowances (no reset time in the answer) |
+| Cursor | `GET /api/usage-summary`, `POST /api/dashboard/get-sand-usage-status` | the weekly pool shared across Cursor and Grok, or the billing cycle's included usage, from cursor.com |
 | Devin | `GET app.devin.ai/api/<org>/billing/quota/usage` | the daily and weekly quota used, and the extra-usage balance |
 | DevPass (LLM Gateway) | `GET /v1/key` | the cycle's plan credits and the premium weekly window; on pay-as-you-go, the key's spend against its limit |
 | Doubao | `arkcli usage plan --format json` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan), from the signed-in arkcli |
@@ -1847,6 +1848,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Command Code | `commandcode-web` | 5-hour and weekly limits, the monthly credit grant used, and purchased credits | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Cosmic AI | `cosmic-project` | a project's AI input and output tokens against the plan's allowances (no reset time in the answer) | API key | CodexBar's source, the vendor's docs and fixtures |
 | Cursor | `cursor-hook` | per-turn consumption Cursor's stop hook records | local files | public docs and fixtures |
+|  | `cursor-app` | the weekly pool shared across Cursor and Grok, or the billing cycle's included usage, from cursor.com | another app's sign-in, once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 |  | `cursor-web` | the weekly pool, or the billing cycle's included usage (legacy: requests), from cursor.com | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Deepgram | `deepgram-account` | prepaid USD balance left, across the key's projects | API key | CodexBar's source, the vendor's docs and fixtures |
 | DeepInfra | `deepinfra-account` | spend since the last invoice, the limit, prepaid credit | API key | public docs and fixtures |

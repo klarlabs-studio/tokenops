@@ -444,8 +444,18 @@ type AppLogin struct {
 // this machine, with the Keychain read only quietly and not at all when
 // keychainDisabled.
 func AppLoginEnv(keychainDisabled bool) applogin.Env {
-	return applogin.Env{KeychainDisabled: keychainDisabled}
+	return applogin.Env{KeychainDisabled: keychainDisabled, Prompt: keychainPrompt}
 }
+
+// keychainPrompt reads a sign-in's Keychain item with the operating system's
+// prompt, for setup only: the operator has just been shown that the item is
+// read, and macOS asks once to allow it.
+func keychainPrompt(ctx context.Context, item keychain.Item) (string, error) {
+	return keychain.Prompting(ctx, item, keychainPromptWait)
+}
+
+// keychainPromptWait bounds how long setup waits for the operator's answer.
+const keychainPromptWait = 2 * time.Minute
 
 // ErrNoAppLogin is a provider no other application's sign-in reads.
 var ErrNoAppLogin = errors.New("no other application's sign-in reads this provider")
@@ -503,10 +513,14 @@ func ApplyGrant(cfg *config.Config, id string, a AppLogin, now time.Time) {
 		cfg.VendorUsage.Grants = map[string]config.AppLoginGrant{}
 	}
 	l := a.located
-	cfg.VendorUsage.Grants[id] = config.AppLoginGrant{
+	g := config.AppLoginGrant{
 		App: l.Spec.App, Kind: string(l.Spec.Kind), Item: l.Item, FromEnv: l.FromEnv,
 		Fields: append([]string(nil), l.Spec.Fields...), Host: l.Spec.Host, GrantedAt: now.UTC(),
 	}
+	if u := l.Spec.Unlock; u != nil {
+		g.UnlockService, g.UnlockAccount = u.Service, u.Account
+	}
+	cfg.VendorUsage.Grants[id] = g
 }
 
 // RevokeGrant removes provider id's grant, reporting whether there was one.
@@ -542,11 +556,16 @@ func Grants(cfg config.Config, env applogin.Env) []Grant {
 	for _, id := range ids {
 		g := cfg.VendorUsage.Grants[id]
 		row := Grant{Provider: id, App: g.App, Host: g.Host, GrantedAt: g.GrantedAt}
-		row.What = applogin.Located{Spec: providers.AppLoginItem{Kind: providers.AppLoginKind(g.Kind), Fields: g.Fields,
-			Service: g.Item, Process: g.Item}, Item: g.Item}.Describe()
+		spec := providers.AppLoginItem{Kind: providers.AppLoginKind(g.Kind), Fields: g.Fields,
+			Service: g.Item, Process: g.Item}
+		if g.UnlockService != "" {
+			spec.Unlock = &providers.AppLoginItem{Kind: providers.AppLoginKeychain, Service: g.UnlockService, Account: g.UnlockAccount}
+		}
+		row.What = applogin.Located{Spec: spec, Item: g.Item}.Describe()
 		if d, ok := providers.Lookup(id); ok {
 			if s, ok := d.AppLoginSource(); ok {
-				_, row.Current = applogin.Granted(s.AppLogins, g.Kind, g.Item, g.Fields, g.Host, g.FromEnv, env)
+				unlock := keychain.Item{Service: g.UnlockService, Account: g.UnlockAccount}
+				_, row.Current = applogin.Granted(s.AppLogins, g.Kind, g.Item, g.Fields, g.Host, g.FromEnv, unlock, env)
 			}
 		}
 		out = append(out, row)

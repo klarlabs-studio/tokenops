@@ -12,6 +12,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/internal/infra/applogin"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
+	"go.klarlabs.de/tokenops/internal/infra/keychain"
 	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
 )
 
@@ -187,7 +188,8 @@ func grantedCredentials(cfg config.Config, readers []accounts.Reader, env applog
 		if endpoint == "" {
 			continue
 		}
-		located, ok := applogin.Granted(s.AppLogins, g.Kind, g.Item, g.Fields, g.Host, g.FromEnv, env)
+		unlock := keychain.Item{Service: g.UnlockService, Account: g.UnlockAccount}
+		located, ok := applogin.Granted(s.AppLogins, g.Kind, g.Item, g.Fields, g.Host, g.FromEnv, unlock, env)
 		if !ok {
 			continue
 		}

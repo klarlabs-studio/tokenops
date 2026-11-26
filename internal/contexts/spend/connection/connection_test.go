@@ -32,6 +32,22 @@ func TestClassify(t *testing.T) {
 			kinds:   []EvidenceKind{Turns},
 		},
 		{
+			name:    "used recently, Cursor's app sign-in on this machine: the app login is offered first",
+			in:      Inputs{Use: map[string]Use{"cursor": recent}, SignIns: map[string]bool{"cursor": true}},
+			want:    NotConnected,
+			source:  "cursor-app",
+			command: "tokenops vendor-usage setup cursor --use-app-login",
+			kinds:   []EvidenceKind{Turns},
+		},
+		{
+			name:    "app sign-in on this machine but nothing to connect for it: the cookie route stays",
+			in:      Inputs{Use: map[string]Use{"cursor": recent}, SignIns: map[string]bool{"kiro": true}},
+			want:    NotConnected,
+			source:  "cursor-web",
+			command: "TOKENOPS_CURSOR_COOKIE=… tokenops vendor-usage enable cursor",
+			kinds:   []EvidenceKind{Turns},
+		},
+		{
 			name:    "installed only: not connected, said as installed",
 			in:      Inputs{Installed: map[string][]string{"cursor": {"/Applications/Cursor.app"}}},
 			want:    NotConnected,

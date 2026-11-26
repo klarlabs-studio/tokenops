@@ -32,6 +32,7 @@ func connectionsFn(cfg config.Config, machine func() sourceprobe.Machine) proxy.
 			Health:    health,
 			Reported:  g.Headroom.VendorRead(),
 			Installed: sourceprobe.InstalledTools(machine()),
+			SignIns:   sourceprobe.SignIns(machine()),
 			Now:       now,
 		})
 	}

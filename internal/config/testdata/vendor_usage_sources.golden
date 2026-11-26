@@ -32,6 +32,7 @@ coderabbit_cli	coderabbit-cli
 commandcode_web	commandcode-web
 cosmic_project	cosmic-project
 cursor_turns (hook ledger)	cursor-hook
+cursor_app	cursor-app
 cursor_web	cursor-web
 deepgram_account	deepgram-account
 deepinfra_account	deepinfra-account

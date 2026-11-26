@@ -369,6 +369,13 @@ type AppLoginItem struct {
 	Markers []string
 	// Host is where the token is sent: the only place it goes.
 	Host string
+	// Unlock is, for an SQLite sign-in whose value Cursor keeps encrypted,
+	// the Keychain item whose password opens it (Chromium's macOS scheme).
+	// Only a value starting with Sealed is decrypted; any other is read as
+	// it is. The grant covers this item as well as the database.
+	Unlock *AppLoginItem
+	// Sealed is the prefix of a value Unlock opens.
+	Sealed string
 }
 
 // Command is a vendor CLI run as a usage source. It is run with fixed

@@ -59,6 +59,11 @@ type AppLoginGrant struct {
 	Fields []string `yaml:"fields"`
 	// Host is the one host the token is sent to.
 	Host string `yaml:"host"`
+	// UnlockService and UnlockAccount name the Keychain item a sealed
+	// sign-in is opened with, when the grant covers one (Cursor's safe
+	// storage key). Empty for a sign-in not sealed.
+	UnlockService string `yaml:"unlock_service,omitempty"`
+	UnlockAccount string `yaml:"unlock_account,omitempty"`
 	// GrantedAt is when the operator granted it.
 	GrantedAt time.Time `yaml:"granted_at"`
 }

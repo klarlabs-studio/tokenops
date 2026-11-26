@@ -61,12 +61,19 @@ func (s Source) Automatic() bool {
 // organisation's spend. False when nothing the operator does connects it:
 // a provider in the catalog only, or one whose plan is read by itself.
 func (d Descriptor) ConnectAction() (Action, bool) {
+	return d.ConnectActionIf(func(Source) bool { return true })
+}
+
+// ConnectActionIf is ConnectAction over the sources usable says may be
+// offered: a source whose sign-in is not on this machine is passed over, so
+// the operator is pointed at the next way in (Cursor's cookie) instead.
+func (d Descriptor) ConnectActionIf(usable func(Source) bool) (Action, bool) {
 	subscription := false
 	for _, s := range d.Sources {
 		subscription = subscription || s.Kind == Subscription
 	}
 	for _, s := range d.Sources {
-		if s.Kind == LocalLog || (subscription && s.Kind != Subscription) || s.Automatic() {
+		if s.Kind == LocalLog || (subscription && s.Kind != Subscription) || s.Automatic() || !usable(s) {
 			continue
 		}
 		if c, ok := d.connectOf(s); ok {
