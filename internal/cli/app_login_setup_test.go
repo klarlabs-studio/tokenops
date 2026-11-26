@@ -188,7 +188,7 @@ func TestAppLoginSetupCursorShowsTheDatabaseAndGrants(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	for _, want := range []string{path, "column value", "cursorAuth/accessToken", "cursor.com", "Cursor's own sign-in", "[y/N]", "weekly pool: 37% used"} {
+	for _, want := range []string{path, "column value", "cursorAuth/accessToken", "cursor.com", "Cursor's own sign-in", "Cursor Safe Storage", `account "Cursor Key"`, "[y/N]", "weekly pool: 37% used"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output omits %q:\n%s", want, out)
 		}
@@ -201,7 +201,8 @@ func TestAppLoginSetupCursorShowsTheDatabaseAndGrants(t *testing.T) {
 		t.Fatal(err)
 	}
 	g := cfg.VendorUsage.Grants["cursor"]
-	if g.App != "Cursor" || g.Item != path || g.Kind != "sqlite" || g.Host != "cursor.com" || len(g.Fields) != 1 || g.Fields[0] != "value" {
+	if g.App != "Cursor" || g.Item != path || g.Kind != "sqlite" || g.Host != "cursor.com" || len(g.Fields) != 1 || g.Fields[0] != "value" ||
+		g.UnlockService != "Cursor Safe Storage" || g.UnlockAccount != "Cursor Key" {
 		t.Errorf("grant %+v", g)
 	}
 	raw, _ := os.ReadFile(cfgPath)

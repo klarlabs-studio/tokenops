@@ -64,6 +64,9 @@ type Env struct {
 	// Processes lists this user's processes; nil lists them from the
 	// system.
 	Processes func(ctx context.Context) ([]Process, error)
+	// Prompt reads a Keychain item with the operating system's prompt. Only
+	// setup, for a grant the operator is shown, sets it; nil never prompts.
+	Prompt func(ctx context.Context, item keychain.Item) (string, error)
 }
 
 func (e Env) home() (string, error) {
@@ -114,7 +117,11 @@ func (l Located) Describe() string {
 	case providers.AppLoginProcess:
 		return fmt.Sprintf("the command line of %s's running %s process: %s", l.Spec.App, l.Spec.Process, fields)
 	case providers.AppLoginSQLite:
-		return fmt.Sprintf("the database %s, column %s (%s)", l.Item, fields, l.Spec.Query)
+		s := fmt.Sprintf("the database %s, column %s (%s)", l.Item, fields, l.Spec.Query)
+		if u := l.Spec.Unlock; u != nil {
+			s += fmt.Sprintf("; opened with the Keychain item %q (account %q), read to decrypt it", u.Service, u.Account)
+		}
+		return s
 	case providers.AppLoginEnvFile:
 		return fmt.Sprintf("the file %s, variable %s", l.Item, fields)
 	case providers.AppLoginTextFile:
@@ -186,9 +193,9 @@ func isFile(p string) bool {
 // specs, with the same kind, fields and host. A grant is consent to read
 // exactly what the operator was shown: when the descriptor changes what it
 // would read or where it would send it, the grant no longer covers it.
-func Granted(specs []providers.AppLoginItem, kind, item string, fields []string, host string, fromEnv bool, env Env) (Located, bool) {
+func Granted(specs []providers.AppLoginItem, kind, item string, fields []string, host string, fromEnv bool, unlock keychain.Item, env Env) (Located, bool) {
 	for _, s := range specs {
-		if string(s.Kind) != kind || s.Host != host || !slices.Equal(s.Fields, fields) {
+		if string(s.Kind) != kind || s.Host != host || !slices.Equal(s.Fields, fields) || unlock != unlockOf(s) {
 			continue
 		}
 		switch s.Kind {
@@ -210,6 +217,15 @@ func Granted(specs []providers.AppLoginItem, kind, item string, fields []string,
 		}
 	}
 	return Located{}, false
+}
+
+// unlockOf is the Keychain item a sign-in's value is opened with, zero when
+// it is not sealed.
+func unlockOf(s providers.AppLoginItem) keychain.Item {
+	if s.Unlock == nil {
+		return keychain.Item{}
+	}
+	return keychain.Item{Service: s.Unlock.Service, Account: s.Unlock.Account}
 }
 
 // Read reads the token from a located sign-in: the one field's value, or,
@@ -263,7 +279,11 @@ func read(ctx context.Context, l Located, env Env) (map[string]string, error) {
 		}
 		return values, nil
 	case providers.AppLoginSQLite:
-		return readSQLite(ctx, l.Item, s)
+		values, err := readSQLite(ctx, l.Item, s)
+		if err != nil {
+			return nil, err
+		}
+		return unlockValues(ctx, values, s, env)
 	}
 	raw, err := readFile(l.Item)
 	if err != nil {
@@ -460,6 +480,64 @@ func envValues(raw []byte, fields []string) map[string]string {
 		out[k] = v
 	}
 	return out
+}
+
+// unlockValues opens each sealed value of a sign-in with the password of its
+// Keychain item. The item is read at most once, and only when a value needs
+// it; a value that is not sealed is left as it is.
+func unlockValues(ctx context.Context, values map[string]string, s providers.AppLoginItem, env Env) (map[string]string, error) {
+	if s.Unlock == nil {
+		return values, nil
+	}
+	var password string
+	read := false
+	for f, v := range values {
+		if !strings.HasPrefix(v, s.Sealed) {
+			continue
+		}
+		if !read {
+			p, err := unlockPassword(ctx, *s.Unlock, env)
+			if err != nil {
+				return nil, err
+			}
+			password, read = p, true
+		}
+		plain, err := openSealed(v, s.Sealed, password)
+		if err != nil {
+			return nil, fmt.Errorf("applogin: %s: %s does not open with the Keychain item %q", s.App, fieldName(f), s.Unlock.Service)
+		}
+		values[f] = plain
+	}
+	return values, nil
+}
+
+// unlockPassword is the password of a sign-in's Keychain item: read with the
+// operator's prompt when setup gave one, else quietly. Never with
+// keychain.disabled.
+func unlockPassword(ctx context.Context, u providers.AppLoginItem, env Env) (string, error) {
+	if env.KeychainDisabled {
+		return "", keychain.ErrDisabled
+	}
+	item := keychain.Item{Service: u.Service, Account: u.Account}
+	var (
+		p   string
+		err error
+	)
+	switch {
+	case env.Prompt != nil:
+		p, err = env.Prompt(ctx, item)
+	case env.Keychain != nil:
+		p, err = env.Keychain(item)
+	default:
+		p, err = keychain.Quiet(item)
+	}
+	if err != nil {
+		if errors.Is(err, keychain.ErrNotFound) {
+			return "", fmt.Errorf("%w: no Keychain item %q", ErrNotFound, u.Service)
+		}
+		return "", fmt.Errorf("applogin: Keychain item %q: %w", u.Service, err)
+	}
+	return p, nil
 }
 
 // readKeychain reads a Keychain item quietly; its value is the token, or

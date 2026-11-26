@@ -31,7 +31,12 @@ func providerCursor() Descriptor {
 					Paths:  []string{"~/Library/Application Support/Cursor/User/globalStorage/state.vscdb", "~/.config/Cursor/User/globalStorage/state.vscdb"},
 					Query:  "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken' LIMIT 1",
 					Fields: []string{"value"},
-					Host:   "cursor.com"}},
+					Host:   "cursor.com",
+					// Cursor 3.27 and later keep the token sealed under its
+					// Electron safe-storage key (CodexBar #4790).
+					Unlock: &AppLoginItem{App: "Cursor", Kind: AppLoginKeychain,
+						Service: "Cursor Safe Storage", Account: "Cursor Key", Fields: []string{""}},
+					Sealed: "cursor-safe-storage:v1:"}},
 				Endpoint: "`GET /api/usage-summary`, `POST /api/dashboard/get-sand-usage-status`",
 				Shows:    "the weekly pool shared across Cursor and Grok, or the billing cycle's included usage, from cursor.com",
 				Connect: &Connect{

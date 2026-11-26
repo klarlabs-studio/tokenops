@@ -1,7 +1,12 @@
 package accounts
 
 import (
+	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/pbkdf2"
+	"crypto/sha1" // #nosec G505 -- Chromium OSCrypt is PBKDF2-SHA1
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -19,7 +24,11 @@ import (
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	cursorusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursor"
 	"go.klarlabs.de/tokenops/internal/infra/applogin"
+	"go.klarlabs.de/tokenops/internal/infra/keychain"
 )
+
+// cursorUnlock is the Keychain item Cursor keeps its database key under.
+var cursorUnlock = keychain.Item{Service: "Cursor Safe Storage", Account: "Cursor Key"}
 
 var cursorNow = time.Date(2026, 11, 25, 12, 0, 0, 0, time.UTC)
 
@@ -188,13 +197,90 @@ func TestCursorGrantEndsWithTheDescriptor(t *testing.T) {
 	}
 	item := "/Users/me/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
 	env := applogin.Env{Home: "/Users/me", Getenv: func(string) string { return "" }}
-	if _, ok := applogin.Granted(s.AppLogins, "sqlite", item, []string{"value"}, "cursor.com", false, env); !ok {
+	if _, ok := applogin.Granted(s.AppLogins, "sqlite", item, []string{"value"}, "cursor.com", false, cursorUnlock, env); !ok {
 		t.Fatal("the grant the descriptor shows is not covered by it")
 	}
-	if _, ok := applogin.Granted(s.AppLogins, "sqlite", item, []string{"email"}, "cursor.com", false, env); ok {
+	if _, ok := applogin.Granted(s.AppLogins, "sqlite", item, []string{"email"}, "cursor.com", false, cursorUnlock, env); ok {
 		t.Error("a grant covers another column")
 	}
-	if _, ok := applogin.Granted(s.AppLogins, "sqlite", item, []string{"value"}, "example.com", false, env); ok {
+	if _, ok := applogin.Granted(s.AppLogins, "sqlite", item, []string{"value"}, "example.com", false, cursorUnlock, env); ok {
 		t.Error("a grant covers another host")
+	}
+}
+
+// sealCursorForTest seals value the way Cursor 3.27 does, for a fixture:
+// Chromium's v10 AES-128-CBC under the PBKDF2 key of the Keychain password.
+func sealCursorForTest(t *testing.T, value, password string) string {
+	t.Helper()
+	key, err := pbkdf2.Key(sha1.New, password, []byte("saltysalt"), 1003, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad := aes.BlockSize - len(value)%aes.BlockSize
+	pt := append([]byte(value), bytes.Repeat([]byte{byte(pad)}, pad)...)
+	ct := make([]byte, len(pt))
+	cipher.NewCBCEncrypter(block, bytes.Repeat([]byte{' '}, aes.BlockSize)).CryptBlocks(ct, pt)
+	return "cursor-safe-storage:v1:" + base64.StdEncoding.EncodeToString(append([]byte("v10"), ct...))
+}
+
+// A sealed sign-in is opened with the granted Keychain item and reads the
+// plan the same way a plain one does.
+func TestCursorGrantOpensASealedSignIn(t *testing.T) {
+	home := t.TempDir()
+	const password = "test-only-safe-storage-password"
+	token := cursorJWT(t, "auth0|user_01ABC", cursorNow.Add(time.Hour))
+	path := filepath.Join(home, "Library/Application Support/Cursor/User/globalStorage/state.vscdb")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`CREATE TABLE ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)`,
+		`INSERT INTO ItemTable VALUES ('cursorAuth/accessToken', '` + sealCursorForTest(t, token, password) + `')`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = db.Close()
+
+	var asked []keychain.Item
+	env := applogin.Env{Home: home, Getenv: func(string) string { return "" },
+		Keychain: func(i keychain.Item) (string, error) {
+			asked = append(asked, i)
+			if i != cursorUnlock {
+				return "", keychain.ErrNotFound
+			}
+			return password, nil
+		}}
+	d, _ := providers.Lookup("cursor")
+	s, ok := d.AppLoginSource()
+	if !ok {
+		t.Fatal("no app-login source")
+	}
+	l, err := applogin.Locate(context.Background(), s.AppLogins, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, err := applogin.Read(context.Background(), l, env)
+	if err != nil || tok != token {
+		t.Fatalf("read %v", err)
+	}
+	if len(asked) != 1 || asked[0] != cursorUnlock {
+		t.Errorf("Keychain reads %v, want the one item", asked)
+	}
+
+	var cookies []string
+	srv := cursorServer(t, fixture(t, "cursor"), "", http.StatusOK, &cookies)
+	got, err := CursorApp{BaseURL: srv.URL, Now: func() time.Time { return cursorNow }}.ReadAppLogin(context.Background(), tok)
+	if err != nil || len(got.Windows) != 1 || !approx(got.Windows[0].UsedPct, 50) {
+		t.Fatalf("reading %+v %v", got, err)
 	}
 }

@@ -78,10 +78,10 @@ func TestPathEnvOverrides(t *testing.T) {
 	if err != nil || l.Item != alt || !l.FromEnv {
 		t.Fatalf("%+v %v", l, err)
 	}
-	if _, ok := Granted([]providers.AppLoginItem{spec}, string(spec.Kind), alt, spec.Fields, "h", true, Env{Home: home}); !ok {
+	if _, ok := Granted([]providers.AppLoginItem{spec}, string(spec.Kind), alt, spec.Fields, "h", true, keychain.Item{}, Env{Home: home}); !ok {
 		t.Error("a grant of the variable's path is honoured")
 	}
-	if _, ok := Granted([]providers.AppLoginItem{spec}, string(spec.Kind), alt, spec.Fields, "h", false, Env{Home: home}); ok {
+	if _, ok := Granted([]providers.AppLoginItem{spec}, string(spec.Kind), alt, spec.Fields, "h", false, keychain.Item{}, Env{Home: home}); ok {
 		t.Error("a path outside the descriptor's is not read without having come from its variable")
 	}
 }
@@ -210,7 +210,7 @@ func TestGrantedMatchesExactly(t *testing.T) {
 	specs := []providers.AppLoginItem{spec}
 	env := Env{Home: home}
 	item := filepath.Join(home, ".a.json")
-	if _, ok := Granted(specs, "json-file", item, []string{"t"}, "api.x", false, env); !ok {
+	if _, ok := Granted(specs, "json-file", item, []string{"t"}, "api.x", false, keychain.Item{}, env); !ok {
 		t.Fatal("the recorded grant is honoured")
 	}
 	for _, bad := range []struct {
@@ -221,7 +221,7 @@ func TestGrantedMatchesExactly(t *testing.T) {
 		{"json-file", item, "refresh", "api.x"},
 		{"json-file", item, "t", "evil.example"},
 	} {
-		if _, ok := Granted(specs, bad.kind, bad.item, []string{bad.field}, bad.host, false, env); ok {
+		if _, ok := Granted(specs, bad.kind, bad.item, []string{bad.field}, bad.host, false, keychain.Item{}, env); ok {
 			t.Errorf("%+v was honoured", bad)
 		}
 	}
