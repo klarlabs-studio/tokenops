@@ -4,7 +4,7 @@
 
 ### Added
 
-- **vendor-usage:** Cursor's plan can be read with the sign-in Cursor's desktop app already keeps: `tokenops vendor-usage setup cursor --use-app-login` shows the database and column it reads and the host it sends the token to, asks first, and reads a copy of the database, so Cursor is not disturbed. The cookie stays as the alternative. Cursor 3.27 and later keep that sign-in encrypted, which TokenOps does not read yet; it says so and asks for the cookie instead.
+- **vendor-usage:** Cursor's plan can be read with the sign-in Cursor's desktop app already keeps: `tokenops vendor-usage setup cursor --use-app-login` shows the database and column it reads, the Keychain item that opens it, and the host it sends the token to, then asks first. It reads a copy of the database, so Cursor is not disturbed. On macOS the setup asks once to allow access to Cursor's "Cursor Safe Storage" Keychain item; the daemon then reads it quietly and never prompts. The cookie stays as the alternative.
 
 ## 0.126.0 - 2026-11-25
 

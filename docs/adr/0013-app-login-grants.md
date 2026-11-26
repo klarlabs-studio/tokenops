@@ -74,6 +74,12 @@ read a site's browser localStorage, **at setup only**.
    `keychain.Quiet`, by setup and daemon alike: never a prompt (when macOS
    would ask, the read fails and health says so), and never at all with
    `keychain.disabled`.
+   *Amended 2026-11-26 (Cursor):* a Keychain item that opens a sealed
+   sign-in (Cursor 3.27's "Cursor Safe Storage" key, `Unlock` in the
+   descriptor) is read once by setup with `keychain.Prompting`, after the
+   grant prompt has named it, so macOS asks the operator once to allow
+   access. The daemon still reads it only quietly. The grant records the
+   item, and changing it ends the grant.
 
 7. **Tokens never leave the reader.** No error, log line, status row or
    setup output carries a token or any of the item's content: errors name
