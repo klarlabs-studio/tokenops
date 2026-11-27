@@ -31,11 +31,20 @@ cleanly, or if an invalid one is accepted.
 The upgrade gate proves that an installed, supervised daemon moves onto the
 new version by itself. The release workflow runs it before goreleaser, and
 goreleaser does not start until it passes. It runs the latest published release
-and a candidate built from the tag: the launchd variant on a macOS runner, then
-the Homebrew variant, which installs the published cask and upgrades it to the
-candidate. Each variant asserts that the old daemon logs the replacement, the
-supervisor starts the new binary, and the API reports the new version within
-two minutes.
+and a candidate built from the tag, in three variants:
+
+- `launchd` on a macOS runner: the release under an isolated launchd job.
+- `brew` on a macOS runner: Homebrew installs the published cask, then upgrades
+  it to the candidate.
+- `systemd` on an Ubuntu runner: the published Linux tarball's binary runs under
+  a systemd user unit that `daemon install --no-load` renders, and the candidate
+  is renamed over it, as the tarball install does. The runner has no operator
+  daemon, so the unit is `tokenops.service`, the name the daemon's supervisor
+  check recognises; a published release cannot be told another name. The job
+  enables lingering for its user if no user manager runs.
+
+Each variant asserts that the old daemon logs the replacement, the supervisor
+starts the new binary, and the API reports the new version within two minutes.
 
 To run the launchd variant on your Mac:
 
@@ -48,6 +57,9 @@ and log. It never touches the real daemon, `~/.tokenops`, `~/.config/tokenops`
 or Homebrew. A published release can be supervised under the test label only
 once it honours `TOKENOPS_SUPERVISOR_LABEL`; until then, pass the old binary:
 `make upgrade-check OLD_BINARY=/path/to/tokenops OLD_VERSION=0.126.0`.
+
+The systemd variant runs only on CI (`GITHUB_ACTIONS=true`). It never runs on
+a workstation, where a `systemd --user` unit would be the operator's own.
 
 Publish with the repository guard:
 
