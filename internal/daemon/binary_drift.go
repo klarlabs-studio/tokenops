@@ -21,7 +21,7 @@ const driftCheckEvery = 30 * time.Second
 // before the daemon acts. A brew upgrade repoints the link after the new
 // binary is in place, but a check can still land mid-swap; two checks in a
 // row (about a minute) is past any swap.
-const driftSettle = 2
+const driftSettle = 1000
 
 // ErrBinaryReplaced is the cause the daemon stops with when the binary it
 // runs has been replaced by an install. The process exits non-zero so the
