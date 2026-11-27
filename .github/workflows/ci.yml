@@ -253,6 +253,41 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: scripts/upgrade-gate.sh brew
 
+  # The Linux half of the upgrade gate: a published tarball's daemon, supervised
+  # by a systemd user unit, moves onto the candidate by itself. Same path filters
+  # as the macOS job above.
+  upgrade-gate-linux:
+    name: Upgrade gate (Linux)
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Does this change touch the upgrade path?
+        id: scope
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --name-only "$BASE" HEAD | grep -Eq '^(internal/daemon/|internal/infra/selfexe/|internal/cli/daemon|\.goreleaser\.ya?ml$|scripts/upgrade-gate\.sh$|\.github/workflows/(ci|release)\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No upgrade-path file changed; the gate is not needed for this PR."
+          fi
+      - if: steps.scope.outputs.run == 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v5.4.0
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: Systemd upgrade
+        if: steps.scope.outputs.run == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/upgrade-gate.sh systemd
+
   # The VS Code extension and the Python adapters ship from this repository
   # but are not Go: without this job nothing checked them, and both broke
   # against the daemon unnoticed. `make integrations` runs the same steps.
