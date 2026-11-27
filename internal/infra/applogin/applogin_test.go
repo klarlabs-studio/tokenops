@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	"go.klarlabs.de/tokenops/internal/infra/keychain"
+	"go.klarlabs.de/tokenops/internal/sqliteuri"
 )
 
 const secret = "tok-SECRET-123"
@@ -241,4 +243,104 @@ func TestFieldPatternsAndAlternatives(t *testing.T) {
 			t.Errorf("%s: %q %v; want %q", field, got[field], err, want)
 		}
 	}
+}
+
+// Cursor's state.vscdb also holds its chats and runs to gigabytes; a
+// sign-in in a database larger than any copy limit is still read, in
+// place and read-only.
+func TestSQLiteLargerThanTheCopyLimitIsRead(t *testing.T) {
+	old := copyLimit
+	copyLimit = 4 << 10
+	t.Cleanup(func() { copyLimit = old })
+	home := t.TempDir()
+	path := filepath.Join(home, "Library/cursor/state.vscdb")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE ItemTable(key TEXT UNIQUE, value BLOB); CREATE TABLE cursorDiskKV(key TEXT, value BLOB)`); err != nil {
+		t.Fatal(err)
+	}
+	pad := strings.Repeat("x", 1<<10)
+	for i := range 64 {
+		if _, err := db.Exec(`INSERT INTO cursorDiskKV VALUES(?, ?)`, fmt.Sprint("bubbleId:", i), pad); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO ItemTable VALUES('cursorAuth/accessToken', ?)`, secret); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+	if fi, _ := os.Stat(path); fi.Size() <= copyLimit {
+		t.Fatalf("fixture is %d bytes, not over the %d copy limit", fi.Size(), copyLimit)
+	}
+	got := readCursorFixture(t, home)
+	if !strings.Contains(got, secret) {
+		t.Fatalf("got %q", got)
+	}
+}
+
+// A running Cursor keeps recent writes in its write-ahead log; the sign-in
+// written there, not yet checkpointed, is what is read.
+func TestSQLiteSignInStillInTheWriteAheadLogIsRead(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, "Library/cursor/state.vscdb")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	app, err := sql.Open("sqlite", sqliteuri.File(path, "_pragma=journal_mode(WAL)&_pragma=wal_autocheckpoint(0)"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = app.Close() })
+	if _, err := app.Exec(`CREATE TABLE ItemTable(key TEXT UNIQUE, value BLOB); INSERT INTO ItemTable VALUES('cursorAuth/accessToken', ?)`, secret); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Stat(path + "-wal"); err != nil || fi.Size() == 0 {
+		t.Fatalf("fixture's write-ahead log is empty: %v", err)
+	}
+	got := readCursorFixture(t, home)
+	if !strings.Contains(got, secret) {
+		t.Fatalf("got %q", got)
+	}
+	var n int
+	if err := app.QueryRow(`SELECT count(*) FROM ItemTable`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("the application's own connection was disturbed: %d %v", n, err)
+	}
+}
+
+// A copy never silently stops at its limit: a database larger than it is
+// refused, not read as a truncated file SQLite calls malformed.
+func TestCopyRefusesADatabaseLargerThanItsLimit(t *testing.T) {
+	old := copyLimit
+	copyLimit = 16
+	t.Cleanup(func() { copyLimit = old })
+	path := filepath.Join(t.TempDir(), "big.db")
+	if err := os.WriteFile(path, make([]byte, 64), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, cleanup, err := copyDB(path); err == nil {
+		cleanup()
+		t.Fatal("a database over the copy limit was copied")
+	}
+}
+
+func readCursorFixture(t *testing.T, home string) string {
+	t.Helper()
+	spec := providers.AppLoginItem{Kind: providers.AppLoginSQLite, Paths: []string{"~/Library/cursor/state.vscdb"},
+		Query: "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken' LIMIT 1", Fields: []string{"value"}}
+	env := Env{Home: home}
+	l, err := Locate(context.Background(), []providers.AppLoginItem{spec}, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Read(context.Background(), l, env)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	return got
 }

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **vendor-usage:** connecting Cursor with its own sign-in (`setup cursor --use-app-login`) failed with "the sign-in query failed" on any Mac where Cursor is used a lot: its `state.vscdb` also holds the chats and runs to gigabytes, and TokenOps read a copy cut off at 256 MB. Sign-ins kept in an app's SQLite database are now read in place, read-only, without copying; a copy is made only when the database cannot be opened read-only in place, and a database too large to copy whole is refused with its size instead of being cut off. The error now says why SQLite refused.
+
 ## 0.127.0 - 2026-11-26
 
 ### Added

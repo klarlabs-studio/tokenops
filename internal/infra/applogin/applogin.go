@@ -563,21 +563,37 @@ func readKeychain(s providers.AppLoginItem, env Env) (map[string]string, error) 
 	return jsonValues([]byte(v), fmt.Sprintf("the Keychain item %q", s.Service), s.Fields)
 }
 
-// readSQLite runs a sign-in's SELECT on a private copy of the database, so
-// the owning application's lock and files are never touched.
+// readSQLite runs a sign-in's SELECT on the database read-only, in place:
+// a read-only connection takes no write lock, so the owning application,
+// running or not, is undisturbed, and its write-ahead log is seen. Some
+// databases cannot be opened read-only in place (a write-ahead log with no
+// shared-memory file beside it); those are read from a private copy, never
+// one larger than copyLimit. Cursor's state.vscdb holds its chats too and
+// runs to gigabytes, so copying first is not the default.
 func readSQLite(ctx context.Context, path string, s providers.AppLoginItem) (map[string]string, error) {
-	copyPath, cleanup, err := copyDB(path)
-	if err != nil {
-		return nil, err
+	out, err := querySQLite(ctx, sqliteuri.File(path, "mode=ro"), path, s)
+	if err == nil || errors.Is(err, ErrNotFound) {
+		return out, err
+	}
+	copyPath, cleanup, cerr := copyDB(path)
+	if cerr != nil {
+		return nil, fmt.Errorf("%w (read in place: %w)", cerr, err)
 	}
 	defer cleanup()
-	db, err := sql.Open("sqlite", sqliteuri.File(copyPath, "mode=ro"))
+	return querySQLite(ctx, sqliteuri.File(copyPath, "mode=ro"), path, s)
+}
+
+// querySQLite runs s.Query on the database at uri. path names it in errors,
+// which carry SQLite's reason (never a row's value).
+func querySQLite(ctx context.Context, uri, path string, s providers.AppLoginItem) (map[string]string, error) {
+	db, err := sql.Open("sqlite", uri)
 	if err != nil {
-		return nil, fmt.Errorf("applogin: open %s", path)
+		return nil, fmt.Errorf("applogin: open %s: %w", path, err)
 	}
 	defer func() { _ = db.Close() }()
+	db.SetMaxOpenConns(1)
 	if _, err := db.ExecContext(ctx, "PRAGMA query_only = ON"); err != nil {
-		return nil, fmt.Errorf("applogin: open %s", path)
+		return nil, fmt.Errorf("applogin: open %s: %w", path, err)
 	}
 	row := db.QueryRowContext(ctx, s.Query)
 	cols := make([]sql.NullString, len(s.Fields))
@@ -589,7 +605,7 @@ func readSQLite(ctx context.Context, path string, s providers.AppLoginItem) (map
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: %s has no sign-in row", ErrNotFound, path)
 		}
-		return nil, fmt.Errorf("applogin: read %s: the sign-in query failed", path)
+		return nil, fmt.Errorf("applogin: read %s: the sign-in query failed: %w", path, err)
 	}
 	out := map[string]string{}
 	for i, f := range s.Fields {
@@ -600,6 +616,9 @@ func readSQLite(ctx context.Context, path string, s providers.AppLoginItem) (map
 	return out, nil
 }
 
+// copyLimit is the largest database copyDB copies.
+var copyLimit int64 = 256 << 20
+
 // copyDB copies a database and its write-ahead sidecars to a private
 // temporary directory, keeping the base name so SQLite pairs them.
 func copyDB(path string) (string, func(), error) {
@@ -609,6 +628,10 @@ func copyDB(path string) (string, func(), error) {
 	}
 	cleanup := func() { _ = os.RemoveAll(dir) }
 	dst := filepath.Join(dir, filepath.Base(path))
+	if fi, err := os.Stat(path); err == nil && fi.Size() > copyLimit {
+		cleanup()
+		return "", func() {}, fmt.Errorf("applogin: %s is %d MB, too large to copy", path, fi.Size()>>20)
+	}
 	if err := copyFile(path, dst); err != nil {
 		cleanup()
 		return "", func() {}, err
@@ -638,7 +661,7 @@ func copyFile(from, to string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(dst, io.LimitReader(src, 256<<20)); err != nil {
+	if _, err := io.Copy(dst, io.LimitReader(src, copyLimit)); err != nil {
 		_ = dst.Close()
 		return fmt.Errorf("applogin: copy %s", from)
 	}
