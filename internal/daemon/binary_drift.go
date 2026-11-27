@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/infra/selfexe"
+	"go.klarlabs.de/tokenops/internal/proxy"
 	"go.klarlabs.de/tokenops/internal/version"
 )
 
@@ -151,6 +154,32 @@ func (w *driftWatch) once(step driftStep, verdict driftVerdict) driftStep {
 	w.noted = true
 	step.Verdict = verdict
 	return step
+}
+
+// installedOf is what /version says about a check: nothing while the
+// binary is current; otherwise that an upgrade waits, with the version
+// installed when Homebrew's path names it.
+func installedOf(d selfexe.Drift, supervised bool) proxy.Installed {
+	if !d.OutOfDate {
+		return proxy.Installed{}
+	}
+	return proxy.Installed{Updating: true, Version: homebrewVersion(d.Installed), RestartsItself: supervised}
+}
+
+// brewVersion is a Homebrew version directory: 0.128.0, 0.128.1_1.
+var brewVersion = regexp.MustCompile(`^v?\d+(\.\d+)*([-_+][0-9A-Za-z.]+)?$`)
+
+// homebrewVersion is the version in a Homebrew install path
+// (…/Caskroom/<cask>/<version>/… or …/Cellar/<formula>/<version>/…); empty
+// for any other path.
+func homebrewVersion(path string) string {
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	for i, p := range parts {
+		if (p == "Caskroom" || p == "Cellar") && i+2 < len(parts) && brewVersion.MatchString(parts[i+2]) {
+			return strings.TrimPrefix(parts[i+2], "v")
+		}
+	}
+	return ""
 }
 
 // isExecutableFile reports whether path is a regular file with an execute bit.

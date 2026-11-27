@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/infra/selfexe"
+	"go.klarlabs.de/tokenops/internal/proxy"
 )
 
 // upgraded is what a check reports after `brew upgrade` repointed the link
@@ -199,4 +200,35 @@ func TestWatchBinaryDriftStopsWithContext(t *testing.T) {
 
 func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+}
+
+// /version says an upgrade is waiting with the version Homebrew installed,
+// read from its path; a path outside Homebrew's layout says only that one
+// is.
+func TestInstalledOfNamesTheVersionWaiting(t *testing.T) {
+	tests := []struct {
+		name       string
+		drift      selfexe.Drift
+		supervised bool
+		want       proxy.Installed
+	}{
+		{name: "current", drift: selfexe.Drift{Running: "/opt/homebrew/Caskroom/tokenops/0.127.0/tokenops"}},
+		{name: "cask", drift: upgraded("/opt/homebrew/Caskroom/tokenops/0.127.0/tokenops", "/opt/homebrew/Caskroom/tokenops/0.128.0/tokenops"),
+			supervised: true, want: proxy.Installed{Updating: true, Version: "0.128.0", RestartsItself: true}},
+		{name: "formula", drift: upgraded("/usr/local/Cellar/tokenops/0.127.0/bin/tokenops", "/usr/local/Cellar/tokenops/0.128.1_1/bin/tokenops"),
+			want: proxy.Installed{Updating: true, Version: "0.128.1_1"}},
+		{name: "replaced in place", drift: selfexe.Drift{OutOfDate: true, Running: "/usr/local/bin/tokenops"},
+			supervised: true, want: proxy.Installed{Updating: true, RestartsItself: true}},
+		{name: "not homebrew", drift: upgraded("/home/me/bin/tokenops-old", "/home/me/bin/tokenops-new"),
+			supervised: true, want: proxy.Installed{Updating: true, RestartsItself: true}},
+		{name: "not a version", drift: upgraded("/opt/homebrew/Caskroom/tokenops/0.127.0/tokenops", "/opt/homebrew/Caskroom/tokenops/latest/tokenops"),
+			supervised: true, want: proxy.Installed{Updating: true, RestartsItself: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := installedOf(tt.drift, tt.supervised); got != tt.want {
+				t.Errorf("installedOf = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
 }

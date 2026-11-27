@@ -147,3 +147,31 @@ func TestStartTwiceErrors(t *testing.T) {
 		t.Fatal("expected error on second Start")
 	}
 }
+
+// While an install has replaced the binary and the daemon has not switched
+// to it, /version says so and names the version waiting; once it has, the
+// answer is the running build alone.
+func TestVersionSaysAnUpgradeIsWaiting(t *testing.T) {
+	t.Cleanup(func() { MarkInstalled(Installed{}) })
+	srv := newTestServer(t)
+	get := func() map[string]any {
+		resp, err := http.Get("http://" + srv.Addr() + "/version")
+		if err != nil {
+			t.Fatalf("GET: %v", err)
+		}
+		defer resp.Body.Close()
+		var out map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	MarkInstalled(Installed{Updating: true, Version: "0.128.0", RestartsItself: true})
+	if v := get(); v["updating"] != true || v["installed"] != "0.128.0" || v["restarts_itself"] != true || v["version"] == nil {
+		t.Errorf("/version while waiting = %v", v)
+	}
+	MarkInstalled(Installed{})
+	if v := get(); v["updating"] != nil || v["installed"] != nil {
+		t.Errorf("/version after the switch = %v", v)
+	}
+}
