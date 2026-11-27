@@ -64,22 +64,52 @@ make menubar-test   # tests, no window needed
 - It reads only the local daemon's API (ADR 0010), with the token the
   daemon writes to `~/.tokenops/daemon.url`. The token stays in the Go
   process; the panel never sees it.
-- The panel's grant names nine permissions: `glance.read`
+- The panel's grant names ten permissions: `glance.read`
   (`glance.follow`), `glance.refresh` (`sources.refresh`), `coach.change`
   (`coach.preset`, which the daemon writes to its audit log),
   `boundaries.deny` (`boundary.deny`), `boundaries.approve`
   (`boundary.approve`), `findings.answer` (`finding.act` and
   `finding.dismiss`), `connections.answer` (`connection.copy`,
-  `connection.docs` and `connection.dismiss`), `ring.choose` (`ring.pin`)
-  and `panel.close`.
+  `connection.docs` and `connection.dismiss`), `connections.grant`
+  (`connection.consent` and `connection.connect`: show, then grant, a
+  tool's own sign-in through the daemon), `ring.choose` (`ring.pin`) and
+  `panel.close`.
 - Under the plans, muted, a row names each tool you use (or have
   installed) whose plan TokenOps cannot read yet, such as **Cursor — in
   use, plan not read**. It is no alert: no badge, no colour, no
-  notification. **Connect…** shows the one command that connects it, what
-  it needs and where to find that, with **Copy command** (the command Go
-  holds for the row, never text from the panel) and **Docs**; **Don't
-  show** asks the daemon to stop suggesting it, like `tokenops vendor-usage
-  dismiss <id>`.
+  notification. **Connect…** opens the row's details and scrolls them into
+  view (the details area scrolls, with a thin scrollbar, so what is below
+  the fold is seen to be there).
+  - When the tool's own sign-in connects it (ADR 0013; Cursor's desktop
+    app, Kilo's CLI and others), TokenOps connects it for you. Connect…
+    shows what the daemon says it would read, the same words
+    `tokenops vendor-usage setup <id> --use-app-login` prints before y/N
+    (`GET /api/connections/connect`): what is read (the file or database
+    and its field), the one host it is sent to, that nothing secret is
+    stored, and, for a sealed sign-in, that macOS will ask to allow
+    TokenOps to use its Keychain item ("Cursor Safe Storage"; choose
+    Always Allow so the daemon can read it again as it polls). **Allow**
+    asks the daemon to grant exactly that (`POST /api/connections/connect`,
+    with what the panel showed, held by Go): it reads the sign-in once,
+    checks it with the vendor, records the grant without the token and
+    audits it, then restarts to read it. The row then says
+    **Connected — reading Cursor's plan** and turns into the plan within
+    the next reads, or says why not in plain words (an expired sign-in:
+    "Sign in to Cursor, then try again"). **Not now** closes it. The app
+    never reads a sign-in itself.
+  - When it needs something you type (an API key or a cookie), Connect…
+    shows the one command, what it needs and where to find that, with
+    **Copy command** (the command Go holds for the row, never text from
+    the panel; it says **Copied**) and **Docs**.
+  - **Don't show** asks the daemon to stop suggesting it, like
+    `tokenops vendor-usage dismiss <id>`.
+- The footer names the running daemon's version (`/version`), quietly,
+  and the app's own when it differs ("TokenOps 0.127.0 · menu bar
+  0.126.2"). While an upgrade has replaced the daemon's binary and the
+  daemon has not switched to it yet, it says what it is updating to
+  ("TokenOps updating to 0.128.0") rather than the number about to go
+  stale; a daemon run by hand, which does not switch on its own, says the
+  new version is installed and to restart it.
 - Decisions a boundary is waiting on (ADR 0014) are listed under *Waiting on
   you*. Deny answers through the daemon in one click and never signs.
   Approve needs a person, because the agent a boundary stopped can reach the

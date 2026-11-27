@@ -14,9 +14,11 @@ import (
 // Below the plan rows the panel lists, muted, each tool the operator uses
 // whose plan TokenOps does not read (the glance's connections in state
 // not_connected), with the one thing to do. It is not an alert: no badge,
-// no notification, no colour change; it is said in place. Connect… shows
-// the command, what it needs and where to find it, with Copy command and
-// Docs; Don't show asks the daemon to stop suggesting it
+// no notification, no colour change; it is said in place. Connect… on a
+// row granted with another application's sign-in shows the consent and
+// connects it on Allow (connect.go); on any other it shows the command,
+// what it needs and where to find it, with Copy command and Docs; Don't
+// show asks the daemon to stop suggesting it
 // (POST /api/connections/dismiss), which is audited and written to the
 // config like `tokenops vendor-usage dismiss`.
 
@@ -31,6 +33,15 @@ type connectionRow struct {
 	Needs   string `json:"needs"`
 	Where   string `json:"where,omitempty"`
 	Docs    string `json:"docs,omitempty"`
+	// Grant is a row connected by granting another application's sign-in:
+	// Connect… shows the consent and Allow connects it (connect.go).
+	Grant bool `json:"grant,omitempty"`
+	// Consent is what the panel shows before Allow, once Connect… asked
+	// the daemon; ConsentError says why there is none.
+	Consent      *consentView `json:"consent,omitempty"`
+	ConsentError string       `json:"consent_error,omitempty"`
+	// Result is what Allow did.
+	Result *connectResult `json:"result,omitempty"`
 }
 
 // glanceConnections is the part of GET /api/glance the rows are made from.
@@ -47,6 +58,7 @@ type glanceConnections struct {
 			Needs   string `json:"needs"`
 			Where   string `json:"where"`
 			Docs    string `json:"docs"`
+			Grant   bool   `json:"grant"`
 		} `json:"action"`
 	} `json:"connections"`
 }
@@ -68,7 +80,7 @@ func connectionRows(glance json.RawMessage) []connectionRow {
 			seen = append(seen, e.Detail)
 		}
 		row := connectionRow{Provider: c.Provider, Label: c.Summary, Seen: strings.Join(seen, " · "),
-			Command: c.Action.Command, Needs: c.Action.Needs, Where: c.Action.Where}
+			Command: c.Action.Command, Needs: c.Action.Needs, Where: c.Action.Where, Grant: c.Action.Grant}
 		if docsURL(c.Action.Docs) {
 			row.Docs = c.Action.Docs
 		}

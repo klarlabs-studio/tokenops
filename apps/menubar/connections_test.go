@@ -160,12 +160,12 @@ func TestConnectionRowsAreDrawnMuted(t *testing.T) {
 		return string(b)
 	}
 	js, css := read("panel.js"), read("style.css")
-	for _, want := range []string{"connectionsSection(document.getElementById(\"detail\"), v);", `"connection.copy"`, `"connection.docs"`, `"connection.dismiss"`, "Connect…", "Don't show"} {
+	for _, want := range []string{"connectionsSection(main, v);", `"connection.copy"`, `"connection.docs"`, `"connection.dismiss"`, "Connect…", "Don't show"} {
 		if !strings.Contains(js, want) {
 			t.Errorf("panel.js lacks %s", want)
 		}
 	}
-	if strings.Index(js, "connectionsSection(document.getElementById") > strings.Index(js, "coachFindings(document.getElementById") {
+	if !strings.Contains(js, "connectionsSection(main, v);\n    coachFindings(main, v);") {
 		t.Error("the rows come after the coach's findings; they belong under the plans")
 	}
 	if !strings.Contains(css, ".connections {") || !strings.Contains(css, "color: var(--muted)") {

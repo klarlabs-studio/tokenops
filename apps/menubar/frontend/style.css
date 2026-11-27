@@ -94,7 +94,11 @@ html, body {
 
 /* The selected plan. */
 .detail { flex: 1; overflow-y: auto; padding-top: 10px; }
-.detail::-webkit-scrollbar { width: 0; }
+/* A thin scrollbar, so what lies below the fold (an opened connection's
+   details) is seen to be there. */
+.detail::-webkit-scrollbar { width: 6px; }
+.detail::-webkit-scrollbar-thumb { background: var(--hair); border-radius: 3px; }
+.detail::-webkit-scrollbar-thumb:hover { background: var(--faint); }
 .head {
   display: flex; justify-content: space-between; align-items: flex-end;
   padding-bottom: 10px; margin-bottom: 4px;
@@ -266,3 +270,18 @@ select {
 .connection-label { flex: 1; min-width: 0; }
 .connection-how { padding: 2px 0 8px 26px; }
 .connection-command { display: block; margin: 4px 0; padding: 4px 6px; font: 11px var(--mono); color: var(--fg); background: var(--surface); border: 1px solid var(--hair); border-radius: var(--tok-r-xs); user-select: text; -webkit-user-select: text; overflow-wrap: anywhere; }
+/* Connecting in place with a tool's own sign-in (ADR 0013): the consent,
+   then what Allow did. */
+.connection-consent .consent-heading { margin: 4px 0 2px; color: var(--fg); font-weight: 600; }
+.consent-row { display: grid; grid-template-columns: 78px 1fr; gap: 6px; margin-top: 3px; }
+.consent-label { color: var(--faint); }
+.consent-text { color: var(--fg); overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+.consent-keychain { color: var(--fg); }
+.connection-result { margin: 4px 0; color: var(--fg); }
+.connection-result.ok { color: var(--accent-line); font-weight: 600; }
+.connection-result.warn { color: var(--error); }
+.connection-how .finding-controls { margin-top: 6px; }
+.fbtn.copied { color: var(--faint); }
+/* The running version, quietly, under the menu. */
+.version { margin: 4px 6px 0; font-size: 11px; color: var(--faint); }
+.version[hidden] { display: none; }

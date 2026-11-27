@@ -99,9 +99,12 @@ type view struct {
 	// Refreshing is a refresh the operator asked for, still coming in.
 	Refreshing bool `json:"refreshing,omitempty"`
 	// Ring is the provider pinned to the menu bar icon; empty is Auto.
-	Ring    string    `json:"ring,omitempty"`
-	Updated time.Time `json:"updated"`
-	err     error
+	Ring string `json:"ring,omitempty"`
+	// VersionLine is the footer's quiet line: the running daemon's
+	// version, or what it is updating to (version.go).
+	VersionLine string    `json:"version_line,omitempty"`
+	Updated     time.Time `json:"updated"`
+	err         error
 }
 
 // costs is one provider's usage over two windows, its last 30 days day by
@@ -159,6 +162,9 @@ type menubar struct {
 	refreshing bool
 	// month is each provider's 30 days as last read; see monthEvery.
 	month map[string]monthCosts
+	// connects is, per grant row, the consent shown and what Allow did
+	// (connect.go).
+	connects map[string]connectState
 }
 
 // monthCosts is a provider's 30 days and when they were read.
@@ -213,12 +219,12 @@ func newMenubar(host app.DesktopHost, d *daemon, sink audit.Sink) (*menubar, err
 // register grants the panel what it needs and registers its commands.
 func (m *menubar) register() error {
 	grant, err := domain.NewCapabilityGrant(
-		"panel", "read the glance, ask the daemon to poll now, change the coach preset, answer boundaries, act on and hide findings, copy, read about or stop suggesting a tool to connect, choose the plan the menu bar ring shows, close the panel",
+		"panel", "read the glance, ask the daemon to poll now, change the coach preset, answer boundaries, act on and hide findings, copy, read about or stop suggesting a tool to connect, show and grant a tool's own sign-in through the daemon, choose the plan the menu bar ring shows, close the panel",
 		[]domain.WindowID{panelWindow},
 		[]domain.Origin{domain.OriginPackagedLocal},
 		[]domain.PermissionSpec{
 			{Name: "glance.read"}, {Name: "glance.refresh"}, {Name: "coach.change"},
-			{Name: "boundaries.deny"}, {Name: "boundaries.approve"}, {Name: "findings.answer"}, {Name: "connections.answer"},
+			{Name: "boundaries.deny"}, {Name: "boundaries.approve"}, {Name: "findings.answer"}, {Name: "connections.answer"}, {Name: "connections.grant"},
 			{Name: "ring.choose"}, {Name: "panel.close"},
 		},
 	)
@@ -335,6 +341,28 @@ func (m *menubar) register() error {
 				return m.refresh(ctx), nil
 			},
 		}),
+		vitra.Register(m.rt, vitra.Command[connectionInput, view]{
+			Name:        "connection.consent",
+			Description: "Show what granting a tool's own sign-in would read, from the daemon; nothing is read or granted",
+			Permission:  "connections.grant",
+			Handler: func(ctx context.Context, _ domain.Invocation, in connectionInput) (view, error) {
+				if err := m.openConsent(ctx, in); err != nil {
+					return view{}, err
+				}
+				return m.current(), nil
+			},
+		}),
+		vitra.Register(m.rt, vitra.Command[connectionInput, view]{
+			Name:        "connection.connect",
+			Description: "Grant a tool's own sign-in as the consent showed it, through the daemon, which reads it once with the vendor, records the grant without the token and audits it",
+			Permission:  "connections.grant",
+			Handler: func(ctx context.Context, _ domain.Invocation, in connectionInput) (view, error) {
+				if err := m.connect(ctx, in); err != nil {
+					return view{}, err
+				}
+				return m.current(), nil
+			},
+		}),
 		vitra.Register(m.rt, vitra.Command[ringInput, view]{
 			Name:        "ring.pin",
 			Description: "Pin the menu bar ring to a plan, or return it to the tightest plan with an empty provider",
@@ -408,6 +436,7 @@ func (m *menubar) refresh(ctx context.Context) view {
 	} else {
 		m.last = v
 	}
+	v.Connections = m.withConnects(v.Connections)
 	v.Refreshing = m.refreshing
 	var notes []note
 	if v.Error == "" && v.Glance != nil {
@@ -443,6 +472,7 @@ func (m *menubar) startRead(ctx context.Context) {
 	}
 	m.loadingSince = time.Now()
 	v := m.last
+	v.Connections = m.withConnects(v.Connections)
 	v.LoadingSince, v.Refreshing, v.Ring = m.loadingSince, m.refreshing, m.settings.Ring
 	if time.Now().Before(m.noteUntil) {
 		v.Note, v.NoteWarn = m.note, m.noteWarn
@@ -544,7 +574,11 @@ func (m *menubar) read(ctx context.Context) view {
 		v.Updated = at.ComputedAt
 	}
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		v.VersionLine = m.versionOf(ctx).line()
+	}()
 	go func() {
 		defer wg.Done()
 		if c, err := m.daemon.coach(ctx); err == nil {
