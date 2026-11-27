@@ -5,6 +5,9 @@
 #   scripts/upgrade-gate.sh launchd   any Mac: an isolated launchd job
 #   scripts/upgrade-gate.sh brew      CI runners only: Homebrew installs the
 #                                     published cask, then upgrades to the candidate
+#   scripts/upgrade-gate.sh systemd   CI runners only: a systemd user unit runs the
+#                                     published tarball's binary, which is then
+#                                     replaced by the candidate
 #
 # The old binary is the latest published release, downloaded and checked against
 # its checksums.txt. The candidate is built from the working tree with the
@@ -26,8 +29,15 @@
 # Locally, OLD_BINARY and OLD_VERSION may name the old binary instead of the
 # latest release (it must honour TOKENOPS_SUPERVISOR_LABEL).
 #
-# Linux is not gated yet: the systemd unit name is still fixed in
-# internal/daemon, so an isolated systemd job cannot yet be supervised.
+# The systemd variant runs only on CI, and under the unit name the daemon
+# itself recognises: tokenops.service (internal/daemon SystemdName). A published
+# release finds its supervisor by the cgroup suffix "/tokenops.service" and
+# has no way to be told another name, so a test unit under another name would
+# never see its old daemon stop. The runner is ephemeral and has no operator
+# daemon, which is the same reasoning the launchd variant applies on CI to the
+# default label. The unit is rendered by `daemon install --no-load` from the
+# old binary, so it is the template the installer writes. Its HOME, XDG_* and
+# port come from a drop-in of the same unit.
 set -Eeuo pipefail
 
 REPO_SLUG="klarlabs-studio/tokenops"
@@ -42,18 +52,33 @@ log() { printf '[upgrade-gate] %s\n' "$*" >&2; }
 die() { log "FAIL: $*"; exit 1; }
 
 case "$VARIANT" in
-launchd | brew) ;;
-*) die "usage: $0 launchd|brew" ;;
+launchd | brew | systemd) ;;
+*) die "usage: $0 launchd|brew|systemd" ;;
 esac
-[ "$(uname -s)" = Darwin ] || die "the $VARIANT variant runs on macOS (launchd and Homebrew); Linux is not gated yet"
+case "$VARIANT" in
+launchd | brew)
+	[ "$(uname -s)" = Darwin ] || die "the $VARIANT variant runs on macOS (launchd and Homebrew)"
+	;;
+systemd)
+	[ "$(uname -s)" = Linux ] || die "the systemd variant runs on Linux"
+	;;
+esac
 if [ "$VARIANT" = brew ] && [ "${GITHUB_ACTIONS:-}" != true ]; then
 	die "the brew variant installs into the Homebrew prefix and runs only on a CI runner"
 fi
+if [ "$VARIANT" = systemd ] && [ "${GITHUB_ACTIONS:-}" != true ]; then
+	die "the systemd variant starts a user manager unit and runs only on a CI runner"
+fi
 
 case "$(uname -m)" in
-arm64) ARCH=arm64 ;;
-x86_64) ARCH=amd64 ;;
+arm64 | aarch64) ARCH=arm64 ;;
+x86_64 | amd64) ARCH=amd64 ;;
 *) die "unsupported architecture $(uname -m)" ;;
+esac
+case "$(uname -s)" in
+Darwin) OS_NAME=darwin ;;
+Linux) OS_NAME=linux ;;
+*) die "unsupported operating system $(uname -s)" ;;
 esac
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/tokenops-upgrade-gate.XXXXXX")"
@@ -89,6 +114,9 @@ cleanup() {
 		HOMEBREW_NO_AUTO_UPDATE=1 brew uninstall --cask --force "$BREW_CASK" >/dev/null 2>&1
 		brew untap "$BREW_TAP" >/dev/null 2>&1
 	fi
+	if [ "$VARIANT" = systemd ]; then
+		unit_cleanup
+	fi
 	case "$WORK" in
 	"${TMPDIR:-/tmp}"/tokenops-upgrade-gate.*) rm -rf "$WORK" ;;
 	esac
@@ -115,6 +143,10 @@ wait_for_version() {
 
 # job_pid prints the pid of the test job, empty when it runs none.
 job_pid() {
+	if [ "$VARIANT" = systemd ]; then
+		unit_pid
+		return
+	fi
 	launchctl print "$DOMAIN/$LABEL" 2>/dev/null | sed -n 's/^[[:space:]]*pid = //p' | head -n 1
 }
 
@@ -218,7 +250,7 @@ fetch_old() {
 	[ -n "$tag" ] && [ "$tag" != null ] || die "could not name the latest release"
 	OLD="${tag#v}"
 	base="https://github.com/$REPO_SLUG/releases/download/$tag"
-	archive="tokenops_${OLD}_darwin_${ARCH}.tar.gz"
+	archive="tokenops_${OLD}_${OS_NAME}_${ARCH}.tar.gz"
 	mkdir -p "$WORK/old"
 	curl -fsSL -o "$WORK/old/checksums.txt" "$base/checksums.txt"
 	curl -fsSL -o "$WORK/old/$archive" "$base/$archive"
@@ -260,6 +292,121 @@ assert_switch() {
 	wait_for_version "$CAND" $((deadline - $(date +%s))) || die "the API does not report $CAND within ${SWITCH_TIMEOUT}s"
 	if kill -0 "$old_pid" 2>/dev/null; then die "old daemon pid $old_pid is still running"; fi
 	log "PASS: $OLD -> $CAND: the daemon moved onto the new binary by itself"
+}
+
+# systemd_unit is the unit the gate runs: the one the daemon's supervisor check
+# recognises (see the header).
+SYSTEMD_UNIT="tokenops.service"
+UNIT_LINK=""
+UNIT_DROPIN=""
+
+# unit_pid prints the main pid of the systemd unit, empty when it runs none.
+unit_pid() {
+	local pid
+	pid="$(systemctl --user show -p MainPID --value "$SYSTEMD_UNIT" 2>/dev/null || true)"
+	[ "$pid" = 0 ] || printf '%s\n' "$pid"
+}
+
+# ensure_user_manager makes sure a systemd user manager runs for this user and
+# that systemctl --user can reach it. A runner whose user has no session has none
+# until it lingers, so lingering is enabled and the manager started.
+ensure_user_manager() {
+	local uid
+	uid="$(id -u)"
+	export XDG_RUNTIME_DIR="/run/user/$uid"
+	if systemctl --user show-environment >/dev/null 2>&1; then
+		log "systemd user manager is running for $(id -un)"
+		return 0
+	fi
+	log "no systemd user manager for $(id -un); enabling lingering and starting it"
+	sudo -n loginctl enable-linger "$(id -un)" || log "loginctl enable-linger failed"
+	sudo -n systemctl start "user@$(id -u).service" || log "start of user@$(id -u).service failed"
+	local deadline=$(($(date +%s) + 60))
+	until systemctl --user show-environment >/dev/null 2>&1; do
+		[ "$(date +%s)" -ge "$deadline" ] && return 1
+		sleep 1
+	done
+	log "systemd user manager is running for $(id -un) after lingering"
+}
+
+# unit_cleanup stops the test unit and removes the unit file and drop-in this
+# gate linked into the user manager's search path. Only what this run created is
+# removed: a link that points elsewhere is left alone.
+unit_cleanup() {
+	systemctl --user stop "$SYSTEMD_UNIT" >/dev/null 2>&1
+	if [ -n "$UNIT_LINK" ] && [ -L "$UNIT_LINK" ] && [ "$(readlink "$UNIT_LINK")" = "$WORK/home/.config/systemd/user/$SYSTEMD_UNIT" ]; then
+		rm -f "$UNIT_LINK"
+		log "unit link $UNIT_LINK removed"
+	fi
+	if [ -n "$UNIT_DROPIN" ] && [ -f "$UNIT_DROPIN" ]; then
+		rm -f "$UNIT_DROPIN"
+		rmdir "$(dirname "$UNIT_DROPIN")" 2>/dev/null || true
+	fi
+	systemctl --user daemon-reload >/dev/null 2>&1
+}
+
+# run_systemd: the published tarball's binary is installed into a bin directory
+# and supervised by a user unit rendered by its own `daemon install --no-load`.
+# The candidate then replaces the binary the way the tarball installer does: a
+# new file renamed over the old path.
+run_systemd() {
+	local install_dir="$WORK/install/bin" runner_unit_dir old_pid
+	HOME_DIR="$WORK/home"
+	mkdir -p "$HOME_DIR"
+	fetch_old
+	build_candidate
+
+	mkdir -p "$install_dir"
+	cp "$WORK/old/tokenops" "$install_dir/tokenops"
+	chmod 755 "$install_dir/tokenops"
+
+	# The unit is rendered by the old binary's own installer. HOME and every XDG
+	# directory point into WORK, so the render and the daemon's state stay there.
+	env HOME="$HOME_DIR" XDG_CONFIG_HOME="$HOME_DIR/.config" XDG_DATA_HOME="$HOME_DIR/.local/share" \
+		XDG_STATE_HOME="$HOME_DIR/.local/state" XDG_CACHE_HOME="$HOME_DIR/.cache" \
+		"$install_dir/tokenops" daemon install --no-load >"$WORK/install.out" 2>&1 \
+		|| { cat "$WORK/install.out" >&2; die "daemon install --no-load failed for $OLD"; }
+	local rendered="$HOME_DIR/.config/systemd/user/$SYSTEMD_UNIT"
+	[ -f "$rendered" ] || die "daemon install did not write $rendered"
+	grep -qF "ExecStart=$install_dir/tokenops start" "$rendered" \
+		|| die "the rendered unit does not start $install_dir/tokenops"
+
+	# The gate loads the unit into the runner's own user manager, which reads
+	# unit files only from its search path, and carries the test's HOME, XDG_*,
+	# port and log in a drop-in of the same unit.
+	ensure_user_manager || die "no systemd user manager could be reached for $(id -un)"
+	runner_unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+	mkdir -p "$runner_unit_dir"
+	[ ! -e "$runner_unit_dir/$SYSTEMD_UNIT" ] || die "$runner_unit_dir/$SYSTEMD_UNIT already exists on the runner"
+	UNIT_LINK="$runner_unit_dir/$SYSTEMD_UNIT"
+	UNIT_DROPIN="$runner_unit_dir/$SYSTEMD_UNIT.d/upgrade-gate.conf"
+	PORT="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+	ln -s "$rendered" "$UNIT_LINK"
+	mkdir -p "$(dirname "$UNIT_DROPIN")"
+	cat >"$UNIT_DROPIN" <<EOF
+[Service]
+Environment="XDG_CONFIG_HOME=$HOME_DIR/.config" "XDG_DATA_HOME=$HOME_DIR/.local/share" "XDG_STATE_HOME=$HOME_DIR/.local/state" "XDG_CACHE_HOME=$HOME_DIR/.cache"
+Environment="TOKENOPS_LISTEN=127.0.0.1:$PORT" "TOKENOPS_KEYCHAIN_DISABLED=1"
+StandardOutput=append:$LOG
+EOF
+	systemctl --user daemon-reload || die "systemctl --user daemon-reload failed"
+	systemctl --user cat "$SYSTEMD_UNIT" | grep -qF "ExecStart=$install_dir/tokenops start" \
+		|| die "the user manager does not load $SYSTEMD_UNIT from the rendered unit"
+
+	systemctl --user start "$SYSTEMD_UNIT" || die "systemctl --user start $SYSTEMD_UNIT failed"
+	wait_for_version "$OLD" "$START_TIMEOUT" || die "the old $OLD daemon did not come up healthy"
+	old_pid="$(unit_pid)"
+	[ -n "$old_pid" ] || die "systemd reports no main pid for the old daemon"
+	log "old daemon $OLD healthy as pid $old_pid under $SYSTEMD_UNIT"
+
+	# The install: the candidate lands beside the old binary and is renamed over
+	# it, so the path never names a half-written file.
+	cp "$WORK/candidate/tokenops" "$install_dir/.tokenops.new"
+	chmod 755 "$install_dir/.tokenops.new"
+	mv -f "$install_dir/.tokenops.new" "$install_dir/tokenops"
+	log "installed $CAND over $OLD"
+
+	assert_switch "$old_pid"
 }
 
 run_launchd() {
@@ -393,4 +540,5 @@ run_brew() {
 case "$VARIANT" in
 launchd) run_launchd ;;
 brew) run_brew ;;
+systemd) run_systemd ;;
 esac
