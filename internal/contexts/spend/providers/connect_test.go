@@ -13,15 +13,17 @@ func TestConnectAction(t *testing.T) {
 	tests := []struct {
 		provider, source, command, needs string
 		none                             bool
+		// grant is an app-login grant a surface can ask for in place.
+		grant bool
 	}{
-		{provider: "cursor", source: "cursor-app", command: "tokenops vendor-usage setup cursor --use-app-login", needs: "Cursor's own sign-in"},
+		{provider: "cursor", source: "cursor-app", command: "tokenops vendor-usage setup cursor --use-app-login", needs: "Cursor's own sign-in", grant: true},
 		{provider: "anthropic", source: "claude-code-statusline", command: "tokenops statusline install", needs: "nothing secret"},
 		{provider: "github", source: "github-copilot", command: "tokenops vendor-usage enable github-copilot", needs: "nothing to paste"},
 		{provider: "fireworks", source: "fireworks-usage", command: "tokenops vendor-usage enable fireworks", needs: "Fireworks key"},
 		{provider: "openrouter", source: "openrouter-account", command: "tokenops vendor-usage setup openrouter", needs: "an API key from OpenRouter"},
 		{provider: "perplexity", source: "perplexity-account", command: "tokenops vendor-usage setup perplexity", needs: "browser session"},
 		{provider: "stepfun", source: "stepfun-account", command: "tokenops vendor-usage setup stepfun", needs: "username and password"},
-		{provider: "antigravity", source: "antigravity-local", command: "tokenops vendor-usage setup antigravity --use-app-login", needs: "your yes"},
+		{provider: "antigravity", source: "antigravity-local", command: "tokenops vendor-usage setup antigravity --use-app-login", needs: "your yes", grant: true},
 		{provider: "zed", source: "zed-account", command: "tokenops vendor-usage setup zed", needs: "Keychain"},
 		{provider: "bedrock", source: "bedrock-cost-explorer", command: "tokenops vendor-usage setup bedrock", needs: "credentials already on this machine"},
 		{provider: "litellm", source: "litellm-account", command: "tokenops vendor-usage setup litellm", needs: "gateway's address"},
@@ -51,7 +53,7 @@ func TestConnectAction(t *testing.T) {
 			if !ok {
 				t.Fatal("no action")
 			}
-			if a.Source != tt.source || a.Command != tt.command || !strings.Contains(a.Needs, tt.needs) {
+			if a.Source != tt.source || a.Command != tt.command || !strings.Contains(a.Needs, tt.needs) || a.Grant != tt.grant {
 				t.Errorf("ConnectAction = %+v, want source %s, command %q, needs ~%q", a, tt.source, tt.command, tt.needs)
 			}
 		})

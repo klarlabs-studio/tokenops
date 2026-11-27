@@ -122,6 +122,10 @@ type Action struct {
 	Docs string `json:"docs"`
 	// Dismiss is the command that stops TokenOps suggesting it.
 	Dismiss string `json:"dismiss"`
+	// Grant is an action taken by granting another application's sign-in
+	// (ADR 0013): a surface can show what is read and connect it in place
+	// on the operator's yes (POST /api/connections/connect).
+	Grant bool `json:"grant,omitempty"`
 }
 
 // Connection is what TokenOps says about one provider's plan.
@@ -314,7 +318,7 @@ func age(d time.Duration) string {
 // stop being told.
 func actionOf(id string, a providers.Action) *Action {
 	return &Action{Source: a.Source, Command: a.Command, Needs: a.Needs, Where: strings.TrimSpace(a.Where),
-		Docs: providers.DocsConnect, Dismiss: DismissCommand(id)}
+		Docs: providers.DocsConnect, Dismiss: DismissCommand(id), Grant: a.Grant}
 }
 
 // DismissCommand is the command that stops TokenOps suggesting provider.

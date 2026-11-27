@@ -80,6 +80,12 @@ read a site's browser localStorage, **at setup only**.
    grant prompt has named it, so macOS asks the operator once to allow
    access. The daemon still reads it only quietly. The grant records the
    item, and changing it ends the grant.
+   *Amended 2026-11-27 (menu bar):* the daemon's
+   `POST /api/connections/connect`, which the menu bar's Allow calls after
+   showing the consent the daemon serves (`GET /api/connections/connect`,
+   the same words setup prints, naming the Keychain item), is that setup
+   step run by the daemon: it reads the item once with
+   `keychain.Prompting`, as setup does. Its polls still read only quietly.
 
 7. **Tokens never leave the reader.** No error, log line, status row or
    setup output carries a token or any of the item's content: errors name
@@ -98,6 +104,15 @@ read a site's browser localStorage, **at setup only**.
 9. **No agent-facing tool grants or reads.** The MCP server neither offers
    `--use-app-login` nor reads localStorage: consent comes from a command
    the operator types, never from a chat.
+   *Amended 2026-11-27 (menu bar):* or from the menu bar's Allow, a click
+   on the consent shown in place. Both run one grant flow
+   (`providersetup.GrantAppLogin`): read once, verified with the vendor,
+   the grant recorded only on the vendor's yes, never the token. The
+   daemon grants only exactly what the request says was shown (its item
+   and host); anything else is refused unread. The route sits behind the
+   API token like every write and is audited; an agent that holds the
+   token could call it, as it could run setup at a terminal, and what it
+   gains is TokenOps reading the plan, never the token.
 
 ## Consequences
 

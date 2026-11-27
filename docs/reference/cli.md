@@ -1528,6 +1528,7 @@ it reads before it does:
 |---|---|---|
 | `vendor-usage setup claude-subscription` | your browser's `… Safe Storage` (for example `Chrome Safe Storage`): the key it encrypts cookies with, used to read two claude.ai cookies, `sessionKey` and `cf_clearance` | yes, when you run it; one refusal stops it asking for other browsers; `--paste` or `--paste-request` skips the Keychain |
 | `vendor-usage setup claude-code --keychain` | `Claude Code-credentials`: Claude Code's own sign-in, sent only to `api.anthropic.com` | yes, when you run it; without `--keychain` only `~/.claude/.credentials.json` is read |
+| `vendor-usage setup cursor --use-app-login`, or **Allow** under the menu bar's Connect… for Cursor | `Cursor Safe Storage`: the key Cursor 3.27 and later seal its sign-in with, read to open the one column setup names | yes, once, after the consent has named it; choose Always Allow so the daemon can read it as it polls |
 | the daemon, for a meter connected from the browser or Claude Code connected with `--keychain` | the same items | **never**: it reads quietly, and when macOS would ask (after an upgrade, or when Claude Code renews its sign-in) it skips the read and the stale-reading finding says to run the setup again |
 
 Nothing else reads the Keychain: not `init`, not an agent through the MCP
@@ -2025,6 +2026,13 @@ turned on without asking; what is listed needs you.
 | Antigravity, Kiro | their apps, `kiro-cli` | `tokenops vendor-usage setup <id> --use-app-login` | your yes to read the app's own sign-in; setup shows exactly what first |
 | Windsurf, Augment, Amp, Factory, Codebuff, Kilo, ClinePass, Grok, Muse Code, Nous Portal | their apps, directories or CLIs | `tokenops vendor-usage setup <id>` | the key or browser session `setup` asks for |
 | Every other provider in [the registry](../providers.md) | requests in the event log | `tokenops vendor-usage setup <id>` | an API key, a browser session or your cloud credentials, as `setup` says |
+
+Where the tool's own sign-in is what connects it (Cursor's desktop app,
+Antigravity, Kiro and the other `--use-app-login` rows), the menu bar does
+it in place: **Connect…** shows what would be read, the host it goes to and
+that nothing secret is stored, and **Allow** connects it through the daemon
+([`POST /api/connections/connect`](api.md#changing)), the same grant
+`setup <id> --use-app-login` records.
 
 Codex and CodeRabbit read their plan through their own CLI, with nothing
 from you, so they are never listed as not connected. A source you switched

@@ -3095,6 +3095,9 @@
                               "docs": {
                                 "type": "string"
                               },
+                              "grant": {
+                                "type": "boolean"
+                              },
                               "needs": {
                                 "type": "string"
                               },
@@ -3167,6 +3170,136 @@
           }
         },
         "summary": "Per provider in use or installed: whether its plan is read and, where it is not, the one thing to do to connect it"
+      }
+    },
+    "/api/connections/connect": {
+      "get": {
+        "operationId": "getConnectionsConnect",
+        "parameters": [
+          {
+            "description": "a provider registry id, e.g. cursor",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "app": {
+                      "type": "string"
+                    },
+                    "host": {
+                      "type": "string"
+                    },
+                    "keychain": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "stored": {
+                      "type": "string"
+                    },
+                    "what": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "What granting a provider's other-application sign-in would read (ADR 0013): the item and field, the one host the token goes to, the Keychain item macOS asks about, and that nothing secret is stored; nothing secret is read. 404 when the sign-in is not on this machine"
+      },
+      "post": {
+        "operationId": "postConnectionsConnect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "host": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "what": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "app": {
+                      "type": "string"
+                    },
+                    "config": {
+                      "type": "string"
+                    },
+                    "host": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "reports": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "what": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Grant a provider's other-application sign-in on the operator's yes to exactly what GET /api/connections/connect showed: read once, verified with the vendor, the grant recorded (vendor_usage.grants) without the token, audited, the daemon restarted to read it. 409 when what would be read changed, 422 when the vendor refused it, 403 when macOS did not allow the Keychain item; nothing is written then"
       }
     },
     "/api/connections/dismiss": {
@@ -4414,6 +4547,9 @@
                               },
                               "docs": {
                                 "type": "string"
+                              },
+                              "grant": {
+                                "type": "boolean"
                               },
                               "needs": {
                                 "type": "string"

@@ -1,12 +1,14 @@
 package proxy
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/capability/connections"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/providersetup"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 )
 
@@ -19,7 +21,8 @@ type ConnectionsFunc func(g headroom.Glance, health []state.SourceReport, now ti
 // is not, the one thing to do. They are computed with the glance, on its
 // cadence, never per request, and served on GET /api/glance and
 // GET /api/connections; POST /api/connections/dismiss stops one being
-// suggested. nil leaves them out.
+// suggested; GET and POST /api/connections/connect show and grant another
+// application's sign-in (ADR 0013). nil leaves them out.
 func WithConnections(fn ConnectionsFunc) Option {
 	return func(s *Server) { s.connections = fn }
 }
@@ -72,6 +75,57 @@ func (s *Server) registerConnectionRoutes(mux RouteMux) {
 		}
 		return change, err
 	}))
+	mux.HandleFunc("GET /api/connections/connect", func(w http.ResponseWriter, r *http.Request) {
+		c, err := providersetup.FindConsent(r.Context(), r.URL.Query().Get("provider"), s.actions().AppLogin.Env)
+		if err != nil {
+			writeAPIError(w, connectStatus(err), err)
+			return
+		}
+		writeAPIJSON(w, http.StatusOK, c)
+	})
+	mux.HandleFunc("POST /api/connections/connect", s.action("connection_connect", restart, func(r *http.Request, path string) (any, error) {
+		var in ConnectConnectionRequest
+		if err := decodeAction(r, &in); err != nil {
+			return nil, err
+		}
+		got, err := providersetup.ConnectAppLogin(r.Context(), path, in.Provider,
+			providersetup.Shown{What: in.What, Host: in.Host}, s.actions().AppLogin)
+		if err != nil {
+			return nil, statusError{status: connectStatus(err), err: err}
+		}
+		s.staleGlance()
+		return got, nil
+	}))
+}
+
+// ConnectConnectionRequest grants provider's other-application sign-in on
+// the operator's yes to exactly what GET /api/connections/connect showed:
+// its what and host.
+type ConnectConnectionRequest struct {
+	Provider string `json:"provider"`
+	What     string `json:"what"`
+	Host     string `json:"host"`
+}
+
+// connectStatus is the HTTP status a failed connect answers with.
+func connectStatus(err error) int {
+	var ce *providersetup.ConnectError
+	if !errors.As(err, &ce) {
+		return http.StatusInternalServerError
+	}
+	switch ce.Failure {
+	case providersetup.ConnectNoSignIn:
+		return http.StatusNotFound
+	case providersetup.ConnectChanged:
+		return http.StatusConflict
+	case providersetup.ConnectRefused:
+		return http.StatusUnprocessableEntity
+	case providersetup.ConnectKeychain:
+		return http.StatusForbidden
+	case providersetup.ConnectUnreadable:
+		return http.StatusBadGateway
+	}
+	return http.StatusBadRequest
 }
 
 // staleGlance makes the next glance request compute a new one.
