@@ -26,7 +26,7 @@ cd "$here/apps/menubar"
 for arch in arm64 amd64; do
   clang_arch=$([ "$arch" = amd64 ] && echo x86_64 || echo arm64)
   CGO_ENABLED=1 GOOS=darwin GOARCH="$arch" CC="clang -arch $clang_arch" \
-    go build -trimpath -tags vitra_native -ldflags "-s -w" \
+    go build -trimpath -tags vitra_native -ldflags "-s -w -X main.appVersion=${version#v}" \
     -o "$work/tokenops-menubar-$arch" .
 done
 lipo -create -output "$work/tokenops-menubar" "$work/tokenops-menubar-arm64" "$work/tokenops-menubar-amd64"

@@ -20,7 +20,11 @@ curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7878/api/glance
 ```
 
 `/healthz`, `/readyz` and `/version` need no token, so a supervisor can
-probe them.
+probe them. `/version` names the running build (`version`, `commit`,
+`date`); while an upgrade has replaced the binary and the daemon has not
+switched to it yet, `updating` is true and `installed` names the version
+installed (from Homebrew's path; empty when it cannot be told), and
+`restarts_itself` says whether the supervisor switches to it on its own.
 
 The daemon answers only requests addressed to this machine: a loopback
 `Host` (`127.0.0.0/8`, `::1`, `localhost`), the listen address, or a name
@@ -120,6 +124,8 @@ instead of an empty screen.
 | `POST /api/outcomes` | Records your judgement of an execution, as `human` with `recorded_via: api`; it is for your own surfaces, so an agent reports through the `tokenops_outcome` MCP tool, which asks you to confirm |
 | `POST /api/coach` | Applies a coach preset, or changes its dials |
 | `POST /api/connections/dismiss` | Stops suggesting to connect a provider's plan (`{"provider": "cursor"}`), or suggests it again (`"undo": true`); written to `vendor_usage.dismissed` like `tokenops vendor-usage dismiss`, and the next glance says it with no restart |
+| `GET /api/connections/connect` | What granting a provider's other-application sign-in would read (`?provider=cursor`), before anything is read ([ADR 0013](../adr/0013-app-login-grants.md)): `app`, `what` (the file or database and its field, as `tokenops vendor-usage setup <id> --use-app-login` prints it), `host` (the one host the token is sent to), `keychain` (the Keychain item macOS asks you to allow, when the sign-in is sealed under one) and `stored`. `404` when the sign-in is not on this machine. The menu bar's *Connect…* shows it |
+| `POST /api/connections/connect` | Grants that sign-in on your yes to exactly what the `GET` showed (`{"provider", "what", "host"}`): the daemon reads it once, verifies it with the vendor and only then records the grant in `vendor_usage.grants`, never the token; audited, then the daemon restarts to read it. Answers `summary` ("Connected — reading Cursor's plan") and what the vendor reported. Nothing is written when it fails, and `error` says why in plain words: `409` what would be read changed, `422` the vendor refused it (an expired sign-in: sign in to the app, then try again), `403` macOS did not allow the Keychain item, `404` no sign-in, `502` the vendor could not be read. macOS may ask once to allow the Keychain item a sealed sign-in opens with. The menu bar's *Allow* calls it |
 | `POST /api/findings/dismiss` | Hides a finding (`{"key", "for": "day"}` or `"week"`) until the time passes or it becomes more urgent than when you hid it: a notice you hid shows again as a warning. `{"for": "none"}` shows every hidden finding again, or one with its `key`. Answers with the findings after the change |
 | `POST /api/findings/act` | Runs one of the `actions` a finding offers now (`{"key", "action"}`), through the same code as the CLI: `boundary.promote` (`tokenops boundaries promote`) and `tip.ack`, `tip.expected` or `tip.snooze` (`tokenops coach tip`). An action's `confirm` says what it changes, for the surface to show first. `409` when the finding is gone or no longer offers the action; `400` for an action that is not on the list. A promote takes effect on the next tool call, with no restart. Demoting stays on the CLI, so nothing on the API loosens a boundary |
 

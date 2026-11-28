@@ -11,8 +11,10 @@
   var PROVIDERS = window.TOKENOPS_PROVIDERS || {};
   // open is the finding whose confirm row or hide choices are showing:
   // { key, action } or { key, hide: true }. busy is a finding being acted on.
-  // connect is the tool whose Connect… details are showing.
-  var state = { view: null, selected: null, refreshing: false, open: null, busy: null, connect: null };
+  // connect is the tool whose Connect… details are showing; connecting is
+  // one whose Allow is in flight; copied is one whose command was copied;
+  // reveal brings the open row into view on the next render.
+  var state = { view: null, selected: null, refreshing: false, open: null, busy: null, connect: null, connecting: null, copied: null, reveal: false };
   // more is whether the coach's information findings are unfolded.
   state.more = false;
   try {
@@ -632,10 +634,13 @@
   }
 
   // Tools in use whose plan TokenOps does not read, muted, under the
-  // plans. Not an alert: no badge, no colour, said in place. Connect…
-  // shows the command, what it needs and where to find it; Copy command
-  // and Docs act on the row Go holds, never on text from here; Don't show
-  // asks the daemon to stop suggesting it.
+  // plans. Not an alert: no badge, no colour, said in place. Connect… on a
+  // row granted with the tool's own sign-in (r.grant) asks Go for the
+  // daemon's consent and shows it with Allow and Not now; Allow has the
+  // daemon grant exactly that, and the row says what happened. On any
+  // other row it shows the command, what it needs and where to find it;
+  // Copy command and Docs act on the row Go holds, never on text from
+  // here; Don't show asks the daemon to stop suggesting it.
   function connectionsSection(main, v) {
     var rows = v.connections || [];
     if (!rows.length) return;
@@ -644,49 +649,140 @@
     rows.forEach(function (r) {
       var open = state.connect === r.provider;
       var item = el("div", "connection");
+      item.setAttribute("data-provider", r.provider);
       var line = el("div", "connection-line");
       line.appendChild(mark(r.provider, "connection-mark"));
       line.appendChild(el("span", "connection-label", r.label));
       var connect = button("quiet", open ? "Close" : "Connect…", "Connect " + name(r.provider));
       connect.setAttribute("aria-expanded", open ? "true" : "false");
-      connect.addEventListener("click", function () {
-        state.connect = open ? null : r.provider;
-        render();
-      });
+      connect.addEventListener("click", function () { toggleConnect(r, open); });
       line.appendChild(connect);
       item.appendChild(line);
-      if (open) {
-        var how = el("div", "connection-how");
-        if (r.seen) how.appendChild(el("div", "note", "Seen: " + r.seen));
-        how.appendChild(el("code", "connection-command", r.command));
-        how.appendChild(el("div", "note", "Needs " + r.needs + (r.where ? ". " + r.where : "") + "."));
-        var controls = el("div", "finding-controls");
-        var copy = button("quiet", "Copy command");
-        copy.addEventListener("click", function () { connectionAct("connection.copy", r.provider); });
-        controls.appendChild(copy);
-        if (r.docs) {
-          var docs = button("quiet", "Docs");
-          docs.addEventListener("click", function () {
-            invoke("connection.docs", { provider: r.provider }).then(null, function (err) { failed("connection.docs", err); });
-          });
-          controls.appendChild(docs);
-        }
-        var hide = button("quiet", "Don't show", "Don't suggest " + name(r.provider) + " again");
-        hide.addEventListener("click", function () { connectionAct("connection.dismiss", r.provider); });
-        controls.appendChild(hide);
-        how.appendChild(controls);
-        item.appendChild(how);
-      }
+      if (open) item.appendChild(r.grant ? grantDetails(r) : commandDetails(r));
       box.appendChild(item);
     });
     main.appendChild(box);
   }
 
+  // toggleConnect opens or closes a row's details; a grant row asks Go for
+  // the daemon's consent first, so what is shown is what Allow grants.
+  function toggleConnect(r, open) {
+    state.connect = open ? null : r.provider;
+    state.reveal = !open;
+    state.copied = null;
+    state.connecting = null;
+    render();
+    if (open || !r.grant) return;
+    invoke("connection.consent", { provider: r.provider }).then(function (v) {
+      state.reveal = true;
+      show(v);
+    }, function (err) {
+      failed("connection.consent", err);
+      state.view = state.view || {};
+      state.view.error = "TokenOps couldn't look at " + name(r.provider) + "'s sign-in just now. Try again in a moment.";
+      render();
+    });
+  }
+
+  // grantDetails is the consent, as the CLI prints it before y/N, then
+  // Allow and Not now; or, after Allow, what happened.
+  function grantDetails(r) {
+    var how = el("div", "connection-how connection-consent");
+    if (r.seen) how.appendChild(el("div", "note", "Seen: " + r.seen));
+    if (r.result) {
+      var res = el("div", "connection-result" + (r.result.connected ? " ok" : " warn"), r.result.text);
+      res.setAttribute("role", "status");
+      how.appendChild(res);
+      if (r.result.connected) return how;
+    }
+    if (!r.consent) {
+      how.appendChild(el("div", "note", r.consent_error || "Looking at what it would read…"));
+      if (r.consent_error) how.appendChild(hideControls(r));
+      return how;
+    }
+    var c = r.consent;
+    how.appendChild(el("div", "consent-heading", c.heading + "."));
+    [["What is read", c.what], ["Sent only to", c.host], ["Stored", c.stored]].forEach(function (p) {
+      var row = el("div", "consent-row");
+      row.appendChild(el("span", "consent-label", p[0]));
+      row.appendChild(el("span", "consent-text", p[1]));
+      how.appendChild(row);
+    });
+    how.appendChild(el("div", "note", "The daemon reads it once now to check it with " + name(r.provider) +
+      ", then afresh each time it polls. It never writes, refreshes or logs it."));
+    if (r.consent.keychain) how.appendChild(el("div", "note consent-keychain", r.consent.keychain));
+    var busy = state.connecting === r.provider;
+    var controls = el("div", "finding-controls");
+    var allow = button("primary", busy ? "Connecting…" : "Allow", "Allow TokenOps to read " + name(r.provider) + "'s own sign-in");
+    allow.disabled = busy;
+    allow.addEventListener("click", function () { allowConnect(r.provider); });
+    controls.appendChild(allow);
+    var later = button("quiet", "Not now");
+    later.disabled = busy;
+    later.addEventListener("click", function () { state.connect = null; render(); });
+    controls.appendChild(later);
+    how.appendChild(controls);
+    return how;
+  }
+
+  // allowConnect has the daemon grant the consent Go holds for the row.
+  function allowConnect(provider) {
+    state.connecting = provider;
+    render();
+    invoke("connection.connect", { provider: provider }).then(function (v) {
+      state.connecting = null;
+      state.reveal = true;
+      show(v);
+    }, function (err) {
+      failed("connection.connect", err);
+      state.connecting = null;
+      state.view = state.view || {};
+      state.view.error = "That didn't go through, and nothing was granted. Try again in a moment.";
+      render();
+    });
+  }
+
+  // commandDetails is the one command for a row that needs something typed.
+  function commandDetails(r) {
+    var how = el("div", "connection-how");
+    if (r.seen) how.appendChild(el("div", "note", "Seen: " + r.seen));
+    how.appendChild(el("code", "connection-command", r.command));
+    how.appendChild(el("div", "note", "Needs " + r.needs + (r.where ? ". " + r.where : "") + "."));
+    var controls = el("div", "finding-controls");
+    var copied = state.copied === r.provider;
+    var copy = button(copied ? "quiet copied" : "primary", copied ? "Copied" : "Copy command", "Copy the command for " + name(r.provider));
+    copy.addEventListener("click", function () { connectionAct("connection.copy", r.provider); });
+    controls.appendChild(copy);
+    if (r.docs) {
+      var docs = button("quiet", "Docs");
+      docs.addEventListener("click", function () {
+        invoke("connection.docs", { provider: r.provider }).then(null, function (err) { failed("connection.docs", err); });
+      });
+      controls.appendChild(docs);
+    }
+    controls.appendChild(hideButton(r));
+    how.appendChild(controls);
+    return how;
+  }
+
+  function hideButton(r) {
+    var hide = button("quiet", "Don't show", "Don't suggest " + name(r.provider) + " again");
+    hide.addEventListener("click", function () { connectionAct("connection.dismiss", r.provider); });
+    return hide;
+  }
+
+  function hideControls(r) {
+    var controls = el("div", "finding-controls");
+    controls.appendChild(hideButton(r));
+    return controls;
+  }
+
   // connectionAct copies a command or dismisses a tool; Go leaves what
-  // happened in the note.
+  // happened in the note, and Copy command says Copied in place.
   function connectionAct(command, provider) {
     invoke(command, { provider: provider }).then(function (v) {
       if (command === "connection.dismiss") state.connect = null;
+      if (command === "connection.copy") state.copied = provider;
       show(v);
     }, function (err) {
       failed(command, err);
@@ -696,6 +792,18 @@
         : "Couldn't copy it. Select the command and copy it yourself.";
       render();
     });
+  }
+
+  // keepScroll keeps the details where the operator scrolled them across a
+  // render, which rebuilds them, and brings an opened row's details into
+  // view: a row near the bottom opened below the fold, where nothing showed
+  // that it had.
+  function keepScroll(main, top) {
+    main.scrollTop = top;
+    if (!state.connect || !state.reveal) return;
+    state.reveal = false;
+    var open = main.querySelector('.connection[data-provider="' + state.connect + '"]');
+    if (open && open.scrollIntoView) open.scrollIntoView({ block: "nearest" });
   }
 
   function focus(selector) {
@@ -822,11 +930,16 @@
       state.selected = reports[0].provider;
     }
     tabs(reports, v);
+    var main = document.getElementById("detail"), top = main.scrollTop;
     var sel = reports.filter(function (r) { return r.provider === state.selected; })[0];
-    if (sel) detail(sel, v); else document.getElementById("detail").textContent = "";
-    connectionsSection(document.getElementById("detail"), v);
-    coachFindings(document.getElementById("detail"), v);
-    boundaryWaits(document.getElementById("detail"), v);
+    if (sel) detail(sel, v); else main.textContent = "";
+    connectionsSection(main, v);
+    coachFindings(main, v);
+    boundaryWaits(main, v);
+    keepScroll(main, top);
+    var version = document.getElementById("version");
+    version.textContent = v.version_line || "";
+    version.hidden = !v.version_line;
     var select = document.getElementById("preset");
     if (v.coach) {
       var custom = document.getElementById("preset-custom");

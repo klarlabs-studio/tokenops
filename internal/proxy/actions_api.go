@@ -16,6 +16,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/outcomes"
+	"go.klarlabs.de/tokenops/internal/capability/providersetup"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -35,6 +36,10 @@ type ActionDeps struct {
 	// Coach supplies the follow-through ledger and the context levers a
 	// coach change reports against.
 	Coach func() (coachcap.Ledger, coachcap.ContextLevers)
+	// AppLogin is where POST /api/connections/connect finds another
+	// application's sign-in and how it asks the vendor (ADR 0013); the
+	// zero value is this machine, with the Keychain read only quietly.
+	AppLogin providersetup.GrantDeps
 }
 
 // WithActions serves the writes an operator makes from a surface that is
@@ -337,7 +342,11 @@ func (s *Server) action(target string, needsRestart bool, do func(r *http.Reques
 	return func(w http.ResponseWriter, r *http.Request) {
 		d := s.actions()
 		change, err := do(r, d.ConfigPath)
+		var se statusError
 		switch {
+		case errors.As(err, &se):
+			writeAPIError(w, se.status, err)
+			return
 		case actions.IsInput(err):
 			writeAPIError(w, http.StatusBadRequest, err)
 			return
@@ -373,6 +382,15 @@ func (s *Server) action(target string, needsRestart bool, do func(r *http.Reques
 		}
 	}
 }
+
+// statusError is an action's failure with the HTTP status it answers with.
+type statusError struct {
+	status int
+	err    error
+}
+
+func (e statusError) Error() string { return e.err.Error() }
+func (e statusError) Unwrap() error { return e.err }
 
 // decodeAction reads a JSON body into in, refusing anything else: another
 // content type, an oversized body, or a field the action does not take.

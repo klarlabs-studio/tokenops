@@ -19,7 +19,7 @@ var appLoginEnv = providersetup.AppLoginEnv
 
 // verifyAppLogin reads a granted sign-in once and the vendor with it.
 // Tests replace it so no vendor is called.
-var verifyAppLogin = providersetup.VerifyAppLogin
+var verifyAppLogin providersetup.VerifyFunc = providersetup.VerifyAppLogin
 
 // runAppLoginSetup grants TokenOps one other application's sign-in for a
 // provider (ADR 0013). It says exactly what would be read, from where, and
@@ -44,37 +44,35 @@ func runAppLoginSetup(cmd *cobra.Command, p providersetup.Provider, opts provide
 	fmt.Fprintf(out, "Connecting %s with %s's own sign-in.\n\n", p.Name, a.App)
 	fmt.Fprintf(out, "  What is read:   %s\n", a.What)
 	fmt.Fprintf(out, "  Sent only to:   %s\n", a.Host)
-	fmt.Fprintln(out, "  Stored:         nothing secret; only this grant, in your config")
+	fmt.Fprintln(out, "  Stored:         "+providersetup.StoredNothingSecret)
 	fmt.Fprintln(out, "\nThe daemon re-reads it, read-only, each time it polls, so a token the app renews is picked up.")
 	fmt.Fprintln(out, "TokenOps never writes it, refreshes or rotates it, or logs it. Undo with --revoke-app-login.")
 	if !confirm(cmd, "\nAllow TokenOps to read it? [y/N] ") {
 		return errors.New("not granted; nothing was read or written")
 	}
-	progress := startActivity(cmd.ErrOrStderr(), "Reading it once and asking "+p.Name)
-	lines, err := verifyAppLogin(ctx, p.ID, a, env)
+	path, err := resolveMutableConfigPath(opts.configPath)
 	if err != nil {
+		return err
+	}
+	progress := startActivity(cmd.ErrOrStderr(), "Reading it once and asking "+p.Name)
+	// The same core the daemon's POST /api/connections/connect runs.
+	lines, err := providersetup.GrantAppLogin(ctx, path, p.ID, a, providersetup.GrantDeps{Env: env, Verify: verifyAppLogin})
+	var notAccepted *providersetup.NotAcceptedError
+	switch {
+	case errors.As(err, &notAccepted):
 		progress.failure(p.Name + " did not accept it")
 		if errors.Is(err, providersetup.ErrRefused) {
 			return fmt.Errorf("%s refused that sign-in (sign in again with %s). Nothing was written", p.Name, a.App)
 		}
-		return fmt.Errorf("could not read %s with it: %w. Nothing was written", p.Name, err)
+		return fmt.Errorf("could not read %s with it: %w. Nothing was written", p.Name, notAccepted.Err)
+	case err != nil:
+		progress.success(p.Name + " accepted it")
+		return err
 	}
 	progress.success(p.Name + " accepted it")
 	fmt.Fprintf(out, "\n%s reports:\n", p.Name)
 	for _, l := range lines {
 		fmt.Fprintln(out, "  "+l)
-	}
-	path, err := resolveMutableConfigPath(opts.configPath)
-	if err != nil {
-		return err
-	}
-	cfg, err := readMutableConfig(path)
-	if err != nil {
-		return err
-	}
-	providersetup.ApplyGrant(&cfg, p.ID, a, time.Now())
-	if err := writeMutableConfig(path, cfg); err != nil {
-		return err
 	}
 	fmt.Fprintf(out, "\nwrote the grant to %s (vendor_usage.grants.%s)\n", path, p.ID)
 	applyRestart(out, path, opts.restart, false)

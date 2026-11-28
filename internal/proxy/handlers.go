@@ -116,12 +116,37 @@ func readyzHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 func versionHandler(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
+	body := map[string]any{
 		"version": version.Version,
 		"commit":  version.Commit,
 		"date":    version.Date,
-	})
+	}
+	if i := installed.Load(); i != nil && i.Updating {
+		body["updating"], body["installed"], body["restarts_itself"] = true, i.Version, i.RestartsItself
+	}
+	writeJSON(w, http.StatusOK, body)
 }
+
+// Installed is what an install put in place of the binary the daemon runs,
+// while the daemon has not switched to it yet.
+type Installed struct {
+	// Updating is true while the running binary is no longer the one
+	// installed.
+	Updating bool
+	// Version is the installed version, when its path tells it; empty
+	// otherwise.
+	Version string
+	// RestartsItself is a supervised daemon, which switches on its own.
+	RestartsItself bool
+}
+
+// installed is the daemon's binary watch's latest view; nil until it ran.
+var installed atomic.Pointer[Installed]
+
+// MarkInstalled records what the daemon's binary watch saw, for /version:
+// a surface says "updating to X" rather than show the running version as
+// current.
+func MarkInstalled(i Installed) { installed.Store(&i) }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")

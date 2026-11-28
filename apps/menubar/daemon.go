@@ -64,6 +64,18 @@ func (d *daemon) endpoint() (endpoint, error) {
 
 // do calls the API and decodes the answer into out.
 func (d *daemon) do(ctx context.Context, method, path string, body, out any) error {
+	return d.doWith(ctx, d.hc, method, path, body, out)
+}
+
+// doWithin is do for a call that may take up to timeout, longer than a
+// read: a grant waits on macOS's Keychain prompt.
+func (d *daemon) doWithin(ctx context.Context, timeout time.Duration, method, path string, body, out any) error {
+	hc := *d.hc
+	hc.Timeout = timeout
+	return d.doWith(ctx, &hc, method, path, body, out)
+}
+
+func (d *daemon) doWith(ctx context.Context, hc *http.Client, method, path string, body, out any) error {
 	e, err := d.endpoint()
 	if err != nil {
 		return err
@@ -84,7 +96,7 @@ func (d *daemon) do(ctx context.Context, method, path string, body, out any) err
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := d.hc.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		var ne net.Error
 		if errors.As(err, &ne) && ne.Timeout() {

@@ -1,0 +1,16 @@
+{
+  "provider": "cursor",
+  "label": "Cursor — in use, plan not read",
+  "seen": "41 turns in the last 7 days",
+  "command": "tokenops vendor-usage setup cursor --use-app-login",
+  "needs": "Cursor's own sign-in on this Mac; asks first",
+  "docs": "https://github.com/klarlabs-studio/tokenops/blob/main/docs/reference/cli.md#connect-a-tool-tokenops-found",
+  "grant": true,
+  "consent": {
+    "heading": "Connect Cursor with Cursor's own sign-in",
+    "what": "the database /Users/me/Library/Application Support/Cursor/User/globalStorage/state.vscdb, column value (SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken' LIMIT 1); opened with the Keychain item \"Cursor Safe Storage\" (account \"Cursor Key\"), read to decrypt it",
+    "host": "cursor.com",
+    "stored": "nothing secret; only this grant, in your config",
+    "keychain": "macOS will ask to allow TokenOps to use “Cursor Safe Storage”. Choose Always Allow, so TokenOps can read Cursor's plan again as it polls."
+  }
+}

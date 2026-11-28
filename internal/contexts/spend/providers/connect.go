@@ -40,6 +40,10 @@ type Connect struct {
 type Action struct {
 	Source string
 	Connect
+	// Grant is an action the operator takes by granting another
+	// application's sign-in (ADR 0013): a yes to what is read, which a
+	// surface can ask for in place, with no command to run.
+	Grant bool
 }
 
 // PlanSource reports whether s reads a plan, a balance or spend, rather
@@ -77,7 +81,7 @@ func (d Descriptor) ConnectActionIf(usable func(Source) bool) (Action, bool) {
 			continue
 		}
 		if c, ok := d.connectOf(s); ok {
-			return Action{Source: s.Tag, Connect: c}, true
+			return Action{Source: s.Tag, Connect: c, Grant: s.Credential == AppLogin}, true
 		}
 	}
 	return Action{}, false
@@ -156,7 +160,7 @@ func (d Descriptor) ConnectFor(tag string) (Action, bool) {
 			continue
 		}
 		if c, ok := d.connectOf(s); ok {
-			return Action{Source: s.Tag, Connect: c}, true
+			return Action{Source: s.Tag, Connect: c, Grant: s.Credential == AppLogin}, true
 		}
 	}
 	return Action{}, false

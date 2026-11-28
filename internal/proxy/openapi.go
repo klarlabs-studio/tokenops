@@ -19,6 +19,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/prefixlint"
+	"go.klarlabs.de/tokenops/internal/capability/providersetup"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/state"
@@ -139,6 +140,9 @@ var APICatalog = []RouteDoc{
 	{Method: "POST", Path: "/api/boundaries/statements", Summary: "The statement a presence-signed approval of a waiting boundary decision signs, and the dialog's text; 409 presence_unavailable when no key can sign here", Request: BoundaryStatementRequest{}, Response: boundaries.ApprovalStatement{}},
 	{Method: "POST", Path: "/api/routing/statements", Summary: "The statement a presence-signed approval of a routing upgrade signs, and the dialog's text; 409 presence_unavailable when no key can sign here", Request: RoutingStatementRequest{}, Response: actions.RoutingStatement{}},
 	{Method: "POST", Path: "/api/connections/dismiss", Summary: "Stop suggesting to connect a provider's plan, or with undo suggest it again (vendor_usage.dismissed)", Request: DismissConnectionRequest{}, Response: actions.ConnectionDismissal{}},
+	{Method: "GET", Path: "/api/connections/connect", Summary: "What granting a provider's other-application sign-in would read (ADR 0013): the item and field, the one host the token goes to, the Keychain item macOS asks about, and that nothing secret is stored; nothing secret is read. 404 when the sign-in is not on this machine",
+		Params: []Param{q("provider", "string", "a provider registry id, e.g. cursor")}, Response: providersetup.Consent{}},
+	{Method: "POST", Path: "/api/connections/connect", Summary: "Grant a provider's other-application sign-in on the operator's yes to exactly what GET /api/connections/connect showed: read once, verified with the vendor, the grant recorded (vendor_usage.grants) without the token, audited, the daemon restarted to read it. 409 when what would be read changed, 422 when the vendor refused it, 403 when macOS did not allow the Keychain item; nothing is written then", Request: ConnectConnectionRequest{}, Response: providersetup.Connected{}},
 	{Method: "POST", Path: "/api/outcomes", Summary: "Record the operator's judgement of an execution (assessment human, recorded_via api)", Request: OutcomeRequest{}, Response: actions.Outcome{}},
 	{Method: "POST", Path: "/api/coach", Summary: "Apply a coach preset, or change its dials", Request: coachcap.ChangeRequest{}, Response: coachcap.Report{}},
 	{Method: "POST", Path: "/api/findings/dismiss", Summary: "Hide a finding for a day or a week, until it becomes more urgent; for none shows it, or with no key every hidden finding, again", Request: FindingDismissRequest{}, Response: FindingDismissResult{}},

@@ -19,6 +19,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/promptcache"
+	"go.klarlabs.de/tokenops/internal/capability/providersetup"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
@@ -371,6 +372,10 @@ func actionDeps(cfg config.Config, store *sqlite.Store, logger *slog.Logger) fun
 			},
 		}
 		d.Coach = func() (coachcap.Ledger, coachcap.ContextLevers) { return coachEnv(cfg) }
+		// The menu bar's Allow (POST /api/connections/connect) reads a
+		// sign-in the operator was just shown, as setup does: a sealed one's
+		// Keychain item with macOS's prompt, once (ADR 0013 §6).
+		d.AppLogin = providersetup.GrantDeps{Env: providersetup.AppLoginEnv(cfg.Keychain.Disabled)}
 		if store != nil {
 			d.Store = store
 			d.Audit = func(ctx context.Context, target string, details map[string]any) {

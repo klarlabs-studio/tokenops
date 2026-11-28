@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- **menu bar:** **Connect…** on a tool TokenOps can read with that tool's own sign-in, such as Cursor's desktop app, now connects it for you. It shows what would be read, the one host it is sent to and that nothing secret is stored, the same words `tokenops vendor-usage setup cursor --use-app-login` prints, and says beforehand when macOS will ask about Cursor's "Cursor Safe Storage" Keychain item. **Allow** connects it: the row says "Connected — reading Cursor's plan" and becomes the plan within a minute, or says in plain words why not ("Sign in to Cursor, then try again"). The daemon does the work (`POST /api/connections/connect`, audited); the CLI flow is unchanged.
+- **menu bar:** the panel's footer shows which TokenOps version is running, and the menu bar app's own when it differs. Right after an upgrade it says "updating to 0.128.0" until the daemon has switched. `/version` says so too (`updating`, `installed`).
+
+### Fixed
+
+- **menu bar:** a tool's details under **Connect…** no longer open out of sight. A row near the bottom of the panel opened its command and buttons below the fold, with no scrollbar to show they were there, so Connect… seemed only to change into Close. The opened details now scroll into view, the panel keeps its scroll position as it refreshes, and the details area shows a thin scrollbar. **Copy command** is the row's main button and says "Copied".
+
 ## 0.127.0 - 2026-11-26
 
 ### Added

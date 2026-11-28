@@ -570,9 +570,16 @@ func (s *startup) startBinaryWatch() {
 		supervised: supervisedIn(os.Getenv, selfCgroup()),
 		exists:     isExecutableFile,
 	}
+	// Each check also tells /version whether an upgrade waits, so a surface
+	// says "updating to X" instead of showing the running version as current.
+	check := func() selfexe.Drift {
+		d := s.exe.Check()
+		proxy.MarkInstalled(installedOf(d, watch.supervised))
+		return d
+	}
 	s.sup.Go("binary-watch", func(ctx context.Context) error {
 		defer ticker.Stop()
-		watchBinaryDrift(ctx, s.exe.Check, watch, ticker.C, s.logger, s.restart)
+		watchBinaryDrift(ctx, check, watch, ticker.C, s.logger, s.restart)
 		return nil
 	})
 }
